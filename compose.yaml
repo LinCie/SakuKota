@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    build:
+      context: ./docker/postgres
+      dockerfile: Dockerfile
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-bearuang}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
