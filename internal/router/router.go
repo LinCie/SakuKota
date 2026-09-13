@@ -5,6 +5,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"rantau-go/internal/httpx"
+	"rantau-go/internal/middleware"
 	"rantau-go/internal/module/place"
 	"rantau-go/internal/module/subdistrict"
 )
@@ -28,5 +30,8 @@ func NewRouter(pool *pgxpool.Pool) Router {
 }
 
 func (r Router) Handler() http.Handler {
-	return r.mux
+	return httpx.NewChain(
+		middleware.Logger,
+		middleware.Recovery,
+	).Then(r.mux)
 }
