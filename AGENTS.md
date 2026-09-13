@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Rantau ("bearuang"): Go 1.26 REST API + React/Vite frontend. Go module path is `rantau-go`.
+Rantau ("rantaugo"): Go 1.26 REST API + React/Vite frontend. Go module path is `rantau-go`.
 
 ## Commands
 

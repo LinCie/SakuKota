@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	defaultDatabaseURL   = "postgres://postgres:postgres@localhost:5432/bearuang?sslmode=disable"
+	defaultDatabaseURL   = "postgres://postgres:postgres@localhost:5432/rantaugo?sslmode=disable"
 	defaultMigrationsDir = "migrations"
 )
 

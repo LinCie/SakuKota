@@ -2,7 +2,7 @@
 
 -include .env
 
-DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/bearuang?sslmode=disable
+DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/rantaugo?sslmode=disable
 MIGRATIONS_DIR ?= migrations
 export DATABASE_URL MIGRATIONS_DIR
 GOOSE := go run github.com/pressly/goose/v3/cmd/goose@v3.27.3
