@@ -1,21 +1,28 @@
 package database
 
 import (
-	"database/sql"
+	"context"
+	"rantau-go/internal/postgis"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func NewDatabase(connStr string) (*sql.DB, error) {
-	db, err := sql.Open("pgx", connStr)
+func NewPool(
+	ctx context.Context,
+	databaseURL string,
+) (*pgxpool.Pool, error) {
+	config, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := db.Ping(); err != nil {
-		_ = db.Close()
-		return nil, err
+	config.AfterConnect = func(
+		ctx context.Context,
+		conn *pgx.Conn,
+	) error {
+		return postgis.Register(ctx, conn)
 	}
 
-	return db, nil
+	return pgxpool.NewWithConfig(ctx, config)
 }

@@ -1,4 +1,6 @@
 -- +goose Up
+CREATE EXTENSION IF NOT EXISTS postgis;
+
 CREATE TABLE KECAMATAN (
     id INT PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
@@ -26,8 +28,7 @@ CREATE TABLE PLACE (
     kecamatan_id INT NOT NULL,
     name VARCHAR(150) NOT NULL,
     address VARCHAR(255),
-    latitude DECIMAL(9, 6),
-    longitude DECIMAL(9, 6),
+    location GEOMETRY(Point, 4326),
     operating_hours VARCHAR(255),
     estimated_price_range VARCHAR(100),
     short_description TEXT,
