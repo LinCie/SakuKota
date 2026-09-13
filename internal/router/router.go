@@ -17,10 +17,10 @@ func NewRouter(pool *pgxpool.Pool) Router {
 	mux := http.NewServeMux()
 
 	placeModule := place.NewModule(pool)
-	mux.Handle("/places/", http.StripPrefix("/places/", placeModule.Mux))
+	mux.Handle("/places/", http.StripPrefix("/places", placeModule.Mux))
 
 	subdistrictModule := subdistrict.NewModule(pool)
-	mux.Handle("/subdistricts/", http.StripPrefix("/subdistricts/", subdistrictModule.Mux))
+	mux.Handle("/subdistricts/", http.StripPrefix("/subdistricts", subdistrictModule.Mux))
 
 	return Router{
 		mux: mux,
