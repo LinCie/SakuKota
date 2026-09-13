@@ -12,7 +12,7 @@ import (
 )
 
 // PointCodec teaches pgx how to encode/decode PostGIS geometry values
-// using *geom.Point.
+// using *Point.
 //
 // It deliberately supports binary format only.
 type PointCodec struct{}
@@ -148,7 +148,7 @@ func (encodePlanPoint) Encode(
 	}
 
 	data, err := ewkb.Marshal(
-		point,
+		&point.Point,
 		binary.LittleEndian,
 	)
 	if err != nil {
@@ -214,12 +214,14 @@ func decodePoint(src []byte) (*Point, error) {
 		)
 	}
 
-	if err := validatePoint(point); err != nil {
+	decoded := &Point{Point: *point}
+
+	if err := validatePoint(decoded); err != nil {
 		return nil, fmt.Errorf(
 			"postgis: invalid point from database: %w",
 			err,
 		)
 	}
 
-	return point, nil
+	return decoded, nil
 }

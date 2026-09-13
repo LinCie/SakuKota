@@ -4,14 +4,18 @@ import (
 	"fmt"
 
 	"github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
 const SRID = 4326
 
-// Point is the go-geom Point type.
+// Point is a PostGIS point backed by a go-geom Point.
 //
-// This is an alias, not a wrapper, so all geom.Point methods remain available.
-type Point = geom.Point
+// It embeds geom.Point so its geometry methods remain available while allowing
+// the API response to use a JSON representation of the point.
+type Point struct {
+	geom.Point
+}
 
 func NewPoint(longitude, latitude float64) (*Point, error) {
 	if longitude < -180 || longitude > 180 {
@@ -28,13 +32,15 @@ func NewPoint(longitude, latitude float64) (*Point, error) {
 		)
 	}
 
-	return geom.NewPointFlat(
-		geom.XY,
-		[]float64{
-			longitude,
-			latitude,
-		},
-	).SetSRID(SRID), nil
+	return &Point{
+		Point: *geom.NewPointFlat(
+			geom.XY,
+			[]float64{
+				longitude,
+				latitude,
+			},
+		).SetSRID(SRID),
+	}, nil
 }
 
 func MustPoint(longitude, latitude float64) *Point {
@@ -44,6 +50,12 @@ func MustPoint(longitude, latitude float64) *Point {
 	}
 
 	return p
+}
+
+// MarshalJSON encodes a point as a GeoJSON Point instead of exposing the
+// unexported fields used internally by go-geom.
+func (p Point) MarshalJSON() ([]byte, error) {
+	return geojson.Marshal(&p.Point)
 }
 
 func validatePoint(p *Point) error {

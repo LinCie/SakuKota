@@ -1,4 +1,4 @@
-.PHONY: dev start build postgres-up postgres-down migrate-up migrate-down migrate-status migrate-version migrate-reset migration
+.PHONY: dev start build postgres-up postgres-down migrate-up migrate-down migrate-status migrate-version migrate-reset migration seed
 
 -include .env
 
@@ -36,6 +36,9 @@ migrate-version:
 
 migrate-reset:
 	DATABASE_URL="$(DATABASE_URL)" go run ./cmd/migrate reset
+
+seed:
+	DATABASE_URL="$(DATABASE_URL)" go run ./cmd/seed
 
 migration:
 	@test -n "$(name)" || (echo "usage: make migration name=create_users" && exit 1)
