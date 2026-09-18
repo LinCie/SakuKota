@@ -58,6 +58,36 @@ func (p Point) MarshalJSON() ([]byte, error) {
 	return geojson.Marshal(&p.Point)
 }
 
+// Scan implements database/sql.Scanner for PostGIS EWKB values.
+func (p *Point) Scan(src any) error {
+	if p == nil {
+		return fmt.Errorf("postgis: cannot scan Point into nil receiver")
+	}
+
+	if src == nil {
+		return fmt.Errorf("postgis: cannot scan NULL into Point")
+	}
+
+	var data []byte
+	switch value := src.(type) {
+	case []byte:
+		data = value
+	case string:
+		data = []byte(value)
+	default:
+		return fmt.Errorf("postgis: cannot scan %T into Point", src)
+	}
+
+	decoded, err := decodePoint(data)
+	if err != nil {
+		return err
+	}
+
+	*p = *decoded
+
+	return nil
+}
+
 func validatePoint(p *Point) error {
 	if p == nil {
 		return fmt.Errorf("point is nil")

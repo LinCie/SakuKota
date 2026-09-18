@@ -17,15 +17,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	pool, err := database.NewPool(context.Background(), cfg.DatabaseURL)
+	db, err := database.NewDB(context.Background(), cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("create database pool: %v", err)
+		log.Fatalf("create database connection: %v", err)
 	}
-	defer pool.Close()
+	defer db.Close()
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
-		Handler: router.NewRouter(pool).Handler(),
+		Handler: router.NewRouter(db).Handler(),
 	}
 
 	log.Printf("server listening on %s", server.Addr)

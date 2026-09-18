@@ -3,8 +3,7 @@ package subdistrict
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jmoiron/sqlx"
 )
 
 type Repository interface {
@@ -12,14 +11,14 @@ type Repository interface {
 }
 
 type PostgresRepository struct {
-	pool *pgxpool.Pool
+	db *sqlx.DB
 }
 
 var _ Repository = (*PostgresRepository)(nil)
 
-func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
+func NewPostgresRepository(db *sqlx.DB) *PostgresRepository {
 	return &PostgresRepository{
-		pool: pool,
+		db: db,
 	}
 }
 
@@ -28,8 +27,11 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 // -----------------------------------------------------------------------------
 
 func (r *PostgresRepository) GetMany(ctx context.Context) ([]SubDistrict, error) {
-	rows, err := r.pool.Query(
+	subDistricts := make([]SubDistrict, 0)
+
+	err := r.db.SelectContext(
 		ctx,
+		&subDistricts,
 		`SELECT id, name, slug, flood_history, safety_crime_information,
 			estimated_daily_spending, static_map_image_url
 		FROM SUB_DISTRICTS`,
@@ -38,31 +40,5 @@ func (r *PostgresRepository) GetMany(ctx context.Context) ([]SubDistrict, error)
 		return nil, err
 	}
 
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (SubDistrict, error) {
-		return scanSubDistrict(ctx, row)
-	})
-}
-
-// -----------------------------------------------------------------------------
-// Scans
-// -----------------------------------------------------------------------------
-
-func scanSubDistrict(ctx context.Context, row pgx.CollectableRow) (SubDistrict, error) {
-	if err := ctx.Err(); err != nil {
-		return SubDistrict{}, err
-	}
-
-	var s SubDistrict
-
-	err := row.Scan(
-		&s.ID,
-		&s.Name,
-		&s.Slug,
-		&s.FloodHistory,
-		&s.SafetyCrimeInformation,
-		&s.EstimatedDailySpending,
-		&s.StaticMapImageURL,
-	)
-
-	return s, err
+	return subDistricts, nil
 }

@@ -3,7 +3,7 @@ package subdistrict
 import (
 	"net/http"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jmoiron/sqlx"
 )
 
 // Module wires up the subdistrict module's repository, service, and
@@ -13,8 +13,8 @@ type Module struct {
 	Mux     *http.ServeMux
 }
 
-func NewModule(pool *pgxpool.Pool) *Module {
-	repo := NewPostgresRepository(pool)
+func NewModule(db *sqlx.DB) *Module {
+	repo := NewPostgresRepository(db)
 	service := NewService(repo)
 	handler := NewHandler(service)
 

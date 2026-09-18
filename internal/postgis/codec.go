@@ -65,9 +65,8 @@ func (PointCodec) PlanScan(
 
 // DecodeDatabaseSQLValue is required by pgtype.Codec.
 //
-// Your app is using native pgx rather than database/sql, so this is mostly
-// here to satisfy the interface. Returning the raw EWKB as []byte is a valid
-// database/sql driver.Value.
+// pgx's database/sql adapter uses this method for values returned through
+// sqlx. Returning the raw EWKB as []byte is a valid database/sql driver.Value.
 func (PointCodec) DecodeDatabaseSQLValue(
 	_ *pgtype.Map,
 	_ uint32,
