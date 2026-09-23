@@ -1,17 +1,25 @@
 package place
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
 	"rantau-go/internal/httpx"
 )
 
-type Handler struct {
-	service *Service
+// Service defines the operations required by the handler.
+type Service interface {
+	GetMany(ctx context.Context) ([]Place, error)
+	GetCategories(ctx context.Context) ([]Category, error)
+	GetManyByCategory(ctx context.Context, categoryID int64) ([]Place, error)
 }
 
-func NewHandler(service *Service) *Handler {
+type Handler struct {
+	service Service
+}
+
+func NewHandler(service Service) *Handler {
 	return &Handler{
 		service: service,
 	}
@@ -21,7 +29,7 @@ func NewHandler(service *Service) *Handler {
 // Handler
 // -----------------------------------------------------------------------------
 
-func (h *Handler) GetMany(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	if categoryParam := r.URL.Query().Get("category_id"); categoryParam != "" {
 		categoryID, err := strconv.ParseInt(categoryParam, 10, 64)
 		if err != nil {
@@ -35,7 +43,7 @@ func (h *Handler) GetMany(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		httpx.RespondJSON(w, http.StatusOK, places)
+		httpx.RespondJSON(w, http.StatusOK, toPlaceResponses(places))
 		return
 	}
 
@@ -45,7 +53,7 @@ func (h *Handler) GetMany(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, places)
+	httpx.RespondJSON(w, http.StatusOK, toPlaceResponses(places))
 }
 
 func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
@@ -55,5 +63,5 @@ func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, categories)
+	httpx.RespondJSON(w, http.StatusOK, toCategoryResponses(categories))
 }

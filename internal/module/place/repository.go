@@ -6,29 +6,21 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-type Repository interface {
-	GetMany(ctx context.Context) ([]Place, error)
-	GetCategories(ctx context.Context) ([]Category, error)
-	GetManyByCategory(ctx context.Context, categoryID int64) ([]Place, error)
-}
-
-type PostgresRepository struct {
+type postgresRepository struct {
 	db *sqlx.DB
 }
 
-var _ Repository = (*PostgresRepository)(nil)
-
-func NewPostgresRepository(db *sqlx.DB) *PostgresRepository {
-	return &PostgresRepository{
+func NewPostgresRepository(db *sqlx.DB) Repository {
+	return &postgresRepository{
 		db: db,
 	}
 }
 
 // -----------------------------------------------------------------------------
-// PostgresRepository
+// postgresRepository
 // -----------------------------------------------------------------------------
 
-func (r *PostgresRepository) GetMany(ctx context.Context) ([]Place, error) {
+func (r *postgresRepository) GetMany(ctx context.Context) ([]Place, error) {
 	places := make([]Place, 0)
 
 	err := r.db.SelectContext(
@@ -45,7 +37,7 @@ func (r *PostgresRepository) GetMany(ctx context.Context) ([]Place, error) {
 	return places, nil
 }
 
-func (r *PostgresRepository) GetCategories(ctx context.Context) ([]Category, error) {
+func (r *postgresRepository) GetCategories(ctx context.Context) ([]Category, error) {
 	categories := make([]Category, 0)
 
 	err := r.db.SelectContext(
@@ -60,7 +52,7 @@ func (r *PostgresRepository) GetCategories(ctx context.Context) ([]Category, err
 	return categories, nil
 }
 
-func (r *PostgresRepository) GetManyByCategory(
+func (r *postgresRepository) GetManyByCategory(
 	ctx context.Context,
 	categoryID int64,
 ) ([]Place, error) {

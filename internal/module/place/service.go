@@ -2,30 +2,35 @@ package place
 
 import "context"
 
-type Service struct {
+// Repository defines the persistence operations required by the service.
+type Repository interface {
+	GetMany(ctx context.Context) ([]Place, error)
+	GetCategories(ctx context.Context) ([]Category, error)
+	GetManyByCategory(ctx context.Context, categoryID int64) ([]Place, error)
+}
+
+type service struct {
 	repo Repository
 }
 
-var _ Repository = (*Service)(nil)
-
-func NewService(repo Repository) *Service {
-	return &Service{
+func NewService(repo Repository) Service {
+	return &service{
 		repo: repo,
 	}
 }
 
 // -----------------------------------------------------------------------------
-// Service
+// service
 // -----------------------------------------------------------------------------
 
-func (s *Service) GetMany(ctx context.Context) ([]Place, error) {
+func (s *service) GetMany(ctx context.Context) ([]Place, error) {
 	return s.repo.GetMany(ctx)
 }
 
-func (s *Service) GetCategories(ctx context.Context) ([]Category, error) {
+func (s *service) GetCategories(ctx context.Context) ([]Category, error) {
 	return s.repo.GetCategories(ctx)
 }
 
-func (s *Service) GetManyByCategory(ctx context.Context, categoryID int64) ([]Place, error) {
+func (s *service) GetManyByCategory(ctx context.Context, categoryID int64) ([]Place, error) {
 	return s.repo.GetManyByCategory(ctx, categoryID)
 }

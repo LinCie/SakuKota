@@ -9,7 +9,7 @@ import (
 // Module wires up the place module's repository, service, and handler,
 // and exposes a mux serving its routes.
 type Module struct {
-	Service *Service
+	Service Service
 	Mux     *http.ServeMux
 }
 
