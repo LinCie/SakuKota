@@ -3,6 +3,7 @@ package postgis
 import (
 	"database/sql/driver"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -197,6 +198,20 @@ func (scanPlanPoint) Scan(
 }
 
 func decodePoint(src []byte) (*Point, error) {
+	// database/sql receives PostGIS geometry as hexadecimal EWKB text because
+	// custom types are not included in pgx's binary result format list.
+	// Accept both that representation and native binary EWKB.
+	if encoded := src; len(encoded)%2 == 0 {
+		if len(encoded) >= 2 && encoded[0] == '\\' && encoded[1] == 'x' {
+			encoded = encoded[2:]
+		}
+
+		decoded := make([]byte, hex.DecodedLen(len(encoded)))
+		if _, err := hex.Decode(decoded, encoded); err == nil {
+			src = decoded
+		}
+	}
+
 	g, err := ewkb.Unmarshal(src)
 	if err != nil {
 		return nil, fmt.Errorf(
