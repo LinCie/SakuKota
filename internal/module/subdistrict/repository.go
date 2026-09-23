@@ -6,27 +6,21 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-type Repository interface {
-	GetMany(ctx context.Context) ([]SubDistrict, error)
-}
-
-type PostgresRepository struct {
+type postgresRepository struct {
 	db *sqlx.DB
 }
 
-var _ Repository = (*PostgresRepository)(nil)
-
-func NewPostgresRepository(db *sqlx.DB) *PostgresRepository {
-	return &PostgresRepository{
+func NewPostgresRepository(db *sqlx.DB) Repository {
+	return &postgresRepository{
 		db: db,
 	}
 }
 
 // -----------------------------------------------------------------------------
-// PostgresRepository
+// postgresRepository
 // -----------------------------------------------------------------------------
 
-func (r *PostgresRepository) GetMany(ctx context.Context) ([]SubDistrict, error) {
+func (r *postgresRepository) GetMany(ctx context.Context) ([]SubDistrict, error) {
 	subDistricts := make([]SubDistrict, 0)
 
 	err := r.db.SelectContext(

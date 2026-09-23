@@ -2,22 +2,25 @@ package subdistrict
 
 import "context"
 
-type Service struct {
+// Repository defines the persistence operations required by the service.
+type Repository interface {
+	GetMany(ctx context.Context) ([]SubDistrict, error)
+}
+
+type service struct {
 	repo Repository
 }
 
-var _ Repository = (*Service)(nil)
-
-func NewService(repo Repository) *Service {
-	return &Service{
+func NewService(repo Repository) Service {
+	return &service{
 		repo: repo,
 	}
 }
 
 // -----------------------------------------------------------------------------
-// Service
+// service
 // -----------------------------------------------------------------------------
 
-func (s *Service) GetMany(ctx context.Context) ([]SubDistrict, error) {
+func (s *service) GetMany(ctx context.Context) ([]SubDistrict, error) {
 	return s.repo.GetMany(ctx)
 }
