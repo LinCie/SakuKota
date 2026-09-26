@@ -6,8 +6,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
-
-	"rantau-go/internal/postgis"
 )
 
 func NewDB(
@@ -20,10 +18,7 @@ func NewDB(
 	}
 
 	db := sqlx.NewDb(
-		stdlib.OpenDB(
-			*config,
-			stdlib.OptionAfterConnect(postgis.Register),
-		),
+		stdlib.OpenDB(*config),
 		"pgx",
 	)
 

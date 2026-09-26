@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/ewkbhex"
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
@@ -58,7 +59,8 @@ func (p Point) MarshalJSON() ([]byte, error) {
 	return geojson.Marshal(&p.Point)
 }
 
-// Scan implements database/sql.Scanner for PostGIS EWKB values.
+// Scan implements database/sql.Scanner for PostGIS geometry values, which
+// database/sql receives as hexadecimal EWKB text.
 func (p *Point) Scan(src any) error {
 	if p == nil {
 		return fmt.Errorf("postgis: cannot scan Point into nil receiver")
@@ -68,22 +70,32 @@ func (p *Point) Scan(src any) error {
 		return fmt.Errorf("postgis: cannot scan NULL into Point")
 	}
 
-	var data []byte
+	var data string
 	switch value := src.(type) {
 	case []byte:
-		data = value
+		data = string(value)
 	case string:
-		data = []byte(value)
+		data = value
 	default:
 		return fmt.Errorf("postgis: cannot scan %T into Point", src)
 	}
 
-	decoded, err := decodePoint(data)
+	g, err := ewkbhex.Decode(data)
 	if err != nil {
-		return err
+		return fmt.Errorf("postgis: decode EWKB: %w", err)
 	}
 
-	*p = *decoded
+	point, ok := g.(*geom.Point)
+	if !ok {
+		return fmt.Errorf("postgis: expected Point, got %T", g)
+	}
+
+	decoded := Point{Point: *point}
+	if err := validatePoint(&decoded); err != nil {
+		return fmt.Errorf("postgis: invalid point from database: %w", err)
+	}
+
+	*p = decoded
 
 	return nil
 }
