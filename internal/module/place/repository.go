@@ -34,6 +34,10 @@ func (r *postgresRepository) GetMany(ctx context.Context) ([]Place, error) {
 		return nil, err
 	}
 
+	if err := r.attachCategories(ctx, places); err != nil {
+		return nil, err
+	}
+
 	return places, nil
 }
 
@@ -72,5 +76,55 @@ func (r *postgresRepository) GetManyByCategory(
 		return nil, err
 	}
 
+	if err := r.attachCategories(ctx, places); err != nil {
+		return nil, err
+	}
+
 	return places, nil
+}
+
+// attachCategories loads the categories of every given place in one query
+// and assigns them to each place's Categories field.
+func (r *postgresRepository) attachCategories(ctx context.Context, places []Place) error {
+	if len(places) == 0 {
+		return nil
+	}
+
+	placeIDs := make([]int64, 0, len(places))
+	for _, p := range places {
+		placeIDs = append(placeIDs, p.ID)
+	}
+
+	rows := make([]struct {
+		PlaceID int64 `db:"place_id"`
+		Category
+	}, 0)
+
+	err := r.db.SelectContext(
+		ctx,
+		&rows,
+		`SELECT pc.place_id, c.id, c.name, c.slug
+		FROM PLACE_CATEGORIES pc
+		JOIN CATEGORIES c ON c.id = pc.category_id
+		WHERE pc.place_id = ANY($1)
+		ORDER BY c.id`,
+		placeIDs,
+	)
+	if err != nil {
+		return err
+	}
+
+	categoriesByPlace := make(map[int64][]Category, len(places))
+	for _, row := range rows {
+		categoriesByPlace[row.PlaceID] = append(categoriesByPlace[row.PlaceID], row.Category)
+	}
+
+	for i := range places {
+		places[i].Categories = categoriesByPlace[places[i].ID]
+		if places[i].Categories == nil {
+			places[i].Categories = make([]Category, 0)
+		}
+	}
+
+	return nil
 }

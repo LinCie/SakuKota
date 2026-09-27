@@ -18,6 +18,7 @@ export type Place = {
   operating_hours: string | null;
   estimated_price_range: string | null;
   short_description: string | null;
+  categories: Category[];
 };
 
 export type Category = {

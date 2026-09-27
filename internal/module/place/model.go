@@ -12,6 +12,7 @@ type Place struct {
 	OperatingHours      *string        `db:"operating_hours"`
 	EstimatedPriceRange *string        `db:"estimated_price_range"`
 	ShortDescription    *string        `db:"short_description"`
+	Categories          []Category     `db:"-"`
 }
 
 // PlaceCategory represents a row in the PLACE_CATEGORIES table.

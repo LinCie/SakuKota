@@ -1,1 +1,19 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css" layer(components);
+
+@theme {
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sign: "Bungee", "Figtree Variable", ui-sans-serif, sans-serif;
+
+  --color-board: #1e6b3a;
+  --color-board-deep: #14502a;
+  --color-sign: #f2c200;
+  --color-sign-soft: #fbe58a;
+  --color-chili: #c8233a;
+  --color-cat: #1f4e9c;
+  --color-plum: #6a3d9a;
+  --color-paint: #fff9ec;
+  --color-paint-deep: #f3ead3;
+  --color-ink: #1a1a17;
+  --color-ink-soft: #55524a;
+}

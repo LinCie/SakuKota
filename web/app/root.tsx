@@ -8,18 +8,23 @@ import {
 } from "react-router";
 
 import type { Route } from "./+types/root";
+import "@fontsource/bungee/latin-400.css";
+import "@fontsource-variable/figtree";
 import "./app.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html
+      lang="id"
+      className="bg-paint [scrollbar-color:var(--color-ink-soft)_transparent]"
+    >
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
       </head>
-      <body>
+      <body className="bg-paint text-ink caret-chili selection:bg-sign selection:text-ink font-sans antialiased">
         {children}
         <ScrollRestoration />
         <Scripts />
@@ -49,11 +54,11 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
 
   return (
-    <main className="pt-16 p-4 container mx-auto">
+    <main className="container mx-auto p-4 pt-16">
       <h1>{message}</h1>
       <p>{details}</p>
       {stack && (
-        <pre className="w-full p-4 overflow-x-auto">
+        <pre className="w-full overflow-x-auto p-4">
           <code>{stack}</code>
         </pre>
       )}
