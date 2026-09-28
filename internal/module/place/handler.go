@@ -4,15 +4,15 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"rantau-go/internal/httpx"
 )
 
 // Service defines the operations required by the handler.
 type Service interface {
-	GetMany(ctx context.Context) ([]Place, error)
+	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error)
 	GetCategories(ctx context.Context) ([]Category, error)
-	GetManyByCategory(ctx context.Context, categoryID int64) ([]Place, error)
 }
 
 type Handler struct {
@@ -29,25 +29,33 @@ func NewHandler(service Service) *Handler {
 // Handler
 // -----------------------------------------------------------------------------
 
+// GetPlaces lists places, optionally filtered by `sub_district_id`,
+// `category_id` (comma-separated, matches any), and a `q` search term.
 func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
-	if categoryParam := r.URL.Query().Get("category_id"); categoryParam != "" {
-		categoryID, err := strconv.ParseInt(categoryParam, 10, 64)
+	query := r.URL.Query()
+	filter := PlaceFilter{Query: strings.TrimSpace(query.Get("q"))}
+
+	if param := query.Get("sub_district_id"); param != "" {
+		id, err := strconv.ParseInt(param, 10, 64)
 		if err != nil {
-			httpx.RespondError(w, http.StatusBadRequest, "invalid_category_id", "invalid category_id")
+			httpx.RespondError(w, http.StatusBadRequest, "invalid_sub_district_id", "invalid sub_district_id")
 			return
 		}
-
-		places, err := h.service.GetManyByCategory(r.Context(), categoryID)
-		if err != nil {
-			httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
-			return
-		}
-
-		httpx.RespondJSON(w, http.StatusOK, toPlaceResponses(places))
-		return
+		filter.SubDistrictID = id
 	}
 
-	places, err := h.service.GetMany(r.Context())
+	if param := query.Get("category_id"); param != "" {
+		for part := range strings.SplitSeq(param, ",") {
+			id, err := strconv.ParseInt(part, 10, 64)
+			if err != nil {
+				httpx.RespondError(w, http.StatusBadRequest, "invalid_category_id", "invalid category_id")
+				return
+			}
+			filter.CategoryIDs = append(filter.CategoryIDs, id)
+		}
+	}
+
+	places, err := h.service.GetMany(r.Context(), filter)
 	if err != nil {
 		httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return

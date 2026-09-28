@@ -1,5 +1,5 @@
 import { ChevronDown, Search, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   data,
   useSearchParams,
@@ -12,7 +12,6 @@ import { PlaceDetails, PlaceList } from "~/components/place-board";
 import { SurvivalMap } from "~/components/survival-map";
 import { getCategories, getPlaces } from "~/services/places";
 import { getSubDistricts } from "~/services/subdistricts";
-import type { Place } from "~/types/places";
 import type { Route } from "./+types/home";
 
 export function meta() {
@@ -26,65 +25,82 @@ export function meta() {
   ];
 }
 
-export async function loader() {
-  const [places, categories, subDistricts] = await Promise.all([
-    getPlaces(),
+function activeCategorySlugs(searchParams: URLSearchParams) {
+  return (searchParams.get("kategori") ?? "").split(",").filter(Boolean);
+}
+
+// The kecamatan, categories, and search in the URL are applied by the
+// backend; the selected place is picked from the loaded results.
+export async function loader({ request }: Route.LoaderArgs) {
+  const searchParams = new URL(request.url).searchParams;
+  const [categories, subDistricts] = await Promise.all([
     getCategories(),
     getSubDistricts(),
   ]);
+  if (!categories.ok) {
+    throw data(categories.error.message, { status: categories.status });
+  }
+  if (!subDistricts.ok) {
+    throw data(subDistricts.error.message, { status: subDistricts.status });
+  }
 
-  for (const result of [places, categories, subDistricts]) {
-    if (!result.ok) {
-      throw data(result.error.message, { status: result.status });
-    }
+  const subDistrict =
+    subDistricts.data.find((sd) => sd.slug === searchParams.get("kecamatan")) ??
+    subDistricts.data[0];
+  const activeSlugs = activeCategorySlugs(searchParams);
+
+  const places = subDistrict
+    ? await getPlaces({
+        subDistrictId: subDistrict.id,
+        categoryIds: categories.data
+          .filter((category) => activeSlugs.includes(category.slug))
+          .map((category) => category.id),
+        q: searchParams.get("q")?.trim(),
+      })
+    : null;
+  if (places && !places.ok) {
+    throw data(places.error.message, { status: places.status });
   }
 
   return {
-    places: places.ok ? places.data : [],
-    categories: categories.ok ? categories.data : [],
-    subDistricts: subDistricts.ok ? subDistricts.data : [],
+    places: places ? places.data : [],
+    categories: categories.data,
+    subDistricts: subDistricts.data,
+    subDistrict,
   };
 }
 
-// Filters, search, and the selected place live in the URL but are applied
-// on the client, so changing them never needs fresh data.
+// Selecting a place only changes `tempat`, which needs no fresh data.
 export function shouldRevalidate({
   currentUrl,
   nextUrl,
   formMethod,
   defaultShouldRevalidate,
 }: ShouldRevalidateFunctionArgs) {
-  if (!formMethod && currentUrl.pathname === nextUrl.pathname) return false;
+  const withoutPlace = (url: URL) => {
+    const params = new URLSearchParams(url.searchParams);
+    params.delete("tempat");
+    params.sort();
+    return `${url.pathname}?${params}`;
+  };
+  if (!formMethod && withoutPlace(currentUrl) === withoutPlace(nextUrl)) {
+    return false;
+  }
   return defaultShouldRevalidate;
 }
 
-function searchText(place: Place) {
-  return [
-    place.name,
-    place.address,
-    place.short_description,
-    ...place.categories.flatMap((category) => [
-      category.name,
-      categoryStyle(category).label,
-    ]),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-}
-
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { places, categories, subDistricts } = loaderData;
+  const {
+    places: visiblePlaces,
+    categories,
+    subDistricts,
+    subDistrict,
+  } = loaderData;
   const [searchParams, setSearchParams] = useSearchParams();
   const [infoOpen, setInfoOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
 
-  const subDistrict =
-    subDistricts.find((sd) => sd.slug === searchParams.get("kecamatan")) ??
-    subDistricts[0];
-  const activeSlugs = (searchParams.get("kategori") ?? "")
-    .split(",")
-    .filter(Boolean);
+  const activeSlugs = activeCategorySlugs(searchParams);
   const query = searchParams.get("q") ?? "";
   const selectedParam = Number(searchParams.get("tempat"));
 
@@ -112,26 +128,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, query]);
 
-  const areaPlaces = useMemo(
-    () => places.filter((place) => place.sub_district_id === subDistrict?.id),
-    [places, subDistrict?.id],
-  );
-
-  const activeKey = activeSlugs.join(",");
-  const needle = query.trim().toLowerCase();
-  const visiblePlaces = useMemo(
-    () =>
-      areaPlaces.filter(
-        (place) =>
-          (activeSlugs.length === 0 ||
-            place.categories.some((category) =>
-              activeSlugs.includes(category.slug),
-            )) &&
-          (needle === "" || searchText(place).includes(needle)),
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [areaPlaces, activeKey, needle],
-  );
+  const needle = query.trim();
 
   const selectedPlace =
     visiblePlaces.find((place) => place.id === selectedParam) ?? null;
@@ -363,7 +360,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         >
           <SurvivalMap
             places={visiblePlaces}
-            focusPlaces={areaPlaces}
+            focusPlaces={visiblePlaces}
             focusKey={subDistrict?.slug ?? ""}
             selectedId={selectedPlace?.id ?? null}
             onSelect={selectPlace}

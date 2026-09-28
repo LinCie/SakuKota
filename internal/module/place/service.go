@@ -4,9 +4,8 @@ import "context"
 
 // Repository defines the persistence operations required by the service.
 type Repository interface {
-	GetMany(ctx context.Context) ([]Place, error)
+	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error)
 	GetCategories(ctx context.Context) ([]Category, error)
-	GetManyByCategory(ctx context.Context, categoryID int64) ([]Place, error)
 }
 
 type service struct {
@@ -23,14 +22,10 @@ func NewService(repo Repository) Service {
 // service
 // -----------------------------------------------------------------------------
 
-func (s *service) GetMany(ctx context.Context) ([]Place, error) {
-	return s.repo.GetMany(ctx)
+func (s *service) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error) {
+	return s.repo.GetMany(ctx, filter)
 }
 
 func (s *service) GetCategories(ctx context.Context) ([]Category, error) {
 	return s.repo.GetCategories(ctx)
-}
-
-func (s *service) GetManyByCategory(ctx context.Context, categoryID int64) ([]Place, error) {
-	return s.repo.GetManyByCategory(ctx, categoryID)
 }

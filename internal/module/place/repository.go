@@ -2,6 +2,7 @@ package place
 
 import (
 	"context"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -20,15 +21,41 @@ func NewPostgresRepository(db *sqlx.DB) Repository {
 // postgresRepository
 // -----------------------------------------------------------------------------
 
-func (r *postgresRepository) GetMany(ctx context.Context) ([]Place, error) {
+// likeEscaper escapes LIKE wildcards so the search query matches literally.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error) {
 	places := make([]Place, 0)
+
+	pattern := ""
+	if filter.Query != "" {
+		pattern = "%" + likeEscaper.Replace(filter.Query) + "%"
+	}
 
 	err := r.db.SelectContext(
 		ctx,
 		&places,
-		`SELECT id, sub_district_id, name, address, location,
-			operating_hours, estimated_price_range, short_description
-		FROM PLACES`,
+		`SELECT p.id, p.sub_district_id, p.name, p.address, p.location,
+			p.operating_hours, p.estimated_price_range, p.short_description
+		FROM PLACES p
+		WHERE ($1::bigint = 0 OR p.sub_district_id = $1)
+			AND (COALESCE(CARDINALITY($2::bigint[]), 0) = 0 OR EXISTS (
+				SELECT 1 FROM PLACE_CATEGORIES pc
+				WHERE pc.place_id = p.id AND pc.category_id = ANY($2)
+			))
+			AND ($3::text = ''
+				OR p.name ILIKE $3
+				OR p.address ILIKE $3
+				OR p.short_description ILIKE $3
+				OR EXISTS (
+					SELECT 1 FROM PLACE_CATEGORIES pc
+					JOIN CATEGORIES c ON c.id = pc.category_id
+					WHERE pc.place_id = p.id AND c.name ILIKE $3
+				))
+		ORDER BY p.id`,
+		filter.SubDistrictID,
+		filter.CategoryIDs,
+		pattern,
 	)
 	if err != nil {
 		return nil, err
@@ -54,33 +81,6 @@ func (r *postgresRepository) GetCategories(ctx context.Context) ([]Category, err
 	}
 
 	return categories, nil
-}
-
-func (r *postgresRepository) GetManyByCategory(
-	ctx context.Context,
-	categoryID int64,
-) ([]Place, error) {
-	places := make([]Place, 0)
-
-	err := r.db.SelectContext(
-		ctx,
-		&places,
-		`SELECT p.id, p.sub_district_id, p.name, p.address, p.location,
-			p.operating_hours, p.estimated_price_range, p.short_description
-		FROM PLACES p
-		JOIN PLACE_CATEGORIES pc ON pc.place_id = p.id
-		WHERE pc.category_id = $1`,
-		categoryID,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := r.attachCategories(ctx, places); err != nil {
-		return nil, err
-	}
-
-	return places, nil
 }
 
 // attachCategories loads the categories of every given place in one query

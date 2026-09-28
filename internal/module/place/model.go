@@ -15,6 +15,16 @@ type Place struct {
 	Categories          []Category     `db:"-"`
 }
 
+// PlaceFilter narrows the places returned by GetMany. Zero values apply no filter.
+type PlaceFilter struct {
+	SubDistrictID int64
+	// CategoryIDs matches places having any of the given categories.
+	CategoryIDs []int64
+	// Query is matched case-insensitively against the name, address,
+	// short description, and category names.
+	Query string
+}
+
 // PlaceCategory represents a row in the PLACE_CATEGORIES table.
 type PlaceCategory struct {
 	PlaceID    int64 `db:"place_id"`
