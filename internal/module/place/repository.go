@@ -2,9 +2,13 @@ package place
 
 import (
 	"context"
+	"errors"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
+
+	"rantau-go/internal/database"
 )
 
 type postgresRepository struct {
@@ -81,6 +85,70 @@ func (r *postgresRepository) GetCategories(ctx context.Context) ([]Category, err
 	}
 
 	return categories, nil
+}
+
+// Create inserts the place and links it to the given categories in a single
+// transaction.
+func (r *postgresRepository) Create(ctx context.Context, p *Place, categoryIDs []int64) (*Place, error) {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	var created Place
+
+	err = tx.GetContext(
+		ctx,
+		&created,
+		`INSERT INTO PLACES (sub_district_id, name, address, location,
+			operating_hours, estimated_price_range, short_description)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, sub_district_id, name, address, location,
+			operating_hours, estimated_price_range, short_description`,
+		p.SubDistrictID,
+		p.Name,
+		p.Address,
+		p.Location,
+		p.OperatingHours,
+		p.EstimatedPriceRange,
+		p.ShortDescription,
+	)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == database.ForeignKeyViolation {
+			return nil, ErrSubDistrictNotFound
+		}
+		return nil, err
+	}
+
+	if len(categoryIDs) > 0 {
+		_, err = tx.ExecContext(
+			ctx,
+			`INSERT INTO PLACE_CATEGORIES (place_id, category_id)
+			SELECT DISTINCT $1::bigint, UNNEST($2::bigint[])`,
+			created.ID,
+			categoryIDs,
+		)
+		if err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == database.ForeignKeyViolation {
+				return nil, ErrCategoryNotFound
+			}
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	places := []Place{created}
+	if err := r.attachCategories(ctx, places); err != nil {
+		return nil, err
+	}
+
+	return &places[0], nil
 }
 
 // attachCategories loads the categories of every given place in one query

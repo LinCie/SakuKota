@@ -2,6 +2,8 @@ package place
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +15,7 @@ import (
 type Service interface {
 	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error)
 	GetCategories(ctx context.Context) ([]Category, error)
+	Create(ctx context.Context, p *Place, categoryIDs []int64) (*Place, error)
 }
 
 type Handler struct {
@@ -72,4 +75,27 @@ func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.RespondJSON(w, http.StatusOK, toCategoryResponses(categories))
+}
+
+func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
+	var req CreatePlaceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+		return
+	}
+
+	p, err := h.service.Create(r.Context(), toPlace(req), req.CategoryIDs)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidName),
+			errors.Is(err, ErrSubDistrictNotFound),
+			errors.Is(err, ErrCategoryNotFound):
+			httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
+		default:
+			httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		}
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusCreated, toPlaceResponse(*p))
 }

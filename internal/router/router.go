@@ -20,10 +20,10 @@ type Router struct {
 func NewRouter(db *sqlx.DB, cfg config.Config) Router {
 	mux := http.NewServeMux()
 
-	placeModule := place.NewModule(db)
+	placeModule := place.NewModule(db, cfg)
 	mux.Handle("/places/", http.StripPrefix("/places", placeModule.Mux))
 
-	subdistrictModule := subdistrict.NewModule(db)
+	subdistrictModule := subdistrict.NewModule(db, cfg)
 	mux.Handle("/subdistricts/", http.StripPrefix("/subdistricts", subdistrictModule.Mux))
 
 	authModule := auth.NewModule(db, cfg)

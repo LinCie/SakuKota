@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/jmoiron/sqlx"
+
+	"rantau-go/internal/config"
 )
 
 // Module wires up the place module's repository, service, and handler,
@@ -13,13 +15,13 @@ type Module struct {
 	Mux     *http.ServeMux
 }
 
-func NewModule(db *sqlx.DB) *Module {
+func NewModule(db *sqlx.DB, cfg config.Config) *Module {
 	repo := NewPostgresRepository(db)
 	service := NewService(repo)
 	handler := NewHandler(service)
 
 	mux := http.NewServeMux()
-	RegisterRoutes(mux, handler)
+	RegisterRoutes(mux, handler, cfg)
 
 	return &Module{
 		Service: service,

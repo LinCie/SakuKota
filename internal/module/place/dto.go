@@ -2,6 +2,18 @@ package place
 
 import "rantau-go/internal/postgis"
 
+// CreatePlaceRequest is the API payload for creating a Place.
+type CreatePlaceRequest struct {
+	SubDistrictID       int64          `json:"sub_district_id"`
+	Name                string         `json:"name"`
+	Address             *string        `json:"address"`
+	Location            *postgis.Point `json:"location"`
+	OperatingHours      *string        `json:"operating_hours"`
+	EstimatedPriceRange *string        `json:"estimated_price_range"`
+	ShortDescription    *string        `json:"short_description"`
+	CategoryIDs         []int64        `json:"category_ids"`
+}
+
 // PlaceResponse is the API representation of a Place.
 type PlaceResponse struct {
 	ID                  int64              `json:"id"`
@@ -25,6 +37,18 @@ type CategoryResponse struct {
 // -----------------------------------------------------------------------------
 // Conversions
 // -----------------------------------------------------------------------------
+
+func toPlace(req CreatePlaceRequest) *Place {
+	return &Place{
+		SubDistrictID:       req.SubDistrictID,
+		Name:                req.Name,
+		Address:             req.Address,
+		Location:            req.Location,
+		OperatingHours:      req.OperatingHours,
+		EstimatedPriceRange: req.EstimatedPriceRange,
+		ShortDescription:    req.ShortDescription,
+	}
+}
 
 func toPlaceResponse(p Place) PlaceResponse {
 	return PlaceResponse{

@@ -60,6 +60,33 @@ func (p Point) MarshalJSON() ([]byte, error) {
 	return geojson.Marshal(&p.Point)
 }
 
+// UnmarshalJSON decodes a GeoJSON Point whose coordinates are
+// [longitude, latitude].
+func (p *Point) UnmarshalJSON(data []byte) error {
+	var g geom.T
+	if err := geojson.Unmarshal(data, &g); err != nil {
+		return fmt.Errorf("postgis: decode GeoJSON: %w", err)
+	}
+
+	point, ok := g.(*geom.Point)
+	if !ok {
+		return fmt.Errorf("postgis: expected Point, got %T", g)
+	}
+
+	if point.Layout() != geom.XY || point.Empty() {
+		return fmt.Errorf("postgis: expected non-empty XY point")
+	}
+
+	decoded, err := NewPoint(point.X(), point.Y())
+	if err != nil {
+		return err
+	}
+
+	*p = *decoded
+
+	return nil
+}
+
 // Scan implements database/sql.Scanner for PostGIS geometry values, which
 // database/sql receives as hexadecimal EWKB text.
 func (p *Point) Scan(src any) error {
