@@ -1,6 +1,7 @@
 package postgis
 
 import (
+	"database/sql/driver"
 	"fmt"
 
 	"github.com/twpayne/go-geom"
@@ -98,6 +99,21 @@ func (p *Point) Scan(src any) error {
 	*p = decoded
 
 	return nil
+}
+
+// Value implements database/sql/driver.Valuer, encoding the point as hex EWKB,
+// which PostGIS accepts as input for geometry and geography columns.
+func (p Point) Value() (driver.Value, error) {
+	if err := validatePoint(&p); err != nil {
+		return nil, fmt.Errorf("postgis: invalid point: %w", err)
+	}
+
+	data, err := ewkbhex.Encode(&p.Point, ewkbhex.NDR)
+	if err != nil {
+		return nil, fmt.Errorf("postgis: encode EWKB: %w", err)
+	}
+
+	return data, nil
 }
 
 func validatePoint(p *Point) error {
