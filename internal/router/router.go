@@ -5,8 +5,10 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
+	"rantau-go/internal/config"
 	"rantau-go/internal/httpx"
 	"rantau-go/internal/middleware"
+	"rantau-go/internal/module/auth"
 	"rantau-go/internal/module/place"
 	"rantau-go/internal/module/subdistrict"
 )
@@ -15,7 +17,7 @@ type Router struct {
 	mux *http.ServeMux
 }
 
-func NewRouter(db *sqlx.DB) Router {
+func NewRouter(db *sqlx.DB, cfg config.Config) Router {
 	mux := http.NewServeMux()
 
 	placeModule := place.NewModule(db)
@@ -23,6 +25,9 @@ func NewRouter(db *sqlx.DB) Router {
 
 	subdistrictModule := subdistrict.NewModule(db)
 	mux.Handle("/subdistricts/", http.StripPrefix("/subdistricts", subdistrictModule.Mux))
+
+	authModule := auth.NewModule(db, cfg)
+	mux.Handle("/auth/", http.StripPrefix("/auth", authModule.Mux))
 
 	return Router{
 		mux: mux,
