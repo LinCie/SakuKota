@@ -1,10 +1,37 @@
 import ky from "ky";
 
-// This client centralizes base URL configuration, retry behavior, and
-// response normalization. No endpoint requires sign-in yet; when one does,
-// attach the access token and the refresh-and-retry-once logic here (e.g. via
-// `beforeRequest`/`afterResponse` hooks) so it stays out of domain services.
-const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
+// This client centralizes base URL configuration, retry behavior, auth, and
+// response normalization. The signed-in user's access token is attached to
+// every request, and a 401 triggers one token refresh and retry, so none of
+// this leaks into domain services.
+//
+// The API is served from the app's own origin (the Vite dev server proxies
+// `/api`, see vite.config.ts), which keeps the HttpOnly refresh cookie
+// first-party. The trailing slash makes `baseUrl` resolve relative inputs
+// under the prefix rather than replacing its last segment.
+const apiBaseUrl = `${(import.meta.env.VITE_API_URL || "/api").replace(/\/+$/, "")}/`;
+
+/**
+ * How the client reaches the session, supplied by the auth feature at startup
+ * (see main.tsx) so that shared code never depends on a feature.
+ */
+export type AuthHandlers = {
+  /** The current access token, if signed in. */
+  getAccessToken: () => string | undefined;
+  /** Renews the access token after a 401; resolves to whether it did. */
+  refresh: () => Promise<boolean>;
+};
+
+let auth: AuthHandlers | undefined;
+
+export function setAuthHandlers(handlers: AuthHandlers) {
+  auth = handlers;
+}
+
+function setAuthHeader({ request }: { request: Request }) {
+  const token = auth?.getAccessToken();
+  if (token) request.headers.set("Authorization", `Bearer ${token}`);
+}
 
 // `throwHttpErrors: false` means non-2xx responses are returned as regular
 // `Response` objects instead of being thrown, so `ky`'s built-in retry only
@@ -15,6 +42,25 @@ export const api = ky.create({
   throwHttpErrors: false,
   retry: {
     limit: 2,
+  },
+  hooks: {
+    beforeRequest: [setAuthHeader],
+    // Retries reuse the original request, so re-attach the current (possibly
+    // refreshed) access token.
+    beforeRetry: [setAuthHeader],
+    afterResponse: [
+      async ({ request, response, retryCount }) => {
+        // Auth endpoints answer 401 for bad credentials or refresh tokens;
+        // refreshing on those would recurse into the refresh call itself.
+        const isAuthRoute = new URL(request.url).pathname.includes("/auth/");
+        if (retryCount > 0 || response.status !== 401 || isAuthRoute) return;
+        // Anonymous requests have no expired token to renew.
+        if (!auth?.getAccessToken()) return;
+
+        // Forced retries bypass `retry.methods`, so this also covers POSTs.
+        if (await auth.refresh()) return ky.retry();
+      },
+    ],
   },
 });
 
@@ -38,6 +84,9 @@ export type CommonApiErrorCode = "internal_error";
 
 /** Error code for endpoints that reject an undecodable request body. */
 export type InvalidBodyErrorCode = "invalid_body";
+
+/** Error codes for endpoints behind sign-in and a role check (see internal/middleware). */
+export type AuthApiErrorCode = "UNAUTHORIZED" | "FORBIDDEN";
 
 /**
  * Normalized outcome of a backend call. `ok: true` carries the typed

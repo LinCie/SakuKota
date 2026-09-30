@@ -17,4 +17,17 @@ export default defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
+  server: {
+    proxy: {
+      // Serve the API from the app's own origin so the HttpOnly refresh
+      // cookie is first-party.
+      "/api": {
+        target: "http://localhost:8080",
+        rewrite: (path) => path.replace(/^\/api/, ""),
+        // The backend scopes the refresh cookie to /auth; here it lives
+        // under /api/auth.
+        cookiePathRewrite: { "/auth": "/api/auth" },
+      },
+    },
+  },
 });

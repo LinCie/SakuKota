@@ -6,23 +6,34 @@ import (
 	"errors"
 	"net/http"
 
+	"rantau-go/internal/config"
 	"rantau-go/internal/httpx"
+)
+
+const (
+	refreshCookieName = "refresh_token"
+	// refreshCookiePath scopes the cookie to the auth routes, the only ones
+	// that read it. A proxy serving the API under a prefix must rewrite it
+	// (see web/vite.config.ts).
+	refreshCookiePath = "/auth"
 )
 
 // Service defines the operations required by the handler.
 type Service interface {
 	Register(ctx context.Context, u *User, password string) (*User, error)
 	Login(ctx context.Context, email, password string) (*User, *Tokens, error)
-	Refresh(ctx context.Context, refreshToken string) (*Tokens, error)
+	Refresh(ctx context.Context, refreshToken string) (*User, *Tokens, error)
 	Logout(ctx context.Context, refreshToken string) error
 }
 
 type Handler struct {
+	cfg     config.Config
 	service Service
 }
 
-func NewHandler(service Service) *Handler {
+func NewHandler(cfg config.Config, service Service) *Handler {
 	return &Handler{
+		cfg:     cfg,
 		service: service,
 	}
 }
@@ -73,22 +84,21 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, LoginResponse{
-		User:          toUserResponse(u),
-		TokenResponse: toTokenResponse(tokens),
-	})
+	h.setRefreshCookie(w, tokens.RefreshToken)
+	httpx.RespondJSON(w, http.StatusOK, toSessionResponse(u, tokens))
 }
 
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
-	var req RefreshRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RefreshToken == "" {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+	cookie, err := r.Cookie(refreshCookieName)
+	if err != nil {
+		httpx.RespondError(w, http.StatusUnauthorized, "invalid_refresh_token", ErrInvalidRefreshToken.Error())
 		return
 	}
 
-	tokens, err := h.service.Refresh(r.Context(), req.RefreshToken)
+	u, tokens, err := h.service.Refresh(r.Context(), cookie.Value)
 	if err != nil {
 		if errors.Is(err, ErrInvalidRefreshToken) {
+			h.clearRefreshCookie(w)
 			httpx.RespondError(w, http.StatusUnauthorized, "invalid_refresh_token", err.Error())
 			return
 		}
@@ -96,20 +106,44 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toTokenResponse(tokens))
+	h.setRefreshCookie(w, tokens.RefreshToken)
+	httpx.RespondJSON(w, http.StatusOK, toSessionResponse(u, tokens))
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-	var req RefreshRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RefreshToken == "" {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
-		return
-	}
+	// The browser drops the cookie even if revoking it server-side fails.
+	h.clearRefreshCookie(w)
 
-	if err := h.service.Logout(r.Context(), req.RefreshToken); err != nil {
-		httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
-		return
+	if cookie, err := r.Cookie(refreshCookieName); err == nil {
+		if err := h.service.Logout(r.Context(), cookie.Value); err != nil {
+			httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// -----------------------------------------------------------------------------
+// Refresh cookie
+// -----------------------------------------------------------------------------
+
+func (h *Handler) setRefreshCookie(w http.ResponseWriter, token string) {
+	h.writeRefreshCookie(w, token, int(h.cfg.RefreshTokenExpiry.Seconds()))
+}
+
+func (h *Handler) clearRefreshCookie(w http.ResponseWriter) {
+	h.writeRefreshCookie(w, "", -1)
+}
+
+func (h *Handler) writeRefreshCookie(w http.ResponseWriter, token string, maxAge int) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     refreshCookieName,
+		Value:    token,
+		Path:     refreshCookiePath,
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   h.cfg.CookieSecure,
+		SameSite: http.SameSiteStrictMode,
+	})
 }

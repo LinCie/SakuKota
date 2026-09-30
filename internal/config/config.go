@@ -13,6 +13,7 @@ type Config struct {
 	JWTSecret          string
 	JWTExpiry          time.Duration
 	RefreshTokenExpiry time.Duration
+	CookieSecure       bool
 	CORSAllowedOrigin  string
 }
 
@@ -35,7 +36,7 @@ func NewConfig() (Config, error) {
 	if jwtSecret == "" {
 		jwtSecret = "dev-secret-change-me"
 	}
-	minutes := 15
+	minutes := 5
 	if v := os.Getenv("JWT_EXPIRES_MINUTES"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			minutes = n
@@ -43,13 +44,22 @@ func NewConfig() (Config, error) {
 	}
 	jwtExpiry := time.Duration(minutes) * time.Minute
 
-	days := 7
+	days := 30
 	if v := os.Getenv("REFRESH_TOKEN_EXPIRES_DAYS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			days = n
 		}
 	}
 	refreshTokenExpiry := time.Duration(days) * 24 * time.Hour
+
+	// Secure by default; set COOKIE_SECURE=false only for local development
+	// over plain HTTP.
+	cookieSecure := true
+	if v := os.Getenv("COOKIE_SECURE"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cookieSecure = b
+		}
+	}
 
 	corsAllowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
 	if corsAllowedOrigin == "" {
@@ -62,6 +72,7 @@ func NewConfig() (Config, error) {
 		JWTSecret:          jwtSecret,
 		JWTExpiry:          jwtExpiry,
 		RefreshTokenExpiry: refreshTokenExpiry,
+		CookieSecure:       cookieSecure,
 		CORSAllowedOrigin:  corsAllowedOrigin,
 	}, nil
 }

@@ -31,11 +31,10 @@ export function AccountControl({ className }: { className?: string }) {
   }
 
   function signOut() {
-    if (!session) return;
     clearSession();
-    // Revoking the refresh token is best effort; the user is signed out here
-    // either way.
-    logout(session.refresh_token).catch(() => undefined);
+    // Revoking and clearing the refresh cookie is best effort; if it fails,
+    // the next page load restores the session from the cookie.
+    logout().catch(() => undefined);
   }
 
   return (

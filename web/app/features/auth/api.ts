@@ -5,7 +5,7 @@ import {
   type CommonApiErrorCode,
   type InvalidBodyErrorCode,
 } from "~/shared/api";
-import type { LoginResponse, Tokens, User } from "./types";
+import type { Session, User } from "./types";
 
 // -----------------------------------------------------------------------------
 // Request bodies / error codes (service-layer concerns, not domain shapes)
@@ -18,9 +18,8 @@ export type RegisterErrorCode =
   | "email_taken";
 export type LoginErrorCode =
   CommonApiErrorCode | InvalidBodyErrorCode | "invalid_credentials";
-export type RefreshErrorCode =
-  CommonApiErrorCode | InvalidBodyErrorCode | "invalid_refresh_token";
-export type LogoutErrorCode = CommonApiErrorCode | InvalidBodyErrorCode;
+export type RefreshErrorCode = CommonApiErrorCode | "invalid_refresh_token";
+export type LogoutErrorCode = CommonApiErrorCode;
 
 export type RegisterRequest = {
   name: string;
@@ -47,24 +46,21 @@ export function register(
 
 export function login(
   body: LoginRequest,
-): Promise<ApiResult<LoginResponse, LoginErrorCode>> {
-  return apiResult<LoginResponse, LoginErrorCode>(
+): Promise<ApiResult<Session, LoginErrorCode>> {
+  return apiResult<Session, LoginErrorCode>(
     api.post("auth/login", { json: body }),
   );
 }
 
-export function refresh(
-  refreshToken: string,
-): Promise<ApiResult<Tokens, RefreshErrorCode>> {
-  return apiResult<Tokens, RefreshErrorCode>(
-    api.post("auth/refresh", { json: { refresh_token: refreshToken } }),
-  );
+/**
+ * Exchanges the HttpOnly refresh cookie for a new session. Prefer
+ * `refreshSession` (see ./session), which serializes refreshes.
+ */
+export function refresh(): Promise<ApiResult<Session, RefreshErrorCode>> {
+  return apiResult<Session, RefreshErrorCode>(api.post("auth/refresh"));
 }
 
-export function logout(
-  refreshToken: string,
-): Promise<ApiResult<void, LogoutErrorCode>> {
-  return apiResult<void, LogoutErrorCode>(
-    api.post("auth/logout", { json: { refresh_token: refreshToken } }),
-  );
+/** Revokes the refresh cookie sent with the request and clears it. */
+export function logout(): Promise<ApiResult<void, LogoutErrorCode>> {
+  return apiResult<void, LogoutErrorCode>(api.post("auth/logout"));
 }

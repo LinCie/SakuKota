@@ -1,4 +1,4 @@
-.PHONY: dev start build postgres-up postgres-down migrate-up migrate-down migrate-status migrate-version migrate-reset migration seed
+.PHONY: dev dev-backend dev-frontend start build postgres-up postgres-down migrate-up migrate-down migrate-status migrate-version migrate-reset migration seed
 
 -include .env
 
@@ -7,8 +7,23 @@ MIGRATIONS_DIR ?= migrations
 export DATABASE_URL MIGRATIONS_DIR
 GOOSE := go run github.com/pressly/goose/v3/cmd/goose@v3.27.3
 
-dev:
+dev-backend:
+	@command -v air >/dev/null || { echo "air not found"; exit 1; }
 	air
+
+dev-frontend:
+	@command -v pnpm >/dev/null || { echo "pnpm not found"; exit 1; }
+	@test -d web/node_modules || pnpm --dir web install
+	pnpm --dir web dev
+
+# Run backend (air) and frontend (vite) together; stopping either (or Ctrl-C) stops both.
+dev:
+	@command -v air >/dev/null || { echo "air not found"; exit 1; }
+	@command -v pnpm >/dev/null || { echo "pnpm not found"; exit 1; }
+	@test -d web/node_modules || pnpm --dir web install
+	@bash -c 'trap "trap - EXIT; kill \$$(jobs -p) 2>/dev/null; wait" INT TERM EXIT; \
+		air & pnpm --dir web dev & \
+		wait -n'
 
 start:
 	go run ./cmd/web

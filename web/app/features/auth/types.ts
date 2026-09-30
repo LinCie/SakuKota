@@ -10,11 +10,11 @@ export type User = {
   updated_at: string;
 };
 
-export type Tokens = {
-  access_token: string;
-  refresh_token: string;
-};
-
-export type LoginResponse = Tokens & {
+/**
+ * The login/refresh response. The refresh token never reaches JavaScript: the
+ * backend keeps it in an HttpOnly cookie.
+ */
+export type Session = {
   user: User;
+  access_token: string;
 };

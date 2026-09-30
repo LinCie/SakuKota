@@ -20,7 +20,7 @@ func NewModule(db *sqlx.DB, cfg config.Config) *Module {
 	hasher := NewArgon2Hasher()
 	store := NewMemoryRefreshStore()
 	service := NewService(cfg, repo, hasher, store)
-	handler := NewHandler(service)
+	handler := NewHandler(cfg, service)
 
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, handler)

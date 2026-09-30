@@ -15,21 +15,11 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
-// RefreshRequest is the API payload for refreshing or revoking a refresh token.
-type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token"`
-}
-
-// TokenResponse is the API representation of Tokens.
-type TokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-}
-
-// LoginResponse is the API response for a successful login.
-type LoginResponse struct {
-	User UserResponse `json:"user"`
-	TokenResponse
+// SessionResponse is the API response for a successful login or refresh. The
+// refresh token is never in the body; it is set as an HttpOnly cookie.
+type SessionResponse struct {
+	User        UserResponse `json:"user"`
+	AccessToken string       `json:"access_token"`
 }
 
 // UserResponse is the API representation of a User.
@@ -52,10 +42,10 @@ func toUser(req RegisterRequest) *User {
 	}
 }
 
-func toTokenResponse(t *Tokens) TokenResponse {
-	return TokenResponse{
-		AccessToken:  t.AccessToken,
-		RefreshToken: t.RefreshToken,
+func toSessionResponse(u *User, t *Tokens) SessionResponse {
+	return SessionResponse{
+		User:        toUserResponse(u),
+		AccessToken: t.AccessToken,
 	}
 }
 

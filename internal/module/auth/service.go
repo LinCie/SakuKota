@@ -120,24 +120,29 @@ func (s *service) Login(ctx context.Context, email, password string) (*User, *To
 	return u, tokens, nil
 }
 
-// Refresh exchanges a valid refresh token for a new token pair. The old
-// refresh token is consumed, so it cannot be reused.
-func (s *service) Refresh(ctx context.Context, refreshToken string) (*Tokens, error) {
+// Refresh exchanges a valid refresh token for the user and a new token pair.
+// The old refresh token is consumed, so it cannot be reused.
+func (s *service) Refresh(ctx context.Context, refreshToken string) (*User, *Tokens, error) {
 	userID, err := s.store.Consume(ctx, hashToken(refreshToken))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Reload the user so the new access token reflects their current role.
 	u, err := s.repo.GetByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			return nil, ErrInvalidRefreshToken
+			return nil, nil, ErrInvalidRefreshToken
 		}
-		return nil, err
+		return nil, nil, err
 	}
 
-	return s.issueTokens(ctx, u)
+	tokens, err := s.issueTokens(ctx, u)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return u, tokens, nil
 }
 
 func (s *service) Logout(ctx context.Context, refreshToken string) error {

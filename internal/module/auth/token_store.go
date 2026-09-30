@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
 )
@@ -38,7 +37,6 @@ func (s *memoryRefreshStore) Save(_ context.Context, tokenHash string, userID in
 		expiresAt: time.Now().Add(ttl),
 	}
 
-	log.Println(s.tokens)
 	return nil
 }
 
