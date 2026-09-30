@@ -23,17 +23,20 @@ Curated micro-services (warung, tailors, local clinics, laundries, pharmacies) r
 - Primary scenario: mobile, late after work, filtering nearby pins by category, tapping for details, and checking the kecamatan info.
 - Also used on desktop.
 - Single-screen app flow: pick kecamatan, filter/search, browse map pins, open place details, open kecamatan info.
+- Optional account: "Masuk" in the header opens `/masuk` or `/daftar` and returns to the same map view afterwards. The map never requires an account.
 
 ## Capabilities and Constraints
 
-- Frontend: React Router 8 + Tailwind CSS v4 in `web/`; Tailwind utilities only, no raw CSS.
+- Frontend: TanStack Router (file routes) + Tailwind CSS v4 in `web/`; Tailwind utilities only, no raw CSS.
 - Map: Leaflet (confirmed) with real coordinates from the API.
 - Backend (Go, PostGIS) endpoints: `GET /places/` (optional `sub_district_id`, comma-separated `category_id`, and `q` search), `GET /places/categories/`, `GET /subdistricts/`.
 - Categories: Affordable Food & Warung, Tailor, Local Clinic, Laundry, Pharmacy.
 - Place fields: name, address, location (GeoJSON point), operating hours, estimated price range, short description. Nullable fields must show placeholders ("Hours not available", "Data not available").
 - Kecamatan fields: flood history, safety/crime information, estimated daily spending (Rupiah), static map image URL.
+- Auth endpoints: `POST /auth/register` (name, email, password of at least 8 characters; returns the user, no tokens), `POST /auth/login` (user plus access and refresh tokens), `POST /auth/refresh` (single-use refresh tokens, held in backend memory, so a restart ends sessions), `POST /auth/logout`. No endpoint requires sign-in yet.
+- Accounts: the map is public; accounts are groundwork for later features and must not be advertised with benefits that don't exist. Registering signs the user in automatically. The session (user plus tokens) lives in localStorage; the return path travels in the `kembali` search param.
 - Terminology: "kecamatan" in the UI (backend calls it sub-district).
-- Out of scope: admin verification, place suggestions, votes/reviews, GeoJSON overlays, kost listings.
+- Out of scope: admin verification, place suggestions, votes/reviews, GeoJSON overlays, kost listings, password reset, social login.
 - UI language: Bahasa Indonesia (confirmed). Seed content is currently English; translating it is a separate data decision.
 
 ## Brand Commitments

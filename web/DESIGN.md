@@ -164,6 +164,64 @@ components:
   list-row-hover:
     backgroundColor: "{colors.sign-soft}"
     padding: "12px 20px"
+  auth-wall:
+    backgroundColor: "{colors.board}"
+    textColor: "{colors.paint}"
+    padding: "12px"
+  auth-board:
+    backgroundColor: "{colors.paint}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.frame}"
+    padding: "4px"
+    width: "min(100%, 26rem)"
+  auth-plate-active:
+    backgroundColor: "{colors.sign}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.plate}"
+    height: "48px"
+  auth-plate-inactive:
+    backgroundColor: "{colors.paint}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.plate}"
+    height: "48px"
+  input-field:
+    backgroundColor: "{colors.paint}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.plate}"
+    padding: "0 12px"
+    height: "{spacing.control}"
+  field-label:
+    textColor: "{colors.ink}"
+    typography: "{typography.label}"
+  field-error:
+    textColor: "{colors.chili}"
+    typography: "{typography.label}"
+  form-alert:
+    textColor: "{colors.ink}"
+    typography: "{typography.label}"
+    rounded: "{rounded.plate}"
+    padding: "10px 12px"
+  button-submit:
+    backgroundColor: "{colors.sign}"
+    textColor: "{colors.ink}"
+    typography: "{typography.code}"
+    rounded: "{rounded.plate}"
+    padding: "0 16px"
+    height: "{spacing.control}"
+    width: "100%"
+  button-submit-pending:
+    backgroundColor: "{colors.sign-soft}"
+    textColor: "{colors.ink}"
+  account-plate:
+    textColor: "{colors.paint}"
+    typography: "{typography.label}"
+    rounded: "{rounded.plate}"
+    padding: "0 12px"
+    height: "{spacing.control}"
+  account-plate-hover:
+    backgroundColor: "{colors.board-deep}"
+    textColor: "{colors.paint}"
 ---
 
 # Design System: Rantau
@@ -243,6 +301,10 @@ A signwriter's tin set: a few saturated, flat enamel colours over warm paint whi
 
 A single-screen app. On desktop (768px and up) the page is exactly the viewport height: header board, category strip, then a 2:1 grid with the map on the left (2fr) and the menu-board column on the right (1fr), separated by a 2px ink rule; only the right column scrolls. From 1024px the header collapses onto one row (wordmark and tagline left, picker, "Lihat info", and search right, search capped at ~28rem) and the category strip puts plates left and the count right.
 
+The header's account plate is the last item of that one-row header from 1024px. Below 1024px the header is a two-column grid: the wordmark cluster on the left and the account plate pinned to the right of the same row, with the picker, "Lihat info", and search spanning both columns beneath. The tagline is hidden below 640px to make room for the account plate.
+
+The auth pages (`/masuk`, `/daftar`) are a separate full-viewport layout: the wordmark cluster sits where it does on the map header (12px padding, 20px from 768px), and a single board up to 26rem wide sits in a centred column under it. On phones the board is top-aligned just under the wordmark; from 768px it is anchored at a fixed offset from the top (12% of the dynamic viewport), never vertically centred, so the plates hold still across pages and error states. The "Kembali ke peta" link sits 12px under the board.
+
 On phones the page stacks and scrolls: header controls wrap (picker and "Lihat info" share a row, search below), category plates wrap onto two rows with the count under them, the map takes 58% of the dynamic viewport (minimum 320px), and the place list follows beneath. Selecting a place opens its menu board as a fixed bottom sheet (up to 60% viewport height) instead of replacing the list; the map pans so the selected sign stays above the sheet.
 
 Spacing runs on a 4px grid with 8px and 12px as the working gaps: 12px side padding on phones, 20px from 768px; 8px between plates; 12px–16px inside rows and boards. Touch targets are 40px (filter plates, zoom buttons) or 44px (header fields and the primary plate).
@@ -257,6 +319,8 @@ The world is flat: panels sit on the page with borders, not shadows. Depth appea
 - **Card lift** (`box-shadow: 0 8px 24px rgb(26 26 23 / 0.2)`): the empty-state card over the map.
 - **Sheet lift** (`box-shadow: 0 -10px 30px rgb(26 26 23 / 0.3)`): the mobile bottom sheet, cast upward.
 - **Dialog lift** (`box-shadow: 0 24px 60px rgb(0 0 0 / 0.35)`): the notice-board dialog, over a 60% ink backdrop.
+
+The auth board lies flat on its green wall and casts no shadow.
 
 ### Named Rules
 **The Only-Floaters-Cast Rule.** Boards, strips, lists, and the desktop menu board have no shadow. A shadow means "this is lifted above the map"; on desktop the details panel drops its sheet shadow because it no longer floats.
@@ -274,6 +338,7 @@ Painted plates, confident and flat.
 - **Hover / Focus:** fill fades to faded sign yellow (colour transition); focus is a 2px outline offset 2px, yellow on the green board, painted blue on paint white. Disabled drops to 50% opacity.
 - **Quiet buttons** (close, back, clear, zoom): no border, ink icon or label, faded-yellow fill on hover and focus, with an inset blue focus outline; on the green board they hover to deep board green.
 - **Icons:** Lucide line icons at a 2.5 stroke, 16–20px.
+- **Submit plate (forms):** a full-width sign plate, 44px, ink Bungee at 0.875rem, blue focus outline offset 2px (it sits on paint white). Hover fades to faded sign yellow. While pending it is disabled, holds the faded sign-yellow fill, and reads "Memproses…".
 
 ### Chips (category filter plates)
 - **Style:** 40px plate with a small code square on the left and a Figtree bold label.
@@ -289,10 +354,14 @@ Painted plates, confident and flat.
 - **Search:** paint-white field, 2px ink border, 3px corners, 44px tall, leading search icon in soft ink, trailing quiet clear button when filled; the native cancel control is hidden.
 - **Kecamatan select:** deep-board-green field with a 2px paint-at-35% border (60% on hover) and a yellow chevron; options render on paint white.
 - **Focus:** fields swap their border to sign yellow instead of drawing an outline.
+- **Form field (on paint white):** a Figtree bold label (0.875rem, ink) above a 44px paint-white field with a 2px ink border, 3px corners, and 12px side padding. Focus is a 2px painted-blue outline offset 2px.
+- **Form field, invalid:** after a submit, the border turns chili and a chili message (0.875rem semibold) sits under the field; editing the field clears it. Without an error, an optional soft-ink hint sits in the same slot.
+- **Form alert:** a form-level message plate with a 2px border and 3px corners (10px × 12px padding), no fill, and ink semibold text at 0.875rem. It carries errors only: a chili border and chili alert icon (an assertive alert). It sits at the top of the form, above the fields.
 
 ### Navigation
 - **Header board:** full-width warung green with the wordmark plate (deep green frame, yellow inset border, yellow Bungee), a paint-at-85% tagline, and the controls; closed by a 6px chili stripe.
 - **Category strip:** paint white with a 2px ink bottom rule; the count sentence is a polite live region with the number in Bungee.
+- **Account plate (header):** a 44px plate on the green board with a 2px paint-at-35% outline, no fill, and a paint-white Figtree bold label (0.875rem) led by a 16px user icon. Hover raises the border to paint at 60% and fills deep board green. Focus is a 2px yellow outline offset 2px. It is never a yellow plate, because yellow is reserved for the action plate. Signed out it reads "Masuk" and links to the sign-in page, carrying the current map address. Signed in, the first name (paint-white bold, truncated at 10ch) sits beside the same plate reading "Keluar" with a log-out icon.
 - **Place list:** rows divided by 1px dashed ink at 20%; each row is a code plate, name (Figtree semibold), truncated address (soft ink), and right-aligned tabular price; hover and focus fill with faded sign yellow at 60%.
 
 ### Map Sign (signature)
@@ -302,11 +371,19 @@ A place is a 36px category plate (2px border, Bungee code, sign cast) on a 3px �
 
 **Map canvas:** Esri Light Gray base and reference tiles (streets and labels, no POI icons) warmed with a 30% sepia filter over a deep-paint backing; the default Leaflet zoom control is replaced by a paint-white zoom plate (2px ink border, ink divider, control cast) at the top left; attribution sits on paint at 90% in 10px soft ink with blue links.
 
+### Auth Wall (Masuk / Daftar)
+The header board grown to fill the viewport: full-bleed warung green with paint-white text. It has no chili stripe, because it never meets a paint-white strip, so there is no seam to close. The wordmark plate and paint-at-85% tagline are the map header's own (one shared component; the tagline hides below 640px on both), and the wordmark links back to the map.
+- **Board:** a menu-board-framed paint-white board (5px frame, 2px ink border, 4px padding, inner 3px panel ringed in 1px ink at 40%, 16px inner padding, 20px from 640px). It is flat and casts no shadow. The plate pair and lede sit 12px apart, and the form follows 20px below.
+- **Plate pair:** a two-column row of equal 48px plates with an 8px gap, lettered in ink Bungee at 1.125rem. The current page's plate is a solid sign-yellow plate with a 2px ink border and is the page's `<h1>`. The other plate is a paint-white link with a dashed 2px ink-at-60% outline that turns solid ink on hover, with a blue focus outline offset 2px. Switching plates swaps only the form; the board and plates stay put.
+- **Lede:** one soft-ink line at 0.875rem under the plates.
+- **Form:** fields, alert, and submit plate stacked at a 16px gap (see Inputs / Fields and Buttons).
+- **Return link:** "Kembali ke peta" under the board, a 40px quiet link on the green: paint-white semibold 0.875rem with a 16px back arrow, deep board green on hover and focus, and a 2px yellow focus outline. It and the wordmark return to the exact map address the visitor came from.
+
 ### Missing Slot
 A drawn empty slot: inline dashed 2px border in ink at 30%, 3px corners, soft-ink label-size text such as "Jam buka tidak tersedia" or "Data tidak tersedia". A missing area image becomes a dashed 8:5 frame holding the slot.
 
 ### Motion
-The mobile sheet slides up from off-screen over 300ms ease-out; the notice board fades in and rises 16px over 300ms ease-out; hovers transition colour at the default 150ms. All motion is gated on `prefers-reduced-motion: no-preference`.
+The mobile sheet slides up from off-screen over 300ms ease-out; the notice board fades in and rises 16px over 300ms ease-out; hovers transition colour at the default 150ms. The auth board settles into place on entry by translating up 12px over 500ms with the planting ease `cubic-bezier(0.16, 1, 0.3, 1)`, with no fade. All motion is gated on `prefers-reduced-motion: no-preference`.
 
 ## Do's and Don'ts
 

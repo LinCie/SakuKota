@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ChevronDown, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { AccountControl } from "~/features/auth/components/account-control";
 import { getCategories, getPlaces } from "~/features/places/api";
 import { categoryStyle } from "~/features/places/components/category-sign";
 import {
@@ -11,6 +12,7 @@ import {
 import { SurvivalMap } from "~/features/places/components/survival-map";
 import { getSubDistricts } from "~/features/subdistricts/api";
 import { KecamatanBoard } from "~/features/subdistricts/components/kecamatan-board";
+import { Wordmark } from "~/shared/components/wordmark";
 
 type HomeSearch = {
   kecamatan?: string;
@@ -197,22 +199,10 @@ function Home() {
     <div className="flex min-h-dvh flex-col md:h-dvh">
       {/* Header board */}
       <header className="bg-board text-paint">
-        <div className="flex flex-col gap-3 px-3 py-3 md:px-5 lg:flex-row lg:items-center lg:gap-6">
-          <div className="flex items-center gap-4">
-            <a
-              href="/"
-              className="bg-board-deep focus-visible:outline-sign shrink-0 rounded-[5px] p-1 focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              <span className="border-sign font-sign text-sign block rounded-[3px] border-2 px-3 pt-1.5 pb-1 text-2xl leading-none tracking-wide">
-                Rantau
-              </span>
-            </a>
-            <p className="text-paint/85 max-w-[26ch] text-sm leading-snug">
-              Peta bertahan hidup untuk perantau di Jakarta
-            </p>
-          </div>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-3 md:px-5 lg:flex lg:gap-6">
+          <Wordmark />
 
-          <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center lg:justify-end">
+          <div className="col-span-2 flex flex-1 flex-col gap-2 sm:flex-row sm:items-center lg:justify-end">
             <div className="flex gap-2">
               <label className="relative flex-1 sm:flex-none">
                 <span className="sr-only">Kecamatan</span>
@@ -289,6 +279,8 @@ function Home() {
               ) : null}
             </form>
           </div>
+
+          <AccountControl className="col-start-2 row-start-1 justify-self-end" />
         </div>
         <div aria-hidden="true" className="bg-chili h-1.5" />
       </header>
@@ -329,7 +321,7 @@ function Home() {
               >
                 <span
                   aria-hidden="true"
-                  className={`font-sign grid size-7 place-items-center rounded-[2px] text-sm leading-none ${
+                  className={`font-sign grid size-7 place-items-center rounded-xs text-sm leading-none ${
                     active ? "bg-paint/20" : `border-2 ${style.solid}`
                   }`}
                 >

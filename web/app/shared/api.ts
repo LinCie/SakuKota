@@ -1,10 +1,9 @@
 import ky from "ky";
 
-// The rantau-go backend has no authentication yet, so this client only
-// centralizes base URL configuration, retry behavior, and response
-// normalization. If the backend later adds session/token authentication,
-// the refresh-and-retry-once logic should be added here (e.g. via an
-// `afterResponse` hook) so it stays out of individual domain services.
+// This client centralizes base URL configuration, retry behavior, and
+// response normalization. No endpoint requires sign-in yet; when one does,
+// attach the access token and the refresh-and-retry-once logic here (e.g. via
+// `beforeRequest`/`afterResponse` hooks) so it stays out of domain services.
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 
 // `throwHttpErrors: false` means non-2xx responses are returned as regular
@@ -36,6 +35,9 @@ export type ApiErrorResponse<C extends string = string> = {
 
 /** Error code shared by every backend endpoint (unhandled server-side failures). */
 export type CommonApiErrorCode = "internal_error";
+
+/** Error code for endpoints that reject an undecodable request body. */
+export type InvalidBodyErrorCode = "invalid_body";
 
 /**
  * Normalized outcome of a backend call. `ok: true` carries the typed
@@ -90,6 +92,14 @@ export async function apiResult<T, C extends string = string>(
   responsePromise: Promise<Response>,
 ): Promise<ApiResult<T, C>> {
   const response = await responsePromise;
+
+  // 204 No Content has no envelope (e.g. POST /auth/logout).
+  if (response.status === 204) {
+    return {
+      ok: true,
+      data: undefined as T,
+    };
+  }
 
   let body: unknown;
   try {
