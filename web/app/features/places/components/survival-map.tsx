@@ -8,7 +8,7 @@ import {
   type RefObject,
 } from "react";
 
-import type { Place } from "~/types/places";
+import type { Place } from "../types";
 import { categoryStyle } from "./category-sign";
 
 const JAKARTA_CENTER: [number, number] = [-6.2088, 106.8456];

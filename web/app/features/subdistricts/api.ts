@@ -1,5 +1,10 @@
-import type { SubDistrict } from "~/types/subdistricts";
-import { api, apiResult, type ApiResult, type CommonApiErrorCode } from "./api";
+import {
+  api,
+  apiResult,
+  type ApiResult,
+  type CommonApiErrorCode,
+} from "~/shared/api";
+import type { SubDistrict } from "./types";
 
 // -----------------------------------------------------------------------------
 // Error codes (service-layer concern, not a domain shape)

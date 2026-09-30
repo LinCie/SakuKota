@@ -1,5 +1,10 @@
-import type { Category, Place } from "~/types/places";
-import { api, apiResult, type ApiResult, type CommonApiErrorCode } from "./api";
+import {
+  api,
+  apiResult,
+  type ApiResult,
+  type CommonApiErrorCode,
+} from "~/shared/api";
+import type { Category, Place } from "./types";
 
 // -----------------------------------------------------------------------------
 // Request params / error codes (service-layer concerns, not domain shapes)

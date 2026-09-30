@@ -1,4 +1,4 @@
-import type { Category } from "~/types/places";
+import type { Category } from "../types";
 
 export type CategoryStyle = {
   code: string;

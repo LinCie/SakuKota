@@ -2,12 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ChevronDown, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { categoryStyle } from "~/components/category-sign";
-import { KecamatanBoard } from "~/components/kecamatan-board";
-import { PlaceDetails, PlaceList } from "~/components/place-board";
-import { SurvivalMap } from "~/components/survival-map";
-import { getCategories, getPlaces } from "~/services/places";
-import { getSubDistricts } from "~/services/subdistricts";
+import { getCategories, getPlaces } from "~/features/places/api";
+import { categoryStyle } from "~/features/places/components/category-sign";
+import {
+  PlaceDetails,
+  PlaceList,
+} from "~/features/places/components/place-board";
+import { SurvivalMap } from "~/features/places/components/survival-map";
+import { getSubDistricts } from "~/features/subdistricts/api";
+import { KecamatanBoard } from "~/features/subdistricts/components/kecamatan-board";
 
 type HomeSearch = {
   kecamatan?: string;

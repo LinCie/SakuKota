@@ -13,8 +13,8 @@ import {
   type ReactNode,
 } from "react";
 
-import type { SubDistrict } from "~/types/subdistricts";
-import { MissingSlot } from "./place-board";
+import { MissingSlot } from "~/shared/components/missing-slot";
+import type { SubDistrict } from "../types";
 
 const rupiah = new Intl.NumberFormat("id-ID", {
   style: "currency",
