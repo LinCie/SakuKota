@@ -2,6 +2,8 @@ import type { AnyFieldApi } from "@tanstack/react-form";
 import { CircleAlert } from "lucide-react";
 import type { InputHTMLAttributes, ReactNode } from "react";
 
+import { cn } from "~/shared/cn";
+
 type TextFieldProps = Omit<
   InputHTMLAttributes<HTMLInputElement>,
   "id" | "name" | "value" | "onChange" | "onBlur"
@@ -17,7 +19,7 @@ export function TextField({
   field,
   label,
   hint,
-  className = "",
+  className,
   ...input
 }: TextFieldProps) {
   // Zod errors arrive as `{ message }` objects.
@@ -37,9 +39,11 @@ export function TextField({
         onBlur={field.handleBlur}
         aria-invalid={error ? true : undefined}
         aria-describedby={error || hint ? messageId : undefined}
-        className={`bg-paint text-ink focus-visible:outline-cat h-11 w-full rounded-[3px] border-2 px-3 focus-visible:outline-2 focus-visible:outline-offset-2 ${
-          error ? "border-chili" : "border-ink"
-        } ${className}`}
+        className={cn(
+          "bg-paint text-ink focus-visible:outline-cat h-11 w-full rounded-[3px] border-2 px-3 focus-visible:outline-2 focus-visible:outline-offset-2",
+          error ? "border-chili" : "border-ink",
+          className,
+        )}
         {...input}
       />
       {error ? (

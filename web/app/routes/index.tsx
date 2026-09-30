@@ -12,6 +12,7 @@ import {
 import { SurvivalMap } from "~/features/places/components/survival-map";
 import { getSubDistricts } from "~/features/subdistricts/api";
 import { KecamatanBoard } from "~/features/subdistricts/components/kecamatan-board";
+import { cn } from "~/shared/cn";
 import { Wordmark } from "~/shared/components/wordmark";
 
 type HomeSearch = {
@@ -295,11 +296,12 @@ function Home() {
             type="button"
             aria-pressed={allActive}
             onClick={() => updateParams({ kategori: undefined })}
-            className={`focus-visible:outline-cat h-10 shrink-0 rounded-[3px] border-2 px-3 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
+            className={cn(
+              "focus-visible:outline-cat h-10 shrink-0 rounded-[3px] border-2 px-3 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2",
               allActive
                 ? "border-ink bg-ink text-paint"
-                : "border-ink/60 bg-paint text-ink hover:border-ink border-dashed"
-            }`}
+                : "border-ink/60 bg-paint text-ink hover:border-ink border-dashed",
+            )}
           >
             Semua
           </button>
@@ -313,17 +315,22 @@ function Home() {
                 type="button"
                 aria-pressed={active}
                 onClick={() => toggleCategory(category.slug)}
-                className={`focus-visible:outline-cat inline-flex h-10 shrink-0 items-center gap-2 rounded-[3px] border-2 pr-3 pl-1 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                className={cn(
+                  "focus-visible:outline-cat inline-flex h-10 shrink-0 items-center gap-2 rounded-[3px] border-2 pr-3 pl-1 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2",
                   active
                     ? style.solid
-                    : `bg-paint border-dashed ${style.outline} hover:border-solid`
-                }`}
+                    : [
+                        "bg-paint border-dashed hover:border-solid",
+                        style.outline,
+                      ],
+                )}
               >
                 <span
                   aria-hidden="true"
-                  className={`font-sign grid size-7 place-items-center rounded-xs text-sm leading-none ${
-                    active ? "bg-paint/20" : `border-2 ${style.solid}`
-                  }`}
+                  className={cn(
+                    "font-sign grid size-7 place-items-center rounded-xs text-sm leading-none",
+                    active ? "bg-paint/20" : ["border-2", style.solid],
+                  )}
                 >
                   {style.code}
                 </span>

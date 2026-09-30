@@ -1,11 +1,18 @@
 import js from "@eslint/js";
 import eslintConfigPrettier from "eslint-config-prettier/flat";
 import globals from "globals";
-import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
+import reactX from "eslint-plugin-react-x";
 import tseslint from "typescript-eslint";
 
 const tsFiles = ["**/*.{ts,tsx}"];
+
+// react-hooks owns the hooks rules; turn off react-x's copies of them.
+const reactXHooksRulesOff = Object.fromEntries(
+  Object.keys(reactHooks.rules)
+    .filter((rule) => rule in reactX.rules)
+    .map((rule) => [`react-x/${rule}`, "off"]),
+);
 
 export default tseslint.config(
   {
@@ -19,21 +26,18 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ...react.configs.flat.recommended,
+    ...reactX.configs["recommended-typescript"],
     files: tsFiles,
+    rules: {
+      ...reactX.configs["recommended-typescript"].rules,
+      ...reactXHooksRulesOff,
+    },
     languageOptions: {
       globals: {
         ...globals.browser,
         ...globals.node,
       },
     },
-    settings: {
-      react: { version: "detect" },
-    },
-  },
-  {
-    ...react.configs.flat["jsx-runtime"],
-    files: tsFiles,
   },
   {
     ...reactHooks.configs.flat.recommended,

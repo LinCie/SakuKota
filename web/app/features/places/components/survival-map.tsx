@@ -237,7 +237,7 @@ export function SurvivalMap({
         paddingBottomRight: [72, 72 + covered],
       });
     }
-  }, [ready, selectedId, places]);
+  }, [ready, selectedId, places, sheetRef]);
 
   return (
     <div className="absolute inset-0 isolate">

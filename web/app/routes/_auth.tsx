@@ -8,6 +8,7 @@ import {
 import { ArrowLeft } from "lucide-react";
 
 import { getSession } from "~/features/auth/session";
+import { cn } from "~/shared/cn";
 import { Wordmark } from "~/shared/components/wordmark";
 
 type AuthSearch = {
@@ -67,7 +68,7 @@ function AuthLayout() {
                     plate.to === pathname ? (
                       <h1
                         key={plate.to}
-                        className={`${plateClass} border-ink bg-sign`}
+                        className={cn(plateClass, "border-ink bg-sign")}
                       >
                         {plate.label}
                       </h1>
@@ -76,7 +77,10 @@ function AuthLayout() {
                         key={plate.to}
                         to={plate.to}
                         search={{ kembali }}
-                        className={`${plateClass} border-ink/60 bg-paint hover:border-ink focus-visible:outline-cat border-dashed transition-colors hover:border-solid focus-visible:outline-2 focus-visible:outline-offset-2`}
+                        className={cn(
+                          plateClass,
+                          "border-ink/60 bg-paint hover:border-ink focus-visible:outline-cat border-dashed transition-colors hover:border-solid focus-visible:outline-2 focus-visible:outline-offset-2",
+                        )}
                       >
                         <span className="sr-only">{plate.hint} </span>
                         {plate.label}

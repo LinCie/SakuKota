@@ -1,6 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { LogOut, UserRound } from "lucide-react";
 
+import { cn } from "~/shared/cn";
 import { logout } from "../api";
 import { clearSession, useSession } from "../session";
 
@@ -12,7 +13,7 @@ const plateClass =
  * the current page afterwards), the user's first name and "Keluar" when
  * signed in.
  */
-export function AccountControl({ className = "" }: { className?: string }) {
+export function AccountControl({ className }: { className?: string }) {
   const session = useSession();
   const href = useLocation({ select: (location) => location.href });
 
@@ -21,7 +22,7 @@ export function AccountControl({ className = "" }: { className?: string }) {
       <Link
         to="/masuk"
         search={{ kembali: href === "/" ? undefined : href }}
-        className={`${plateClass} ${className}`}
+        className={cn(plateClass, className)}
       >
         <UserRound aria-hidden="true" className="size-4" strokeWidth={2.5} />
         Masuk
@@ -38,7 +39,7 @@ export function AccountControl({ className = "" }: { className?: string }) {
   }
 
   return (
-    <div className={`flex items-center gap-3 ${className}`}>
+    <div className={cn("flex items-center gap-3", className)}>
       <span className="text-paint max-w-[10ch] truncate text-sm font-bold">
         {session.user.name.split(" ")[0]}
       </span>

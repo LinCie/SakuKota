@@ -1,3 +1,4 @@
+import { cn } from "~/shared/cn";
 import type { Category } from "../types";
 
 export type CategoryStyle = {
@@ -59,7 +60,7 @@ export function categoryStyle(category: Category): CategoryStyle {
 /** Small painted code plate, e.g. the "W" on a warung sign. */
 export function CodePlate({
   category,
-  className = "",
+  className,
 }: {
   category: Category;
   className?: string;
@@ -69,7 +70,11 @@ export function CodePlate({
   return (
     <span
       aria-hidden="true"
-      className={`font-sign inline-grid size-7 shrink-0 place-items-center rounded-[3px] border-2 text-sm leading-none ${style.solid} ${className}`}
+      className={cn(
+        "font-sign inline-grid size-7 shrink-0 place-items-center rounded-[3px] border-2 text-sm leading-none",
+        style.solid,
+        className,
+      )}
     >
       {style.code}
     </span>
