@@ -16,5 +16,7 @@ func RegisterRoutes(mux *http.ServeMux, handler *Handler, cfg config.Config) {
 
 	mux.HandleFunc("GET /{$}", handler.GetPlaces)
 	mux.Handle("POST /{$}", adminOnly.ThenFunc(handler.CreatePlace))
-	mux.HandleFunc("GET /categories/", handler.GetCategories)
+	mux.HandleFunc("GET /categories/{$}", handler.GetCategories)
+	mux.Handle("POST /categories/{$}", adminOnly.ThenFunc(handler.CreateCategory))
+	mux.Handle("POST /categories/{id}/fields/{$}", adminOnly.ThenFunc(handler.CreateCategoryField))
 }

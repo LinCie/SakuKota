@@ -1,37 +1,84 @@
 package place
 
-import "rantau-go/internal/postgis"
+import (
+	"encoding/json"
+
+	"rantau-go/internal/postgis"
+)
 
 // CreatePlaceRequest is the API payload for creating a Place.
 type CreatePlaceRequest struct {
 	SubDistrictID       int64          `json:"sub_district_id"`
+	CategoryID          int64          `json:"category_id"`
 	Name                string         `json:"name"`
 	Address             *string        `json:"address"`
 	Location            *postgis.Point `json:"location"`
 	OperatingHours      *string        `json:"operating_hours"`
 	EstimatedPriceRange *string        `json:"estimated_price_range"`
 	ShortDescription    *string        `json:"short_description"`
-	CategoryIDs         []int64        `json:"category_ids"`
+	// Attributes is a JSON object keyed by the category's field keys.
+	Attributes json.RawMessage `json:"attributes"`
+}
+
+// CreateCategoryRequest is the API payload for creating a Category.
+type CreateCategoryRequest struct {
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+// CreateCategoryFieldRequest is the API payload for adding a custom field to
+// a Category.
+type CreateCategoryFieldRequest struct {
+	Key      string   `json:"key"`
+	Label    string   `json:"label"`
+	DataType string   `json:"data_type"`
+	Required bool     `json:"required"`
+	Options  []string `json:"options"`
+	// SortOrder is the 1-based position to insert the field at, moving the
+	// fields from there on down. Omitted, the field goes last.
+	SortOrder int32 `json:"sort_order"`
 }
 
 // PlaceResponse is the API representation of a Place.
 type PlaceResponse struct {
-	ID                  int64              `json:"id"`
-	SubDistrictID       int64              `json:"sub_district_id"`
-	Name                string             `json:"name"`
-	Address             *string            `json:"address"`
-	Location            *postgis.Point     `json:"location"`
-	OperatingHours      *string            `json:"operating_hours"`
-	EstimatedPriceRange *string            `json:"estimated_price_range"`
-	ShortDescription    *string            `json:"short_description"`
-	Categories          []CategoryResponse `json:"categories"`
+	ID                  int64            `json:"id"`
+	SubDistrictID       int64            `json:"sub_district_id"`
+	Name                string           `json:"name"`
+	Address             *string          `json:"address"`
+	Location            *postgis.Point   `json:"location"`
+	OperatingHours      *string          `json:"operating_hours"`
+	EstimatedPriceRange *string          `json:"estimated_price_range"`
+	ShortDescription    *string          `json:"short_description"`
+	Attributes          json.RawMessage  `json:"attributes"`
+	Category            CategoryResponse `json:"category"`
 }
 
-// CategoryResponse is the API representation of a Category.
+// CategoryResponse is the API representation of the Category of a place.
 type CategoryResponse struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
 	Slug string `json:"slug"`
+}
+
+// CategoryDetailResponse is the API representation of a Category with the
+// custom fields its places carry.
+type CategoryDetailResponse struct {
+	ID     int64                   `json:"id"`
+	Name   string                  `json:"name"`
+	Slug   string                  `json:"slug"`
+	Fields []CategoryFieldResponse `json:"fields"`
+}
+
+// CategoryFieldResponse is the API representation of a CategoryField.
+type CategoryFieldResponse struct {
+	ID         int64    `json:"id"`
+	CategoryID int64    `json:"category_id"`
+	Key        string   `json:"key"`
+	Label      string   `json:"label"`
+	DataType   string   `json:"data_type"`
+	Required   bool     `json:"required"`
+	Options    []string `json:"options"`
+	SortOrder  int32    `json:"sort_order"`
 }
 
 // -----------------------------------------------------------------------------
@@ -41,12 +88,33 @@ type CategoryResponse struct {
 func toPlace(req CreatePlaceRequest) *Place {
 	return &Place{
 		SubDistrictID:       req.SubDistrictID,
+		CategoryID:          req.CategoryID,
 		Name:                req.Name,
 		Address:             req.Address,
 		Location:            req.Location,
 		OperatingHours:      req.OperatingHours,
 		EstimatedPriceRange: req.EstimatedPriceRange,
 		ShortDescription:    req.ShortDescription,
+		Attributes:          req.Attributes,
+	}
+}
+
+func toCategory(req CreateCategoryRequest) *Category {
+	return &Category{
+		Name: req.Name,
+		Slug: req.Slug,
+	}
+}
+
+func toCategoryField(categoryID int64, req CreateCategoryFieldRequest) *CategoryField {
+	return &CategoryField{
+		CategoryID: categoryID,
+		Key:        req.Key,
+		Label:      req.Label,
+		DataType:   req.DataType,
+		Required:   req.Required,
+		Options:    req.Options,
+		SortOrder:  req.SortOrder,
 	}
 }
 
@@ -60,7 +128,8 @@ func toPlaceResponse(p Place) PlaceResponse {
 		OperatingHours:      p.OperatingHours,
 		EstimatedPriceRange: p.EstimatedPriceRange,
 		ShortDescription:    p.ShortDescription,
-		Categories:          toCategoryResponses(p.Categories),
+		Attributes:          p.Attributes,
+		Category:            toCategoryResponse(p.Category),
 	}
 }
 
@@ -75,15 +144,47 @@ func toPlaceResponses(places []Place) []PlaceResponse {
 }
 
 func toCategoryResponse(c Category) CategoryResponse {
-	return CategoryResponse(c)
+	return CategoryResponse{
+		ID:   c.ID,
+		Name: c.Name,
+		Slug: c.Slug,
+	}
 }
 
-func toCategoryResponses(categories []Category) []CategoryResponse {
-	responses := make([]CategoryResponse, 0, len(categories))
+func toCategoryDetailResponse(c Category) CategoryDetailResponse {
+	fields := make([]CategoryFieldResponse, 0, len(c.Fields))
+
+	for _, f := range c.Fields {
+		fields = append(fields, toCategoryFieldResponse(f))
+	}
+
+	return CategoryDetailResponse{
+		ID:     c.ID,
+		Name:   c.Name,
+		Slug:   c.Slug,
+		Fields: fields,
+	}
+}
+
+func toCategoryDetailResponses(categories []Category) []CategoryDetailResponse {
+	responses := make([]CategoryDetailResponse, 0, len(categories))
 
 	for _, c := range categories {
-		responses = append(responses, toCategoryResponse(c))
+		responses = append(responses, toCategoryDetailResponse(c))
 	}
 
 	return responses
+}
+
+func toCategoryFieldResponse(f CategoryField) CategoryFieldResponse {
+	return CategoryFieldResponse{
+		ID:         f.ID,
+		CategoryID: f.CategoryID,
+		Key:        f.Key,
+		Label:      f.Label,
+		DataType:   f.DataType,
+		Required:   f.Required,
+		Options:    f.Options,
+		SortOrder:  f.SortOrder,
+	}
 }

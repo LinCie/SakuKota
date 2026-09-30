@@ -14,8 +14,10 @@ import (
 // Service defines the operations required by the handler.
 type Service interface {
 	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error)
+	Create(ctx context.Context, p *Place) (*Place, error)
 	GetCategories(ctx context.Context) ([]Category, error)
-	Create(ctx context.Context, p *Place, categoryIDs []int64) (*Place, error)
+	CreateCategory(ctx context.Context, c *Category) (*Category, error)
+	CreateCategoryField(ctx context.Context, f *CategoryField) (*CategoryField, error)
 }
 
 type Handler struct {
@@ -74,7 +76,69 @@ func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toCategoryResponses(categories))
+	httpx.RespondJSON(w, http.StatusOK, toCategoryDetailResponses(categories))
+}
+
+func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
+	var req CreateCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+		return
+	}
+
+	c, err := h.service.CreateCategory(r.Context(), toCategory(req))
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidCategoryName),
+			errors.Is(err, ErrInvalidSlug):
+			httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
+		case errors.Is(err, ErrCategoryExists):
+			httpx.RespondError(w, http.StatusConflict, "category_exists", err.Error())
+		default:
+			httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		}
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusCreated, toCategoryDetailResponse(*c))
+}
+
+// CreateCategoryField adds a custom field to the category given by the `id`
+// path parameter.
+func (h *Handler) CreateCategoryField(w http.ResponseWriter, r *http.Request) {
+	categoryID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_category_id", "invalid category_id")
+		return
+	}
+
+	var req CreateCategoryFieldRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+		return
+	}
+
+	f, err := h.service.CreateCategoryField(r.Context(), toCategoryField(categoryID, req))
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidFieldKey),
+			errors.Is(err, ErrInvalidFieldLabel),
+			errors.Is(err, ErrInvalidFieldSortOrder),
+			errors.Is(err, ErrInvalidFieldDataType),
+			errors.Is(err, ErrFieldOptionsRequired),
+			errors.Is(err, ErrFieldOptionsNotAllowed):
+			httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
+		case errors.Is(err, ErrCategoryNotFound):
+			httpx.RespondError(w, http.StatusNotFound, "category_not_found", err.Error())
+		case errors.Is(err, ErrCategoryFieldExists):
+			httpx.RespondError(w, http.StatusConflict, "category_field_exists", err.Error())
+		default:
+			httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		}
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusCreated, toCategoryFieldResponse(*f))
 }
 
 func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
@@ -84,12 +148,13 @@ func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p, err := h.service.Create(r.Context(), toPlace(req), req.CategoryIDs)
+	p, err := h.service.Create(r.Context(), toPlace(req))
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidName),
 			errors.Is(err, ErrSubDistrictNotFound),
-			errors.Is(err, ErrCategoryNotFound):
+			errors.Is(err, ErrCategoryNotFound),
+			errors.Is(err, ErrInvalidAttributes):
 			httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
 		default:
 			httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())

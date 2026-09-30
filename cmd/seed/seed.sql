@@ -8,6 +8,42 @@ VALUES
     ('Pharmacy', 'pharmacy')
 ON CONFLICT (slug) DO NOTHING;
 
+-- Custom fields per category. Values bypass the API, so they must satisfy the
+-- rules in internal/module/place/service.go.
+WITH SEEDED_CATEGORY_FIELDS (
+    sort_order,
+    category_slug,
+    key,
+    label,
+    data_type,
+    required,
+    options
+) AS (
+    VALUES
+        (1, 'affordable-food-warung', 'halal', 'Halal', 'boolean', TRUE, NULL),
+        (2, 'affordable-food-warung', 'serving_style', 'Cara penyajian', 'select', TRUE, '["Prasmanan", "Dimasak saat dipesan"]'),
+        (3, 'affordable-food-warung', 'seating_capacity', 'Kapasitas tempat duduk', 'number', FALSE, NULL),
+        (1, 'tailor', 'specialty', 'Keahlian', 'select', TRUE, '["Permak", "Reparasi", "Jahit baru"]'),
+        (2, 'tailor', 'turnaround_days', 'Lama pengerjaan (hari)', 'range', TRUE, NULL),
+        (3, 'tailor', 'same_day_service', 'Bisa selesai di hari yang sama', 'boolean', FALSE, NULL),
+        (1, 'local-clinic', 'bpjs_accepted', 'Menerima BPJS', 'boolean', TRUE, NULL),
+        (2, 'local-clinic', 'walk_in', 'Bisa datang tanpa janji', 'boolean', FALSE, NULL),
+        (3, 'local-clinic', 'services', 'Layanan', 'text', FALSE, NULL),
+        (4, 'local-clinic', 'opened_on', 'Mulai beroperasi', 'date', FALSE, NULL),
+        (1, 'laundry', 'service_type', 'Jenis layanan', 'select', TRUE, '["Swalayan", "Titip cuci", "Swalayan & titip cuci"]'),
+        (2, 'laundry', 'turnaround_hours', 'Lama pengerjaan (jam)', 'range', TRUE, NULL),
+        (3, 'laundry', 'express_available', 'Layanan ekspres', 'boolean', FALSE, NULL),
+        (4, 'laundry', 'minimum_weight_kg', 'Berat minimum (kg)', 'number', FALSE, NULL),
+        (1, 'pharmacy', 'accepts_prescriptions', 'Melayani resep dokter', 'boolean', TRUE, NULL),
+        (2, 'pharmacy', 'compounding', 'Melayani obat racikan', 'boolean', FALSE, NULL),
+        (3, 'pharmacy', 'delivery', 'Pengantaran', 'select', FALSE, '["Tidak ada", "Kurir sendiri", "Ojek online"]')
+)
+INSERT INTO CATEGORY_FIELDS (category_id, key, label, data_type, required, options, sort_order)
+SELECT c.id, scf.key, scf.label, scf.data_type, scf.required, scf.options::jsonb, scf.sort_order
+FROM SEEDED_CATEGORY_FIELDS scf
+JOIN CATEGORIES c ON c.slug = scf.category_slug
+ON CONFLICT (category_id, key) DO NOTHING;
+
 INSERT INTO SUB_DISTRICTS (
     name,
     slug,
@@ -44,7 +80,8 @@ WITH SEEDED_PLACES (
     operating_hours,
     estimated_price_range,
     short_description,
-    category_slug
+    category_slug,
+    attributes
 ) AS (
     VALUES
         (
@@ -56,7 +93,8 @@ WITH SEEDED_PLACES (
             'Daily, 06:30-14:00',
             'Rp15.000-Rp35.000',
             'A simple rice counter with rotating home-style dishes and generous portions.',
-            'affordable-food-warung'
+            'affordable-food-warung',
+            '{"halal": true, "serving_style": "Prasmanan", "seating_capacity": 20}'
         ),
         (
             'Kedai Pagi Karet',
@@ -67,7 +105,8 @@ WITH SEEDED_PLACES (
             'Mon-Sat, 06:00-20:00',
             'Rp12.000-Rp30.000',
             'Quick breakfast, coffee, and takeaway meals for commuters around Karet.',
-            'affordable-food-warung'
+            'affordable-food-warung',
+            '{"halal": true, "serving_style": "Dimasak saat dipesan", "seating_capacity": 8}'
         ),
         (
             'Jarum Rapi Setiabudi',
@@ -78,7 +117,8 @@ WITH SEEDED_PLACES (
             'Mon-Sat, 09:00-18:00',
             'Rp25.000-Rp150.000',
             'Neighborhood tailor for trouser hems, uniform repairs, and small alterations.',
-            'tailor'
+            'tailor',
+            '{"specialty": "Permak", "turnaround_days": {"min": 1, "max": 3}, "same_day_service": false}'
         ),
         (
             'Benang Sudirman',
@@ -89,7 +129,8 @@ WITH SEEDED_PLACES (
             'Mon-Sat, 10:00-19:00',
             'Rp30.000-Rp250.000',
             'Small alteration shop that handles office wear and same-day repairs when available.',
-            'tailor'
+            'tailor',
+            '{"specialty": "Permak", "turnaround_days": {"min": 0, "max": 2}, "same_day_service": true}'
         ),
         (
             'Klinik Sehat Setiabudi',
@@ -100,7 +141,8 @@ WITH SEEDED_PLACES (
             'Daily, 08:00-21:00',
             'Rp50.000-Rp200.000',
             'General outpatient clinic for minor illnesses, basic checks, and first aid.',
-            'local-clinic'
+            'local-clinic',
+            '{"bpjs_accepted": true, "walk_in": true, "services": "Pemeriksaan umum, cek kesehatan dasar, pertolongan pertama", "opened_on": "2015-03-02"}'
         ),
         (
             'Klinik Menteng Dalam',
@@ -111,7 +153,8 @@ WITH SEEDED_PLACES (
             'Mon-Sat, 08:00-20:00',
             'Rp50.000-Rp175.000',
             'A compact clinic serving routine consultations and simple laboratory referrals.',
-            'local-clinic'
+            'local-clinic',
+            '{"bpjs_accepted": true, "walk_in": false, "services": "Konsultasi dokter umum, rujukan laboratorium", "opened_on": "2018-07-16"}'
         ),
         (
             'Busa Laundry 24 Jam',
@@ -122,7 +165,8 @@ WITH SEEDED_PLACES (
             'Daily, 07:00-23:00',
             'Rp8.000-Rp25.000/kg',
             'Self-service and drop-off laundry with late pickup hours for apartment residents.',
-            'laundry'
+            'laundry',
+            '{"service_type": "Swalayan & titip cuci", "turnaround_hours": {"min": 12, "max": 24}, "express_available": false, "minimum_weight_kg": 2}'
         ),
         (
             'CuciBersih Karet',
@@ -133,7 +177,8 @@ WITH SEEDED_PLACES (
             'Daily, 08:00-20:00',
             'Rp7.000-Rp22.000/kg',
             'Affordable wash, dry, and fold service with express options for work clothes.',
-            'laundry'
+            'laundry',
+            '{"service_type": "Titip cuci", "turnaround_hours": {"min": 6, "max": 48}, "express_available": true, "minimum_weight_kg": 3}'
         ),
         (
             'Apotek Sehat Sudirman',
@@ -144,7 +189,8 @@ WITH SEEDED_PLACES (
             'Daily, 07:00-22:00',
             'Rp5.000-Rp250.000',
             'Convenient pharmacy for common medicines, vitamins, and basic health supplies.',
-            'pharmacy'
+            'pharmacy',
+            '{"accepts_prescriptions": true, "compounding": false, "delivery": "Ojek online"}'
         ),
         (
             'Apotek Taman Rasuna',
@@ -155,7 +201,8 @@ WITH SEEDED_PLACES (
             'Daily, 08:00-21:00',
             'Rp5.000-Rp300.000',
             'Local pharmacy with over-the-counter medicine and personal care essentials.',
-            'pharmacy'
+            'pharmacy',
+            '{"accepts_prescriptions": false, "compounding": false, "delivery": "Tidak ada"}'
         ),
         (
             'Warung Bu Narti Mampang',
@@ -166,7 +213,8 @@ WITH SEEDED_PLACES (
             'Daily, 07:00-15:00',
             'Rp15.000-Rp35.000',
             'Casual warung serving rice plates, vegetables, and fried side dishes at lunch.',
-            'affordable-food-warung'
+            'affordable-food-warung',
+            '{"halal": true, "serving_style": "Prasmanan", "seating_capacity": 16}'
         ),
         (
             'Dapur Gang Lima',
@@ -177,7 +225,8 @@ WITH SEEDED_PLACES (
             'Mon-Sat, 10:00-21:00',
             'Rp18.000-Rp45.000',
             'A tiny neighborhood kitchen with filling Indonesian meals and takeaway portions.',
-            'affordable-food-warung'
+            'affordable-food-warung',
+            '{"halal": true, "serving_style": "Dimasak saat dipesan", "seating_capacity": 6}'
         ),
         (
             'Jahit Cepat Mampang',
@@ -188,7 +237,8 @@ WITH SEEDED_PLACES (
             'Mon-Sat, 09:00-18:00',
             'Rp20.000-Rp140.000',
             'Fast clothing repairs, zipper replacement, and basic resizing for daily wear.',
-            'tailor'
+            'tailor',
+            '{"specialty": "Reparasi", "turnaround_days": {"min": 0, "max": 2}, "same_day_service": true}'
         ),
         (
             'Rumah Kancing Bangka',
@@ -199,7 +249,8 @@ WITH SEEDED_PLACES (
             'Mon-Sat, 10:00-19:00',
             'Rp25.000-Rp225.000',
             'Friendly tailor for hemming, patching, and simple custom work.',
-            'tailor'
+            'tailor',
+            '{"specialty": "Jahit baru", "turnaround_days": {"min": 3, "max": 7}, "same_day_service": false}'
         ),
         (
             'Klinik Pratama Kemang Selatan',
@@ -210,7 +261,8 @@ WITH SEEDED_PLACES (
             'Daily, 08:00-22:00',
             'Rp60.000-Rp225.000',
             'General clinic offering consultations, wound care, and basic health screening.',
-            'local-clinic'
+            'local-clinic',
+            '{"bpjs_accepted": true, "walk_in": true, "services": "Konsultasi dokter umum, perawatan luka, skrining kesehatan", "opened_on": "2012-11-05"}'
         ),
         (
             'Klinik Keluarga Mampang',
@@ -221,7 +273,8 @@ WITH SEEDED_PLACES (
             'Mon-Sat, 08:00-20:00',
             'Rp50.000-Rp175.000',
             'Walk-in clinic for everyday health concerns and referrals to nearby hospitals.',
-            'local-clinic'
+            'local-clinic',
+            '{"bpjs_accepted": false, "walk_in": true, "services": "Konsultasi dokter umum, rujukan rumah sakit", "opened_on": "2020-01-20"}'
         ),
         (
             'Laundry Kilat Tegal Parang',
@@ -232,7 +285,8 @@ WITH SEEDED_PLACES (
             'Daily, 07:00-22:00',
             'Rp8.000-Rp25.000/kg',
             'Drop-off laundry with an express service for residents and boarding-house tenants.',
-            'laundry'
+            'laundry',
+            '{"service_type": "Titip cuci", "turnaround_hours": {"min": 4, "max": 24}, "express_available": true, "minimum_weight_kg": 2}'
         ),
         (
             'FreshFold Laundry Bangka',
@@ -243,7 +297,8 @@ WITH SEEDED_PLACES (
             'Daily, 08:00-21:00',
             'Rp7.000-Rp22.000/kg',
             'Wash-and-fold service that also accepts blankets and small household items.',
-            'laundry'
+            'laundry',
+            '{"service_type": "Titip cuci", "turnaround_hours": {"min": 24, "max": 48}, "express_available": false, "minimum_weight_kg": 3}'
         ),
         (
             'Apotek Prapanca',
@@ -254,7 +309,8 @@ WITH SEEDED_PLACES (
             'Daily, 08:00-22:00',
             'Rp5.000-Rp275.000',
             'Pharmacy carrying common prescriptions, vitamins, and basic first-aid supplies.',
-            'pharmacy'
+            'pharmacy',
+            '{"accepts_prescriptions": true, "compounding": true, "delivery": "Kurir sendiri"}'
         ),
         (
             'Apotek Mampang Sejahtera',
@@ -265,52 +321,38 @@ WITH SEEDED_PLACES (
             'Daily, 07:00-21:00',
             'Rp5.000-Rp250.000',
             'Convenient neighborhood pharmacy for medicine refills and everyday health needs.',
-            'pharmacy'
+            'pharmacy',
+            '{"accepts_prescriptions": true, "compounding": false, "delivery": "Ojek online"}'
         )
-), INSERTED_PLACES AS (
-    INSERT INTO PLACES (
-        sub_district_id,
-        name,
-        address,
-        location,
-        operating_hours,
-        estimated_price_range,
-        short_description
-    )
-    SELECT
-        sd.id,
-        sp.name,
-        sp.address,
-        ST_SetSRID(ST_MakePoint(sp.longitude, sp.latitude), 4326),
-        sp.operating_hours,
-        sp.estimated_price_range,
-        sp.short_description
-    FROM SEEDED_PLACES sp
-    JOIN SUB_DISTRICTS sd ON sd.slug = sp.sub_district_slug
-    WHERE NOT EXISTS (
-        SELECT 1
-        FROM PLACES existing
-        WHERE existing.sub_district_id = sd.id
-          AND existing.name = sp.name
-    )
-    RETURNING id, name
-), ALL_SEEDED_PLACES AS (
-    SELECT id, name
-    FROM INSERTED_PLACES
-
-    UNION ALL
-
-    SELECT p.id, p.name
-    FROM PLACES p
-    JOIN SUB_DISTRICTS sd ON sd.id = p.sub_district_id
-    JOIN SEEDED_PLACES sp
-        ON sp.name = p.name
-       AND sp.sub_district_slug = sd.slug
 )
-INSERT INTO PLACE_CATEGORIES (place_id, category_id)
-SELECT asp.id, c.id
-FROM ALL_SEEDED_PLACES asp
-JOIN SEEDED_PLACES sp ON sp.name = asp.name
+INSERT INTO PLACES (
+    sub_district_id,
+    category_id,
+    name,
+    address,
+    location,
+    operating_hours,
+    estimated_price_range,
+    short_description,
+    attributes
+)
+SELECT
+    sd.id,
+    c.id,
+    sp.name,
+    sp.address,
+    ST_SetSRID(ST_MakePoint(sp.longitude, sp.latitude), 4326),
+    sp.operating_hours,
+    sp.estimated_price_range,
+    sp.short_description,
+    sp.attributes::jsonb
+FROM SEEDED_PLACES sp
+JOIN SUB_DISTRICTS sd ON sd.slug = sp.sub_district_slug
 JOIN CATEGORIES c ON c.slug = sp.category_slug
-ON CONFLICT (place_id, category_id) DO NOTHING;
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM PLACES existing
+    WHERE existing.sub_district_id = sd.id
+      AND existing.name = sp.name
+);
 

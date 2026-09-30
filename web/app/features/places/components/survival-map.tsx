@@ -46,10 +46,7 @@ function toLatLng(place: Place): [number, number] | null {
 
 /** A place as a small painted sign on a post. */
 function signIcon(L: typeof Leaflet, place: Place, delay: string) {
-  const category = place.categories[0];
-  const style = category ? categoryStyle(category) : null;
-  const plate = style?.solid ?? "bg-ink text-paint border-ink";
-  const code = style?.code ?? "?";
+  const { solid: plate, code } = categoryStyle(place.category);
 
   return L.divIcon({
     className:

@@ -18,11 +18,45 @@ export type Place = {
   operating_hours: string | null;
   estimated_price_range: string | null;
   short_description: string | null;
-  categories: Category[];
+  /** Values of the category's custom fields, keyed by `CategoryField.key`. */
+  attributes: Record<string, unknown>;
+  category: Category;
 };
 
 export type Category = {
   id: number;
   name: string;
   slug: string;
+};
+
+/** A category with the custom fields its places carry. */
+export type CategoryDetail = Category & {
+  fields: CategoryField[];
+};
+
+/**
+ * Validated by the backend (internal/module/place/service.go). New types may
+ * arrive before the frontend knows them, so they must still render.
+ */
+export type FieldDataType =
+  | "text"
+  | "number"
+  | "boolean"
+  | "select"
+  | "range"
+  | "date"
+  // Any other type, while keeping autocomplete for the known ones.
+  | (string & {});
+
+export type CategoryField = {
+  id: number;
+  category_id: number;
+  key: string;
+  label: string;
+  data_type: FieldDataType;
+  required: boolean;
+  /** Allowed values of a select field; null for other types. */
+  options: string[] | null;
+  /** 1-based position among the category's fields, which arrive sorted by it. */
+  sort_order: number;
 };

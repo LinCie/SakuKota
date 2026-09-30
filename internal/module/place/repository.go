@@ -2,6 +2,7 @@ package place
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
 
@@ -28,6 +29,12 @@ func NewPostgresRepository(db *sqlx.DB) Repository {
 // likeEscaper escapes LIKE wildcards so the search query matches literally.
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
+// placeColumns selects a place from `p` and its category from `c`, aliased to
+// match the nested Place.Category fields.
+const placeColumns = `p.id, p.sub_district_id, p.category_id, p.name, p.address,
+	p.location, p.operating_hours, p.estimated_price_range, p.short_description,
+	p.attributes, c.id AS "category.id", c.name AS "category.name", c.slug AS "category.slug"`
+
 func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error) {
 	places := make([]Place, 0)
 
@@ -39,33 +46,22 @@ func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([
 	err := r.db.SelectContext(
 		ctx,
 		&places,
-		`SELECT p.id, p.sub_district_id, p.name, p.address, p.location,
-			p.operating_hours, p.estimated_price_range, p.short_description
+		`SELECT `+placeColumns+`
 		FROM PLACES p
+		JOIN CATEGORIES c ON c.id = p.category_id
 		WHERE ($1::bigint = 0 OR p.sub_district_id = $1)
-			AND (COALESCE(CARDINALITY($2::bigint[]), 0) = 0 OR EXISTS (
-				SELECT 1 FROM PLACE_CATEGORIES pc
-				WHERE pc.place_id = p.id AND pc.category_id = ANY($2)
-			))
+			AND (COALESCE(CARDINALITY($2::bigint[]), 0) = 0 OR p.category_id = ANY($2))
 			AND ($3::text = ''
 				OR p.name ILIKE $3
 				OR p.address ILIKE $3
 				OR p.short_description ILIKE $3
-				OR EXISTS (
-					SELECT 1 FROM PLACE_CATEGORIES pc
-					JOIN CATEGORIES c ON c.id = pc.category_id
-					WHERE pc.place_id = p.id AND c.name ILIKE $3
-				))
+				OR c.name ILIKE $3)
 		ORDER BY p.id`,
 		filter.SubDistrictID,
 		filter.CategoryIDs,
 		pattern,
 	)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := r.attachCategories(ctx, places); err != nil {
 		return nil, err
 	}
 
@@ -84,113 +80,188 @@ func (r *postgresRepository) GetCategories(ctx context.Context) ([]Category, err
 		return nil, err
 	}
 
+	if err := r.attachFields(ctx, categories); err != nil {
+		return nil, err
+	}
+
 	return categories, nil
 }
 
-// Create inserts the place and links it to the given categories in a single
-// transaction.
-func (r *postgresRepository) Create(ctx context.Context, p *Place, categoryIDs []int64) (*Place, error) {
-	tx, err := r.db.BeginTxx(ctx, nil)
+// GetCategory returns the category with its fields, or ErrCategoryNotFound.
+func (r *postgresRepository) GetCategory(ctx context.Context, id int64) (*Category, error) {
+	var category Category
+
+	err := r.db.GetContext(
+		ctx,
+		&category,
+		`SELECT id, name, slug FROM CATEGORIES WHERE id = $1`,
+		id,
+	)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCategoryNotFound
+		}
 		return nil, err
 	}
-	defer tx.Rollback()
 
-	var created Place
+	categories := []Category{category}
+	if err := r.attachFields(ctx, categories); err != nil {
+		return nil, err
+	}
 
-	err = tx.GetContext(
+	return &categories[0], nil
+}
+
+func (r *postgresRepository) CreateCategory(ctx context.Context, c *Category) (*Category, error) {
+	var created Category
+
+	err := r.db.GetContext(
 		ctx,
 		&created,
-		`INSERT INTO PLACES (sub_district_id, name, address, location,
-			operating_hours, estimated_price_range, short_description)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id, sub_district_id, name, address, location,
-			operating_hours, estimated_price_range, short_description`,
+		`INSERT INTO CATEGORIES (name, slug)
+		VALUES ($1, $2)
+		RETURNING id, name, slug`,
+		c.Name,
+		c.Slug,
+	)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == database.UniqueViolation {
+			return nil, ErrCategoryExists
+		}
+		return nil, err
+	}
+
+	created.Fields = make([]CategoryField, 0)
+
+	return &created, nil
+}
+
+// CreateCategoryField inserts the field at its SortOrder position, moving the
+// category's fields from that position on down, or last if SortOrder is zero.
+func (r *postgresRepository) CreateCategoryField(ctx context.Context, f *CategoryField) (*CategoryField, error) {
+	var created CategoryField
+
+	err := r.db.GetContext(
+		ctx,
+		&created,
+		`WITH shifted AS (
+			UPDATE CATEGORY_FIELDS
+			SET sort_order = sort_order + 1
+			WHERE category_id = $1 AND $7 > 0 AND sort_order >= $7
+		)
+		INSERT INTO CATEGORY_FIELDS (category_id, key, label, data_type, required, options, sort_order)
+		VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $7 > 0 THEN $7 ELSE (
+			SELECT COALESCE(MAX(sort_order), 0) + 1
+			FROM CATEGORY_FIELDS
+			WHERE category_id = $1
+		) END)
+		RETURNING id, category_id, key, label, data_type, required, options, sort_order`,
+		f.CategoryID,
+		f.Key,
+		f.Label,
+		f.DataType,
+		f.Required,
+		f.Options,
+		f.SortOrder,
+	)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Code {
+			case database.ForeignKeyViolation:
+				return nil, ErrCategoryNotFound
+			case database.UniqueViolation:
+				return nil, ErrCategoryFieldExists
+			}
+		}
+		return nil, err
+	}
+
+	return &created, nil
+}
+
+// Create inserts the place and returns it joined with its category.
+func (r *postgresRepository) Create(ctx context.Context, p *Place) (*Place, error) {
+	var created Place
+
+	err := r.db.GetContext(
+		ctx,
+		&created,
+		`WITH inserted AS (
+			INSERT INTO PLACES (sub_district_id, category_id, name, address,
+				location, operating_hours, estimated_price_range, short_description,
+				attributes)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			RETURNING id, sub_district_id, category_id, name, address,
+				location, operating_hours, estimated_price_range, short_description,
+				attributes
+		)
+		SELECT `+placeColumns+`
+		FROM inserted p
+		JOIN CATEGORIES c ON c.id = p.category_id`,
 		p.SubDistrictID,
+		p.CategoryID,
 		p.Name,
 		p.Address,
 		p.Location,
 		p.OperatingHours,
 		p.EstimatedPriceRange,
 		p.ShortDescription,
+		p.Attributes,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == database.ForeignKeyViolation {
-			return nil, ErrSubDistrictNotFound
-		}
-		return nil, err
-	}
-
-	if len(categoryIDs) > 0 {
-		_, err = tx.ExecContext(
-			ctx,
-			`INSERT INTO PLACE_CATEGORIES (place_id, category_id)
-			SELECT DISTINCT $1::bigint, UNNEST($2::bigint[])`,
-			created.ID,
-			categoryIDs,
-		)
-		if err != nil {
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && pgErr.Code == database.ForeignKeyViolation {
+			switch pgErr.ConstraintName {
+			case "places_sub_district_id_fkey":
+				return nil, ErrSubDistrictNotFound
+			case "places_category_id_fkey":
 				return nil, ErrCategoryNotFound
 			}
-			return nil, err
 		}
-	}
-
-	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 
-	places := []Place{created}
-	if err := r.attachCategories(ctx, places); err != nil {
-		return nil, err
-	}
-
-	return &places[0], nil
+	return &created, nil
 }
 
-// attachCategories loads the categories of every given place in one query
-// and assigns them to each place's Categories field.
-func (r *postgresRepository) attachCategories(ctx context.Context, places []Place) error {
-	if len(places) == 0 {
+// attachFields loads the fields of every given category in one query and
+// assigns them to each category's Fields field.
+func (r *postgresRepository) attachFields(ctx context.Context, categories []Category) error {
+	if len(categories) == 0 {
 		return nil
 	}
 
-	placeIDs := make([]int64, 0, len(places))
-	for _, p := range places {
-		placeIDs = append(placeIDs, p.ID)
+	categoryIDs := make([]int64, 0, len(categories))
+	for _, c := range categories {
+		categoryIDs = append(categoryIDs, c.ID)
 	}
 
-	rows := make([]struct {
-		PlaceID int64 `db:"place_id"`
-		Category
-	}, 0)
+	fields := make([]CategoryField, 0)
 
 	err := r.db.SelectContext(
 		ctx,
-		&rows,
-		`SELECT pc.place_id, c.id, c.name, c.slug
-		FROM PLACE_CATEGORIES pc
-		JOIN CATEGORIES c ON c.id = pc.category_id
-		WHERE pc.place_id = ANY($1)
-		ORDER BY c.id`,
-		placeIDs,
+		&fields,
+		`SELECT id, category_id, key, label, data_type, required, options, sort_order
+		FROM CATEGORY_FIELDS
+		WHERE category_id = ANY($1)
+		ORDER BY sort_order, id`,
+		categoryIDs,
 	)
 	if err != nil {
 		return err
 	}
 
-	categoriesByPlace := make(map[int64][]Category, len(places))
-	for _, row := range rows {
-		categoriesByPlace[row.PlaceID] = append(categoriesByPlace[row.PlaceID], row.Category)
+	fieldsByCategory := make(map[int64][]CategoryField, len(categories))
+	for _, f := range fields {
+		fieldsByCategory[f.CategoryID] = append(fieldsByCategory[f.CategoryID], f)
 	}
 
-	for i := range places {
-		places[i].Categories = categoriesByPlace[places[i].ID]
-		if places[i].Categories == nil {
-			places[i].Categories = make([]Category, 0)
+	for i := range categories {
+		categories[i].Fields = fieldsByCategory[categories[i].ID]
+		if categories[i].Fields == nil {
+			categories[i].Fields = make([]CategoryField, 0)
 		}
 	}
 

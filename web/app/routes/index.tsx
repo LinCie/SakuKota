@@ -134,6 +134,9 @@ function Home() {
 
   const selectedPlace =
     visiblePlaces.find((place) => place.id === search.tempat) ?? null;
+  const selectedFields =
+    categories.find((category) => category.id === selectedPlace?.category.id)
+      ?.fields ?? [];
 
   function selectPlace(placeId: number | null) {
     updateParams({ tempat: placeId ?? undefined });
@@ -406,6 +409,7 @@ function Home() {
             >
               <PlaceDetails
                 place={selectedPlace}
+                fields={selectedFields}
                 onClose={() => selectPlace(null)}
               />
             </div>

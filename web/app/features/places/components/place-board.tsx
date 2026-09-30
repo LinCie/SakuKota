@@ -1,8 +1,8 @@
-import { ArrowLeft, X } from "lucide-react";
+import { ArrowLeft, Check, X } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { MissingSlot } from "~/shared/components/missing-slot";
-import type { Place } from "../types";
+import type { CategoryField, Place } from "../types";
 import { CategoryBadge, CodePlate } from "./category-sign";
 
 // -----------------------------------------------------------------------------
@@ -25,37 +25,31 @@ export function PlaceList({ places, onSelect, emptyMessage }: PlaceListProps) {
 
   return (
     <ul>
-      {places.map((place) => {
-        const category = place.categories[0];
-
-        return (
-          <li
-            key={place.id}
-            className="border-ink/20 border-b border-dashed last:border-b-0"
+      {places.map((place) => (
+        <li
+          key={place.id}
+          className="border-ink/20 border-b border-dashed last:border-b-0"
+        >
+          <button
+            type="button"
+            onClick={() => onSelect(place.id)}
+            className="hover:bg-sign-soft/60 focus-visible:bg-sign-soft/60 focus-visible:outline-cat flex w-full items-start gap-3 px-4 py-3 text-left transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 md:px-5"
           >
-            <button
-              type="button"
-              onClick={() => onSelect(place.id)}
-              className="hover:bg-sign-soft/60 focus-visible:bg-sign-soft/60 focus-visible:outline-cat flex w-full items-start gap-3 px-4 py-3 text-left transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 md:px-5"
-            >
-              {category ? (
-                <CodePlate category={category} className="mt-0.5" />
-              ) : null}
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="text-ink font-semibold">{place.name}</span>
-                <span className="text-ink-soft truncate text-sm">
-                  {place.address ?? "Alamat tidak tersedia"}
-                </span>
+            <CodePlate category={place.category} className="mt-0.5" />
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-ink font-semibold">{place.name}</span>
+              <span className="text-ink-soft truncate text-sm">
+                {place.address ?? "Alamat tidak tersedia"}
               </span>
-              {place.estimated_price_range ? (
-                <span className="text-ink mt-0.5 shrink-0 text-right text-sm font-semibold tabular-nums">
-                  {place.estimated_price_range}
-                </span>
-              ) : null}
-            </button>
-          </li>
-        );
-      })}
+            </span>
+            {place.estimated_price_range ? (
+              <span className="text-ink mt-0.5 shrink-0 text-right text-sm font-semibold tabular-nums">
+                {place.estimated_price_range}
+              </span>
+            ) : null}
+          </button>
+        </li>
+      ))}
     </ul>
   );
 }
@@ -74,7 +68,9 @@ function LeaderRow({
 }) {
   return (
     <div className="flex items-baseline gap-2 py-2">
-      <dt className="text-ink-soft shrink-0 text-sm font-semibold">{label}</dt>
+      <dt className="text-ink-soft max-w-[50%] shrink-0 text-sm font-semibold">
+        {label}
+      </dt>
       <span
         aria-hidden="true"
         className="border-ink/25 min-w-6 flex-1 -translate-y-1 border-b-2 border-dotted"
@@ -86,13 +82,107 @@ function LeaderRow({
   );
 }
 
+/** A menu-board block for long values: label above, value below. */
+function StackedRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="border-ink/25 flex flex-col gap-1 border-t border-dashed py-2">
+      <dt className="text-ink-soft text-sm font-semibold">{label}</dt>
+      <dd className="text-ink text-pretty">{children}</dd>
+    </div>
+  );
+}
+
+const numberFormat = new Intl.NumberFormat("id-ID");
+const dateFormat = new Intl.DateTimeFormat("id-ID", {
+  dateStyle: "long",
+  timeZone: "UTC",
+});
+
+function isRange(value: unknown): value is { min: number; max: number } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "min" in value &&
+    "max" in value &&
+    typeof value.min === "number" &&
+    typeof value.max === "number"
+  );
+}
+
+/**
+ * Renders a custom field value by its data type, or null when the value is
+ * missing or doesn't match the type.
+ */
+function formatAttribute(field: CategoryField, value: unknown): ReactNode {
+  switch (field.data_type) {
+    case "text":
+    case "select":
+      return typeof value === "string" && value.trim() !== "" ? value : null;
+    case "number":
+      return typeof value === "number" ? numberFormat.format(value) : null;
+    case "boolean": {
+      if (typeof value !== "boolean") return null;
+      const Icon = value ? Check : X;
+      return (
+        // The word sets the baseline so the row's leader lines up with it.
+        <span className="inline-flex items-baseline gap-1">
+          <Icon
+            aria-hidden="true"
+            className="size-4 self-center"
+            strokeWidth={2.5}
+          />
+          {value ? "Ya" : "Tidak"}
+        </span>
+      );
+    }
+    case "range":
+      if (!isRange(value)) return null;
+      return value.min === value.max
+        ? numberFormat.format(value.min)
+        : `${numberFormat.format(value.min)}–${numberFormat.format(value.max)}`;
+    case "date": {
+      // YYYY-MM-DD parses as UTC midnight, so format in UTC too.
+      const date = typeof value === "string" ? new Date(value) : null;
+      return date && !Number.isNaN(date.getTime())
+        ? dateFormat.format(date)
+        : null;
+    }
+    default:
+      // A type this frontend doesn't know yet: show plain values as-is.
+      return typeof value === "string" || typeof value === "number"
+        ? String(value)
+        : null;
+  }
+}
+
+function attributeValue(field: CategoryField, place: Place): ReactNode {
+  return (
+    formatAttribute(field, place.attributes[field.key]) ?? (
+      <MissingSlot>Data tidak tersedia</MissingSlot>
+    )
+  );
+}
+
 type PlaceDetailsProps = {
   place: Place;
+  /** Custom fields of the place's category, sorted by `sort_order`. */
+  fields: CategoryField[];
   onClose: () => void;
 };
 
-export function PlaceDetails({ place, onClose }: PlaceDetailsProps) {
+export function PlaceDetails({ place, fields, onClose }: PlaceDetailsProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
+
+  // Short values sit on leader rows; free text follows as full-width blocks,
+  // so `sort_order` applies within each group.
+  const leaderFields = fields.filter((field) => field.data_type !== "text");
+  const textFields = fields.filter((field) => field.data_type === "text");
 
   useEffect(() => {
     headingRef.current?.focus({ preventScroll: true });
@@ -126,10 +216,8 @@ export function PlaceDetails({ place, onClose }: PlaceDetailsProps) {
       <div className="p-3 md:p-4">
         <div className="border-ink bg-paint rounded-[5px] border-2 p-1">
           <div className="border-ink/40 flex flex-col gap-4 rounded-[3px] border px-4 py-4">
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
-              {place.categories.map((category) => (
-                <CategoryBadge key={category.id} category={category} />
-              ))}
+            <div>
+              <CategoryBadge category={place.category} />
             </div>
 
             <h2
@@ -160,14 +248,21 @@ export function PlaceDetails({ place, onClose }: PlaceDetailsProps) {
                   <MissingSlot>Harga tidak tersedia</MissingSlot>
                 )}
               </LeaderRow>
-              <div className="border-ink/25 flex flex-col gap-1 border-t border-dashed py-2">
-                <dt className="text-ink-soft text-sm font-semibold">Alamat</dt>
-                <dd className="text-ink">
-                  {place.address ?? (
-                    <MissingSlot>Alamat tidak tersedia</MissingSlot>
-                  )}
-                </dd>
-              </div>
+              {leaderFields.map((field) => (
+                <LeaderRow key={field.id} label={field.label}>
+                  {attributeValue(field, place)}
+                </LeaderRow>
+              ))}
+              {textFields.map((field) => (
+                <StackedRow key={field.id} label={field.label}>
+                  {attributeValue(field, place)}
+                </StackedRow>
+              ))}
+              <StackedRow label="Alamat">
+                {place.address ?? (
+                  <MissingSlot>Alamat tidak tersedia</MissingSlot>
+                )}
+              </StackedRow>
             </dl>
           </div>
         </div>

@@ -4,7 +4,7 @@ import {
   type ApiResult,
   type CommonApiErrorCode,
 } from "~/shared/api";
-import type { Category, Place } from "./types";
+import type { CategoryDetail, Place } from "./types";
 
 // -----------------------------------------------------------------------------
 // Request params / error codes (service-layer concerns, not domain shapes)
@@ -45,9 +45,9 @@ export function getPlaces(
 }
 
 export function getCategories(): Promise<
-  ApiResult<Category[], CategoryErrorCode>
+  ApiResult<CategoryDetail[], CategoryErrorCode>
 > {
-  return apiResult<Category[], CategoryErrorCode>(
+  return apiResult<CategoryDetail[], CategoryErrorCode>(
     api.get("places/categories/"),
   );
 }
