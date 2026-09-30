@@ -9,7 +9,12 @@ const tsFiles = ["**/*.{ts,tsx}"];
 
 export default tseslint.config(
   {
-    ignores: [".agents/**", "build/**", ".react-router/**", "node_modules/**"],
+    ignores: [
+      ".agents/**",
+      "dist/**",
+      "app/routeTree.gen.ts",
+      "node_modules/**",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

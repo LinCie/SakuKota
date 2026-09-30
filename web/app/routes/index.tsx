@@ -1,10 +1,6 @@
+import { createFileRoute } from "@tanstack/react-router";
 import { ChevronDown, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import {
-  data,
-  useSearchParams,
-  type ShouldRevalidateFunctionArgs,
-} from "react-router";
 
 import { categoryStyle } from "~/components/category-sign";
 import { KecamatanBoard } from "~/components/kecamatan-board";
@@ -12,118 +8,118 @@ import { PlaceDetails, PlaceList } from "~/components/place-board";
 import { SurvivalMap } from "~/components/survival-map";
 import { getCategories, getPlaces } from "~/services/places";
 import { getSubDistricts } from "~/services/subdistricts";
-import type { Route } from "./+types/home";
 
-export function meta() {
-  return [
-    { title: "Rantau — Peta bertahan hidup perantau Jakarta" },
-    {
-      name: "description",
-      content:
-        "Warung, penjahit, klinik, laundry, dan apotek terjangkau di sekitarmu, plus info banjir, keamanan, dan biaya harian per kecamatan.",
-    },
-  ];
+type HomeSearch = {
+  kecamatan?: string;
+  /** Comma-separated category slugs; absent means every category. */
+  kategori?: string;
+  q?: string;
+  tempat?: number;
+};
+
+// Search params arrive JSON-parsed (`?q=2024` is a number). Malformed values
+// are dropped instead of erroring.
+function searchString(value: unknown) {
+  if (typeof value === "number") return String(value);
+  return typeof value === "string" && value !== "" ? value : undefined;
 }
 
-function activeCategorySlugs(searchParams: URLSearchParams) {
-  return (searchParams.get("kategori") ?? "").split(",").filter(Boolean);
+function activeCategorySlugs(kategori: string | undefined) {
+  return (kategori ?? "").split(",").filter(Boolean);
 }
 
-// The kecamatan, categories, and search in the URL are applied by the
-// backend; the selected place is picked from the loaded results.
-export async function loader({ request }: Route.LoaderArgs) {
-  const searchParams = new URL(request.url).searchParams;
-  const [categories, subDistricts] = await Promise.all([
-    getCategories(),
-    getSubDistricts(),
-  ]);
-  if (!categories.ok) {
-    throw data(categories.error.message, { status: categories.status });
-  }
-  if (!subDistricts.ok) {
-    throw data(subDistricts.error.message, { status: subDistricts.status });
-  }
+export const Route = createFileRoute("/")({
+  validateSearch: (search: Record<string, unknown>): HomeSearch => ({
+    kecamatan: searchString(search.kecamatan),
+    kategori: searchString(search.kategori),
+    q: searchString(search.q),
+    tempat: typeof search.tempat === "number" ? search.tempat : undefined,
+  }),
+  // The kecamatan, categories, and search are applied by the backend; the
+  // selected place (`tempat`) is picked from the loaded results, so changing
+  // it doesn't reload.
+  loaderDeps: ({ search: { kecamatan, kategori, q } }) => ({
+    kecamatan,
+    kategori,
+    q,
+  }),
+  loader: async ({ deps: { kecamatan, kategori, q } }) => {
+    const [categories, subDistricts] = await Promise.all([
+      getCategories(),
+      getSubDistricts(),
+    ]);
+    if (!categories.ok) throw new Error(categories.error.message);
+    if (!subDistricts.ok) throw new Error(subDistricts.error.message);
 
-  const subDistrict =
-    subDistricts.data.find((sd) => sd.slug === searchParams.get("kecamatan")) ??
-    subDistricts.data[0];
-  const activeSlugs = activeCategorySlugs(searchParams);
+    const subDistrict =
+      subDistricts.data.find((sd) => sd.slug === kecamatan) ??
+      subDistricts.data[0];
+    const activeSlugs = activeCategorySlugs(kategori);
 
-  const places = subDistrict
-    ? await getPlaces({
-        subDistrictId: subDistrict.id,
-        categoryIds: categories.data
-          .filter((category) => activeSlugs.includes(category.slug))
-          .map((category) => category.id),
-        q: searchParams.get("q")?.trim(),
-      })
-    : null;
-  if (places && !places.ok) {
-    throw data(places.error.message, { status: places.status });
-  }
+    const places = subDistrict
+      ? await getPlaces({
+          subDistrictId: subDistrict.id,
+          categoryIds: categories.data
+            .filter((category) => activeSlugs.includes(category.slug))
+            .map((category) => category.id),
+          q: q?.trim(),
+        })
+      : null;
+    if (places && !places.ok) throw new Error(places.error.message);
 
-  return {
-    places: places ? places.data : [],
-    categories: categories.data,
-    subDistricts: subDistricts.data,
-    subDistrict,
-  };
-}
+    return {
+      places: places ? places.data : [],
+      categories: categories.data,
+      subDistricts: subDistricts.data,
+      subDistrict,
+    };
+  },
+  head: () => ({
+    meta: [
+      { title: "Rantau — Peta bertahan hidup perantau Jakarta" },
+      {
+        name: "description",
+        content:
+          "Warung, penjahit, klinik, laundry, dan apotek terjangkau di sekitarmu, plus info banjir, keamanan, dan biaya harian per kecamatan.",
+      },
+    ],
+  }),
+  component: Home,
+  errorComponent: HomeError,
+});
 
-// Selecting a place only changes `tempat`, which needs no fresh data.
-export function shouldRevalidate({
-  currentUrl,
-  nextUrl,
-  formMethod,
-  defaultShouldRevalidate,
-}: ShouldRevalidateFunctionArgs) {
-  const withoutPlace = (url: URL) => {
-    const params = new URLSearchParams(url.searchParams);
-    params.delete("tempat");
-    params.sort();
-    return `${url.pathname}?${params}`;
-  };
-  if (!formMethod && withoutPlace(currentUrl) === withoutPlace(nextUrl)) {
-    return false;
-  }
-  return defaultShouldRevalidate;
-}
-
-export default function Home({ loaderData }: Route.ComponentProps) {
+function Home() {
   const {
     places: visiblePlaces,
     categories,
     subDistricts,
     subDistrict,
-  } = loaderData;
-  const [searchParams, setSearchParams] = useSearchParams();
+  } = Route.useLoaderData();
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [infoOpen, setInfoOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
 
-  const activeSlugs = activeCategorySlugs(searchParams);
-  const query = searchParams.get("q") ?? "";
-  const selectedParam = Number(searchParams.get("tempat"));
+  const activeSlugs = activeCategorySlugs(search.kategori);
+  const query = search.q ?? "";
 
   const [draft, setDraft] = useState(query);
 
-  function updateParams(changes: Record<string, string | null>) {
-    setSearchParams(
-      (previous) => {
-        const next = new URLSearchParams(previous);
-        for (const [key, value] of Object.entries(changes)) {
-          if (value === null || value === "") next.delete(key);
-          else next.set(key, value);
-        }
-        return next;
-      },
-      { replace: true, preventScrollReset: true },
-    );
+  function updateParams(changes: HomeSearch) {
+    void navigate({
+      search: (previous) => ({ ...previous, ...changes }),
+      replace: true,
+      resetScroll: false,
+    });
   }
 
   // Debounce typing into the URL.
   useEffect(() => {
     if (draft.trim() === query) return;
-    const timeout = setTimeout(() => updateParams({ q: draft.trim() }), 250);
+    const timeout = setTimeout(
+      () => updateParams({ q: draft.trim() || undefined }),
+      250,
+    );
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, query]);
@@ -131,10 +127,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const needle = query.trim();
 
   const selectedPlace =
-    visiblePlaces.find((place) => place.id === selectedParam) ?? null;
+    visiblePlaces.find((place) => place.id === search.tempat) ?? null;
 
   function selectPlace(placeId: number | null) {
-    updateParams({ tempat: placeId === null ? null : String(placeId) });
+    updateParams({ tempat: placeId ?? undefined });
   }
 
   function toggleCategory(slug: string) {
@@ -145,13 +141,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       .map((category) => category.slug)
       .filter((s) => next.includes(s));
     updateParams({
-      kategori: ordered.length === categories.length ? null : ordered.join(","),
+      kategori:
+        ordered.length === categories.length ? undefined : ordered.join(","),
     });
   }
 
   function clearSearch() {
     setDraft("");
-    updateParams({ q: null });
+    updateParams({ q: undefined });
   }
 
   // Escape closes the place details.
@@ -189,7 +186,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         : {
             message: `Belum ada tempat untuk kategori ini di ${areaName}.`,
             action: "Tampilkan semua kategori",
-            onAction: () => updateParams({ kategori: null }),
+            onAction: () => updateParams({ kategori: undefined }),
           };
   }
 
@@ -221,7 +218,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   onChange={(event) =>
                     updateParams({
                       kecamatan: event.target.value,
-                      tempat: null,
+                      tempat: undefined,
                     })
                   }
                   className="border-paint/35 bg-board-deep text-paint hover:border-paint/60 focus-visible:border-sign h-11 w-full appearance-none rounded-[3px] border-2 py-0 pr-10 pl-3 font-semibold transition-colors focus-visible:outline-none sm:w-64"
@@ -256,7 +253,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               role="search"
               onSubmit={(event) => {
                 event.preventDefault();
-                updateParams({ q: draft.trim() });
+                updateParams({ q: draft.trim() || undefined });
               }}
               className="relative sm:flex-1 lg:max-w-md"
             >
@@ -302,7 +299,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <button
             type="button"
             aria-pressed={allActive}
-            onClick={() => updateParams({ kategori: null })}
+            onClick={() => updateParams({ kategori: undefined })}
             className={`focus-visible:outline-cat h-10 shrink-0 rounded-[3px] border-2 px-3 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
               allActive
                 ? "border-ink bg-ink text-paint"
@@ -425,7 +422,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   );
 }
 
-export function ErrorBoundary() {
+function HomeError() {
   return (
     <main className="bg-board grid min-h-dvh place-items-center p-4">
       <div className="border-sign bg-board-deep text-paint flex max-w-md flex-col items-center gap-4 rounded-[5px] border-2 p-6 text-center">

@@ -8,12 +8,12 @@ import (
 )
 
 type Config struct {
-	DatabaseURL string
-	Port        int
-	JWTSecret   string
-	JWTExpiry   time.Duration
-
+	DatabaseURL        string
+	Port               int
+	JWTSecret          string
+	JWTExpiry          time.Duration
 	RefreshTokenExpiry time.Duration
+	CORSAllowedOrigin  string
 }
 
 func NewConfig() (Config, error) {
@@ -51,11 +51,17 @@ func NewConfig() (Config, error) {
 	}
 	refreshTokenExpiry := time.Duration(days) * 24 * time.Hour
 
+	corsAllowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
+	if corsAllowedOrigin == "" {
+		corsAllowedOrigin = "http://localhost:5173"
+	}
+
 	return Config{
-		DatabaseURL: databaseURL,
-		Port:        port,
-		JWTSecret:   jwtSecret,
-		JWTExpiry:   jwtExpiry,
+		DatabaseURL:        databaseURL,
+		Port:               port,
+		JWTSecret:          jwtSecret,
+		JWTExpiry:          jwtExpiry,
 		RefreshTokenExpiry: refreshTokenExpiry,
+		CORSAllowedOrigin:  corsAllowedOrigin,
 	}, nil
 }
