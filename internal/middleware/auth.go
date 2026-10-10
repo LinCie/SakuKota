@@ -35,7 +35,7 @@ func WithAuth(cfg config.Config) httpx.Constructor {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
+			ctx := context.WithValue(r.Context(), userIDKey, claims.Subject)
 			ctx = context.WithValue(ctx, roleKey, claims.Role)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

@@ -11,16 +11,14 @@ import (
 )
 
 type Claims struct {
-	UserID int64  `json:"user_id"`
-	Role   string `json:"role"`
+	Role string `json:"role"`
 	jwt.RegisteredClaims
 }
 
 func GenerateToken(cfg config.Config, userID int64, role string) (string, error) {
 	now := time.Now()
 	claims := Claims{
-		UserID: userID,
-		Role:   role,
+		Role: role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   fmt.Sprint(userID),
 			IssuedAt:  jwt.NewNumericDate(now),
