@@ -5,10 +5,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
-
 	"github.com/jmoiron/sqlx"
 
 	"rantau-go/internal/config"
+	"rantau-go/internal/docs"
 	"rantau-go/internal/middleware"
 	"rantau-go/internal/module/auth"
 	"rantau-go/internal/module/place"
@@ -29,6 +29,9 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 		chimiddleware.StripSlashes,
 		middleware.WithCORS(cfg),
 	)
+
+	r.Get("/docs", docs.Scalar)
+	r.Get("/openapi.json", docs.OpenAPI)
 
 	authModule := auth.NewModule(db, cfg)
 	placeModule := place.NewModule(db, cfg)

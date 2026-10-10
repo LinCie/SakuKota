@@ -1,0 +1,882 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Rantau API",
+    "version": "1.0.0",
+    "description": "API for sub-districts, places, place categories, and authentication. Successful JSON responses are wrapped in data; errors contain code and message."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "Register users, authenticate, and manage refresh-token sessions."
+    },
+    {
+      "name": "Places",
+      "description": "List and create places."
+    },
+    {
+      "name": "Categories",
+      "description": "List and create place categories, and add custom fields to them."
+    },
+    {
+      "name": "Sub-districts",
+      "description": "List and create sub-districts."
+    }
+  ],
+  "paths": {
+    "/v1/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "operationId": "register",
+        "summary": "Register a user",
+        "description": "Creates a user and returns their ID, name, and email. No tokens or cookies are issued; log in separately to authenticate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" },
+              "example": {
+                "name": "Jane Doe",
+                "email": "jane@example.com",
+                "password": "correct-horse-battery-staple"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "409": {
+            "description": "A user with this email already exists.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "email_taken",
+                  "message": "email already registered"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "operationId": "login",
+        "summary": "Log in",
+        "description": "Authenticates a user and issues an access token. The refresh token is set in an HttpOnly cookie and is not included in the response body.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" },
+              "example": {
+                "email": "jane@example.com",
+                "password": "correct-horse-battery-staple"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful. The refresh token cookie is set.",
+            "headers": {
+              "Set-Cookie": {
+                "description": "HttpOnly refresh_token cookie scoped to /v1/auth; SameSite=Strict and Secure according to server configuration.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SessionResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": {
+            "description": "The email or password is incorrect.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "invalid_credentials",
+                  "message": "invalid email or password"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/auth/refresh": {
+      "post": {
+        "tags": ["Auth"],
+        "operationId": "refreshSession",
+        "summary": "Refresh session",
+        "description": "Rotates the refresh token and issues a new access token. The refresh token is read from and replaced in the HttpOnly cookie.",
+        "security": [{ "RefreshTokenCookie": [] }],
+        "responses": {
+          "200": {
+            "description": "Session refreshed successfully.",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Replacement HttpOnly refresh_token cookie scoped to /v1/auth; SameSite=Strict and Secure according to server configuration.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SessionResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "The refresh token cookie is missing, or the refresh token is invalid or expired. The cookie is cleared.",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Expired refresh_token cookie scoped to /v1/auth.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "invalid_refresh_token",
+                  "message": "invalid or expired refresh token"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "operationId": "logout",
+        "summary": "Log out",
+        "description": "Revokes the refresh-token session if a refresh_token cookie is present, then clears the cookie. Calling without the cookie is also successful.",
+        "responses": {
+          "204": {
+            "description": "Logged out successfully. No response body.",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Expired refresh_token cookie scoped to /v1/auth.",
+                "schema": { "type": "string" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/places": {
+      "get": {
+        "tags": ["Places"],
+        "operationId": "listPlaces",
+        "summary": "List places",
+        "description": "Returns places, optionally filtered. Filters are combined with AND.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Case-insensitive search across place name, address, short description, and category name.",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "sub_district_id",
+            "in": "query",
+            "description": "Only return places in this sub-district.",
+            "schema": { "type": "integer", "format": "int64" }
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "description": "Comma-separated category IDs. Returns places in any of the given categories.",
+            "schema": {
+              "type": "string",
+              "example": "1,3"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Places retrieved successfully. An empty result returns an empty data array.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Place" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "sub_district_id or category_id is not a valid integer.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "invalid_category_id",
+                  "message": "invalid category_id"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      },
+      "post": {
+        "tags": ["Places"],
+        "operationId": "createPlace",
+        "summary": "Create a place",
+        "description": "Creates a place. Requires the admin role. The attributes object must match the fields of the chosen category: required fields must be present, and unknown keys are rejected.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreatePlaceRequest" },
+              "example": {
+                "sub_district_id": 1,
+                "category_id": 1,
+                "name": "Warung Bu Sri",
+                "address": "Jl. Melati No. 5",
+                "location": {
+                  "type": "Point",
+                  "coordinates": [106.8456, -6.2088]
+                },
+                "operating_hours": "07:00-21:00",
+                "estimated_price_range": "Rp 10.000-25.000",
+                "short_description": "Nasi campur and soto.",
+                "attributes": {
+                  "halal": true,
+                  "serving_style": "Dimasak saat dipesan"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Place created successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PlaceResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/places/categories": {
+      "get": {
+        "tags": ["Categories"],
+        "operationId": "listCategories",
+        "summary": "List categories",
+        "description": "Returns all categories with their custom fields.",
+        "responses": {
+          "200": {
+            "description": "Categories retrieved successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/CategoryDetail" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      },
+      "post": {
+        "tags": ["Categories"],
+        "operationId": "createCategory",
+        "summary": "Create a category",
+        "description": "Creates a category with no custom fields. Requires the admin role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateCategoryRequest" },
+              "example": {
+                "name": "Laundry",
+                "slug": "laundry"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Category created successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CategoryDetailResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": {
+            "description": "A category with this name or slug already exists.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "category_exists",
+                  "message": "category with this name or slug already exists"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/places/categories/{id}/fields": {
+      "post": {
+        "tags": ["Categories"],
+        "operationId": "createCategoryField",
+        "summary": "Add a custom field to a category",
+        "description": "Adds a custom field that places in the category carry in their attributes. Requires the admin role. Options are required for select fields and not allowed for other data types.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Category ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateCategoryFieldRequest" },
+              "example": {
+                "key": "halal",
+                "label": "Halal",
+                "data_type": "boolean",
+                "required": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Field created successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CategoryFieldResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The category ID is invalid, the body is malformed, or a field value is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "validation_error",
+                  "message": "data_type must be one of text, number, boolean, select, range, date"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The category does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "category_not_found",
+                  "message": "category not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A field with this key already exists in the category.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "category_field_exists",
+                  "message": "field with this key already exists in the category"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/subdistricts": {
+      "get": {
+        "tags": ["Sub-districts"],
+        "operationId": "listSubDistricts",
+        "summary": "List sub-districts",
+        "responses": {
+          "200": {
+            "description": "Sub-districts retrieved successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/SubDistrict" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      },
+      "post": {
+        "tags": ["Sub-districts"],
+        "operationId": "createSubDistrict",
+        "summary": "Create a sub-district",
+        "description": "Creates a sub-district. Requires the admin role.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateSubDistrictRequest" },
+              "example": {
+                "name": "Kebayoran Baru",
+                "slug": "kebayoran-baru",
+                "estimated_daily_spending": 150000
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sub-district created successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SubDistrictResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": {
+            "description": "A sub-district with this name or slug already exists.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "sub_district_exists",
+                  "message": "sub-district with this name or slug already exists"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["name", "email", "password"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string", "minLength": 8 }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string" }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": ["id", "name", "email", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "required": ["data"],
+        "properties": {
+          "data": { "$ref": "#/components/schemas/User" }
+        }
+      },
+      "Session": {
+        "type": "object",
+        "required": ["user", "access_token"],
+        "properties": {
+          "user": { "$ref": "#/components/schemas/User" },
+          "access_token": {
+            "type": "string",
+            "description": "Bearer token for endpoints that require authentication."
+          }
+        }
+      },
+      "SessionResponse": {
+        "type": "object",
+        "required": ["data"],
+        "properties": {
+          "data": { "$ref": "#/components/schemas/Session" }
+        }
+      },
+      "Point": {
+        "type": "object",
+        "description": "GeoJSON Point in WGS 84 (SRID 4326). Coordinates are [longitude, latitude].",
+        "required": ["type", "coordinates"],
+        "properties": {
+          "type": { "type": "string", "const": "Point" },
+          "coordinates": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": { "type": "number" }
+          }
+        }
+      },
+      "CreatePlaceRequest": {
+        "type": "object",
+        "required": ["sub_district_id", "category_id", "name"],
+        "properties": {
+          "sub_district_id": { "type": "integer", "format": "int64" },
+          "category_id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 150 },
+          "address": { "type": ["string", "null"], "maxLength": 255 },
+          "location": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/Point" },
+              { "type": "null" }
+            ]
+          },
+          "operating_hours": { "type": ["string", "null"], "maxLength": 255 },
+          "estimated_price_range": { "type": ["string", "null"], "maxLength": 100 },
+          "short_description": { "type": ["string", "null"] },
+          "attributes": {
+            "type": "object",
+            "description": "Values for the chosen category's custom fields, keyed by field key. Required fields must be present."
+          }
+        }
+      },
+      "CategorySummary": {
+        "type": "object",
+        "required": ["id", "name", "slug"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" }
+        }
+      },
+      "Place": {
+        "type": "object",
+        "required": [
+          "id",
+          "sub_district_id",
+          "name",
+          "address",
+          "location",
+          "operating_hours",
+          "estimated_price_range",
+          "short_description",
+          "attributes",
+          "category"
+        ],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "sub_district_id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" },
+          "address": { "type": ["string", "null"] },
+          "location": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/Point" },
+              { "type": "null" }
+            ]
+          },
+          "operating_hours": { "type": ["string", "null"] },
+          "estimated_price_range": { "type": ["string", "null"] },
+          "short_description": { "type": ["string", "null"] },
+          "attributes": {
+            "type": "object",
+            "description": "Values for the category's custom fields, keyed by field key."
+          },
+          "category": { "$ref": "#/components/schemas/CategorySummary" }
+        }
+      },
+      "PlaceResponse": {
+        "type": "object",
+        "required": ["data"],
+        "properties": {
+          "data": { "$ref": "#/components/schemas/Place" }
+        }
+      },
+      "CreateCategoryRequest": {
+        "type": "object",
+        "required": ["name", "slug"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "slug": {
+            "type": "string",
+            "maxLength": 100,
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          }
+        }
+      },
+      "CategoryDetail": {
+        "type": "object",
+        "required": ["id", "name", "slug", "fields"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "fields": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CategoryField" }
+          }
+        }
+      },
+      "CategoryDetailResponse": {
+        "type": "object",
+        "required": ["data"],
+        "properties": {
+          "data": { "$ref": "#/components/schemas/CategoryDetail" }
+        }
+      },
+      "FieldDataType": {
+        "type": "string",
+        "enum": ["text", "number", "boolean", "select", "range", "date"]
+      },
+      "CreateCategoryFieldRequest": {
+        "type": "object",
+        "required": ["key", "label", "data_type"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "description": "Unique within the category. Lowercase letters, digits, or underscores, starting with a letter."
+          },
+          "label": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "data_type": { "$ref": "#/components/schemas/FieldDataType" },
+          "required": { "type": "boolean", "default": false },
+          "options": {
+            "type": ["array", "null"],
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Allowed values. Required, unique, and non-blank for select fields; not allowed for other data types."
+          },
+          "sort_order": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "1-based position to insert the field at; later fields shift down. Omitted or 0 adds the field last."
+          }
+        }
+      },
+      "CategoryField": {
+        "type": "object",
+        "required": ["id", "category_id", "key", "label", "data_type", "required", "options", "sort_order"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "category_id": { "type": "integer", "format": "int64" },
+          "key": { "type": "string" },
+          "label": { "type": "string" },
+          "data_type": { "$ref": "#/components/schemas/FieldDataType" },
+          "required": { "type": "boolean" },
+          "options": {
+            "type": ["array", "null"],
+            "items": { "type": "string" }
+          },
+          "sort_order": { "type": "integer", "format": "int32" }
+        }
+      },
+      "CategoryFieldResponse": {
+        "type": "object",
+        "required": ["data"],
+        "properties": {
+          "data": { "$ref": "#/components/schemas/CategoryField" }
+        }
+      },
+      "CreateSubDistrictRequest": {
+        "type": "object",
+        "required": ["name", "slug"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "slug": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "flood_history": { "type": ["string", "null"] },
+          "safety_crime_information": { "type": ["string", "null"] },
+          "estimated_daily_spending": { "type": ["number", "null"] },
+          "static_map_image_url": { "type": ["string", "null"], "maxLength": 255 }
+        }
+      },
+      "SubDistrict": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "flood_history",
+          "safety_crime_information",
+          "estimated_daily_spending",
+          "static_map_image_url"
+        ],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "flood_history": { "type": ["string", "null"] },
+          "safety_crime_information": { "type": ["string", "null"] },
+          "estimated_daily_spending": { "type": ["number", "null"] },
+          "static_map_image_url": { "type": ["string", "null"] }
+        }
+      },
+      "SubDistrictResponse": {
+        "type": "object",
+        "required": ["data"],
+        "properties": {
+          "data": { "$ref": "#/components/schemas/SubDistrict" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "The request body is malformed or a path or query parameter is invalid.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "code": "invalid_body",
+              "message": "invalid request body"
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "The request body failed validation.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "code": "validation_error",
+              "message": "name is required"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "The bearer token is missing, invalid, or expired.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "code": "UNAUTHORIZED",
+              "message": "missing bearer token"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "The authenticated user does not have the admin role.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "code": "FORBIDDEN",
+              "message": "insufficient role"
+            }
+          }
+        }
+      },
+      "InternalServerError": {
+        "description": "An internal error occurred while processing the request.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "code": "internal_error",
+              "message": "internal server error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Access token returned by login or refresh."
+      },
+      "RefreshTokenCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "refresh_token",
+        "description": "HttpOnly refresh token cookie scoped to /v1/auth."
+      }
+    }
+  }
+}
