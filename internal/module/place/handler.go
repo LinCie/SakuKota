@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
+
 	"rantau-go/internal/httpx"
 )
 
@@ -106,7 +108,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 // CreateCategoryField adds a custom field to the category given by the `id`
 // path parameter.
 func (h *Handler) CreateCategoryField(w http.ResponseWriter, r *http.Request) {
-	categoryID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	categoryID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		httpx.RespondError(w, http.StatusBadRequest, "invalid_category_id", "invalid category_id")
 		return

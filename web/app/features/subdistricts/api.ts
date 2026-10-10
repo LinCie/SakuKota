@@ -37,7 +37,7 @@ export function getSubDistricts(): Promise<
   ApiResult<SubDistrict[], SubDistrictErrorCode>
 > {
   return apiResult<SubDistrict[], SubDistrictErrorCode>(
-    api.get("subdistricts/"),
+    api.get("subdistricts"),
   );
 }
 
@@ -46,6 +46,6 @@ export function createSubDistrict(
   body: CreateSubDistrictRequest,
 ): Promise<ApiResult<SubDistrict, CreateSubDistrictErrorCode>> {
   return apiResult<SubDistrict, CreateSubDistrictErrorCode>(
-    api.post("subdistricts/", { json: body }),
+    api.post("subdistricts", { json: body }),
   );
 }

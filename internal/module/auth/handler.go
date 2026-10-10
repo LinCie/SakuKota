@@ -15,7 +15,7 @@ const (
 	// refreshCookiePath scopes the cookie to the auth routes, the only ones
 	// that read it. A proxy serving the API under a prefix must rewrite it
 	// (see web/vite.config.ts).
-	refreshCookiePath = "/auth"
+	refreshCookiePath = "/v1/auth"
 )
 
 // Service defines the operations required by the handler.

@@ -96,7 +96,7 @@ export function getPlaces(
   if (q) searchParams.set("q", q);
 
   return apiResult<Place[], PlaceErrorCode>(
-    api.get("places/", { searchParams }),
+    api.get("places", { searchParams }),
   );
 }
 
@@ -104,7 +104,7 @@ export function getCategories(): Promise<
   ApiResult<CategoryDetail[], CategoryErrorCode>
 > {
   return apiResult<CategoryDetail[], CategoryErrorCode>(
-    api.get("places/categories/"),
+    api.get("places/categories"),
   );
 }
 
@@ -113,7 +113,7 @@ export function createPlace(
   body: CreatePlaceRequest,
 ): Promise<ApiResult<Place, CreatePlaceErrorCode>> {
   return apiResult<Place, CreatePlaceErrorCode>(
-    api.post("places/", { json: body }),
+    api.post("places", { json: body }),
   );
 }
 
@@ -122,7 +122,7 @@ export function createCategory(
   body: CreateCategoryRequest,
 ): Promise<ApiResult<CategoryDetail, CreateCategoryErrorCode>> {
   return apiResult<CategoryDetail, CreateCategoryErrorCode>(
-    api.post("places/categories/", { json: body }),
+    api.post("places/categories", { json: body }),
   );
 }
 
@@ -132,6 +132,6 @@ export function createCategoryField(
   body: CreateCategoryFieldRequest,
 ): Promise<ApiResult<CategoryField, CreateCategoryFieldErrorCode>> {
   return apiResult<CategoryField, CreateCategoryFieldErrorCode>(
-    api.post(`places/categories/${categoryId}/fields/`, { json: body }),
+    api.post(`places/categories/${categoryId}/fields`, { json: body }),
   );
 }

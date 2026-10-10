@@ -3,10 +3,12 @@ package router
 import (
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
+
 	"github.com/jmoiron/sqlx"
 
 	"rantau-go/internal/config"
-	"rantau-go/internal/httpx"
 	"rantau-go/internal/middleware"
 	"rantau-go/internal/module/auth"
 	"rantau-go/internal/module/place"
@@ -18,28 +20,72 @@ type Router struct {
 	cfg config.Config
 }
 
-func NewRouter(db *sqlx.DB, cfg config.Config) Router {
-	mux := http.NewServeMux()
+func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
+	r := chi.NewRouter()
 
-	placeModule := place.NewModule(db, cfg)
-	mux.Handle("/places/", http.StripPrefix("/places", placeModule.Mux))
-
-	subdistrictModule := subdistrict.NewModule(db, cfg)
-	mux.Handle("/subdistricts/", http.StripPrefix("/subdistricts", subdistrictModule.Mux))
+	r.Use(
+		chimiddleware.Recoverer,
+		chimiddleware.Logger,
+		chimiddleware.StripSlashes,
+		middleware.WithCORS(cfg),
+	)
 
 	authModule := auth.NewModule(db, cfg)
-	mux.Handle("/auth/", http.StripPrefix("/auth", authModule.Mux))
+	placeModule := place.NewModule(db, cfg)
+	subdisctrictModule := subdistrict.NewModule(db, cfg)
 
-	return Router{
-		mux: mux,
-		cfg: cfg,
-	}
-}
+	r.Route("/v1", func(r chi.Router) {
+		r.Route("/auth", func(r chi.Router) {
+			r.Post("/register", authModule.Handler.Register)
+			r.Post("/login", authModule.Handler.Login)
+			r.Post("/refresh", authModule.Handler.Refresh)
+			r.Post("/logout", authModule.Handler.Logout)
+		})
 
-func (r Router) Handler() http.Handler {
-	return httpx.NewChain(
-		middleware.Logger,
-		middleware.Recovery,
-		middleware.WithCORS(r.cfg),
-	).Then(r.mux)
+		r.Route("/places", func(r chi.Router) {
+			// GET /v1/places
+			r.Get("/", placeModule.Handler.GetPlaces)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.WithAuth(cfg))
+				r.Use(middleware.Guard([]string{"admin"}))
+
+				// POST /v1/places
+				r.Post("/", placeModule.Handler.CreatePlace)
+			})
+
+			r.Route("/categories", func(r chi.Router) {
+				// GET /v1/places/categories
+				r.Get("/", placeModule.Handler.GetCategories)
+
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.WithAuth(cfg))
+					r.Use(middleware.Guard([]string{"admin"}))
+
+					// POST /v1/places/categories
+					r.Post("/", placeModule.Handler.CreateCategory)
+
+					// POST /v1/places/categories/{id}/fields
+					r.Post("/{id}/fields", placeModule.Handler.CreateCategoryField)
+				})
+			})
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Route("/subdistricts", func(r chi.Router) {
+				// GET /v1/subdistricts
+				r.Get("/", subdisctrictModule.Handler.GetSubDistricts)
+
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.WithAuth(cfg))
+					r.Use(middleware.Guard([]string{"admin"}))
+
+					// POST /v1/subdistricts
+					r.Post("/", subdisctrictModule.Handler.CreateSubDistrict)
+				})
+			})
+		})
+	})
+
+	return r
 }

@@ -1,8 +1,6 @@
 package subdistrict
 
 import (
-	"net/http"
-
 	"github.com/jmoiron/sqlx"
 
 	"rantau-go/internal/config"
@@ -12,7 +10,7 @@ import (
 // handler, and exposes a mux serving its routes.
 type Module struct {
 	Service Service
-	Mux     *http.ServeMux
+	Handler *Handler
 }
 
 func NewModule(db *sqlx.DB, cfg config.Config) *Module {
@@ -20,11 +18,8 @@ func NewModule(db *sqlx.DB, cfg config.Config) *Module {
 	service := NewService(repo)
 	handler := NewHandler(service)
 
-	mux := http.NewServeMux()
-	RegisterRoutes(mux, handler, cfg)
-
 	return &Module{
 		Service: service,
-		Mux:     mux,
+		Handler: handler,
 	}
 }
