@@ -43,6 +43,28 @@ export function useSession() {
   return useSyncExternalStore(subscribe, getSession);
 }
 
+/**
+ * Whether the access token carries the `admin` role. Only used to decide what
+ * to show: the backend enforces the role on every admin endpoint.
+ */
+export function isAdmin(current: Session | null): boolean {
+  if (!current) return false;
+  try {
+    const payload = current.access_token.split(".")[1] ?? "";
+    const claims: unknown = JSON.parse(
+      atob(payload.replace(/-/g, "+").replace(/_/g, "/")),
+    );
+    return (
+      typeof claims === "object" &&
+      claims !== null &&
+      "role" in claims &&
+      claims.role === "admin"
+    );
+  } catch {
+    return false;
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Refresh
 // -----------------------------------------------------------------------------

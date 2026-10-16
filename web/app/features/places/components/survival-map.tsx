@@ -1,5 +1,4 @@
 import type * as Leaflet from "leaflet";
-import { Minus, Plus } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -8,21 +7,20 @@ import {
   type RefObject,
 } from "react";
 
-import { cn } from "~/shared/cn";
-import { menuButtonClass } from "~/shared/components/menu-board";
 import type { Place } from "../types";
 import { categoryStyle } from "./category-sign";
+import { ZoomPlate } from "./zoom-plate";
 
-const JAKARTA_CENTER: [number, number] = [-6.2088, 106.8456];
+export const JAKARTA_CENTER: [number, number] = [-6.2088, 106.8456];
 const FIT_OPTIONS = { padding: [56, 56] as [number, number], maxZoom: 16 };
 
 // Esri light gray canvas: street geometry and labels without competing POI
 // icons, so the painted signs are the only markers on the map.
-const TILE_BASE_URL =
+export const TILE_BASE_URL =
   "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}";
-const TILE_LABELS_URL =
+export const TILE_LABELS_URL =
   "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}";
-const TILE_ATTRIBUTION =
+export const TILE_ATTRIBUTION =
   'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 // Signs plant west to east in a quick stagger. Literal class names so
@@ -247,25 +245,10 @@ export function SurvivalMap({
         className="bg-paint-deep [&_.leaflet-control-attribution]:bg-paint/90 [&_.leaflet-control-attribution]:text-ink-soft [&_.leaflet-control-attribution_a]:text-cat absolute inset-0 font-sans [&_.leaflet-control-attribution]:px-1.5 [&_.leaflet-control-attribution]:text-[10px] [&_.leaflet-tile-pane]:sepia-[.3]"
       />
 
-      <div className="border-ink bg-paint absolute top-3 left-3 z-1000 flex flex-col overflow-hidden rounded-[3px] border-2 shadow-[0_3px_8px_rgb(26_26_23/0.25)]">
-        <button
-          type="button"
-          aria-label="Perbesar peta"
-          onClick={() => mapRef.current?.zoomIn()}
-          className={cn(menuButtonClass, "grid size-10 place-items-center")}
-        >
-          <Plus aria-hidden="true" className="size-5" strokeWidth={2.5} />
-        </button>
-        <span aria-hidden="true" className="bg-ink h-0.5" />
-        <button
-          type="button"
-          aria-label="Perkecil peta"
-          onClick={() => mapRef.current?.zoomOut()}
-          className={cn(menuButtonClass, "grid size-10 place-items-center")}
-        >
-          <Minus aria-hidden="true" className="size-5" strokeWidth={2.5} />
-        </button>
-      </div>
+      <ZoomPlate
+        onZoomIn={() => mapRef.current?.zoomIn()}
+        onZoomOut={() => mapRef.current?.zoomOut()}
+      />
 
       {children}
     </div>

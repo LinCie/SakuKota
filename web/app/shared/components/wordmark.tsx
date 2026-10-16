@@ -4,7 +4,13 @@ import { Link } from "@tanstack/react-router";
  * The RANTAU plate and tagline on the green board, linking to the map.
  * `href` keeps a specific map address (kecamatan, filters, place).
  */
-export function Wordmark({ href = "/" }: { href?: string }) {
+export function Wordmark({
+  href = "/",
+  tagline = true,
+}: {
+  href?: string;
+  tagline?: boolean;
+}) {
   return (
     <div className="flex items-center gap-4">
       {/* `href` overrides `to`. */}
@@ -17,9 +23,11 @@ export function Wordmark({ href = "/" }: { href?: string }) {
           Rantau
         </span>
       </Link>
-      <p className="text-paint/85 hidden max-w-[26ch] text-sm leading-snug sm:block">
-        Peta bertahan hidup untuk perantau di Jakarta
-      </p>
+      {tagline ? (
+        <p className="text-paint/85 hidden max-w-[26ch] text-sm leading-snug sm:block">
+          Peta bertahan hidup untuk perantau di Jakarta
+        </p>
+      ) : null}
     </div>
   );
 }

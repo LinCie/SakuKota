@@ -1,9 +1,9 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { LogOut, UserRound } from "lucide-react";
+import { LogOut, ShieldCheck, UserRound } from "lucide-react";
 
 import { cn } from "~/shared/cn";
 import { logout } from "../api";
-import { clearSession, useSession } from "../session";
+import { clearSession, isAdmin, useSession } from "../session";
 
 const plateClass =
   "border-paint/35 text-paint hover:border-paint/60 hover:bg-board-deep focus-visible:outline-sign inline-flex h-11 shrink-0 items-center gap-2 rounded-[3px] border-2 px-3 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2";
@@ -16,6 +16,7 @@ const plateClass =
 export function AccountControl({ className }: { className?: string }) {
   const session = useSession();
   const href = useLocation({ select: (location) => location.href });
+  const pathname = useLocation({ select: (location) => location.pathname });
 
   if (!session) {
     return (
@@ -37,9 +38,28 @@ export function AccountControl({ className }: { className?: string }) {
     logout().catch(() => undefined);
   }
 
+  // The admin plate is icon-only on phones, where it replaces the name.
+  const admin = isAdmin(session);
+  const adminLink = admin && pathname !== "/admin";
+
   return (
     <div className={cn("flex items-center gap-3", className)}>
-      <span className="text-paint max-w-[10ch] truncate text-sm font-bold">
+      {adminLink ? (
+        <Link to="/admin" className={plateClass}>
+          <ShieldCheck
+            aria-hidden="true"
+            className="size-4"
+            strokeWidth={2.5}
+          />
+          <span className="sr-only sm:not-sr-only">Admin</span>
+        </Link>
+      ) : null}
+      <span
+        className={cn(
+          "text-paint max-w-[10ch] truncate text-sm font-bold",
+          admin && "hidden sm:block",
+        )}
+      >
         {session.user.name.split(" ")[0]}
       </span>
       <button type="button" onClick={signOut} className={plateClass}>

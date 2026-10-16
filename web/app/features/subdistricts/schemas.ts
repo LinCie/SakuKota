@@ -1,0 +1,43 @@
+import { z } from "zod";
+
+export function slugify(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** Digits only; dots and spaces are accepted as thousands separators. */
+export function parseRupiah(text: string): number | null {
+  const digits = text.replace(/[.\s]/g, "");
+  return digits === "" ? null : Number(digits);
+}
+
+export const subDistrictSchema = z.object({
+  name: z.string().trim().min(1, "Nama kecamatan wajib diisi."),
+  slug: z
+    .string()
+    .trim()
+    .min(1, "Slug wajib diisi.")
+    .regex(
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+      "Slug hanya huruf kecil, angka, dan tanda hubung.",
+    ),
+  floodHistory: z.string(),
+  safetyInfo: z.string(),
+  dailySpending: z
+    .string()
+    .refine(
+      (v) => /^\d*$/.test(v.replace(/[.\s]/g, "")),
+      "Isi dengan angka saja, contoh: 75000.",
+    ),
+  mapImageUrl: z
+    .string()
+    .trim()
+    .refine(
+      (v) => v === "" || /^https?:\/\/\S+$/.test(v),
+      "Isi alamat gambar yang diawali http:// atau https://.",
+    ),
+});

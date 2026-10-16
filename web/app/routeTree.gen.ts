@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/_auth'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AuthDaftarRouteImport } from './routes/_auth/daftar'
 import { Route as AuthMasukRouteImport } from './routes/_auth/masuk'
 
@@ -21,6 +22,11 @@ const IndexRoute = IndexRouteImport.update({
 } as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/_auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthDaftarRoute = AuthDaftarRouteImport.update({
@@ -36,11 +42,13 @@ const AuthMasukRoute = AuthMasukRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/daftar': typeof AuthDaftarRoute
   '/masuk': typeof AuthMasukRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/daftar': typeof AuthDaftarRoute
   '/masuk': typeof AuthMasukRoute
 }
@@ -48,20 +56,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_auth': typeof AuthRouteWithChildren
+  '/admin': typeof AdminRoute
   '/_auth/daftar': typeof AuthDaftarRoute
   '/_auth/masuk': typeof AuthMasukRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/daftar' | '/masuk'
+  fullPaths: '/' | '/admin' | '/daftar' | '/masuk'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/daftar' | '/masuk'
-  id: '__root__' | '/' | '/_auth' | '/_auth/daftar' | '/_auth/masuk'
+  to: '/' | '/admin' | '/daftar' | '/masuk'
+  id: '__root__' | '/' | '/_auth' | '/admin' | '/_auth/daftar' | '/_auth/masuk'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRouteWithChildren
+  AdminRoute: typeof AdminRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -78,6 +88,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_auth/daftar': {
@@ -112,6 +129,7 @@ const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRouteWithChildren,
+  AdminRoute: AdminRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
