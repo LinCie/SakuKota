@@ -8,6 +8,8 @@ import {
   type RefObject,
 } from "react";
 
+import { cn } from "~/shared/cn";
+import { menuButtonClass } from "~/shared/components/menu-board";
 import type { Place } from "../types";
 import { categoryStyle } from "./category-sign";
 
@@ -38,10 +40,13 @@ const PLANT_DELAYS = [
   "delay-360",
 ];
 
-function toLatLng(place: Place): [number, number] | null {
-  if (!place.location) return null;
-  const [longitude, latitude] = place.location.coordinates;
-  return [latitude, longitude];
+/** The places that have a location, with their latitude and longitude. */
+function locatedPlaces(places: Place[]) {
+  return places.flatMap((place) => {
+    if (!place.location) return [];
+    const [longitude, latitude] = place.location.coordinates;
+    return [{ place, lat: latitude, lng: longitude }];
+  });
 }
 
 /** A place as a small painted sign on a post. */
@@ -53,7 +58,7 @@ function signIcon(L: typeof Leaflet, place: Place, delay: string) {
       "group rounded-[4px] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cat",
     iconSize: [36, 46],
     iconAnchor: [18, 46],
-    html: `<span class="flex h-full origin-bottom flex-col items-center motion-safe:transition-transform motion-safe:duration-500 motion-safe:ease-[cubic-bezier(0.16,1,0.3,1)] motion-safe:starting:scale-y-0 ${delay}"><span class="grid size-9 place-items-center rounded-[3px] border-2 font-sign text-base leading-none shadow-[0_3px_6px_rgb(26_26_23/0.35)] transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-data-selected:scale-115 group-data-selected:border-sign group-data-selected:bg-ink group-data-selected:text-sign ${plate}">${code}</span><span class="h-2.5 w-[3px] bg-ink"></span></span>`,
+    html: `<span class="flex h-full origin-bottom flex-col items-center motion-safe:transition-transform motion-safe:duration-500 motion-safe:ease-[cubic-bezier(0.16,1,0.3,1)] motion-safe:starting:scale-y-0 ${delay}"><span class="grid size-9 place-items-center rounded-[3px] border-2 font-sign text-base leading-none shadow-[0_3px_6px_rgb(26_26_23/0.35)] transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-data-selected:scale-115 group-data-selected:border-sign group-data-selected:bg-ink group-data-selected:text-sign ${plate}">${code}</span><span class="h-2.5 w-0.75 bg-ink"></span></span>`,
   });
 }
 
@@ -144,10 +149,9 @@ export function SurvivalMap({
     const map = mapRef.current;
     if (!ready || !L || !map || focusedKeyRef.current === focusKey) return;
 
-    const points = focusPlaces.flatMap((place) => {
-      const latLng = toLatLng(place);
-      return latLng ? [latLng] : [];
-    });
+    const points = locatedPlaces(focusPlaces).map(
+      ({ lat, lng }) => [lat, lng] as [number, number],
+    );
     if (points.length === 0) {
       if (focusedKeyRef.current === null) map.setView(JAKARTA_CENTER, 14);
       focusedKeyRef.current = focusKey;
@@ -184,13 +188,13 @@ export function SurvivalMap({
       }
     }
 
-    const westToEast = places
-      .filter((place) => !markers.has(place.id) && place.location)
-      .sort((a, b) => a.location!.coordinates[0] - b.location!.coordinates[0]);
+    const westToEast = locatedPlaces(places)
+      .filter(({ place }) => !markers.has(place.id))
+      .sort((a, b) => a.lng - b.lng);
 
-    westToEast.forEach((place, index) => {
+    westToEast.forEach(({ place, lat, lng }, index) => {
       const delay = PLANT_DELAYS[Math.min(index, PLANT_DELAYS.length - 1)];
-      const marker = L.marker(toLatLng(place)!, {
+      const marker = L.marker([lat, lng], {
         icon: signIcon(L, place, delay),
         title: place.name,
         alt: place.name,
@@ -248,7 +252,7 @@ export function SurvivalMap({
           type="button"
           aria-label="Perbesar peta"
           onClick={() => mapRef.current?.zoomIn()}
-          className="text-ink hover:bg-sign-soft focus-visible:bg-sign-soft focus-visible:outline-cat grid size-10 place-items-center transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2"
+          className={cn(menuButtonClass, "grid size-10 place-items-center")}
         >
           <Plus aria-hidden="true" className="size-5" strokeWidth={2.5} />
         </button>
@@ -257,7 +261,7 @@ export function SurvivalMap({
           type="button"
           aria-label="Perkecil peta"
           onClick={() => mapRef.current?.zoomOut()}
-          className="text-ink hover:bg-sign-soft focus-visible:bg-sign-soft focus-visible:outline-cat grid size-10 place-items-center transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2"
+          className={cn(menuButtonClass, "grid size-10 place-items-center")}
         >
           <Minus aria-hidden="true" className="size-5" strokeWidth={2.5} />
         </button>

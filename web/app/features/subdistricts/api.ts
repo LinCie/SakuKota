@@ -1,10 +1,9 @@
 import {
-  api,
-  apiResult,
+  apiGet,
+  apiPost,
+  type AdminWriteErrorCode,
   type ApiResult,
-  type AuthApiErrorCode,
   type CommonApiErrorCode,
-  type InvalidBodyErrorCode,
 } from "~/shared/api";
 import type { SubDistrict } from "./types";
 
@@ -14,11 +13,7 @@ import type { SubDistrict } from "./types";
 
 export type SubDistrictErrorCode = CommonApiErrorCode;
 export type CreateSubDistrictErrorCode =
-  | CommonApiErrorCode
-  | AuthApiErrorCode
-  | InvalidBodyErrorCode
-  | "validation_error"
-  | "sub_district_exists";
+  AdminWriteErrorCode | "validation_error" | "sub_district_exists";
 
 export type CreateSubDistrictRequest = {
   name: string;
@@ -36,16 +31,14 @@ export type CreateSubDistrictRequest = {
 export function getSubDistricts(): Promise<
   ApiResult<SubDistrict[], SubDistrictErrorCode>
 > {
-  return apiResult<SubDistrict[], SubDistrictErrorCode>(
-    api.get("subdistricts"),
-  );
+  return apiGet<SubDistrict[], SubDistrictErrorCode>("subdistricts");
 }
 
 /** Admin only. */
 export function createSubDistrict(
   body: CreateSubDistrictRequest,
 ): Promise<ApiResult<SubDistrict, CreateSubDistrictErrorCode>> {
-  return apiResult<SubDistrict, CreateSubDistrictErrorCode>(
-    api.post("subdistricts", { json: body }),
-  );
+  return apiPost<SubDistrict, CreateSubDistrictErrorCode>("subdistricts", {
+    json: body,
+  });
 }

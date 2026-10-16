@@ -1,10 +1,9 @@
 import {
-  api,
-  apiResult,
+  apiGet,
+  apiPost,
+  type AdminWriteErrorCode,
   type ApiResult,
-  type AuthApiErrorCode,
   type CommonApiErrorCode,
-  type InvalidBodyErrorCode,
 } from "~/shared/api";
 import type {
   CategoryDetail,
@@ -21,21 +20,11 @@ import type {
 export type PlaceErrorCode =
   CommonApiErrorCode | "invalid_sub_district_id" | "invalid_category_id";
 export type CategoryErrorCode = CommonApiErrorCode;
-export type CreatePlaceErrorCode =
-  | CommonApiErrorCode
-  | AuthApiErrorCode
-  | InvalidBodyErrorCode
-  | "validation_error";
+export type CreatePlaceErrorCode = AdminWriteErrorCode | "validation_error";
 export type CreateCategoryErrorCode =
-  | CommonApiErrorCode
-  | AuthApiErrorCode
-  | InvalidBodyErrorCode
-  | "validation_error"
-  | "category_exists";
+  AdminWriteErrorCode | "validation_error" | "category_exists";
 export type CreateCategoryFieldErrorCode =
-  | CommonApiErrorCode
-  | AuthApiErrorCode
-  | InvalidBodyErrorCode
+  | AdminWriteErrorCode
   | "invalid_category_id"
   | "validation_error"
   | "category_not_found"
@@ -95,35 +84,29 @@ export function getPlaces(
     searchParams.set("category_id", categoryIds.join(","));
   if (q) searchParams.set("q", q);
 
-  return apiResult<Place[], PlaceErrorCode>(
-    api.get("places", { searchParams }),
-  );
+  return apiGet<Place[], PlaceErrorCode>("places", { searchParams });
 }
 
 export function getCategories(): Promise<
   ApiResult<CategoryDetail[], CategoryErrorCode>
 > {
-  return apiResult<CategoryDetail[], CategoryErrorCode>(
-    api.get("places/categories"),
-  );
+  return apiGet<CategoryDetail[], CategoryErrorCode>("places/categories");
 }
 
 /** Admin only. */
 export function createPlace(
   body: CreatePlaceRequest,
 ): Promise<ApiResult<Place, CreatePlaceErrorCode>> {
-  return apiResult<Place, CreatePlaceErrorCode>(
-    api.post("places", { json: body }),
-  );
+  return apiPost<Place, CreatePlaceErrorCode>("places", { json: body });
 }
 
 /** Admin only. */
 export function createCategory(
   body: CreateCategoryRequest,
 ): Promise<ApiResult<CategoryDetail, CreateCategoryErrorCode>> {
-  return apiResult<CategoryDetail, CreateCategoryErrorCode>(
-    api.post("places/categories", { json: body }),
-  );
+  return apiPost<CategoryDetail, CreateCategoryErrorCode>("places/categories", {
+    json: body,
+  });
 }
 
 /** Admin only. */
@@ -131,7 +114,8 @@ export function createCategoryField(
   categoryId: number,
   body: CreateCategoryFieldRequest,
 ): Promise<ApiResult<CategoryField, CreateCategoryFieldErrorCode>> {
-  return apiResult<CategoryField, CreateCategoryFieldErrorCode>(
-    api.post(`places/categories/${categoryId}/fields`, { json: body }),
+  return apiPost<CategoryField, CreateCategoryFieldErrorCode>(
+    `places/categories/${categoryId}/fields`,
+    { json: body },
   );
 }

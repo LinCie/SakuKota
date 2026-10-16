@@ -8,3 +8,12 @@ export function MissingSlot({ children }: { children: ReactNode }) {
     </span>
   );
 }
+
+/** The value, or a drawn slot naming what is missing when it is null or empty. */
+export function orMissing(value: ReactNode, message = "Data tidak tersedia") {
+  return value === null || value === undefined || value === "" ? (
+    <MissingSlot>{message}</MissingSlot>
+  ) : (
+    value
+  );
+}

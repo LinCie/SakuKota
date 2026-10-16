@@ -1,7 +1,14 @@
 import { ArrowLeft, Check, X } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 
-import { MissingSlot } from "~/shared/components/missing-slot";
+import { cn } from "~/shared/cn";
+import { MissingSlot, orMissing } from "~/shared/components/missing-slot";
+import {
+  LeaderRow,
+  menuButtonClass,
+  StackedRow,
+} from "~/shared/components/menu-board";
+import { formatDate, formatNumber } from "~/shared/format";
 import type { CategoryField, Place } from "../types";
 import { CategoryBadge, CodePlate } from "./category-sign";
 
@@ -58,52 +65,6 @@ export function PlaceList({ places, onSelect, emptyMessage }: PlaceListProps) {
 // Details (the menu board)
 // -----------------------------------------------------------------------------
 
-/** A menu-board row: label, dotted leader, value. */
-function LeaderRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex items-baseline gap-2 py-2">
-      <dt className="text-ink-soft max-w-[50%] shrink-0 text-sm font-semibold">
-        {label}
-      </dt>
-      <span
-        aria-hidden="true"
-        className="border-ink/25 min-w-6 flex-1 -translate-y-1 border-b-2 border-dotted"
-      />
-      <dd className="text-ink max-w-[65%] text-right font-semibold tabular-nums">
-        {children}
-      </dd>
-    </div>
-  );
-}
-
-/** A menu-board block for long values: label above, value below. */
-function StackedRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="border-ink/25 flex flex-col gap-1 border-t border-dashed py-2">
-      <dt className="text-ink-soft text-sm font-semibold">{label}</dt>
-      <dd className="text-ink text-pretty">{children}</dd>
-    </div>
-  );
-}
-
-const numberFormat = new Intl.NumberFormat("id-ID");
-const dateFormat = new Intl.DateTimeFormat("id-ID", {
-  dateStyle: "long",
-  timeZone: "UTC",
-});
-
 function isRange(value: unknown): value is { min: number; max: number } {
   return (
     typeof value === "object" &&
@@ -125,7 +86,7 @@ function formatAttribute(field: CategoryField, value: unknown): ReactNode {
     case "select":
       return typeof value === "string" && value.trim() !== "" ? value : null;
     case "number":
-      return typeof value === "number" ? numberFormat.format(value) : null;
+      return typeof value === "number" ? formatNumber(value) : null;
     case "boolean": {
       if (typeof value !== "boolean") return null;
       const Icon = value ? Check : X;
@@ -144,14 +105,11 @@ function formatAttribute(field: CategoryField, value: unknown): ReactNode {
     case "range":
       if (!isRange(value)) return null;
       return value.min === value.max
-        ? numberFormat.format(value.min)
-        : `${numberFormat.format(value.min)}–${numberFormat.format(value.max)}`;
+        ? formatNumber(value.min)
+        : `${formatNumber(value.min)}–${formatNumber(value.max)}`;
     case "date": {
-      // YYYY-MM-DD parses as UTC midnight, so format in UTC too.
       const date = typeof value === "string" ? new Date(value) : null;
-      return date && !Number.isNaN(date.getTime())
-        ? dateFormat.format(date)
-        : null;
+      return date && !Number.isNaN(date.getTime()) ? formatDate(date) : null;
     }
     default:
       // A type this frontend doesn't know yet: show plain values as-is.
@@ -162,11 +120,7 @@ function formatAttribute(field: CategoryField, value: unknown): ReactNode {
 }
 
 function attributeValue(field: CategoryField, place: Place): ReactNode {
-  return (
-    formatAttribute(field, place.attributes[field.key]) ?? (
-      <MissingSlot>Data tidak tersedia</MissingSlot>
-    )
-  );
+  return orMissing(formatAttribute(field, place.attributes[field.key]));
 }
 
 type PlaceDetailsProps = {
@@ -194,7 +148,10 @@ export function PlaceDetails({ place, fields, onClose }: PlaceDetailsProps) {
         <button
           type="button"
           onClick={onClose}
-          className="text-ink hover:bg-sign-soft focus-visible:bg-sign-soft focus-visible:outline-cat hidden items-center gap-2 rounded-[3px] px-2 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 md:inline-flex"
+          className={cn(
+            menuButtonClass,
+            "hidden items-center gap-2 rounded-[3px] px-2 py-1.5 text-sm font-semibold md:inline-flex",
+          )}
         >
           <ArrowLeft aria-hidden="true" className="size-4" strokeWidth={2.5} />
           Daftar tempat
@@ -207,7 +164,10 @@ export function PlaceDetails({ place, fields, onClose }: PlaceDetailsProps) {
           type="button"
           onClick={onClose}
           aria-label="Tutup detail tempat"
-          className="text-ink hover:bg-sign-soft focus-visible:bg-sign-soft focus-visible:outline-cat grid size-9 place-items-center rounded-[3px] transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 md:hidden"
+          className={cn(
+            menuButtonClass,
+            "grid size-9 place-items-center rounded-[3px] md:hidden",
+          )}
         >
           <X aria-hidden="true" className="size-5" strokeWidth={2.5} />
         </button>
@@ -239,14 +199,10 @@ export function PlaceDetails({ place, fields, onClose }: PlaceDetailsProps) {
 
             <dl className="border-ink border-t-2 pt-1">
               <LeaderRow label="Jam buka">
-                {place.operating_hours ?? (
-                  <MissingSlot>Jam buka tidak tersedia</MissingSlot>
-                )}
+                {orMissing(place.operating_hours, "Jam buka tidak tersedia")}
               </LeaderRow>
               <LeaderRow label="Kisaran harga">
-                {place.estimated_price_range ?? (
-                  <MissingSlot>Harga tidak tersedia</MissingSlot>
-                )}
+                {orMissing(place.estimated_price_range, "Harga tidak tersedia")}
               </LeaderRow>
               {leaderFields.map((field) => (
                 <LeaderRow key={field.id} label={field.label}>
@@ -259,9 +215,7 @@ export function PlaceDetails({ place, fields, onClose }: PlaceDetailsProps) {
                 </StackedRow>
               ))}
               <StackedRow label="Alamat">
-                {place.address ?? (
-                  <MissingSlot>Alamat tidak tersedia</MissingSlot>
-                )}
+                {orMissing(place.address, "Alamat tidak tersedia")}
               </StackedRow>
             </dl>
           </div>

@@ -1,4 +1,4 @@
-import ky from "ky";
+import ky, { type Options } from "ky";
 
 // This client centralizes base URL configuration, retry behavior, auth, and
 // response normalization. The signed-in user's access token is attached to
@@ -87,6 +87,10 @@ export type InvalidBodyErrorCode = "invalid_body";
 
 /** Error codes for endpoints behind sign-in and a role check (see internal/middleware). */
 export type AuthApiErrorCode = "UNAUTHORIZED" | "FORBIDDEN";
+
+/** Error codes shared by admin-only writes: sign-in and role checks, plus invalid bodies. */
+export type AdminWriteErrorCode =
+  CommonApiErrorCode | AuthApiErrorCode | InvalidBodyErrorCode;
 
 /**
  * Normalized outcome of a backend call. `ok: true` carries the typed
@@ -184,4 +188,20 @@ export async function apiResult<T, C extends string = string>(
     status: response.status,
     error: body as ApiErrorResponse<C>,
   };
+}
+
+/** GET `path` and normalize the response into an `ApiResult`. */
+export function apiGet<T, C extends string = string>(
+  path: string,
+  options?: Options,
+): Promise<ApiResult<T, C>> {
+  return apiResult<T, C>(api.get(path, options));
+}
+
+/** POST to `path` and normalize the response into an `ApiResult`. */
+export function apiPost<T, C extends string = string>(
+  path: string,
+  options?: Options,
+): Promise<ApiResult<T, C>> {
+  return apiResult<T, C>(api.post(path, options));
 }

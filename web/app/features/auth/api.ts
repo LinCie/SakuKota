@@ -1,6 +1,5 @@
 import {
-  api,
-  apiResult,
+  apiPost,
   type ApiResult,
   type CommonApiErrorCode,
   type InvalidBodyErrorCode,
@@ -39,17 +38,13 @@ export type LoginRequest = {
 export function register(
   body: RegisterRequest,
 ): Promise<ApiResult<User, RegisterErrorCode>> {
-  return apiResult<User, RegisterErrorCode>(
-    api.post("auth/register", { json: body }),
-  );
+  return apiPost<User, RegisterErrorCode>("auth/register", { json: body });
 }
 
 export function login(
   body: LoginRequest,
 ): Promise<ApiResult<Session, LoginErrorCode>> {
-  return apiResult<Session, LoginErrorCode>(
-    api.post("auth/login", { json: body }),
-  );
+  return apiPost<Session, LoginErrorCode>("auth/login", { json: body });
 }
 
 /**
@@ -57,10 +52,10 @@ export function login(
  * `refreshSession` (see ./session), which serializes refreshes.
  */
 export function refresh(): Promise<ApiResult<Session, RefreshErrorCode>> {
-  return apiResult<Session, RefreshErrorCode>(api.post("auth/refresh"));
+  return apiPost<Session, RefreshErrorCode>("auth/refresh");
 }
 
 /** Revokes the refresh cookie sent with the request and clears it. */
 export function logout(): Promise<ApiResult<void, LogoutErrorCode>> {
-  return apiResult<void, LogoutErrorCode>(api.post("auth/logout"));
+  return apiPost<void, LogoutErrorCode>("auth/logout");
 }

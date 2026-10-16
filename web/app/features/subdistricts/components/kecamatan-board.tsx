@@ -5,50 +5,12 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ComponentType,
-  type ReactNode,
-} from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { MissingSlot } from "~/shared/components/missing-slot";
+import { InfoSection } from "~/shared/components/menu-board";
+import { formatRupiah } from "~/shared/format";
 import type { SubDistrict } from "../types";
-
-const rupiah = new Intl.NumberFormat("id-ID", {
-  style: "currency",
-  currency: "IDR",
-  maximumFractionDigits: 0,
-});
-
-function InfoSection({
-  icon: Icon,
-  title,
-  children,
-}: {
-  icon: ComponentType<{
-    className?: string;
-    strokeWidth?: number;
-    "aria-hidden"?: boolean;
-  }>;
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="border-ink/25 flex flex-col gap-2 border-t border-dashed pt-4 first:border-t-0 first:pt-0">
-      <h3 className="text-ink flex items-center gap-2 text-sm font-bold">
-        <Icon
-          aria-hidden={true}
-          className="text-board size-4"
-          strokeWidth={2.5}
-        />
-        {title}
-      </h3>
-      {children}
-    </section>
-  );
-}
 
 function AreaMap({ subDistrict }: { subDistrict: SubDistrict }) {
   const [failed, setFailed] = useState(false);
@@ -56,7 +18,7 @@ function AreaMap({ subDistrict }: { subDistrict: SubDistrict }) {
 
   if (!src || failed) {
     return (
-      <div className="border-ink/30 grid aspect-[8/5] w-full place-items-center rounded-[3px] border-2 border-dashed">
+      <div className="border-ink/30 grid aspect-8/5 w-full place-items-center rounded-[3px] border-2 border-dashed">
         <MissingSlot>Peta area tidak tersedia</MissingSlot>
       </div>
     );
@@ -68,7 +30,7 @@ function AreaMap({ subDistrict }: { subDistrict: SubDistrict }) {
       alt={`Peta area Kecamatan ${subDistrict.name}`}
       loading="lazy"
       onError={() => setFailed(true)}
-      className="border-ink bg-paint-deep aspect-[8/5] w-full rounded-[3px] border-2 object-cover"
+      className="border-ink bg-paint-deep aspect-8/5 w-full rounded-[3px] border-2 object-cover"
     />
   );
 }
@@ -104,7 +66,7 @@ export function KecamatanBoard({
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
-      className="border-ink bg-paint text-ink backdrop:bg-ink/60 m-auto max-h-[calc(100dvh-1.5rem)] w-[min(100%-1.5rem,34rem)] overflow-y-auto overscroll-contain rounded-[6px] border-2 p-0 shadow-[0_24px_60px_rgb(0_0_0/0.35)] motion-safe:transition-[opacity,translate] motion-safe:duration-300 motion-safe:ease-out motion-safe:starting:translate-y-4 motion-safe:starting:opacity-0"
+      className="border-ink bg-paint text-ink backdrop:bg-ink/60 m-auto max-h-[calc(100dvh-1.5rem)] w-[min(100%-1.5rem,34rem)] overflow-y-auto overscroll-contain rounded-md border-2 p-0 shadow-[0_24px_60px_rgb(0_0_0/0.35)] motion-safe:transition-[opacity,translate] motion-safe:duration-300 motion-safe:ease-out motion-safe:starting:translate-y-4 motion-safe:starting:opacity-0"
     >
       <header className="bg-board text-paint sticky top-0 z-10 p-1.5">
         <div className="border-sign flex items-center justify-between gap-3 rounded-[3px] border-2 py-2 pr-2 pl-4">
@@ -149,7 +111,7 @@ export function KecamatanBoard({
           {spending !== null ? (
             <p className="flex flex-wrap items-baseline gap-x-2">
               <span className="font-sign text-chili text-4xl leading-none tabular-nums">
-                {rupiah.format(spending)}
+                {formatRupiah(spending)}
               </span>
               <span className="text-ink-soft text-sm">per hari, perkiraan</span>
             </p>
