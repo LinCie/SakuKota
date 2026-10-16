@@ -28,6 +28,7 @@ var (
 	ErrInvalidFieldSortOrder  = errors.New("sort_order must be a positive position, or omitted to add the field last")
 	ErrCategoryFieldExists    = errors.New("field with this key already exists in the category")
 	ErrInvalidAttributes      = errors.New("invalid attributes")
+	ErrInvalidLocation        = errors.New("location must be within Indonesia")
 )
 
 var (
@@ -35,16 +36,25 @@ var (
 	slugPattern     = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 )
 
+// Indonesia's bounding box in degrees: west and east longitude, south and north latitude.
+const (
+	indonesiaMinLongitude = 95
+	indonesiaMaxLongitude = 141
+	indonesiaMinLatitude  = -11
+	indonesiaMaxLatitude  = 6
+)
+
 // maxNameLength is the size of the VARCHAR(100) columns holding category names
 // and slugs and field labels. VARCHAR counts characters, not bytes.
 const maxNameLength = 100
 
-// Repository defines the persistence operations required by the service.
-type Repository interface {
+// Service defines the operations required by the handler.
+//
+//go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
+type Service interface {
 	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error)
 	Create(ctx context.Context, p *Place) (*Place, error)
 	GetCategories(ctx context.Context) ([]Category, error)
-	GetCategory(ctx context.Context, id int64) (*Category, error)
 	CreateCategory(ctx context.Context, c *Category) (*Category, error)
 	CreateCategoryField(ctx context.Context, f *CategoryField) (*CategoryField, error)
 }
@@ -53,7 +63,7 @@ type service struct {
 	repo Repository
 }
 
-func NewService(repo Repository) Service {
+func NewService(repo Repository) *service {
 	return &service{
 		repo: repo,
 	}
@@ -75,6 +85,11 @@ func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
 	p.Name = strings.TrimSpace(p.Name)
 	if p.Name == "" {
 		return nil, ErrInvalidName
+	}
+
+	if loc := p.Location; loc != nil && (loc.X() < indonesiaMinLongitude || loc.X() > indonesiaMaxLongitude ||
+		loc.Y() < indonesiaMinLatitude || loc.Y() > indonesiaMaxLatitude) {
+		return nil, ErrInvalidLocation
 	}
 
 	category, err := s.repo.GetCategory(ctx, p.CategoryID)
@@ -168,10 +183,11 @@ func validateAttributes(fields []CategoryField, raw json.RawMessage) (json.RawMe
 
 	for _, f := range fields {
 		value, ok := values[f.Key]
-		if !ok {
+		if !ok || value == nil {
 			if f.Required {
 				return nil, fmt.Errorf("%w: %q is required", ErrInvalidAttributes, f.Key)
 			}
+			delete(values, f.Key)
 			continue
 		}
 

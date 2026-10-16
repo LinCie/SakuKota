@@ -1,7 +1,6 @@
 package place
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -12,15 +11,6 @@ import (
 
 	"rantau-go/internal/httpx"
 )
-
-// Service defines the operations required by the handler.
-type Service interface {
-	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error)
-	Create(ctx context.Context, p *Place) (*Place, error)
-	GetCategories(ctx context.Context) ([]Category, error)
-	CreateCategory(ctx context.Context, c *Category) (*Category, error)
-	CreateCategoryField(ctx context.Context, f *CategoryField) (*CategoryField, error)
-}
 
 type Handler struct {
 	service Service
@@ -36,6 +26,12 @@ func NewHandler(service Service) *Handler {
 // Handler
 // -----------------------------------------------------------------------------
 
+const internalErrorMessage = "internal server error"
+
+func respondInternal(w http.ResponseWriter) {
+	httpx.RespondError(w, http.StatusInternalServerError, "internal_error", internalErrorMessage)
+}
+
 // GetPlaces lists places, optionally filtered by `sub_district_id`,
 // `category_id` (comma-separated, matches any), and a `q` search term.
 func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +40,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 
 	if param := query.Get("sub_district_id"); param != "" {
 		id, err := strconv.ParseInt(param, 10, 64)
-		if err != nil {
+		if err != nil || id <= 0 {
 			httpx.RespondError(w, http.StatusBadRequest, "invalid_sub_district_id", "invalid sub_district_id")
 			return
 		}
@@ -54,7 +50,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	if param := query.Get("category_id"); param != "" {
 		for part := range strings.SplitSeq(param, ",") {
 			id, err := strconv.ParseInt(part, 10, 64)
-			if err != nil {
+			if err != nil || id <= 0 {
 				httpx.RespondError(w, http.StatusBadRequest, "invalid_category_id", "invalid category_id")
 				return
 			}
@@ -64,7 +60,14 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 
 	places, err := h.service.GetMany(r.Context(), filter)
 	if err != nil {
-		httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		switch {
+		case errors.Is(err, ErrSubDistrictNotFound):
+			httpx.RespondError(w, http.StatusNotFound, "sub_district_not_found", err.Error())
+		case errors.Is(err, ErrCategoryNotFound):
+			httpx.RespondError(w, http.StatusNotFound, "category_not_found", err.Error())
+		default:
+			respondInternal(w)
+		}
 		return
 	}
 
@@ -74,7 +77,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
 	categories, err := h.service.GetCategories(r.Context())
 	if err != nil {
-		httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		respondInternal(w)
 		return
 	}
 
@@ -97,7 +100,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrCategoryExists):
 			httpx.RespondError(w, http.StatusConflict, "category_exists", err.Error())
 		default:
-			httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			respondInternal(w)
 		}
 		return
 	}
@@ -135,7 +138,7 @@ func (h *Handler) CreateCategoryField(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrCategoryFieldExists):
 			httpx.RespondError(w, http.StatusConflict, "category_field_exists", err.Error())
 		default:
-			httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			respondInternal(w)
 		}
 		return
 	}
@@ -151,15 +154,19 @@ func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p, err := h.service.Create(r.Context(), toPlace(req))
+	if err == nil && p == nil {
+		err = errors.New("service returned no place")
+	}
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidName),
 			errors.Is(err, ErrSubDistrictNotFound),
 			errors.Is(err, ErrCategoryNotFound),
-			errors.Is(err, ErrInvalidAttributes):
+			errors.Is(err, ErrInvalidAttributes),
+			errors.Is(err, ErrInvalidLocation):
 			httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
 		default:
-			httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			respondInternal(w)
 		}
 		return
 	}

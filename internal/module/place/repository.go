@@ -12,11 +12,23 @@ import (
 	"rantau-go/internal/database"
 )
 
+// Repository defines the persistence operations required by the service.
+//
+//go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock
+type Repository interface {
+	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error)
+	Create(ctx context.Context, p *Place) (*Place, error)
+	GetCategories(ctx context.Context) ([]Category, error)
+	GetCategory(ctx context.Context, id int64) (*Category, error)
+	CreateCategory(ctx context.Context, c *Category) (*Category, error)
+	CreateCategoryField(ctx context.Context, f *CategoryField) (*CategoryField, error)
+}
+
 type postgresRepository struct {
 	db *sqlx.DB
 }
 
-func NewPostgresRepository(db *sqlx.DB) Repository {
+func NewPostgresRepository(db *sqlx.DB) *postgresRepository {
 	return &postgresRepository{
 		db: db,
 	}
