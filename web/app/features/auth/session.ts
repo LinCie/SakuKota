@@ -1,5 +1,3 @@
-import { useSyncExternalStore } from "react";
-
 import type { ApiResult } from "~/shared/api";
 import { refresh, type RefreshErrorCode } from "./api";
 import type { Session } from "./types";
@@ -16,7 +14,7 @@ function writeSession(next: Session | null) {
   for (const listener of listeners) listener();
 }
 
-function subscribe(listener: () => void) {
+export function subscribeSession(listener: () => void) {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
@@ -37,10 +35,6 @@ export function saveSession(next: Session) {
 
 export function clearSession() {
   writeSession(null);
-}
-
-export function useSession() {
-  return useSyncExternalStore(subscribe, getSession);
 }
 
 /**

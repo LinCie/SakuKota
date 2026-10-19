@@ -3,7 +3,10 @@ import { Dialog } from "@base-ui/react/dialog";
 import { X } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 
+import { cn } from "~/shared/cn";
+
 import { SubmitPlate } from "./form-fields";
+import { signButtonClass } from "./menu-board";
 
 type FormSheetProps = {
   open: boolean;
@@ -108,7 +111,7 @@ export function FormSheet({
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row-reverse">
                       <AlertDialog.Close
-                        className={`${plateButton} border-ink bg-sign hover:bg-sign-soft sm:flex-1`}
+                        className={cn(signButtonClass, "h-11 sm:flex-1")}
                       >
                         Lanjut mengisi
                       </AlertDialog.Close>

@@ -1,10 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronDown, Search, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-import { AccountControl } from "~/features/auth/components/account-control";
 import { getCategories, getPlaces } from "~/features/places/api";
-import { categoryStyle } from "~/features/places/components/category-sign";
+import { CategoryNav } from "~/features/places/components/category-nav";
+import { HomeHeader } from "~/features/places/components/home-header";
+import {
+  MapEmptyState,
+  type EmptyState,
+} from "~/features/places/components/map-empty-state";
 import {
   PlaceDetails,
   PlaceList,
@@ -12,8 +15,7 @@ import {
 import { SurvivalMap } from "~/features/places/components/survival-map";
 import { getSubDistricts } from "~/features/subdistricts/api";
 import { KecamatanBoard } from "~/features/subdistricts/components/kecamatan-board";
-import { cn } from "~/shared/cn";
-import { Wordmark } from "~/shared/components/wordmark";
+import { ErrorBoard } from "~/shared/components/error-board";
 
 type HomeSearch = {
   kecamatan?: string;
@@ -120,14 +122,13 @@ function Home() {
   }
 
   // Debounce typing into the URL.
+  const applyDraft = useEffectEvent(() =>
+    updateParams({ q: draft.trim() || undefined }),
+  );
   useEffect(() => {
     if (draft.trim() === query) return;
-    const timeout = setTimeout(
-      () => updateParams({ q: draft.trim() || undefined }),
-      250,
-    );
+    const timeout = setTimeout(applyDraft, 250);
     return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, query]);
 
   const needle = query.trim();
@@ -161,24 +162,19 @@ function Home() {
   }
 
   // Escape closes the place details.
+  const closeOnEscape = useEffectEvent((event: KeyboardEvent) => {
+    if (event.key === "Escape" && !infoOpen) selectPlace(null);
+  });
   useEffect(() => {
     if (!selectedPlace) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !infoOpen) selectPlace(null);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPlace, infoOpen]);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [selectedPlace]);
 
   const allActive = activeSlugs.length === 0;
   const areaName = subDistrict?.name ?? "Jakarta";
 
-  let emptyState: {
-    message: string;
-    action: string;
-    onAction: () => void;
-  } | null = null;
+  let emptyState: EmptyState | null = null;
   if (visiblePlaces.length === 0) {
     emptyState = needle
       ? {
@@ -201,158 +197,28 @@ function Home() {
 
   return (
     <div className="flex min-h-dvh flex-col md:h-dvh">
-      {/* Header board */}
-      <header className="bg-board text-paint">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-3 md:px-5 lg:flex lg:gap-6">
-          <Wordmark />
+      <HomeHeader
+        subDistricts={subDistricts}
+        subDistrict={subDistrict}
+        draft={draft}
+        onDraftChange={setDraft}
+        onSearch={() => updateParams({ q: draft.trim() || undefined })}
+        onClearSearch={clearSearch}
+        onKecamatanChange={(slug) =>
+          updateParams({ kecamatan: slug, tempat: undefined })
+        }
+        onOpenInfo={() => setInfoOpen(true)}
+      />
 
-          <div className="col-span-2 flex flex-1 flex-col gap-2 sm:flex-row sm:items-center lg:justify-end">
-            <div className="flex gap-2">
-              <label className="relative flex-1 sm:flex-none">
-                <span className="sr-only">Kecamatan</span>
-                <select
-                  value={subDistrict?.slug ?? ""}
-                  onChange={(event) =>
-                    updateParams({
-                      kecamatan: event.target.value,
-                      tempat: undefined,
-                    })
-                  }
-                  className="border-paint/35 bg-board-deep text-paint hover:border-paint/60 focus-visible:border-sign h-11 w-full appearance-none rounded-[3px] border-2 py-0 pr-10 pl-3 font-semibold transition-colors focus-visible:outline-none sm:w-64"
-                >
-                  {subDistricts.map((sd) => (
-                    <option
-                      key={sd.id}
-                      value={sd.slug}
-                      className="bg-paint text-ink"
-                    >
-                      Kec. {sd.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  aria-hidden="true"
-                  className="text-sign pointer-events-none absolute top-1/2 right-3 size-5 -translate-y-1/2"
-                  strokeWidth={2.5}
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => setInfoOpen(true)}
-                disabled={!subDistrict}
-                className="border-ink bg-sign font-sign text-ink hover:bg-sign-soft focus-visible:outline-sign h-11 shrink-0 rounded-[3px] border-2 px-4 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
-              >
-                Lihat info
-              </button>
-            </div>
-
-            <form
-              role="search"
-              onSubmit={(event) => {
-                event.preventDefault();
-                updateParams({ q: draft.trim() || undefined });
-              }}
-              className="relative sm:flex-1 lg:max-w-md"
-            >
-              <label htmlFor="search" className="sr-only">
-                Cari tempat
-              </label>
-              <Search
-                aria-hidden="true"
-                className="text-ink-soft pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2"
-                strokeWidth={2.5}
-              />
-              <input
-                id="search"
-                type="search"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder="Cari warung, apotek, nama tempat…"
-                autoComplete="off"
-                className="border-ink bg-paint text-ink placeholder:text-ink-soft focus-visible:border-sign h-11 w-full rounded-[3px] border-2 pr-11 pl-10 focus-visible:outline-none [&::-webkit-search-cancel-button]:appearance-none"
-              />
-              {draft ? (
-                <button
-                  type="button"
-                  onClick={clearSearch}
-                  aria-label="Hapus pencarian"
-                  className="text-ink hover:bg-paint-deep focus-visible:bg-paint-deep focus-visible:outline-cat absolute top-1/2 right-1.5 grid size-8 -translate-y-1/2 place-items-center rounded-[3px] transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2"
-                >
-                  <X aria-hidden="true" className="size-4" strokeWidth={2.5} />
-                </button>
-              ) : null}
-            </form>
-          </div>
-
-          <AccountControl className="col-start-2 row-start-1 justify-self-end" />
-        </div>
-        <div aria-hidden="true" className="bg-chili h-1.5" />
-      </header>
-
-      {/* Category signs */}
-      <nav
-        aria-label="Filter kategori"
-        className="border-ink bg-paint flex flex-col gap-2 border-b-2 py-2.5 md:px-5 lg:flex-row lg:items-center lg:justify-between"
-      >
-        <div className="flex flex-wrap gap-2 px-3 md:px-0">
-          <button
-            type="button"
-            aria-pressed={allActive}
-            onClick={() => updateParams({ kategori: undefined })}
-            className={cn(
-              "focus-visible:outline-cat h-10 shrink-0 rounded-[3px] border-2 px-3 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2",
-              allActive
-                ? "border-ink bg-ink text-paint"
-                : "border-ink/60 bg-paint text-ink hover:border-ink border-dashed",
-            )}
-          >
-            Semua
-          </button>
-          {categories.map((category) => {
-            const style = categoryStyle(category);
-            const active = activeSlugs.includes(category.slug);
-
-            return (
-              <button
-                key={category.id}
-                type="button"
-                aria-pressed={active}
-                onClick={() => toggleCategory(category.slug)}
-                className={cn(
-                  "focus-visible:outline-cat inline-flex h-10 shrink-0 items-center gap-2 rounded-[3px] border-2 pr-3 pl-1 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2",
-                  active
-                    ? style.solid
-                    : [
-                        "bg-paint border-dashed hover:border-solid",
-                        style.outline,
-                      ],
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "font-sign grid size-7 place-items-center rounded-xs text-sm leading-none",
-                    active ? "bg-paint/20" : ["border-2", style.solid],
-                  )}
-                >
-                  {style.code}
-                </span>
-                {style.label}
-              </button>
-            );
-          })}
-        </div>
-        <p
-          aria-live="polite"
-          className="text-ink-soft shrink-0 px-3 text-sm md:px-0"
-        >
-          <span className="font-sign text-ink text-base tabular-nums">
-            {visiblePlaces.length}
-          </span>{" "}
-          tempat di Kec. {areaName}
-          {needle ? <> untuk “{query}”</> : null}
-        </p>
-      </nav>
+      <CategoryNav
+        categories={categories}
+        activeSlugs={activeSlugs}
+        onToggle={toggleCategory}
+        onShowAll={() => updateParams({ kategori: undefined })}
+        placeCount={visiblePlaces.length}
+        areaName={areaName}
+        query={query}
+      />
 
       {/* Map + menu board */}
       <main className="flex flex-1 flex-col md:grid md:min-h-0 md:grid-cols-[2fr_1fr]">
@@ -362,28 +228,12 @@ function Home() {
         >
           <SurvivalMap
             places={visiblePlaces}
-            focusPlaces={visiblePlaces}
             focusKey={subDistrict?.slug ?? ""}
             selectedId={selectedPlace?.id ?? null}
             onSelect={selectPlace}
             sheetRef={sheetRef}
           >
-            {emptyState ? (
-              <div className="bg-paint/70 absolute inset-0 z-1000 grid place-items-center p-4">
-                <div className="border-ink bg-paint flex max-w-sm flex-col items-center gap-3 rounded-[5px] border-2 p-5 text-center shadow-[0_8px_24px_rgb(26_26_23/0.2)]">
-                  <p className="text-ink font-semibold text-pretty">
-                    {emptyState.message}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={emptyState.onAction}
-                    className="border-ink bg-sign font-sign text-ink hover:bg-sign-soft focus-visible:outline-cat h-10 rounded-[3px] border-2 px-4 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-                  >
-                    {emptyState.action}
-                  </button>
-                </div>
-              </div>
-            ) : null}
+            {emptyState ? <MapEmptyState {...emptyState} /> : null}
           </SurvivalMap>
         </section>
 
@@ -429,22 +279,5 @@ function Home() {
 }
 
 function HomeError() {
-  return (
-    <main className="bg-board grid min-h-dvh place-items-center p-4">
-      <div className="border-sign bg-board-deep text-paint flex max-w-md flex-col items-center gap-4 rounded-[5px] border-2 p-6 text-center">
-        <span className="font-sign text-sign text-3xl">Rantau</span>
-        <p className="font-semibold">Peta belum bisa dimuat.</p>
-        <p className="text-paint/85 text-sm">
-          Server Rantau sedang tidak merespons. Periksa koneksimu, lalu coba
-          lagi.
-        </p>
-        <a
-          href="/"
-          className="border-ink bg-sign font-sign text-ink hover:bg-sign-soft focus-visible:outline-sign rounded-[3px] border-2 px-4 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          Coba lagi
-        </a>
-      </div>
-    </main>
-  );
+  return <ErrorBoard title="Peta belum bisa dimuat." href="/" />;
 }

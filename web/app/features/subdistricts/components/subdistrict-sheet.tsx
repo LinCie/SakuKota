@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { adminWriteError } from "~/shared/admin-error";
 import {
   FormAlert,
+  orNull,
   TextAreaField,
   TextField,
 } from "~/shared/components/form-fields";
@@ -22,11 +23,6 @@ const emptyValues = {
   dailySpending: "",
   mapImageUrl: "",
 };
-
-function orNull(text: string) {
-  const trimmed = text.trim();
-  return trimmed === "" ? null : trimmed;
-}
 
 type SubDistrictSheetProps = {
   open: boolean;

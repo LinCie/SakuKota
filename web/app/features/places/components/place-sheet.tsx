@@ -12,6 +12,7 @@ import type { SubDistrict } from "~/features/subdistricts/types";
 import { adminWriteError } from "~/shared/admin-error";
 import {
   FormAlert,
+  orNull,
   SelectField,
   TextAreaField,
   TextField,
@@ -56,11 +57,6 @@ const emptyValues: PlaceValues = {
   description: "",
   attributes: {},
 };
-
-function orNull(text: string) {
-  const trimmed = text.trim();
-  return trimmed === "" ? null : trimmed;
-}
 
 type PlaceSheetProps = {
   open: boolean;

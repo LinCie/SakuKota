@@ -5,23 +5,26 @@ import {
   redirect,
   useRouter,
 } from "@tanstack/react-router";
-import { ArrowLeft, Check, Plus } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { AccountControl } from "~/features/auth/components/account-control";
-import { getSession, isAdmin, useSession } from "~/features/auth/session";
+import { useSession } from "~/features/auth/hooks";
+import { getSession, isAdmin } from "~/features/auth/session";
+import {
+  PlacesPanel,
+  SubDistrictsPanel,
+} from "~/features/admin/components/admin-panels";
 import { getCategories, getPlaces } from "~/features/places/api";
-import { CodePlate } from "~/features/places/components/category-sign";
 import { PlaceSheet } from "~/features/places/components/place-sheet";
 import type { Place } from "~/features/places/types";
 import { getSubDistricts } from "~/features/subdistricts/api";
 import { SubDistrictSheet } from "~/features/subdistricts/components/subdistrict-sheet";
 import type { SubDistrict } from "~/features/subdistricts/types";
 import { cn } from "~/shared/cn";
-import { SelectControl } from "~/shared/components/form-fields";
-import { MissingSlot } from "~/shared/components/missing-slot";
+import { ErrorBoard } from "~/shared/components/error-board";
+import { signButtonClass } from "~/shared/components/menu-board";
 import { Wordmark } from "~/shared/components/wordmark";
-import { formatNumber, formatRupiah } from "~/shared/format";
 
 type AdminSearch = {
   /** Absent means the places tab. */
@@ -232,252 +235,6 @@ function Tab({ value, children }: { value: string; children: ReactNode }) {
 }
 
 // -----------------------------------------------------------------------------
-// Panels
-// -----------------------------------------------------------------------------
-
-function AddPlate({
-  onClick,
-  disabled,
-  className,
-  children,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "border-ink bg-sign font-sign text-ink hover:bg-sign-soft focus-visible:outline-cat inline-flex h-11 items-center justify-center gap-2 rounded-[3px] border-2 px-4 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50",
-        className,
-      )}
-    >
-      <Plus aria-hidden="true" className="size-4" strokeWidth={3} />
-      {children}
-    </button>
-  );
-}
-
-/** The add plate pinned to the bottom of a phone screen, within thumb reach. */
-function StickyAdd({
-  onClick,
-  disabled,
-  children,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div className="border-ink bg-paint sticky bottom-0 z-10 mt-auto border-t-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden">
-      <AddPlate onClick={onClick} disabled={disabled} className="w-full">
-        {children}
-      </AddPlate>
-    </div>
-  );
-}
-
-const rowClass =
-  "border-ink/20 flex items-start gap-3 border-b border-dashed px-3 py-3 transition-colors duration-700 last:border-b-0 md:px-5";
-
-function Count({ n, children }: { n: number; children: ReactNode }) {
-  return (
-    <p className="text-ink-soft px-3 pb-3 text-sm md:px-5">
-      <span className="font-sign text-ink tabular-nums">{formatNumber(n)}</span>{" "}
-      {children}
-    </p>
-  );
-}
-
-function PlacesPanel({
-  places,
-  subDistricts,
-  highlightId,
-  onAdd,
-}: {
-  places: Place[];
-  subDistricts: SubDistrict[];
-  highlightId: string | null;
-  onAdd: () => void;
-}) {
-  const [filter, setFilter] = useState("");
-  const names = new Map(subDistricts.map((sd) => [sd.id, sd.name]));
-  const rows = places
-    .filter((place) => !filter || String(place.sub_district_id) === filter)
-    .sort((a, b) => b.id - a.id);
-  const area = filter ? names.get(Number(filter)) : undefined;
-  const noSubDistricts = subDistricts.length === 0;
-
-  return (
-    <>
-      <div className="flex items-center gap-3 px-3 py-3 md:px-5">
-        <div className="flex-1 md:max-w-64">
-          <label htmlFor="filter-kecamatan" className="sr-only">
-            Saring menurut kecamatan
-          </label>
-          <SelectControl
-            id="filter-kecamatan"
-            value={filter}
-            onValueChange={setFilter}
-            placeholder="Semua kecamatan"
-            options={subDistricts.map((sd) => ({
-              value: String(sd.id),
-              label: `Kec. ${sd.name}`,
-            }))}
-          />
-        </div>
-        <AddPlate
-          onClick={onAdd}
-          disabled={noSubDistricts}
-          className="ml-auto hidden md:inline-flex"
-        >
-          Tambah tempat
-        </AddPlate>
-      </div>
-
-      <div aria-live="polite">
-        <Count n={rows.length}>tempat{area ? ` di Kec. ${area}` : ""}</Count>
-      </div>
-
-      {rows.length === 0 ? (
-        <p className="border-ink/20 text-ink-soft border-t border-dashed px-3 py-6 text-sm md:px-5">
-          {noSubDistricts
-            ? "Belum ada kecamatan. Tambah kecamatan dulu, baru tempatnya."
-            : area
-              ? `Belum ada tempat di Kec. ${area}.`
-              : "Belum ada tempat yang tercatat."}
-        </p>
-      ) : (
-        <ul className="border-ink/20 border-t border-dashed">
-          {rows.map((place) => (
-            <li
-              key={place.id}
-              className={cn(
-                rowClass,
-                highlightId === `tempat-${place.id}` && "bg-sign-soft",
-              )}
-            >
-              <CodePlate category={place.category} className="mt-0.5" />
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="font-semibold">{place.name}</span>
-                <span className="text-ink-soft truncate text-sm">
-                  {place.address ?? "Alamat tidak tersedia"}
-                </span>
-                <span className="text-ink-soft mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                  Kec. {names.get(place.sub_district_id) ?? "?"}
-                  {place.location ? null : (
-                    <MissingSlot>Tanpa lokasi</MissingSlot>
-                  )}
-                </span>
-              </div>
-              {place.estimated_price_range ? (
-                <span className="mt-0.5 shrink-0 text-right text-sm font-semibold tabular-nums">
-                  {place.estimated_price_range}
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <StickyAdd onClick={onAdd} disabled={noSubDistricts}>
-        Tambah tempat
-      </StickyAdd>
-    </>
-  );
-}
-
-function SubDistrictsPanel({
-  places,
-  subDistricts,
-  highlightId,
-  onAdd,
-}: {
-  places: Place[];
-  subDistricts: SubDistrict[];
-  highlightId: string | null;
-  onAdd: () => void;
-}) {
-  const rows = [...subDistricts].sort((a, b) => b.id - a.id);
-
-  return (
-    <>
-      <div className="flex items-center justify-between gap-3 px-3 py-3 md:px-5">
-        <p aria-live="polite" className="text-ink-soft text-sm">
-          <span className="font-sign text-ink tabular-nums">
-            {formatNumber(rows.length)}
-          </span>{" "}
-          kecamatan
-        </p>
-        <AddPlate onClick={onAdd} className="hidden md:inline-flex">
-          Tambah kecamatan
-        </AddPlate>
-      </div>
-
-      {rows.length === 0 ? (
-        <p className="border-ink/20 text-ink-soft border-t border-dashed px-3 py-6 text-sm md:px-5">
-          Belum ada kecamatan yang tercatat.
-        </p>
-      ) : (
-        <ul className="border-ink/20 border-t border-dashed">
-          {rows.map((sd) => {
-            const missing = [
-              sd.flood_history ? null : "banjir",
-              sd.safety_crime_information ? null : "keamanan",
-              sd.static_map_image_url ? null : "peta",
-            ].filter((label) => label !== null);
-            const placeCount = places.filter(
-              (place) => place.sub_district_id === sd.id,
-            ).length;
-
-            return (
-              <li
-                key={sd.id}
-                className={cn(
-                  rowClass,
-                  highlightId === `kecamatan-${sd.id}` && "bg-sign-soft",
-                )}
-              >
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="font-semibold">Kec. {sd.name}</span>
-                  <span className="text-ink-soft truncate text-sm">
-                    {sd.slug} ·{" "}
-                    <span className="tabular-nums">
-                      {formatNumber(placeCount)}
-                    </span>{" "}
-                    tempat
-                  </span>
-                  {missing.length > 0 ? (
-                    <span className="mt-0.5">
-                      <MissingSlot>
-                        Belum ada info {missing.join(", ")}
-                      </MissingSlot>
-                    </span>
-                  ) : null}
-                </div>
-                <span className="mt-0.5 shrink-0 text-right text-sm font-semibold tabular-nums">
-                  {sd.estimated_daily_spending !== null ? (
-                    `${formatRupiah(sd.estimated_daily_spending)}/hari`
-                  ) : (
-                    <MissingSlot>Biaya belum diisi</MissingSlot>
-                  )}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      <StickyAdd onClick={onAdd}>Tambah kecamatan</StickyAdd>
-    </>
-  );
-}
-
-// -----------------------------------------------------------------------------
 // Gate and error
 // -----------------------------------------------------------------------------
 
@@ -500,7 +257,7 @@ function AdminGate({ signedIn }: { signedIn: boolean }) {
               <Link
                 to="/masuk"
                 search={{ kembali: "/admin" }}
-                className="border-ink bg-sign font-sign text-ink hover:bg-sign-soft focus-visible:outline-cat grid h-11 place-items-center rounded-[3px] border-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+                className={cn(signButtonClass, "grid h-11 place-items-center")}
               >
                 Masuk
               </Link>
@@ -514,22 +271,5 @@ function AdminGate({ signedIn }: { signedIn: boolean }) {
 }
 
 function AdminError() {
-  return (
-    <main className="bg-board grid min-h-dvh place-items-center p-4">
-      <div className="border-sign bg-board-deep text-paint flex max-w-md flex-col items-center gap-4 rounded-[5px] border-2 p-6 text-center">
-        <span className="font-sign text-sign text-3xl">Rantau</span>
-        <p className="font-semibold">Halaman admin belum bisa dimuat.</p>
-        <p className="text-paint/85 text-sm">
-          Server Rantau sedang tidak merespons. Periksa koneksimu, lalu coba
-          lagi.
-        </p>
-        <a
-          href="/admin"
-          className="border-ink bg-sign font-sign text-ink hover:bg-sign-soft focus-visible:outline-sign rounded-[3px] border-2 px-4 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          Coba lagi
-        </a>
-      </div>
-    </main>
-  );
+  return <ErrorBoard title="Halaman admin belum bisa dimuat." href="/admin" />;
 }

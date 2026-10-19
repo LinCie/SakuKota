@@ -3,6 +3,13 @@ import type { ReactNode } from "react";
 
 // Shared look of the menu board: painted rows and dashed dividers.
 
+/**
+ * Class names for a yellow sign-plate button. Each use adds its size, and any
+ * disabled style.
+ */
+export const signButtonClass =
+  "border-ink bg-sign font-sign text-ink hover:bg-sign-soft focus-visible:outline-cat rounded-[3px] border-2 px-4 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2";
+
 /** Class names for the board's icon-and-text buttons on paper. */
 export const menuButtonClass =
   "text-ink hover:bg-sign-soft focus-visible:bg-sign-soft focus-visible:outline-cat transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2";

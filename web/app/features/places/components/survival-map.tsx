@@ -1,27 +1,21 @@
 import type * as Leaflet from "leaflet";
 import {
   useEffect,
+  useEffectEvent,
   useRef,
-  useState,
   type ReactNode,
   type RefObject,
 } from "react";
 
 import type { Place } from "../types";
-import { categoryStyle } from "./category-sign";
+import { useLeafletMap } from "../hooks";
+import { JAKARTA_CENTER, locatedPlaces, MAP_CANVAS_CLASS } from "./leaflet-map";
+import { signIcon } from "./map-icons";
 import { ZoomPlate } from "./zoom-plate";
 
-export const JAKARTA_CENTER: [number, number] = [-6.2088, 106.8456];
 const FIT_OPTIONS = { padding: [56, 56] as [number, number], maxZoom: 16 };
-
-// Esri light gray canvas: street geometry and labels without competing POI
-// icons, so the painted signs are the only markers on the map.
-export const TILE_BASE_URL =
-  "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}";
-export const TILE_LABELS_URL =
-  "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}";
-export const TILE_ATTRIBUTION =
-  'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+// ZoomPlate replaces Leaflet's zoom control.
+const MAP_OPTIONS: Leaflet.MapOptions = { zoomControl: false };
 
 // Signs plant west to east in a quick stagger. Literal class names so
 // Tailwind generates them.
@@ -38,33 +32,23 @@ const PLANT_DELAYS = [
   "delay-360",
 ];
 
-/** The places that have a location, with their latitude and longitude. */
-function locatedPlaces(places: Place[]) {
-  return places.flatMap((place) => {
-    if (!place.location) return [];
-    const [longitude, latitude] = place.location.coordinates;
-    return [{ place, lat: latitude, lng: longitude }];
-  });
-}
-
-/** A place as a small painted sign on a post. */
-function signIcon(L: typeof Leaflet, place: Place, delay: string) {
-  const { solid: plate, code } = categoryStyle(place.category);
-
-  return L.divIcon({
-    className:
-      "group rounded-[4px] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cat",
-    iconSize: [36, 46],
-    iconAnchor: [18, 46],
-    html: `<span class="flex h-full origin-bottom flex-col items-center motion-safe:transition-transform motion-safe:duration-500 motion-safe:ease-[cubic-bezier(0.16,1,0.3,1)] motion-safe:starting:scale-y-0 ${delay}"><span class="grid size-9 place-items-center rounded-[3px] border-2 font-sign text-base leading-none shadow-[0_3px_6px_rgb(26_26_23/0.35)] transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-data-selected:scale-115 group-data-selected:border-sign group-data-selected:bg-ink group-data-selected:text-sign ${plate}">${code}</span><span class="h-2.5 w-0.75 bg-ink"></span></span>`,
-  });
+/** Height of the fixed bottom sheet covering the map; 0 when it doesn't overlap. */
+function coveredHeight(
+  container: HTMLElement,
+  sheet: HTMLElement | null | undefined,
+) {
+  // Only a fixed (mobile) sheet overlaps the map.
+  if (!sheet || getComputedStyle(sheet).position !== "fixed") return 0;
+  return Math.max(
+    0,
+    container.getBoundingClientRect().bottom -
+      (window.innerHeight - sheet.offsetHeight),
+  );
 }
 
 type SurvivalMapProps = {
-  /** Places to plant as signs (already filtered). */
+  /** Places to plant as signs. The map frames them when the kecamatan changes. */
   places: Place[];
-  /** Places the map frames when the kecamatan changes. */
-  focusPlaces: Place[];
   /** Changes when the kecamatan changes; triggers a fly-to. */
   focusKey: string;
   selectedId: number | null;
@@ -77,7 +61,6 @@ type SurvivalMapProps = {
 
 export function SurvivalMap({
   places,
-  focusPlaces,
   focusKey,
   selectedId,
   onSelect,
@@ -85,79 +68,27 @@ export function SurvivalMap({
   children,
 }: SurvivalMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const leafletRef = useRef<typeof Leaflet | null>(null);
-  const mapRef = useRef<Leaflet.Map | null>(null);
   const markersRef = useRef(new Map<number, Leaflet.Marker>());
   const focusedKeyRef = useRef<string | null>(null);
-  const onSelectRef = useRef(onSelect);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    onSelectRef.current = onSelect;
-  });
-
-  // Leaflet touches `window`, so it is loaded only in the browser.
-  useEffect(() => {
-    let cancelled = false;
-    let map: Leaflet.Map | undefined;
-    let observer: ResizeObserver | undefined;
-    const markers = markersRef.current;
-
-    void import("leaflet").then((L) => {
-      const container = containerRef.current;
-      if (cancelled || !container) return;
-
-      // No initial view: the first kecamatan fit sets it, so no tiles load
-      // at a throwaway zoom level.
-      map = L.map(container, { zoomControl: false });
-      map.attributionControl.setPrefix(
-        '<a href="https://leafletjs.com">Leaflet</a>',
-      );
-      L.tileLayer(TILE_BASE_URL, {
-        maxNativeZoom: 16,
-        maxZoom: 19,
-        attribution: TILE_ATTRIBUTION,
-      }).addTo(map);
-      L.tileLayer(TILE_LABELS_URL, { maxNativeZoom: 16, maxZoom: 19 }).addTo(
-        map,
-      );
-
-      observer = new ResizeObserver(() => map?.invalidateSize());
-      observer.observe(container);
-
-      leafletRef.current = L;
-      mapRef.current = map;
-      setReady(true);
-    });
-
-    return () => {
-      cancelled = true;
-      observer?.disconnect();
-      map?.remove();
-      mapRef.current = null;
-      markers.clear();
-      focusedKeyRef.current = null;
-      setReady(false);
-    };
-  }, []);
+  const leaflet = useLeafletMap(containerRef, MAP_OPTIONS);
+  const onSelectEvent = useEffectEvent(onSelect);
 
   // Frame the selected kecamatan: jump on first load, fly afterwards.
   useEffect(() => {
-    const L = leafletRef.current;
-    const map = mapRef.current;
-    if (!ready || !L || !map || focusedKeyRef.current === focusKey) return;
+    if (!leaflet || focusedKeyRef.current === focusKey) return;
+    const { L, map } = leaflet;
 
-    const points = locatedPlaces(focusPlaces).map(
-      ({ lat, lng }) => [lat, lng] as [number, number],
-    );
-    if (points.length === 0) {
+    const located = locatedPlaces(places);
+    if (located.length === 0) {
       if (focusedKeyRef.current === null) map.setView(JAKARTA_CENTER, 14);
       focusedKeyRef.current = focusKey;
       return;
     }
 
     map.invalidateSize();
-    const bounds = L.latLngBounds(points);
+    const bounds = L.latLngBounds(
+      located.map(({ lat, lng }) => L.latLng(lat, lng)),
+    );
     const reduceMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
@@ -168,14 +99,12 @@ export function SurvivalMap({
       map.flyToBounds(bounds, { ...FIT_OPTIONS, duration: 0.9 });
     }
     focusedKeyRef.current = focusKey;
-  }, [ready, focusKey, focusPlaces]);
+  }, [leaflet, focusKey, places]);
 
   // Plant new signs and pull the ones that no longer match.
   useEffect(() => {
-    const L = leafletRef.current;
-    const map = mapRef.current;
-    if (!ready || !L || !map) return;
-
+    if (!leaflet) return;
+    const { L, map } = leaflet;
     const markers = markersRef.current;
     const visibleIds = new Set(places.map((place) => place.id));
 
@@ -193,62 +122,49 @@ export function SurvivalMap({
     westToEast.forEach(({ place, lat, lng }, index) => {
       const delay = PLANT_DELAYS[Math.min(index, PLANT_DELAYS.length - 1)];
       const marker = L.marker([lat, lng], {
-        icon: signIcon(L, place, delay),
+        icon: signIcon(L, place.category, delay),
         title: place.name,
         alt: place.name,
         riseOnHover: true,
         keyboard: true,
       })
-        .on("click", () => onSelectRef.current(place.id))
+        .on("click", () => onSelectEvent(place.id))
         .addTo(map);
 
       markers.set(place.id, marker);
     });
-  }, [ready, places]);
+  }, [leaflet, places]);
 
   // Invert the selected sign and keep it in view.
   useEffect(() => {
-    if (!ready) return;
+    if (!leaflet) return;
+    const markers = markersRef.current;
 
-    for (const [id, marker] of markersRef.current) {
+    for (const [id, marker] of markers) {
       const selected = id === selectedId;
       marker.getElement()?.toggleAttribute("data-selected", selected);
       marker.setZIndexOffset(selected ? 1000 : 0);
     }
 
     const selectedMarker =
-      selectedId !== null ? markersRef.current.get(selectedId) : undefined;
+      selectedId !== null ? markers.get(selectedId) : undefined;
     const container = containerRef.current;
     if (selectedMarker && container) {
-      // Only a fixed (mobile) sheet overlaps the map.
-      const sheet = sheetRef?.current;
-      const covered =
-        sheet && getComputedStyle(sheet).position === "fixed"
-          ? Math.max(
-              0,
-              container.getBoundingClientRect().bottom -
-                (window.innerHeight - sheet.offsetHeight),
-            )
-          : 0;
-
-      mapRef.current?.panInside(selectedMarker.getLatLng(), {
+      leaflet.map.panInside(selectedMarker.getLatLng(), {
         paddingTopLeft: [72, 72],
-        paddingBottomRight: [72, 72 + covered],
+        paddingBottomRight: [
+          72,
+          72 + coveredHeight(container, sheetRef?.current),
+        ],
       });
     }
-  }, [ready, selectedId, places, sheetRef]);
+  }, [leaflet, selectedId, places, sheetRef]);
 
   return (
     <div className="absolute inset-0 isolate">
-      <div
-        ref={containerRef}
-        className="bg-paint-deep [&_.leaflet-control-attribution]:bg-paint/90 [&_.leaflet-control-attribution]:text-ink-soft [&_.leaflet-control-attribution_a]:text-cat absolute inset-0 font-sans [&_.leaflet-control-attribution]:px-1.5 [&_.leaflet-control-attribution]:text-[10px] [&_.leaflet-tile-pane]:sepia-[.3]"
-      />
+      <div ref={containerRef} className={MAP_CANVAS_CLASS} />
 
-      <ZoomPlate
-        onZoomIn={() => mapRef.current?.zoomIn()}
-        onZoomOut={() => mapRef.current?.zoomOut()}
-      />
+      <ZoomPlate map={leaflet?.map} />
 
       {children}
     </div>

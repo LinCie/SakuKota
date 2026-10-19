@@ -8,6 +8,7 @@ import type {
 } from "react";
 
 import { cn } from "~/shared/cn";
+import { signButtonClass } from "./menu-board";
 
 /** Shared look of a paint-white control; the border turns chili when invalid. */
 export function controlClass(invalid: boolean) {
@@ -15,6 +16,12 @@ export function controlClass(invalid: boolean) {
     "bg-paint text-ink focus-visible:outline-cat w-full rounded-[3px] border-2 px-3 focus-visible:outline-2 focus-visible:outline-offset-2",
     invalid ? "border-chili" : "border-ink",
   );
+}
+
+/** A text value as a nullable string: blank becomes null. */
+export function orNull(text: string) {
+  const trimmed = text.trim();
+  return trimmed === "" ? null : trimmed;
 }
 
 /** A field's label; optional fields say so, so required ones need no mark. */
@@ -321,7 +328,7 @@ export function SubmitPlate({
       type="submit"
       form={form}
       disabled={pending}
-      className="border-ink bg-sign font-sign text-ink hover:bg-sign-soft focus-visible:outline-cat disabled:bg-sign-soft mt-1 h-11 w-full rounded-[3px] border-2 px-4 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+      className={cn(signButtonClass, "disabled:bg-sign-soft mt-1 h-11 w-full")}
     >
       {pending ? "Memproses…" : children}
     </button>
