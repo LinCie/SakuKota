@@ -1,8 +1,12 @@
 package place
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -147,13 +151,27 @@ func (h *Handler) CreateCategoryField(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
-	var req CreatePlaceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
 		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
 		return
 	}
 
-	p, err := h.service.Create(r.Context(), toPlace(req))
+	var req CreatePlaceRequest
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&req); err != nil {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+		return
+	}
+
+	in := toPlace(req)
+	if key := r.Header.Get("Idempotency-Key"); key != "" {
+		// The hash tells a retry of the same request from a reuse of the key.
+		sum := sha256.Sum256(body)
+		in.IdempotencyKey = key
+		in.RequestHash = hex.EncodeToString(sum[:])
+	}
+
+	p, err := h.service.Create(r.Context(), in)
 	if err == nil && p == nil {
 		err = errors.New("service returned no place")
 	}
@@ -165,6 +183,8 @@ func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 			errors.Is(err, ErrInvalidAttributes),
 			errors.Is(err, ErrInvalidLocation):
 			httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
+		case errors.Is(err, ErrIdempotencyKeyReused):
+			httpx.RespondError(w, http.StatusConflict, "idempotency_key_reused", err.Error())
 		default:
 			respondInternal(w)
 		}
@@ -172,4 +192,73 @@ func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.RespondJSON(w, http.StatusCreated, toPlaceResponse(*p))
+}
+
+// PatchPlace partially updates the place given by the `id` path parameter.
+func (h *Handler) PatchPlace(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePlaceID(r)
+	if err != nil {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_place_id", "invalid place_id")
+		return
+	}
+
+	// A body of null decodes to a nil pointer and is rejected with the others.
+	var req *UpdatePlaceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil || req.clearsRequiredField() {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+		return
+	}
+
+	p, err := h.service.Update(r.Context(), id, toPlacePatch(*req))
+	if err == nil && p == nil {
+		err = errors.New("service returned no place")
+	}
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrPlaceNotFound):
+			httpx.RespondError(w, http.StatusNotFound, "place_not_found", err.Error())
+		case errors.Is(err, ErrInvalidName),
+			errors.Is(err, ErrPlaceNameTooLong),
+			errors.Is(err, ErrSubDistrictNotFound),
+			errors.Is(err, ErrCategoryNotFound),
+			errors.Is(err, ErrInvalidAttributes),
+			errors.Is(err, ErrInvalidLocation):
+			httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
+		default:
+			respondInternal(w)
+		}
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p))
+}
+
+// DeletePlace deletes the place given by the `id` path parameter.
+func (h *Handler) DeletePlace(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePlaceID(r)
+	if err != nil {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_place_id", "invalid place_id")
+		return
+	}
+
+	if err := h.service.Delete(r.Context(), id); err != nil {
+		if errors.Is(err, ErrPlaceNotFound) {
+			httpx.RespondError(w, http.StatusNotFound, "place_not_found", err.Error())
+			return
+		}
+		respondInternal(w)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// parsePlaceID reads the `id` path parameter, which must be a positive integer.
+func parsePlaceID(r *http.Request) (int64, error) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		return 0, errors.New("invalid place id")
+	}
+
+	return id, nil
 }

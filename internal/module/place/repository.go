@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -22,6 +23,9 @@ type Repository interface {
 	GetCategory(ctx context.Context, id int64) (*Category, error)
 	CreateCategory(ctx context.Context, c *Category) (*Category, error)
 	CreateCategoryField(ctx context.Context, f *CategoryField) (*CategoryField, error)
+	GetPlace(ctx context.Context, id int64) (*Place, error)
+	Update(ctx context.Context, p *Place) (*Place, error)
+	Delete(ctx context.Context, id int64) error
 }
 
 type postgresRepository struct {
@@ -47,7 +51,54 @@ const placeColumns = `p.id, p.sub_district_id, p.category_id, p.name, p.address,
 	p.location, p.operating_hours, p.estimated_price_range, p.short_description,
 	p.attributes, c.id AS "category.id", c.name AS "category.name", c.slug AS "category.slug"`
 
+// checkFilterTargets returns ErrSubDistrictNotFound or ErrCategoryNotFound when
+// the filter names a sub-district or category that does not exist.
+func (r *postgresRepository) checkFilterTargets(ctx context.Context, filter PlaceFilter) error {
+	if filter.SubDistrictID != 0 {
+		var exists bool
+		err := r.db.GetContext(
+			ctx,
+			&exists,
+			`SELECT EXISTS (SELECT 1 FROM SUB_DISTRICTS WHERE id = $1)`,
+			filter.SubDistrictID,
+		)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return ErrSubDistrictNotFound
+		}
+	}
+
+	if len(filter.CategoryIDs) == 0 {
+		return nil
+	}
+
+	var found []int64
+	err := r.db.SelectContext(
+		ctx,
+		&found,
+		`SELECT id FROM CATEGORIES WHERE id = ANY($1)`,
+		filter.CategoryIDs,
+	)
+	if err != nil {
+		return err
+	}
+
+	for _, id := range filter.CategoryIDs {
+		if !slices.Contains(found, id) {
+			return ErrCategoryNotFound
+		}
+	}
+
+	return nil
+}
+
 func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error) {
+	if err := r.checkFilterTargets(ctx, filter); err != nil {
+		return nil, err
+	}
+
 	places := make([]Place, 0)
 
 	pattern := ""
@@ -149,25 +200,57 @@ func (r *postgresRepository) CreateCategory(ctx context.Context, c *Category) (*
 	return &created, nil
 }
 
-// CreateCategoryField inserts the field at its SortOrder position, moving the
-// category's fields from that position on down, or last if SortOrder is zero.
+// CreateCategoryField adds the field at its SortOrder position, moving the
+// category's fields from that position on down, or last if SortOrder is nil.
+// The category row is locked for the duration, so concurrent adds to the same
+// category take turns and each sees the positions the others took.
 func (r *postgresRepository) CreateCategoryField(ctx context.Context, f *CategoryField) (*CategoryField, error) {
-	var created CategoryField
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
 
-	err := r.db.GetContext(
+	var categoryID int64
+	err = tx.GetContext(ctx, &categoryID, `SELECT id FROM CATEGORIES WHERE id = $1 FOR UPDATE`, f.CategoryID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCategoryNotFound
+		}
+		return nil, err
+	}
+
+	var count int32
+	err = tx.GetContext(ctx, &count, `SELECT COUNT(*) FROM CATEGORY_FIELDS WHERE category_id = $1`, f.CategoryID)
+	if err != nil {
+		return nil, err
+	}
+
+	sortOrder := count + 1
+	if f.SortOrder != nil {
+		if *f.SortOrder > sortOrder {
+			return nil, ErrInvalidFieldSortOrder
+		}
+
+		sortOrder = *f.SortOrder
+		_, err = tx.ExecContext(
+			ctx,
+			`UPDATE CATEGORY_FIELDS SET sort_order = sort_order + 1
+			WHERE category_id = $1 AND sort_order >= $2`,
+			f.CategoryID,
+			sortOrder,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var created CategoryField
+	err = tx.GetContext(
 		ctx,
 		&created,
-		`WITH shifted AS (
-			UPDATE CATEGORY_FIELDS
-			SET sort_order = sort_order + 1
-			WHERE category_id = $1 AND $7 > 0 AND sort_order >= $7
-		)
-		INSERT INTO CATEGORY_FIELDS (category_id, key, label, data_type, required, options, sort_order)
-		VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $7 > 0 THEN $7 ELSE (
-			SELECT COALESCE(MAX(sort_order), 0) + 1
-			FROM CATEGORY_FIELDS
-			WHERE category_id = $1
-		) END)
+		`INSERT INTO CATEGORY_FIELDS (category_id, key, label, data_type, required, options, sort_order)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, category_id, key, label, data_type, required, options, sort_order`,
 		f.CategoryID,
 		f.Key,
@@ -175,30 +258,40 @@ func (r *postgresRepository) CreateCategoryField(ctx context.Context, f *Categor
 		f.DataType,
 		f.Required,
 		f.Options,
-		f.SortOrder,
+		sortOrder,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) {
-			switch pgErr.Code {
-			case database.ForeignKeyViolation:
-				return nil, ErrCategoryNotFound
-			case database.UniqueViolation:
-				return nil, ErrCategoryFieldExists
-			}
+		if errors.As(err, &pgErr) && pgErr.Code == database.UniqueViolation {
+			return nil, ErrCategoryFieldExists
 		}
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 
 	return &created, nil
 }
 
-// Create inserts the place and returns it joined with its category.
+// Create inserts the place and returns it joined with its category. A request
+// with an idempotency key is stored once and replayed on retries.
 func (r *postgresRepository) Create(ctx context.Context, p *Place) (*Place, error) {
+	if p.IdempotencyKey == "" {
+		return insertPlace(ctx, r.db, p)
+	}
+
+	return r.createOnce(ctx, p)
+}
+
+// insertPlace inserts the place through q and returns it joined with its category.
+func insertPlace(ctx context.Context, q sqlx.QueryerContext, p *Place) (*Place, error) {
 	var created Place
 
-	err := r.db.GetContext(
+	err := sqlx.GetContext(
 		ctx,
+		q,
 		&created,
 		`WITH inserted AS (
 			INSERT INTO PLACES (sub_district_id, category_id, name, address,
@@ -223,19 +316,182 @@ func (r *postgresRepository) Create(ctx context.Context, p *Place) (*Place, erro
 		p.Attributes,
 	)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == database.ForeignKeyViolation {
-			switch pgErr.ConstraintName {
-			case "places_sub_district_id_fkey":
-				return nil, ErrSubDistrictNotFound
-			case "places_category_id_fkey":
-				return nil, ErrCategoryNotFound
-			}
+		return nil, mapPlaceForeignKeyError(err)
+	}
+
+	return &created, nil
+}
+
+// createOnce stores the place together with its idempotency key. If the key is
+// already taken, the place holding it is returned when the request matches, and
+// ErrIdempotencyKeyReused is returned when it does not.
+func (r *postgresRepository) createOnce(ctx context.Context, p *Place) (*Place, error) {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	created, err := insertPlace(ctx, tx, p)
+	if err != nil {
+		return nil, err
+	}
+
+	// A concurrent request with the same key waits here until this transaction
+	// ends, then inserts nothing.
+	result, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO PLACE_IDEMPOTENCY_KEYS (key, request_hash, place_id)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (key) DO NOTHING`,
+		p.IdempotencyKey,
+		p.RequestHash,
+		created.ID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if rows == 1 {
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		return created, nil
+	}
+
+	// Discard this request's copy of the place and answer with the one that
+	// holds the key.
+	if err := tx.Rollback(); err != nil {
+		return nil, err
+	}
+
+	return r.replay(ctx, p)
+}
+
+// replay returns the place holding the request's idempotency key, or
+// ErrIdempotencyKeyReused if the key belongs to a different request.
+func (r *postgresRepository) replay(ctx context.Context, p *Place) (*Place, error) {
+	var stored struct {
+		RequestHash string `db:"request_hash"`
+		PlaceID     int64  `db:"place_id"`
+	}
+
+	err := r.db.GetContext(
+		ctx,
+		&stored,
+		`SELECT request_hash, place_id FROM PLACE_IDEMPOTENCY_KEYS WHERE key = $1`,
+		p.IdempotencyKey,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if stored.RequestHash != p.RequestHash {
+		return nil, ErrIdempotencyKeyReused
+	}
+
+	return r.GetPlace(ctx, stored.PlaceID)
+}
+
+// GetPlace returns the place with its category, or ErrPlaceNotFound.
+func (r *postgresRepository) GetPlace(ctx context.Context, id int64) (*Place, error) {
+	var p Place
+
+	err := r.db.GetContext(
+		ctx,
+		&p,
+		`SELECT `+placeColumns+`
+		FROM PLACES p
+		JOIN CATEGORIES c ON c.id = p.category_id
+		WHERE p.id = $1`,
+		id,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPlaceNotFound
 		}
 		return nil, err
 	}
 
-	return &created, nil
+	return &p, nil
+}
+
+// Update stores the place's fields and returns it joined with its category.
+func (r *postgresRepository) Update(ctx context.Context, p *Place) (*Place, error) {
+	var updated Place
+
+	err := r.db.GetContext(
+		ctx,
+		&updated,
+		`WITH updated AS (
+			UPDATE PLACES
+			SET sub_district_id = $2, category_id = $3, name = $4, address = $5,
+				location = $6, operating_hours = $7, estimated_price_range = $8,
+				short_description = $9, attributes = $10
+			WHERE id = $1
+			RETURNING id, sub_district_id, category_id, name, address,
+				location, operating_hours, estimated_price_range, short_description,
+				attributes
+		)
+		SELECT `+placeColumns+`
+		FROM updated p
+		JOIN CATEGORIES c ON c.id = p.category_id`,
+		p.ID,
+		p.SubDistrictID,
+		p.CategoryID,
+		p.Name,
+		p.Address,
+		p.Location,
+		p.OperatingHours,
+		p.EstimatedPriceRange,
+		p.ShortDescription,
+		p.Attributes,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPlaceNotFound
+		}
+		return nil, mapPlaceForeignKeyError(err)
+	}
+
+	return &updated, nil
+}
+
+// Delete removes the place, or returns ErrPlaceNotFound if there is none.
+func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
+	result, err := r.db.ExecContext(ctx, `DELETE FROM PLACES WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrPlaceNotFound
+	}
+
+	return nil
+}
+
+// mapPlaceForeignKeyError translates a foreign key violation on PLACES into the
+// sub-district or category it refers to. Other errors are returned unchanged.
+func mapPlaceForeignKeyError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == database.ForeignKeyViolation {
+		switch pgErr.ConstraintName {
+		case "places_sub_district_id_fkey":
+			return ErrSubDistrictNotFound
+		case "places_category_id_fkey":
+			return ErrCategoryNotFound
+		}
+	}
+
+	return err
 }
 
 // attachFields loads the fields of every given category in one query and

@@ -55,6 +55,12 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 
 				// POST /v1/places
 				r.Post("/", placeModule.Handler.CreatePlace)
+
+				// PATCH /v1/places/{id}
+				r.Patch("/{id}", placeModule.Handler.PatchPlace)
+
+				// DELETE /v1/places/{id}
+				r.Delete("/{id}", placeModule.Handler.DeletePlace)
 			})
 
 			r.Route("/categories", func(r chi.Router) {

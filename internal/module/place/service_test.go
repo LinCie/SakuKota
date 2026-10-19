@@ -511,3 +511,363 @@ func TestService_CreateCategoryField(t *testing.T) {
 		})
 	}
 }
+
+// -----------------------------------------------------------------------------
+// Updating and deleting places
+// -----------------------------------------------------------------------------
+
+// present is a PATCH field the client sent with the value v.
+func present[T any](v T) place.Optional[T] {
+	return place.Optional[T]{Set: true, Value: &v}
+}
+
+// null is a PATCH field the client sent as null.
+func null[T any]() place.Optional[T] {
+	return place.Optional[T]{Set: true}
+}
+
+func ptr[T any](v T) *T {
+	return &v
+}
+
+// savedKopi is the stored place that updates start from: a Kopi in Menteng
+// with every optional field set.
+func savedKopi() *place.Place {
+	return &place.Place{
+		ID:                  7,
+		SubDistrictID:       1,
+		CategoryID:          2,
+		Name:                "Kopi Senja",
+		Address:             ptr("Jl. Sudirman 9"),
+		Location:            postgis.MustPoint(106.8, -6.2),
+		OperatingHours:      ptr("08:00-17:00"),
+		EstimatedPriceRange: ptr("Rp20.000-50.000"),
+		ShortDescription:    ptr("Kopi tubruk"),
+		Attributes:          json.RawMessage(`{"halal":true,"seats":12}`),
+		Category:            place.Category{ID: 2, Name: "Kopi", Slug: "kopi"},
+	}
+}
+
+// lookupCategory answers category lookups for the update tests. Category 1 is
+// Warung, which requires "contact". Category 2 is Kopi.
+func lookupCategory(_ context.Context, id int64) (*place.Category, error) {
+	switch id {
+	case 1:
+		return warungCategory(), nil
+	case 2:
+		return openCategory(), nil
+	}
+	return nil, place.ErrCategoryNotFound
+}
+
+// updatePlace runs Service.Update for place id, where existing is the stored
+// place. It returns the place the repository was asked to store, or nil if
+// storage was never reached.
+func updatePlace(t *testing.T, existing *place.Place, id int64, patch place.PlacePatch) (*place.Place, error) {
+	t.Helper()
+
+	repo := mock.NewMockRepository(gomock.NewController(t))
+	repo.EXPECT().GetPlace(gomock.Any(), id).Return(existing, nil).AnyTimes()
+	repo.EXPECT().GetCategory(gomock.Any(), gomock.Any()).DoAndReturn(lookupCategory).AnyTimes()
+
+	var stored *place.Place
+	repo.EXPECT().Update(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got *place.Place) (*place.Place, error) {
+			stored = got
+			return got, nil
+		}).AnyTimes()
+
+	_, err := place.NewService(repo).Update(context.Background(), id, patch)
+	return stored, err
+}
+
+func TestService_UpdatePlace_LookupFailure(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name    string
+		getErr  error
+		wantErr error
+	}{
+		{"unknown place", place.ErrPlaceNotFound, place.ErrPlaceNotFound},
+		{"lookup failure is returned", boom, boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// No Update expectation: nothing may be stored when the place cannot be read.
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(nil, tc.getErr)
+
+			_, err := place.NewService(repo).Update(context.Background(), 7,
+				place.PlacePatch{Name: present("Kopi Baru")})
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestService_UpdatePlace_Fields(t *testing.T) {
+	tests := []struct {
+		name   string
+		patch  place.PlacePatch
+		change func(*place.Place) // turns savedKopi into the wanted stored place
+	}{
+		{"empty patch changes nothing", place.PlacePatch{}, func(*place.Place) {}},
+		{"name is trimmed", place.PlacePatch{Name: present("  Kopi Baru\t")},
+			func(p *place.Place) { p.Name = "Kopi Baru" }},
+		{"address is replaced", place.PlacePatch{Address: present("Jl. Kemang 2")},
+			func(p *place.Place) { p.Address = ptr("Jl. Kemang 2") }},
+		{"location is replaced", place.PlacePatch{Location: present(*postgis.MustPoint(106.85, -6.18))},
+			func(p *place.Place) { p.Location = postgis.MustPoint(106.85, -6.18) }},
+		{"sub-district is replaced", place.PlacePatch{SubDistrictID: present(int64(2))},
+			func(p *place.Place) { p.SubDistrictID = 2 }},
+		{"null clears every nullable field", place.PlacePatch{
+			Address:             null[string](),
+			Location:            null[postgis.Point](),
+			OperatingHours:      null[string](),
+			EstimatedPriceRange: null[string](),
+			ShortDescription:    null[string](),
+		}, func(p *place.Place) {
+			p.Address, p.Location, p.OperatingHours = nil, nil, nil
+			p.EstimatedPriceRange, p.ShortDescription = nil, nil
+		}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			want := savedKopi()
+			tc.change(want)
+
+			stored, err := updatePlace(t, savedKopi(), 7, tc.patch)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(stored, want) {
+				t.Errorf("stored = %+v, want %+v", stored, want)
+			}
+		})
+	}
+}
+
+func TestService_UpdatePlace_Name(t *testing.T) {
+	long := strings.Repeat("a", 150)
+
+	tests := []struct {
+		name     string
+		input    string
+		wantName string
+		wantErr  error
+	}{
+		{"surrounding spaces are removed", "  Kopi Baru  ", "Kopi Baru", nil},
+		{"empty", "", "", place.ErrInvalidName},
+		{"spaces only", "   ", "", place.ErrInvalidName},
+		{"150 characters is allowed", long, long, nil},
+		{"151 characters is too long", long + "a", "", place.ErrPlaceNameTooLong},
+		{"150 multibyte characters is allowed", strings.Repeat("é", 150), strings.Repeat("é", 150), nil},
+		{"151 multibyte characters is too long", strings.Repeat("é", 151), "", place.ErrPlaceNameTooLong},
+		{"length is counted after trimming", "  " + long + "  ", long, nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			stored, err := updatePlace(t, savedKopi(), 7, place.PlacePatch{Name: present(tc.input)})
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("err = %v, want %v", err, tc.wantErr)
+				}
+				if stored != nil {
+					t.Fatalf("invalid name reached storage as %q", stored.Name)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if stored.Name != tc.wantName {
+				t.Errorf("stored name = %q, want %q", stored.Name, tc.wantName)
+			}
+		})
+	}
+}
+
+func TestService_UpdatePlace_Location(t *testing.T) {
+	tests := []struct {
+		name    string
+		lon     float64
+		lat     float64
+		wantErr error
+	}{
+		{"inside Indonesia", 106.8, -6.2, nil},
+		{"on the western edge", 95, -2, nil},
+		{"west of the Indonesia box", 94.9, -2, place.ErrInvalidLocation},
+		{"north of the Indonesia box", 110, 6.5, place.ErrInvalidLocation},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			stored, err := updatePlace(t, savedKopi(), 7,
+				place.PlacePatch{Location: present(*postgis.MustPoint(tc.lon, tc.lat))})
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("err = %v, want %v", err, tc.wantErr)
+				}
+				if stored != nil {
+					t.Fatalf("location outside Indonesia reached storage")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if stored.Location == nil || stored.Location.X() != tc.lon || stored.Location.Y() != tc.lat {
+				t.Errorf("stored location = %v, want [%v, %v]", stored.Location, tc.lon, tc.lat)
+			}
+		})
+	}
+}
+
+func TestService_UpdatePlace_Attributes(t *testing.T) {
+	// The place is a Kopi, which has no required fields.
+	tests := []struct {
+		name      string
+		attrs     place.Optional[json.RawMessage]
+		wantAttrs string
+		wantErr   error
+	}{
+		{"new attributes replace the old ones", present(json.RawMessage(`{"halal":false}`)), `{"halal":false}`, nil},
+		{"null attributes become an empty object", null[json.RawMessage](), `{}`, nil},
+		{"unknown key is rejected", present(json.RawMessage(`{"parking":true}`)), "", place.ErrInvalidAttributes},
+		{"wrong type is rejected", present(json.RawMessage(`{"seats":"many"}`)), "", place.ErrInvalidAttributes},
+		{"array is rejected", present(json.RawMessage(`[1]`)), "", place.ErrInvalidAttributes},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			stored, err := updatePlace(t, savedKopi(), 7, place.PlacePatch{Attributes: tc.attrs})
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("err = %v, want %v", err, tc.wantErr)
+				}
+				if stored != nil {
+					t.Fatalf("invalid attributes reached storage as %s", stored.Attributes)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			assertJSON(t, stored.Attributes, tc.wantAttrs)
+		})
+	}
+}
+
+func TestService_UpdatePlace_Category(t *testing.T) {
+	tests := []struct {
+		name           string
+		attrs          string // the place's attributes before the update
+		patch          place.PlacePatch
+		wantCategoryID int64
+		wantAttrs      string
+		wantErr        error
+	}{
+		{"attributes that fit the new category are kept", `{"contact":"0812","seats":12}`,
+			place.PlacePatch{CategoryID: present(int64(1))}, 1, `{"contact":"0812","seats":12}`, nil},
+		{"attributes missing a required field of the new category are rejected", `{"halal":true,"seats":12}`,
+			place.PlacePatch{CategoryID: present(int64(1))}, 0, "", place.ErrInvalidAttributes},
+		{"attributes unknown to the new category are rejected", `{"contact":"0812"}`,
+			place.PlacePatch{CategoryID: present(int64(2))}, 0, "", place.ErrInvalidAttributes},
+		{"new attributes are checked against the new category", `{"contact":"0812"}`,
+			place.PlacePatch{CategoryID: present(int64(1)), Attributes: present(json.RawMessage(`{"seats":12}`))},
+			0, "", place.ErrInvalidAttributes},
+		{"new attributes that fit the new category are stored", `{"halal":true}`,
+			place.PlacePatch{CategoryID: present(int64(1)), Attributes: present(json.RawMessage(`{"contact":"0812"}`))},
+			1, `{"contact":"0812"}`, nil},
+		{"unknown category is rejected", `{"halal":true}`,
+			place.PlacePatch{CategoryID: present(int64(99))}, 0, "", place.ErrCategoryNotFound},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			existing := savedKopi()
+			existing.Attributes = json.RawMessage(tc.attrs)
+
+			stored, err := updatePlace(t, existing, 7, tc.patch)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("err = %v, want %v", err, tc.wantErr)
+				}
+				if stored != nil {
+					t.Fatalf("rejected update reached storage")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if stored.CategoryID != tc.wantCategoryID {
+				t.Errorf("stored category = %d, want %d", stored.CategoryID, tc.wantCategoryID)
+			}
+			assertJSON(t, stored.Attributes, tc.wantAttrs)
+		})
+	}
+}
+
+func TestService_UpdatePlace_Storage(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name      string
+		updateErr error // returned when the place is stored
+		wantErr   error // nil means the call succeeds
+	}{
+		{"storage reports the place is gone", place.ErrPlaceNotFound, place.ErrPlaceNotFound},
+		{"storage reports an unknown sub-district", place.ErrSubDistrictNotFound, place.ErrSubDistrictNotFound},
+		{"storage failure is returned", boom, boom},
+		{"stored place is returned", nil, nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), nil)
+			repo.EXPECT().Update(gomock.Any(), gomock.Any()).Return(&place.Place{ID: 7}, tc.updateErr)
+
+			got, err := place.NewService(repo).Update(context.Background(), 7,
+				place.PlacePatch{Name: present("Kopi Baru")})
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+			if tc.wantErr == nil && got.ID != 7 {
+				t.Errorf("returned ID = %d, want the stored place's ID 7", got.ID)
+			}
+		})
+	}
+}
+
+func TestService_DeletePlace(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name    string
+		repoErr error
+		wantErr error
+	}{
+		{"deletes the place", nil, nil},
+		{"unknown place", place.ErrPlaceNotFound, place.ErrPlaceNotFound},
+		{"storage failure is returned", boom, boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(tc.repoErr)
+
+			err := place.NewService(repo).Delete(context.Background(), 7)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}

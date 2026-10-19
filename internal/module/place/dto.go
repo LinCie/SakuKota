@@ -20,6 +20,28 @@ type CreatePlaceRequest struct {
 	Attributes json.RawMessage `json:"attributes"`
 }
 
+// UpdatePlaceRequest is the API payload for partially updating a Place. Keys
+// left out keep their current value. Nullable fields accept null to clear them.
+type UpdatePlaceRequest struct {
+	SubDistrictID       Optional[int64]           `json:"sub_district_id"`
+	CategoryID          Optional[int64]           `json:"category_id"`
+	Name                Optional[string]          `json:"name"`
+	Address             Optional[string]          `json:"address"`
+	Location            Optional[postgis.Point]   `json:"location"`
+	OperatingHours      Optional[string]          `json:"operating_hours"`
+	EstimatedPriceRange Optional[string]          `json:"estimated_price_range"`
+	ShortDescription    Optional[string]          `json:"short_description"`
+	Attributes          Optional[json.RawMessage] `json:"attributes"`
+}
+
+// clearsRequiredField reports whether the client sent null for a field that
+// cannot be cleared.
+func (r *UpdatePlaceRequest) clearsRequiredField() bool {
+	return (r.SubDistrictID.Set && r.SubDistrictID.Value == nil) ||
+		(r.CategoryID.Set && r.CategoryID.Value == nil) ||
+		(r.Name.Set && r.Name.Value == nil)
+}
+
 // CreateCategoryRequest is the API payload for creating a Category.
 type CreateCategoryRequest struct {
 	Name string `json:"name"`
@@ -36,7 +58,7 @@ type CreateCategoryFieldRequest struct {
 	Options  []string `json:"options"`
 	// SortOrder is the 1-based position to insert the field at, moving the
 	// fields from there on down. Omitted, the field goes last.
-	SortOrder int32 `json:"sort_order"`
+	SortOrder *int32 `json:"sort_order"`
 }
 
 // PlaceResponse is the API representation of a Place.
@@ -87,6 +109,20 @@ type CategoryFieldResponse struct {
 
 func toPlace(req CreatePlaceRequest) *Place {
 	return &Place{
+		SubDistrictID:       req.SubDistrictID,
+		CategoryID:          req.CategoryID,
+		Name:                req.Name,
+		Address:             req.Address,
+		Location:            req.Location,
+		OperatingHours:      req.OperatingHours,
+		EstimatedPriceRange: req.EstimatedPriceRange,
+		ShortDescription:    req.ShortDescription,
+		Attributes:          req.Attributes,
+	}
+}
+
+func toPlacePatch(req UpdatePlaceRequest) PlacePatch {
+	return PlacePatch{
 		SubDistrictID:       req.SubDistrictID,
 		CategoryID:          req.CategoryID,
 		Name:                req.Name,
@@ -177,6 +213,11 @@ func toCategoryDetailResponses(categories []Category) []CategoryDetailResponse {
 }
 
 func toCategoryFieldResponse(f CategoryField) CategoryFieldResponse {
+	var sortOrder int32
+	if f.SortOrder != nil {
+		sortOrder = *f.SortOrder
+	}
+
 	return CategoryFieldResponse{
 		ID:         f.ID,
 		CategoryID: f.CategoryID,
@@ -185,6 +226,6 @@ func toCategoryFieldResponse(f CategoryField) CategoryFieldResponse {
 		DataType:   f.DataType,
 		Required:   f.Required,
 		Options:    f.Options,
-		SortOrder:  f.SortOrder,
+		SortOrder:  sortOrder,
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -839,4 +840,156 @@ func TestIntegration_StorageFailureHidesDetails(t *testing.T) {
 			}
 		})
 	}
+}
+
+// -----------------------------------------------------------------------------
+// Updating and deleting places
+// -----------------------------------------------------------------------------
+
+// findPlace returns the listed place with the given id.
+func findPlace(t *testing.T, rows []placeRow, id int64) placeRow {
+	t.Helper()
+	for _, r := range rows {
+		if r.ID == id {
+			return r
+		}
+	}
+	t.Fatalf("place %d is not listed", id)
+	return placeRow{}
+}
+
+func TestIntegration_PatchPlace(t *testing.T) {
+	tests := []struct {
+		name       string
+		target     string
+		body       string
+		wantStatus int
+		wantCode   string
+		check      func(t *testing.T, rows []placeRow) // nil means the places must not change
+	}{
+		{"renames a place and keeps its other fields", "/places/1", `{"name":"Warung Baru"}`, http.StatusOK, "",
+			func(t *testing.T, rows []placeRow) {
+				p := findPlace(t, rows, 1)
+				if p.Name != "Warung Baru" || p.Address == nil || *p.Address != "Jl. Merdeka 1" {
+					t.Errorf("place 1 = name %q, address %v; want Warung Baru and Jl. Merdeka 1", p.Name, p.Address)
+				}
+			}},
+		{"null clears an optional field", "/places/1", `{"address":null}`, http.StatusOK, "",
+			func(t *testing.T, rows []placeRow) {
+				p := findPlace(t, rows, 1)
+				if p.Address != nil {
+					t.Errorf("address = %q, want null", *p.Address)
+				}
+				if p.Name != "Warung Bu Ani" {
+					t.Errorf("name = %q, want Warung Bu Ani", p.Name)
+				}
+			}},
+		{"location is stored and listed", "/places/1", `{"location":{"type":"Point","coordinates":[106.8,-6.2]}}`, http.StatusOK, "",
+			func(t *testing.T, rows []placeRow) {
+				assertJSON(t, findPlace(t, rows, 1).Location, `{"type":"Point","coordinates":[106.8,-6.2]}`)
+			}},
+		{"moves a place to a category with the attributes it needs", "/places/2",
+			`{"category_id":1,"attributes":{"contact":"0812"}}`, http.StatusOK, "",
+			func(t *testing.T, rows []placeRow) {
+				p := findPlace(t, rows, 2)
+				if p.Category.ID != 1 {
+					t.Errorf("category = %d, want 1", p.Category.ID)
+				}
+				assertJSON(t, p.Attributes, `{"contact":"0812"}`)
+			}},
+		{"an empty body changes nothing", "/places/1", `{}`, http.StatusOK, "", nil},
+		{"unknown place", "/places/99", `{"name":"Warung Baru"}`, http.StatusNotFound, "place_not_found", nil},
+		{"invalid body", "/places/1", `{"name":5}`, http.StatusBadRequest, "invalid_body", nil},
+		{"name longer than 150 characters", "/places/1",
+			`{"name":"` + strings.Repeat("a", 151) + `"}`, http.StatusBadRequest, "validation_error", nil},
+		{"unknown sub-district", "/places/1", `{"sub_district_id":99}`, http.StatusBadRequest, "validation_error", nil},
+		{"unknown category", "/places/1", `{"category_id":99}`, http.StatusBadRequest, "validation_error", nil},
+		{"attributes miss the required field of the category", "/places/1",
+			`{"attributes":{"seats":3}}`, http.StatusBadRequest, "validation_error", nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resetDB(t)
+			seedCatalog(t)
+			seedWarungFields(t)
+			seedPlaces(t)
+
+			router := integrationRouter(testDB)
+			before := listPlaces(t, router, "/places")
+
+			rec := call(t, router, http.MethodPatch, tc.target, tc.body)
+			if tc.wantCode != "" {
+				assertError(t, rec, tc.wantStatus, tc.wantCode)
+			} else if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tc.wantStatus, rec.Body)
+			}
+
+			after := listPlaces(t, router, "/places")
+			if tc.check == nil {
+				if !reflect.DeepEqual(after, before) {
+					t.Errorf("places changed: got %+v, want %+v", after, before)
+				}
+				return
+			}
+			tc.check(t, after)
+		})
+	}
+}
+
+func TestIntegration_DeletePlace(t *testing.T) {
+	all := []int64{1, 2, 3, 4, 5}
+
+	tests := []struct {
+		name       string
+		target     string
+		wantStatus int
+		wantCode   string
+		wantIDs    []int64
+	}{
+		{"deletes the place", "/places/2", http.StatusNoContent, "", []int64{1, 3, 4, 5}},
+		{"unknown place leaves the places", "/places/99", http.StatusNotFound, "place_not_found", all},
+		{"invalid id leaves the places", "/places/abc", http.StatusBadRequest, "invalid_place_id", all},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resetDB(t)
+			seedCatalog(t)
+			seedWarungFields(t)
+			seedPlaces(t)
+
+			router := integrationRouter(testDB)
+			rec := call(t, router, http.MethodDelete, tc.target, "")
+			if tc.wantCode != "" {
+				assertError(t, rec, tc.wantStatus, tc.wantCode)
+			} else if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tc.wantStatus, rec.Body)
+			}
+
+			rows := listPlaces(t, router, "/places")
+			got := make([]int64, 0, len(rows))
+			for _, r := range rows {
+				got = append(got, r.ID)
+			}
+			if !slices.Equal(got, tc.wantIDs) {
+				t.Errorf("place IDs = %v, want %v", got, tc.wantIDs)
+			}
+		})
+	}
+}
+
+func TestIntegration_DeletePlaceTwice(t *testing.T) {
+	resetDB(t)
+	seedCatalog(t)
+	seedWarungFields(t)
+	seedPlaces(t)
+
+	router := integrationRouter(testDB)
+	first := call(t, router, http.MethodDelete, "/places/2", "")
+	if first.Code != http.StatusNoContent {
+		t.Fatalf("first delete: status %d; body: %s", first.Code, first.Body)
+	}
+
+	assertError(t, call(t, router, http.MethodDelete, "/places/2", ""), http.StatusNotFound, "place_not_found")
 }

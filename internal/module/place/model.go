@@ -23,6 +23,10 @@ type Place struct {
 	// object keyed by CategoryField.Key.
 	Attributes json.RawMessage `db:"attributes"`
 	Category   Category        `db:"category"`
+	// IdempotencyKey and RequestHash identify a create request that the client
+	// may retry. They are empty when the request carries no Idempotency-Key.
+	IdempotencyKey string `db:"-"`
+	RequestHash    string `db:"-"`
 }
 
 // PlaceFilter narrows the places returned by GetMany. Zero values apply no filter.
@@ -33,6 +37,43 @@ type PlaceFilter struct {
 	// Query is matched case-insensitively against the name, address,
 	// short description, and category name.
 	Query string
+}
+
+// Optional is a field of a partial update. Set reports whether the client sent
+// the key, and Value is nil when the client sent null.
+type Optional[T any] struct {
+	Set   bool
+	Value *T
+}
+
+// UnmarshalJSON marks the field as set. A JSON null leaves Value nil.
+func (o *Optional[T]) UnmarshalJSON(data []byte) error {
+	o.Set = true
+	if string(data) == "null" {
+		o.Value = nil
+		return nil
+	}
+
+	var v T
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	o.Value = &v
+	return nil
+}
+
+// PlacePatch holds the fields a client may change on a place. A field that is
+// not Set keeps its current value.
+type PlacePatch struct {
+	SubDistrictID       Optional[int64]
+	CategoryID          Optional[int64]
+	Name                Optional[string]
+	Address             Optional[string]
+	Location            Optional[postgis.Point]
+	OperatingHours      Optional[string]
+	EstimatedPriceRange Optional[string]
+	ShortDescription    Optional[string]
+	Attributes          Optional[json.RawMessage]
 }
 
 // Category represents a row in the CATEGORIES table.
@@ -67,8 +108,8 @@ type CategoryField struct {
 	Required   bool         `db:"required"`
 	Options    FieldOptions `db:"options"`
 	// SortOrder is the field's 1-based position among its category's fields.
-	// Creating a field with zero adds it last.
-	SortOrder int32 `db:"sort_order"`
+	// On create, nil adds the field last.
+	SortOrder *int32 `db:"sort_order"`
 }
 
 // FieldOptions are the allowed values of a select field, stored as a JSONB

@@ -11,10 +11,14 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"rantau-go/internal/postgis"
 )
 
 var (
 	ErrInvalidName            = errors.New("name is required")
+	ErrPlaceNameTooLong       = errors.New("name must be 150 characters or fewer")
+	ErrPlaceNotFound          = errors.New("place not found")
 	ErrInvalidCategoryName    = errors.New("name must be 1-100 characters")
 	ErrInvalidSlug            = errors.New("slug must be 1-100 lowercase letters or digits, with single hyphens between words")
 	ErrSubDistrictNotFound    = errors.New("sub-district not found")
@@ -29,6 +33,7 @@ var (
 	ErrCategoryFieldExists    = errors.New("field with this key already exists in the category")
 	ErrInvalidAttributes      = errors.New("invalid attributes")
 	ErrInvalidLocation        = errors.New("location must be within Indonesia")
+	ErrIdempotencyKeyReused   = errors.New("idempotency key was already used for a different request")
 )
 
 var (
@@ -48,6 +53,9 @@ const (
 // and slugs and field labels. VARCHAR counts characters, not bytes.
 const maxNameLength = 100
 
+// maxPlaceNameLength is the size of the VARCHAR(150) column holding place names.
+const maxPlaceNameLength = 150
+
 // Service defines the operations required by the handler.
 //
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
@@ -57,6 +65,8 @@ type Service interface {
 	GetCategories(ctx context.Context) ([]Category, error)
 	CreateCategory(ctx context.Context, c *Category) (*Category, error)
 	CreateCategoryField(ctx context.Context, f *CategoryField) (*CategoryField, error)
+	Update(ctx context.Context, id int64, patch PlacePatch) (*Place, error)
+	Delete(ctx context.Context, id int64) error
 }
 
 type service struct {
@@ -87,9 +97,8 @@ func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
 		return nil, ErrInvalidName
 	}
 
-	if loc := p.Location; loc != nil && (loc.X() < indonesiaMinLongitude || loc.X() > indonesiaMaxLongitude ||
-		loc.Y() < indonesiaMinLatitude || loc.Y() > indonesiaMaxLatitude) {
-		return nil, ErrInvalidLocation
+	if err := validateLocation(p.Location); err != nil {
+		return nil, err
 	}
 
 	category, err := s.repo.GetCategory(ctx, p.CategoryID)
@@ -131,7 +140,7 @@ func (s *service) CreateCategoryField(ctx context.Context, f *CategoryField) (*C
 		return nil, ErrInvalidFieldLabel
 	}
 
-	if f.SortOrder < 0 {
+	if f.SortOrder != nil && *f.SortOrder < 1 {
 		return nil, ErrInvalidFieldSortOrder
 	}
 
@@ -157,6 +166,95 @@ func (s *service) CreateCategoryField(ctx context.Context, f *CategoryField) (*C
 	}
 
 	return s.repo.CreateCategoryField(ctx, f)
+}
+
+// Update applies the patch to the stored place. Attributes are checked against
+// the place's category whenever either of them changes.
+func (s *service) Update(ctx context.Context, id int64, patch PlacePatch) (*Place, error) {
+	p, err := s.repo.GetPlace(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if patch.Name.Set && patch.Name.Value != nil {
+		name := strings.TrimSpace(*patch.Name.Value)
+		switch {
+		case name == "":
+			return nil, ErrInvalidName
+		case utf8.RuneCountInString(name) > maxPlaceNameLength:
+			return nil, ErrPlaceNameTooLong
+		}
+		p.Name = name
+	}
+
+	if patch.SubDistrictID.Set && patch.SubDistrictID.Value != nil {
+		p.SubDistrictID = *patch.SubDistrictID.Value
+	}
+
+	if patch.CategoryID.Set && patch.CategoryID.Value != nil {
+		p.CategoryID = *patch.CategoryID.Value
+	}
+
+	if patch.Address.Set {
+		p.Address = patch.Address.Value
+	}
+
+	if patch.Location.Set {
+		if err := validateLocation(patch.Location.Value); err != nil {
+			return nil, err
+		}
+		p.Location = patch.Location.Value
+	}
+
+	if patch.OperatingHours.Set {
+		p.OperatingHours = patch.OperatingHours.Value
+	}
+
+	if patch.EstimatedPriceRange.Set {
+		p.EstimatedPriceRange = patch.EstimatedPriceRange.Value
+	}
+
+	if patch.ShortDescription.Set {
+		p.ShortDescription = patch.ShortDescription.Value
+	}
+
+	if patch.CategoryID.Set || patch.Attributes.Set {
+		category, err := s.repo.GetCategory(ctx, p.CategoryID)
+		if err != nil {
+			return nil, err
+		}
+
+		raw := p.Attributes
+		if patch.Attributes.Set {
+			raw = nil
+			if patch.Attributes.Value != nil {
+				raw = *patch.Attributes.Value
+			}
+		}
+
+		attributes, err := validateAttributes(category.Fields, raw)
+		if err != nil {
+			return nil, err
+		}
+		p.Attributes = attributes
+	}
+
+	return s.repo.Update(ctx, p)
+}
+
+func (s *service) Delete(ctx context.Context, id int64) error {
+	return s.repo.Delete(ctx, id)
+}
+
+// validateLocation reports ErrInvalidLocation when loc lies outside Indonesia.
+// A nil location is allowed.
+func validateLocation(loc *postgis.Point) error {
+	if loc != nil && (loc.X() < indonesiaMinLongitude || loc.X() > indonesiaMaxLongitude ||
+		loc.Y() < indonesiaMinLatitude || loc.Y() > indonesiaMaxLatitude) {
+		return ErrInvalidLocation
+	}
+
+	return nil
 }
 
 // -----------------------------------------------------------------------------

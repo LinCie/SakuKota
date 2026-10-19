@@ -17,6 +17,7 @@ import (
 
 	"rantau-go/internal/module/place"
 	"rantau-go/internal/module/place/mock"
+	"rantau-go/internal/postgis"
 )
 
 // newRouter serves the place handlers on the paths the API uses for them, so
@@ -26,6 +27,8 @@ func newRouter(svc place.Service) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/places", h.GetPlaces)
 	r.Post("/places", h.CreatePlace)
+	r.Patch("/places/{id}", h.PatchPlace)
+	r.Delete("/places/{id}", h.DeletePlace)
 	r.Get("/categories", h.GetCategories)
 	r.Post("/categories", h.CreateCategory)
 	r.Post("/categories/{id}/fields", h.CreateCategoryField)
@@ -605,5 +608,212 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 				t.Errorf("500 body exposes storage detail: %s", rec.Body)
 			}
 		})
+	}
+}
+
+// -----------------------------------------------------------------------------
+// PATCH /places/{id}
+// -----------------------------------------------------------------------------
+
+func TestHandler_PatchPlace_RejectsInvalidRequests(t *testing.T) {
+	tests := []struct {
+		name     string
+		target   string
+		body     string
+		wantCode string
+	}{
+		{"place id is not a number", "/places/abc", `{"name":"Kopi"}`, "invalid_place_id"},
+		{"place id is fractional", "/places/1.5", `{"name":"Kopi"}`, "invalid_place_id"},
+		{"place id is zero", "/places/0", `{"name":"Kopi"}`, "invalid_place_id"},
+		{"place id is negative", "/places/-1", `{"name":"Kopi"}`, "invalid_place_id"},
+		{"empty body", "/places/1", ``, "invalid_body"},
+		{"truncated JSON", "/places/1", `{"name":"Kopi"`, "invalid_body"},
+		{"body is an array", "/places/1", `[]`, "invalid_body"},
+		{"body is null", "/places/1", `null`, "invalid_body"},
+		{"name is a number", "/places/1", `{"name":5}`, "invalid_body"},
+		{"name is null", "/places/1", `{"name":null}`, "invalid_body"},
+		{"sub_district_id is null", "/places/1", `{"sub_district_id":null}`, "invalid_body"},
+		{"category_id is null", "/places/1", `{"category_id":null}`, "invalid_body"},
+		{"sub_district_id is a string", "/places/1", `{"sub_district_id":"one"}`, "invalid_body"},
+		{"location is a line", "/places/1",
+			`{"location":{"type":"LineString","coordinates":[[106.8,-6.2],[106.9,-6.3]]}}`, "invalid_body"},
+		{"location coordinates are swapped", "/places/1",
+			`{"location":{"type":"Point","coordinates":[-6.2,106.8]}}`, "invalid_body"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// No expectations: an invalid request must never reach the service.
+			svc := mock.NewMockService(gomock.NewController(t))
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, tc.target, tc.body))
+			assertError(t, rec, http.StatusBadRequest, tc.wantCode)
+		})
+	}
+}
+
+func TestHandler_PatchPlace_PassesPatchToService(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+		body   string
+		wantID int64
+		want   place.PlacePatch
+	}{
+		{"empty body changes nothing", "/places/9", `{}`, 9, place.PlacePatch{}},
+		{"name is passed as sent", "/places/9", `{"name":"  Kopi Senja  "}`, 9,
+			place.PlacePatch{Name: present("  Kopi Senja  ")}},
+		{"null clears an optional field", "/places/9", `{"address":null}`, 9,
+			place.PlacePatch{Address: null[string]()}},
+		{"text is replaced", "/places/9", `{"operating_hours":"08:00-17:00"}`, 9,
+			place.PlacePatch{OperatingHours: present("08:00-17:00")}},
+		{"location is replaced", "/places/9", `{"location":{"type":"Point","coordinates":[106.8,-6.2]}}`, 9,
+			place.PlacePatch{Location: present(*postgis.MustPoint(106.8, -6.2))}},
+		{"null clears location", "/places/9", `{"location":null}`, 9,
+			place.PlacePatch{Location: null[postgis.Point]()}},
+		{"sub-district and category are replaced", "/places/9", `{"sub_district_id":2,"category_id":3}`, 9,
+			place.PlacePatch{SubDistrictID: present(int64(2)), CategoryID: present(int64(3))}},
+		{"attributes are passed as sent", "/places/9", `{"attributes":{"contact":"0812"}}`, 9,
+			place.PlacePatch{Attributes: present(json.RawMessage(`{"contact":"0812"}`))}},
+		{"null clears attributes", "/places/9", `{"attributes":null}`, 9,
+			place.PlacePatch{Attributes: null[json.RawMessage]()}},
+		{"client id and unknown keys are ignored", "/places/9",
+			`{"id":99,"created_at":"yesterday","name":"Kopi"}`, 9,
+			place.PlacePatch{Name: present("Kopi")}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := mock.NewMockService(gomock.NewController(t))
+			svc.EXPECT().Update(gomock.Any(), tc.wantID, tc.want).Return(&place.Place{ID: tc.wantID}, nil)
+
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, tc.target, tc.body))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+func TestHandler_PatchPlace_MapsServiceErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantCode   string
+	}{
+		{"unknown place", place.ErrPlaceNotFound, http.StatusNotFound, "place_not_found"},
+		{"wrapped unknown place", fmt.Errorf("update: %w", place.ErrPlaceNotFound), http.StatusNotFound, "place_not_found"},
+		{"blank name", place.ErrInvalidName, http.StatusBadRequest, "validation_error"},
+		{"name too long", place.ErrPlaceNameTooLong, http.StatusBadRequest, "validation_error"},
+		{"unknown sub-district", place.ErrSubDistrictNotFound, http.StatusBadRequest, "validation_error"},
+		{"unknown category", place.ErrCategoryNotFound, http.StatusBadRequest, "validation_error"},
+		{"invalid attributes", place.ErrInvalidAttributes, http.StatusBadRequest, "validation_error"},
+		{"wrapped invalid attributes", fmt.Errorf("%w: %q is required", place.ErrInvalidAttributes, "contact"), http.StatusBadRequest, "validation_error"},
+		{"location outside Indonesia", place.ErrInvalidLocation, http.StatusBadRequest, "validation_error"},
+		{"storage failure", errors.New("storage failure"), http.StatusInternalServerError, "internal_error"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := mock.NewMockService(gomock.NewController(t))
+			svc.EXPECT().Update(gomock.Any(), int64(1), gomock.Any()).Return(nil, tc.err)
+
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, "/places/1", `{"name":"Kopi"}`))
+			assertError(t, rec, tc.wantStatus, tc.wantCode)
+		})
+	}
+}
+
+func TestHandler_PatchPlace_NilResultIsAnInternalError(t *testing.T) {
+	svc := mock.NewMockService(gomock.NewController(t))
+	svc.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
+
+	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, "/places/1", `{"name":"Kopi"}`))
+	assertError(t, rec, http.StatusInternalServerError, "internal_error")
+}
+
+func TestHandler_PatchPlace_Success(t *testing.T) {
+	svc := mock.NewMockService(gomock.NewController(t))
+	svc.EXPECT().Update(gomock.Any(), int64(3), place.PlacePatch{Name: present("Kopi Senja")}).Return(&place.Place{
+		ID:            3,
+		SubDistrictID: 1,
+		Name:          "Kopi Senja",
+		Attributes:    json.RawMessage(`{}`),
+		Category:      place.Category{ID: 2, Name: "Kopi", Slug: "kopi"},
+	}, nil)
+
+	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, "/places/3", `{"name":"Kopi Senja"}`))
+	assertData(t, rec, http.StatusOK, `{
+		"id": 3,
+		"sub_district_id": 1,
+		"name": "Kopi Senja",
+		"address": null,
+		"location": null,
+		"operating_hours": null,
+		"estimated_price_range": null,
+		"short_description": null,
+		"attributes": {},
+		"category": {"id": 2, "name": "Kopi", "slug": "kopi"}
+	}`)
+}
+
+// -----------------------------------------------------------------------------
+// DELETE /places/{id}
+// -----------------------------------------------------------------------------
+
+func TestHandler_DeletePlace_RejectsInvalidID(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+	}{
+		{"place id is not a number", "/places/abc"},
+		{"place id is fractional", "/places/1.5"},
+		{"place id is zero", "/places/0"},
+		{"place id is negative", "/places/-1"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// No expectations: an invalid id must never reach the service.
+			svc := mock.NewMockService(gomock.NewController(t))
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodDelete, tc.target, ""))
+			assertError(t, rec, http.StatusBadRequest, "invalid_place_id")
+		})
+	}
+}
+
+func TestHandler_DeletePlace_MapsServiceErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantCode   string
+	}{
+		{"unknown place", place.ErrPlaceNotFound, http.StatusNotFound, "place_not_found"},
+		{"wrapped unknown place", fmt.Errorf("delete: %w", place.ErrPlaceNotFound), http.StatusNotFound, "place_not_found"},
+		{"storage failure", errors.New("storage failure"), http.StatusInternalServerError, "internal_error"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := mock.NewMockService(gomock.NewController(t))
+			svc.EXPECT().Delete(gomock.Any(), int64(4)).Return(tc.err)
+
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodDelete, "/places/4", ""))
+			assertError(t, rec, tc.wantStatus, tc.wantCode)
+		})
+	}
+}
+
+func TestHandler_DeletePlace_Success(t *testing.T) {
+	svc := mock.NewMockService(gomock.NewController(t))
+	svc.EXPECT().Delete(gomock.Any(), int64(4)).Return(nil)
+
+	rec := serve(t, newRouter(svc), jsonRequest(http.MethodDelete, "/places/4", ""))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204; body: %s", rec.Code, rec.Body)
+	}
+	if rec.Body.Len() != 0 {
+		t.Errorf("body = %q, want empty", rec.Body)
 	}
 }
