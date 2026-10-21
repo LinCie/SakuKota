@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"rantau-go/internal/httpx"
 	"rantau-go/internal/postgis"
 )
 
@@ -39,41 +40,18 @@ type PlaceFilter struct {
 	Query string
 }
 
-// Optional is a field of a partial update. Set reports whether the client sent
-// the key, and Value is nil when the client sent null.
-type Optional[T any] struct {
-	Set   bool
-	Value *T
-}
-
-// UnmarshalJSON marks the field as set. A JSON null leaves Value nil.
-func (o *Optional[T]) UnmarshalJSON(data []byte) error {
-	o.Set = true
-	if string(data) == "null" {
-		o.Value = nil
-		return nil
-	}
-
-	var v T
-	if err := json.Unmarshal(data, &v); err != nil {
-		return err
-	}
-	o.Value = &v
-	return nil
-}
-
 // PlacePatch holds the fields a client may change on a place. A field that is
 // not Set keeps its current value.
 type PlacePatch struct {
-	SubDistrictID       Optional[int64]
-	CategoryID          Optional[int64]
-	Name                Optional[string]
-	Address             Optional[string]
-	Location            Optional[postgis.Point]
-	OperatingHours      Optional[string]
-	EstimatedPriceRange Optional[string]
-	ShortDescription    Optional[string]
-	Attributes          Optional[json.RawMessage]
+	SubDistrictID       httpx.Optional[int64]
+	CategoryID          httpx.Optional[int64]
+	Name                httpx.Optional[string]
+	Address             httpx.Optional[string]
+	Location            httpx.Optional[postgis.Point]
+	OperatingHours      httpx.Optional[string]
+	EstimatedPriceRange httpx.Optional[string]
+	ShortDescription    httpx.Optional[string]
+	Attributes          httpx.Optional[json.RawMessage]
 }
 
 // Category represents a row in the CATEGORIES table.

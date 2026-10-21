@@ -12,6 +12,7 @@ import (
 
 	"go.uber.org/mock/gomock"
 
+	"rantau-go/internal/httpx"
 	"rantau-go/internal/module/place"
 	"rantau-go/internal/module/place/mock"
 	"rantau-go/internal/postgis"
@@ -135,6 +136,15 @@ func TestService_CreatePlace_Name(t *testing.T) {
 				t.Errorf("stored name = %q, want %q", stored.Name, tc.wantName)
 			}
 		})
+	}
+}
+
+func TestService_CreatePlace_NameTooLong(t *testing.T) {
+	_, err := createPlace(t, openCategory(), &place.Place{
+		Name: strings.Repeat("a", 151), SubDistrictID: 1, CategoryID: 2,
+	})
+	if !errors.Is(err, place.ErrPlaceNameTooLong) {
+		t.Fatalf("err = %v, want ErrPlaceNameTooLong", err)
 	}
 }
 
@@ -523,13 +533,13 @@ func TestService_CreateCategoryField(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 // present is a PATCH field the client sent with the value v.
-func present[T any](v T) place.Optional[T] {
-	return place.Optional[T]{Set: true, Value: &v}
+func present[T any](v T) httpx.Optional[T] {
+	return httpx.Optional[T]{Set: true, Value: &v}
 }
 
 // null is a PATCH field the client sent as null.
-func null[T any]() place.Optional[T] {
-	return place.Optional[T]{Set: true}
+func null[T any]() httpx.Optional[T] {
+	return httpx.Optional[T]{Set: true}
 }
 
 func ptr[T any](v T) *T {
@@ -738,7 +748,7 @@ func TestService_UpdatePlace_Attributes(t *testing.T) {
 	// The place is a Kopi, which has no required fields.
 	tests := []struct {
 		name      string
-		attrs     place.Optional[json.RawMessage]
+		attrs     httpx.Optional[json.RawMessage]
 		wantAttrs string
 		wantErr   error
 	}{

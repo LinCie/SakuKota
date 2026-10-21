@@ -85,12 +85,21 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 				// GET /v1/subdistricts
 				r.Get("/", subdisctrictModule.Handler.GetSubDistricts)
 
+				// GET /v1/subdistricts/{id}
+				r.Get("/{id}", subdisctrictModule.Handler.GetSubDistrict)
+
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.WithAuth(cfg))
 					r.Use(middleware.Guard([]string{"admin"}))
 
 					// POST /v1/subdistricts
 					r.Post("/", subdisctrictModule.Handler.CreateSubDistrict)
+
+					// PATCH /v1/subdistricts/{id}
+					r.Patch("/{id}", subdisctrictModule.Handler.PatchSubDistrict)
+
+					// DELETE /v1/subdistricts/{id}
+					r.Delete("/{id}", subdisctrictModule.Handler.DeleteSubDistrict)
 				})
 			})
 		})

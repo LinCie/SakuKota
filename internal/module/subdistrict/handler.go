@@ -1,19 +1,14 @@
 package subdistrict
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	"rantau-go/internal/httpx"
 )
-
-// Service defines the operations required by the handler.
-type Service interface {
-	GetMany(ctx context.Context) ([]SubDistrict, error)
-	Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error)
-}
 
 type Handler struct {
 	service Service
@@ -32,11 +27,35 @@ func NewHandler(service Service) *Handler {
 func (h *Handler) GetSubDistricts(w http.ResponseWriter, r *http.Request) {
 	subDistricts, err := h.service.GetMany(r.Context())
 	if err != nil {
-		httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		httpx.RespondInternalError(w)
 		return
 	}
 
 	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponses(subDistricts))
+}
+
+// GetSubDistrict returns the sub-district given by the `id` path parameter.
+func (h *Handler) GetSubDistrict(w http.ResponseWriter, r *http.Request) {
+	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_sub_district_id", "invalid sub_district_id")
+		return
+	}
+
+	sd, err := h.service.GetSubDistrict(r.Context(), id)
+	if err == nil && sd == nil {
+		err = errors.New("service returned no sub-district")
+	}
+	if err != nil {
+		if errors.Is(err, ErrSubDistrictNotFound) {
+			httpx.RespondError(w, http.StatusNotFound, "sub_district_not_found", err.Error())
+			return
+		}
+		httpx.RespondInternalError(w)
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponse(*sd))
 }
 
 func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
@@ -47,18 +66,80 @@ func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sd, err := h.service.Create(r.Context(), toSubDistrict(req))
+	if err == nil && sd == nil {
+		err = errors.New("service returned no sub-district")
+	}
 	if err != nil {
-		switch {
-		case errors.Is(err, ErrInvalidName),
-			errors.Is(err, ErrInvalidSlug):
-			httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
-		case errors.Is(err, ErrSubDistrictExists):
-			httpx.RespondError(w, http.StatusConflict, "sub_district_exists", err.Error())
-		default:
-			httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
-		}
+		respondSubDistrictError(w, err)
 		return
 	}
 
 	httpx.RespondJSON(w, http.StatusCreated, toSubDistrictResponse(*sd))
+}
+
+// PatchSubDistrict partially updates the sub-district given by the `id` path parameter.
+func (h *Handler) PatchSubDistrict(w http.ResponseWriter, r *http.Request) {
+	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_sub_district_id", "invalid sub_district_id")
+		return
+	}
+
+	// A body of null decodes to a nil pointer and is rejected with the others.
+	var req *UpdateSubDistrictRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil || req.clearsRequiredField() {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+		return
+	}
+
+	sd, err := h.service.Update(r.Context(), id, SubDistrictPatch(*req))
+	if err == nil && sd == nil {
+		err = errors.New("service returned no sub-district")
+	}
+	if err != nil {
+		respondSubDistrictError(w, err)
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponse(*sd))
+}
+
+// DeleteSubDistrict deletes the sub-district given by the `id` path parameter.
+func (h *Handler) DeleteSubDistrict(w http.ResponseWriter, r *http.Request) {
+	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_sub_district_id", "invalid sub_district_id")
+		return
+	}
+
+	if err := h.service.Delete(r.Context(), id); err != nil {
+		switch {
+		case errors.Is(err, ErrSubDistrictNotFound):
+			httpx.RespondError(w, http.StatusNotFound, "sub_district_not_found", err.Error())
+		case errors.Is(err, ErrSubDistrictInUse):
+			httpx.RespondError(w, http.StatusConflict, "sub_district_in_use", err.Error())
+		default:
+			httpx.RespondInternalError(w)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// respondSubDistrictError writes the response for an error from creating or updating a sub-district.
+func respondSubDistrictError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, ErrSubDistrictNotFound):
+		httpx.RespondError(w, http.StatusNotFound, "sub_district_not_found", err.Error())
+	case errors.Is(err, ErrInvalidName),
+		errors.Is(err, ErrInvalidSlug),
+		errors.Is(err, ErrInvalidEstimatedDailySpending),
+		errors.Is(err, ErrInvalidStaticMapImageURL):
+		httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
+	case errors.Is(err, ErrSubDistrictExists):
+		httpx.RespondError(w, http.StatusConflict, "sub_district_exists", err.Error())
+	default:
+		httpx.RespondInternalError(w)
+	}
 }

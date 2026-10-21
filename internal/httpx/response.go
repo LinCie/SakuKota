@@ -29,3 +29,9 @@ func RespondError(w http.ResponseWriter, status int, code, message string) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(errorResponse{Code: code, Message: message})
 }
+
+// RespondInternalError writes a generic 500 response, so storage details stay
+// out of the body.
+func RespondInternalError(w http.ResponseWriter) {
+	RespondError(w, http.StatusInternalServerError, "internal_error", "internal server error")
+}

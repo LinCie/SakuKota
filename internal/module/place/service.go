@@ -92,10 +92,11 @@ func (s *service) GetCategories(ctx context.Context) ([]Category, error) {
 }
 
 func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
-	p.Name = strings.TrimSpace(p.Name)
-	if p.Name == "" {
-		return nil, ErrInvalidName
+	name, err := normalizePlaceName(p.Name)
+	if err != nil {
+		return nil, err
 	}
+	p.Name = name
 
 	if err := validateLocation(p.Location); err != nil {
 		return nil, err
@@ -177,12 +178,9 @@ func (s *service) Update(ctx context.Context, id int64, patch PlacePatch) (*Plac
 	}
 
 	if patch.Name.Set && patch.Name.Value != nil {
-		name := strings.TrimSpace(*patch.Name.Value)
-		switch {
-		case name == "":
-			return nil, ErrInvalidName
-		case utf8.RuneCountInString(name) > maxPlaceNameLength:
-			return nil, ErrPlaceNameTooLong
+		name, err := normalizePlaceName(*patch.Name.Value)
+		if err != nil {
+			return nil, err
 		}
 		p.Name = name
 	}
@@ -244,6 +242,19 @@ func (s *service) Update(ctx context.Context, id int64, patch PlacePatch) (*Plac
 
 func (s *service) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
+}
+
+// normalizePlaceName trims name and checks it against the length of PLACES.name.
+func normalizePlaceName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	switch {
+	case name == "":
+		return "", ErrInvalidName
+	case utf8.RuneCountInString(name) > maxPlaceNameLength:
+		return "", ErrPlaceNameTooLong
+	}
+
+	return name, nil
 }
 
 // validateLocation reports ErrInvalidLocation when loc lies outside Indonesia.

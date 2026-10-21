@@ -30,12 +30,6 @@ func NewHandler(service Service) *Handler {
 // Handler
 // -----------------------------------------------------------------------------
 
-const internalErrorMessage = "internal server error"
-
-func respondInternal(w http.ResponseWriter) {
-	httpx.RespondError(w, http.StatusInternalServerError, "internal_error", internalErrorMessage)
-}
-
 // GetPlaces lists places, optionally filtered by `sub_district_id`,
 // `category_id` (comma-separated, matches any), and a `q` search term.
 func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
@@ -43,8 +37,8 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	filter := PlaceFilter{Query: strings.TrimSpace(query.Get("q"))}
 
 	if param := query.Get("sub_district_id"); param != "" {
-		id, err := strconv.ParseInt(param, 10, 64)
-		if err != nil || id <= 0 {
+		id, ok := httpx.ParseID(param)
+		if !ok {
 			httpx.RespondError(w, http.StatusBadRequest, "invalid_sub_district_id", "invalid sub_district_id")
 			return
 		}
@@ -53,8 +47,8 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 
 	if param := query.Get("category_id"); param != "" {
 		for part := range strings.SplitSeq(param, ",") {
-			id, err := strconv.ParseInt(part, 10, 64)
-			if err != nil || id <= 0 {
+			id, ok := httpx.ParseID(part)
+			if !ok {
 				httpx.RespondError(w, http.StatusBadRequest, "invalid_category_id", "invalid category_id")
 				return
 			}
@@ -70,7 +64,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrCategoryNotFound):
 			httpx.RespondError(w, http.StatusNotFound, "category_not_found", err.Error())
 		default:
-			respondInternal(w)
+			httpx.RespondInternalError(w)
 		}
 		return
 	}
@@ -81,7 +75,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
 	categories, err := h.service.GetCategories(r.Context())
 	if err != nil {
-		respondInternal(w)
+		httpx.RespondInternalError(w)
 		return
 	}
 
@@ -104,7 +98,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrCategoryExists):
 			httpx.RespondError(w, http.StatusConflict, "category_exists", err.Error())
 		default:
-			respondInternal(w)
+			httpx.RespondInternalError(w)
 		}
 		return
 	}
@@ -142,7 +136,7 @@ func (h *Handler) CreateCategoryField(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrCategoryFieldExists):
 			httpx.RespondError(w, http.StatusConflict, "category_field_exists", err.Error())
 		default:
-			respondInternal(w)
+			httpx.RespondInternalError(w)
 		}
 		return
 	}
@@ -176,18 +170,7 @@ func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 		err = errors.New("service returned no place")
 	}
 	if err != nil {
-		switch {
-		case errors.Is(err, ErrInvalidName),
-			errors.Is(err, ErrSubDistrictNotFound),
-			errors.Is(err, ErrCategoryNotFound),
-			errors.Is(err, ErrInvalidAttributes),
-			errors.Is(err, ErrInvalidLocation):
-			httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
-		case errors.Is(err, ErrIdempotencyKeyReused):
-			httpx.RespondError(w, http.StatusConflict, "idempotency_key_reused", err.Error())
-		default:
-			respondInternal(w)
-		}
+		respondPlaceError(w, err)
 		return
 	}
 
@@ -196,8 +179,8 @@ func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 
 // PatchPlace partially updates the place given by the `id` path parameter.
 func (h *Handler) PatchPlace(w http.ResponseWriter, r *http.Request) {
-	id, err := parsePlaceID(r)
-	if err != nil {
+	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
 		httpx.RespondError(w, http.StatusBadRequest, "invalid_place_id", "invalid place_id")
 		return
 	}
@@ -209,24 +192,12 @@ func (h *Handler) PatchPlace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p, err := h.service.Update(r.Context(), id, toPlacePatch(*req))
+	p, err := h.service.Update(r.Context(), id, PlacePatch(*req))
 	if err == nil && p == nil {
 		err = errors.New("service returned no place")
 	}
 	if err != nil {
-		switch {
-		case errors.Is(err, ErrPlaceNotFound):
-			httpx.RespondError(w, http.StatusNotFound, "place_not_found", err.Error())
-		case errors.Is(err, ErrInvalidName),
-			errors.Is(err, ErrPlaceNameTooLong),
-			errors.Is(err, ErrSubDistrictNotFound),
-			errors.Is(err, ErrCategoryNotFound),
-			errors.Is(err, ErrInvalidAttributes),
-			errors.Is(err, ErrInvalidLocation):
-			httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
-		default:
-			respondInternal(w)
-		}
+		respondPlaceError(w, err)
 		return
 	}
 
@@ -235,8 +206,8 @@ func (h *Handler) PatchPlace(w http.ResponseWriter, r *http.Request) {
 
 // DeletePlace deletes the place given by the `id` path parameter.
 func (h *Handler) DeletePlace(w http.ResponseWriter, r *http.Request) {
-	id, err := parsePlaceID(r)
-	if err != nil {
+	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
 		httpx.RespondError(w, http.StatusBadRequest, "invalid_place_id", "invalid place_id")
 		return
 	}
@@ -246,19 +217,28 @@ func (h *Handler) DeletePlace(w http.ResponseWriter, r *http.Request) {
 			httpx.RespondError(w, http.StatusNotFound, "place_not_found", err.Error())
 			return
 		}
-		respondInternal(w)
+		httpx.RespondInternalError(w)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// parsePlaceID reads the `id` path parameter, which must be a positive integer.
-func parsePlaceID(r *http.Request) (int64, error) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil || id <= 0 {
-		return 0, errors.New("invalid place id")
+// respondPlaceError writes the response for an error from creating or updating a place.
+func respondPlaceError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, ErrPlaceNotFound):
+		httpx.RespondError(w, http.StatusNotFound, "place_not_found", err.Error())
+	case errors.Is(err, ErrInvalidName),
+		errors.Is(err, ErrPlaceNameTooLong),
+		errors.Is(err, ErrSubDistrictNotFound),
+		errors.Is(err, ErrCategoryNotFound),
+		errors.Is(err, ErrInvalidAttributes),
+		errors.Is(err, ErrInvalidLocation):
+		httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
+	case errors.Is(err, ErrIdempotencyKeyReused):
+		httpx.RespondError(w, http.StatusConflict, "idempotency_key_reused", err.Error())
+	default:
+		httpx.RespondInternalError(w)
 	}
-
-	return id, nil
 }

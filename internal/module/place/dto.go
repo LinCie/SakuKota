@@ -3,6 +3,7 @@ package place
 import (
 	"encoding/json"
 
+	"rantau-go/internal/httpx"
 	"rantau-go/internal/postgis"
 )
 
@@ -23,15 +24,15 @@ type CreatePlaceRequest struct {
 // UpdatePlaceRequest is the API payload for partially updating a Place. Keys
 // left out keep their current value. Nullable fields accept null to clear them.
 type UpdatePlaceRequest struct {
-	SubDistrictID       Optional[int64]           `json:"sub_district_id"`
-	CategoryID          Optional[int64]           `json:"category_id"`
-	Name                Optional[string]          `json:"name"`
-	Address             Optional[string]          `json:"address"`
-	Location            Optional[postgis.Point]   `json:"location"`
-	OperatingHours      Optional[string]          `json:"operating_hours"`
-	EstimatedPriceRange Optional[string]          `json:"estimated_price_range"`
-	ShortDescription    Optional[string]          `json:"short_description"`
-	Attributes          Optional[json.RawMessage] `json:"attributes"`
+	SubDistrictID       httpx.Optional[int64]           `json:"sub_district_id"`
+	CategoryID          httpx.Optional[int64]           `json:"category_id"`
+	Name                httpx.Optional[string]          `json:"name"`
+	Address             httpx.Optional[string]          `json:"address"`
+	Location            httpx.Optional[postgis.Point]   `json:"location"`
+	OperatingHours      httpx.Optional[string]          `json:"operating_hours"`
+	EstimatedPriceRange httpx.Optional[string]          `json:"estimated_price_range"`
+	ShortDescription    httpx.Optional[string]          `json:"short_description"`
+	Attributes          httpx.Optional[json.RawMessage] `json:"attributes"`
 }
 
 // clearsRequiredField reports whether the client sent null for a field that
@@ -109,20 +110,6 @@ type CategoryFieldResponse struct {
 
 func toPlace(req CreatePlaceRequest) *Place {
 	return &Place{
-		SubDistrictID:       req.SubDistrictID,
-		CategoryID:          req.CategoryID,
-		Name:                req.Name,
-		Address:             req.Address,
-		Location:            req.Location,
-		OperatingHours:      req.OperatingHours,
-		EstimatedPriceRange: req.EstimatedPriceRange,
-		ShortDescription:    req.ShortDescription,
-		Attributes:          req.Attributes,
-	}
-}
-
-func toPlacePatch(req UpdatePlaceRequest) PlacePatch {
-	return PlacePatch{
 		SubDistrictID:       req.SubDistrictID,
 		CategoryID:          req.CategoryID,
 		Name:                req.Name,

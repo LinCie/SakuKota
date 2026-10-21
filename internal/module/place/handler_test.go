@@ -449,6 +449,7 @@ func TestHandler_CreatePlace_MapsServiceErrors(t *testing.T) {
 		wantCode   string
 	}{
 		{name: "blank name", err: place.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "name too long", err: place.ErrPlaceNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
 		{name: "unknown sub-district", err: place.ErrSubDistrictNotFound, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
 		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
 		{name: "invalid attributes", err: place.ErrInvalidAttributes, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
