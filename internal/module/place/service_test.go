@@ -106,12 +106,12 @@ func TestService_CreatePlace_Name(t *testing.T) {
 		wantName string
 		wantErr  bool
 	}{
-		{"surrounding spaces are removed", "  Warung Bu Ani  ", "Warung Bu Ani", false},
-		{"tabs and newlines are removed", "\tWarung Bu Ani\n", "Warung Bu Ani", false},
-		{"inner spacing is kept", "Warung  Bu Ani", "Warung  Bu Ani", false},
-		{"empty", "", "", true},
-		{"spaces only", "   ", "", true},
-		{"tabs and newlines only", "\t\n", "", true},
+		{name: "surrounding spaces are removed", input: "  Warung Bu Ani  ", wantName: "Warung Bu Ani", wantErr: false},
+		{name: "tabs and newlines are removed", input: "\tWarung Bu Ani\n", wantName: "Warung Bu Ani", wantErr: false},
+		{name: "inner spacing is kept", input: "Warung  Bu Ani", wantName: "Warung  Bu Ani", wantErr: false},
+		{name: "empty", input: "", wantName: "", wantErr: true},
+		{name: "spaces only", input: "   ", wantName: "", wantErr: true},
+		{name: "tabs and newlines only", input: "\t\n", wantName: "", wantErr: true},
 	}
 
 	for _, tc := range tests {
@@ -145,43 +145,49 @@ func TestService_CreatePlace_Attributes(t *testing.T) {
 		wantStored string // stored JSON when the attributes are accepted
 		wantErr    bool
 	}{
-		{"required field only", `{"contact":"0812-3456"}`, `{"contact":"0812-3456"}`, false},
-		{"every type with a valid value",
-			`{"contact":"0812","seats":12,"halal":true,"payment":"card","price_range":{"min":10000,"max":50000},"opened_on":"2024-01-31"}`,
-			`{"contact":"0812","seats":12,"halal":true,"payment":"card","price_range":{"min":10000,"max":50000},"opened_on":"2024-01-31"}`, false},
-		{"range with equal bounds", `{"contact":"x","price_range":{"min":5,"max":5}}`, `{"contact":"x","price_range":{"min":5,"max":5}}`, false},
-		{"integer keeps every digit", `{"contact":"x","seats":12345678901234567890}`, `{"contact":"x","seats":12345678901234567890}`, false},
-		{"decimal keeps its trailing zero", `{"contact":"x","seats":1.50}`, `{"contact":"x","seats":1.50}`, false},
-		{"text is kept verbatim",
-			`{"contact":"🍜 \"Bu Ani\" '; DROP TABLE places; --"}`,
-			`{"contact":"🍜 \"Bu Ani\" '; DROP TABLE places; --"}`, false},
-		{"optional null is dropped", `{"contact":"x","seats":null,"halal":null}`, `{"contact":"x"}`, false},
+		{name: "required field only", attributes: `{"contact":"0812-3456"}`, wantStored: `{"contact":"0812-3456"}`, wantErr: false},
+		{
+			name:       "every type with a valid value",
+			attributes: `{"contact":"0812","seats":12,"halal":true,"payment":"card","price_range":{"min":10000,"max":50000},"opened_on":"2024-01-31"}`,
+			wantStored: `{"contact":"0812","seats":12,"halal":true,"payment":"card","price_range":{"min":10000,"max":50000},"opened_on":"2024-01-31"}`,
+			wantErr:    false,
+		},
+		{name: "range with equal bounds", attributes: `{"contact":"x","price_range":{"min":5,"max":5}}`, wantStored: `{"contact":"x","price_range":{"min":5,"max":5}}`, wantErr: false},
+		{name: "integer keeps every digit", attributes: `{"contact":"x","seats":12345678901234567890}`, wantStored: `{"contact":"x","seats":12345678901234567890}`, wantErr: false},
+		{name: "decimal keeps its trailing zero", attributes: `{"contact":"x","seats":1.50}`, wantStored: `{"contact":"x","seats":1.50}`, wantErr: false},
+		{
+			name:       "text is kept verbatim",
+			attributes: `{"contact":"🍜 \"Bu Ani\" '; DROP TABLE places; --"}`,
+			wantStored: `{"contact":"🍜 \"Bu Ani\" '; DROP TABLE places; --"}`,
+			wantErr:    false,
+		},
+		{name: "optional null is dropped", attributes: `{"contact":"x","seats":null,"halal":null}`, wantStored: `{"contact":"x"}`, wantErr: false},
 
-		{"required field missing", `{"seats":1}`, "", true},
-		{"required text is only spaces", `{"contact":"   "}`, "", true},
-		{"required field is null", `{"contact":null}`, "", true},
-		{"null attributes miss the required field", `null`, "", true},
-		{"empty object misses the required field", `{}`, "", true},
-		{"array instead of object", `[1,2]`, "", true},
-		{"string instead of object", `"text"`, "", true},
-		{"malformed JSON", `{"contact":`, "", true},
-		{"unknown key", `{"contact":"x","parking":true}`, "", true},
-		{"text given a number", `{"contact":5}`, "", true},
-		{"number given a string", `{"contact":"x","seats":"12"}`, "", true},
-		{"number given a boolean", `{"contact":"x","seats":true}`, "", true},
-		{"boolean given a string", `{"contact":"x","halal":"true"}`, "", true},
-		{"boolean given a number", `{"contact":"x","halal":1}`, "", true},
-		{"select value outside its options", `{"contact":"x","payment":"bitcoin"}`, "", true},
-		{"select given a number", `{"contact":"x","payment":1}`, "", true},
-		{"range with min above max", `{"contact":"x","price_range":{"min":9,"max":1}}`, "", true},
-		{"range missing max", `{"contact":"x","price_range":{"min":1}}`, "", true},
-		{"range with an extra key", `{"contact":"x","price_range":{"min":1,"max":2,"step":1}}`, "", true},
-		{"range with string bounds", `{"contact":"x","price_range":{"min":"1","max":"2"}}`, "", true},
-		{"range given as an array", `{"contact":"x","price_range":[1,2]}`, "", true},
-		{"date with slashes", `{"contact":"x","opened_on":"2024/01/31"}`, "", true},
-		{"date that does not exist", `{"contact":"x","opened_on":"2024-02-30"}`, "", true},
-		{"date given as a number", `{"contact":"x","opened_on":20240131}`, "", true},
-		{"date with a time", `{"contact":"x","opened_on":"2024-01-31T00:00:00Z"}`, "", true},
+		{name: "required field missing", attributes: `{"seats":1}`, wantStored: "", wantErr: true},
+		{name: "required text is only spaces", attributes: `{"contact":"   "}`, wantStored: "", wantErr: true},
+		{name: "required field is null", attributes: `{"contact":null}`, wantStored: "", wantErr: true},
+		{name: "null attributes miss the required field", attributes: `null`, wantStored: "", wantErr: true},
+		{name: "empty object misses the required field", attributes: `{}`, wantStored: "", wantErr: true},
+		{name: "array instead of object", attributes: `[1,2]`, wantStored: "", wantErr: true},
+		{name: "string instead of object", attributes: `"text"`, wantStored: "", wantErr: true},
+		{name: "malformed JSON", attributes: `{"contact":`, wantStored: "", wantErr: true},
+		{name: "unknown key", attributes: `{"contact":"x","parking":true}`, wantStored: "", wantErr: true},
+		{name: "text given a number", attributes: `{"contact":5}`, wantStored: "", wantErr: true},
+		{name: "number given a string", attributes: `{"contact":"x","seats":"12"}`, wantStored: "", wantErr: true},
+		{name: "number given a boolean", attributes: `{"contact":"x","seats":true}`, wantStored: "", wantErr: true},
+		{name: "boolean given a string", attributes: `{"contact":"x","halal":"true"}`, wantStored: "", wantErr: true},
+		{name: "boolean given a number", attributes: `{"contact":"x","halal":1}`, wantStored: "", wantErr: true},
+		{name: "select value outside its options", attributes: `{"contact":"x","payment":"bitcoin"}`, wantStored: "", wantErr: true},
+		{name: "select given a number", attributes: `{"contact":"x","payment":1}`, wantStored: "", wantErr: true},
+		{name: "range with min above max", attributes: `{"contact":"x","price_range":{"min":9,"max":1}}`, wantStored: "", wantErr: true},
+		{name: "range missing max", attributes: `{"contact":"x","price_range":{"min":1}}`, wantStored: "", wantErr: true},
+		{name: "range with an extra key", attributes: `{"contact":"x","price_range":{"min":1,"max":2,"step":1}}`, wantStored: "", wantErr: true},
+		{name: "range with string bounds", attributes: `{"contact":"x","price_range":{"min":"1","max":"2"}}`, wantStored: "", wantErr: true},
+		{name: "range given as an array", attributes: `{"contact":"x","price_range":[1,2]}`, wantStored: "", wantErr: true},
+		{name: "date with slashes", attributes: `{"contact":"x","opened_on":"2024/01/31"}`, wantStored: "", wantErr: true},
+		{name: "date that does not exist", attributes: `{"contact":"x","opened_on":"2024-02-30"}`, wantStored: "", wantErr: true},
+		{name: "date given as a number", attributes: `{"contact":"x","opened_on":20240131}`, wantStored: "", wantErr: true},
+		{name: "date with a time", attributes: `{"contact":"x","opened_on":"2024-01-31T00:00:00Z"}`, wantStored: "", wantErr: true},
 	}
 
 	for _, tc := range tests {
@@ -213,11 +219,11 @@ func TestService_CreatePlace_AttributesWithoutRequiredFields(t *testing.T) {
 		attributes string
 		wantStored string
 	}{
-		{"absent attributes are stored as an empty object", "", `{}`},
-		{"null attributes are stored as an empty object", `null`, `{}`},
-		{"empty object is kept", `{}`, `{}`},
-		{"set optional field is kept", `{"seats":5}`, `{"seats":5}`},
-		{"null optional field is dropped", `{"halal":null}`, `{}`},
+		{name: "absent attributes are stored as an empty object", attributes: "", wantStored: `{}`},
+		{name: "null attributes are stored as an empty object", attributes: `null`, wantStored: `{}`},
+		{name: "empty object is kept", attributes: `{}`, wantStored: `{}`},
+		{name: "set optional field is kept", attributes: `{"seats":5}`, wantStored: `{"seats":5}`},
+		{name: "null optional field is dropped", attributes: `{"halal":null}`, wantStored: `{}`},
 	}
 
 	for _, tc := range tests {
@@ -241,21 +247,21 @@ func TestService_CreatePlace_Location(t *testing.T) {
 		omit     bool // no location in the request
 		wantErr  bool
 	}{
-		{"Jakarta", 106.8, -6.2, false, false},
-		{"Sabang, the western tip", 95.3, 5.9, false, false},
-		{"Merauke, the eastern tip", 140.4, -8.5, false, false},
-		{"west edge of the box", 95, -6.2, false, false},
-		{"east edge of the box", 141, -6.2, false, false},
-		{"north edge of the box", 106.8, 6, false, false},
-		{"south edge of the box", 106.8, -11, false, false},
-		{"location omitted", 0, 0, true, false},
-		{"Tokyo", 139.7, 35.7, false, true},
-		{"London", -0.1, 51.5, false, true},
-		{"null island", 0, 0, false, true},
-		{"just west of the box", 94.99, -6.2, false, true},
-		{"just east of the box", 141.01, -6.2, false, true},
-		{"just north of the box", 106.8, 6.01, false, true},
-		{"just south of the box", 106.8, -11.01, false, true},
+		{name: "Jakarta", lon: 106.8, lat: -6.2, omit: false, wantErr: false},
+		{name: "Sabang, the western tip", lon: 95.3, lat: 5.9, omit: false, wantErr: false},
+		{name: "Merauke, the eastern tip", lon: 140.4, lat: -8.5, omit: false, wantErr: false},
+		{name: "west edge of the box", lon: 95, lat: -6.2, omit: false, wantErr: false},
+		{name: "east edge of the box", lon: 141, lat: -6.2, omit: false, wantErr: false},
+		{name: "north edge of the box", lon: 106.8, lat: 6, omit: false, wantErr: false},
+		{name: "south edge of the box", lon: 106.8, lat: -11, omit: false, wantErr: false},
+		{name: "location omitted", lon: 0, lat: 0, omit: true, wantErr: false},
+		{name: "Tokyo", lon: 139.7, lat: 35.7, omit: false, wantErr: true},
+		{name: "London", lon: -0.1, lat: 51.5, omit: false, wantErr: true},
+		{name: "null island", lon: 0, lat: 0, omit: false, wantErr: true},
+		{name: "just west of the box", lon: 94.99, lat: -6.2, omit: false, wantErr: true},
+		{name: "just east of the box", lon: 141.01, lat: -6.2, omit: false, wantErr: true},
+		{name: "just north of the box", lon: 106.8, lat: 6.01, omit: false, wantErr: true},
+		{name: "just south of the box", lon: 106.8, lat: -11.01, omit: false, wantErr: true},
 	}
 
 	for _, tc := range tests {
@@ -304,11 +310,11 @@ func TestService_CreatePlace_Storage(t *testing.T) {
 		storeErr  error // returned when the place is stored
 		wantErr   error // nil means the call succeeds
 	}{
-		{"unknown category stops before storage", place.ErrCategoryNotFound, nil, place.ErrCategoryNotFound},
-		{"storage reports an unknown sub-district", nil, place.ErrSubDistrictNotFound, place.ErrSubDistrictNotFound},
-		{"storage reports an unknown category", nil, place.ErrCategoryNotFound, place.ErrCategoryNotFound},
-		{"storage failure is returned", nil, boom, boom},
-		{"stored place is returned", nil, nil, nil},
+		{name: "unknown category stops before storage", lookupErr: place.ErrCategoryNotFound, storeErr: nil, wantErr: place.ErrCategoryNotFound},
+		{name: "storage reports an unknown sub-district", lookupErr: nil, storeErr: place.ErrSubDistrictNotFound, wantErr: place.ErrSubDistrictNotFound},
+		{name: "storage reports an unknown category", lookupErr: nil, storeErr: place.ErrCategoryNotFound, wantErr: place.ErrCategoryNotFound},
+		{name: "storage failure is returned", lookupErr: nil, storeErr: boom, wantErr: boom},
+		{name: "stored place is returned", lookupErr: nil, storeErr: nil, wantErr: nil},
 	}
 
 	for _, tc := range tests {
@@ -348,29 +354,29 @@ func TestService_CreateCategory(t *testing.T) {
 		catSlug string
 		wantErr error
 	}{
-		{"name surrounding spaces are removed", "  Kopi Tubruk  ", validSlug, nil},
-		{"name of 100 characters", strings.Repeat("é", 100), "kopi", nil},
-		{"name of 101 characters", strings.Repeat("é", 101), "kopi", place.ErrInvalidCategoryName},
-		{"name of 20 family emoji is 100 code points", strings.Repeat(family, 20), "kopi", nil},
-		{"name of 21 family emoji is 105 code points", strings.Repeat(family, 21), "kopi", place.ErrInvalidCategoryName},
-		{"blank name", "   ", validSlug, place.ErrInvalidCategoryName},
-		{"empty name", "", validSlug, place.ErrInvalidCategoryName},
+		{name: "name surrounding spaces are removed", catName: "  Kopi Tubruk  ", catSlug: validSlug, wantErr: nil},
+		{name: "name of 100 characters", catName: strings.Repeat("é", 100), catSlug: "kopi", wantErr: nil},
+		{name: "name of 101 characters", catName: strings.Repeat("é", 101), catSlug: "kopi", wantErr: place.ErrInvalidCategoryName},
+		{name: "name of 20 family emoji is 100 code points", catName: strings.Repeat(family, 20), catSlug: "kopi", wantErr: nil},
+		{name: "name of 21 family emoji is 105 code points", catName: strings.Repeat(family, 21), catSlug: "kopi", wantErr: place.ErrInvalidCategoryName},
+		{name: "blank name", catName: "   ", catSlug: validSlug, wantErr: place.ErrInvalidCategoryName},
+		{name: "empty name", catName: "", catSlug: validSlug, wantErr: place.ErrInvalidCategoryName},
 
-		{"single letter slug", validName, "a", nil},
-		{"digits-only slug", validName, "123", nil},
-		{"words joined by single hyphens", validName, "kopi-tubruk-2", nil},
-		{"slug of 100 characters", validName, strings.Repeat("a", 100), nil},
-		{"slug surrounding spaces are removed", validName, "  kopi-tubruk  ", nil},
-		{"slug of 101 characters", validName, strings.Repeat("a", 101), place.ErrInvalidSlug},
-		{"uppercase slug", validName, "Kopi", place.ErrInvalidSlug},
-		{"underscore in slug", validName, "kopi_tubruk", place.ErrInvalidSlug},
-		{"leading hyphen", validName, "-kopi", place.ErrInvalidSlug},
-		{"trailing hyphen", validName, "kopi-", place.ErrInvalidSlug},
-		{"double hyphen", validName, "kopi--tubruk", place.ErrInvalidSlug},
-		{"space inside slug", validName, "kopi tubruk", place.ErrInvalidSlug},
-		{"slash in slug", validName, "kopi/teh", place.ErrInvalidSlug},
-		{"non-ASCII letter in slug", validName, "kopi-é", place.ErrInvalidSlug},
-		{"missing slug", validName, "", place.ErrInvalidSlug},
+		{name: "single letter slug", catName: validName, catSlug: "a", wantErr: nil},
+		{name: "digits-only slug", catName: validName, catSlug: "123", wantErr: nil},
+		{name: "words joined by single hyphens", catName: validName, catSlug: "kopi-tubruk-2", wantErr: nil},
+		{name: "slug of 100 characters", catName: validName, catSlug: strings.Repeat("a", 100), wantErr: nil},
+		{name: "slug surrounding spaces are removed", catName: validName, catSlug: "  kopi-tubruk  ", wantErr: nil},
+		{name: "slug of 101 characters", catName: validName, catSlug: strings.Repeat("a", 101), wantErr: place.ErrInvalidSlug},
+		{name: "uppercase slug", catName: validName, catSlug: "Kopi", wantErr: place.ErrInvalidSlug},
+		{name: "underscore in slug", catName: validName, catSlug: "kopi_tubruk", wantErr: place.ErrInvalidSlug},
+		{name: "leading hyphen", catName: validName, catSlug: "-kopi", wantErr: place.ErrInvalidSlug},
+		{name: "trailing hyphen", catName: validName, catSlug: "kopi-", wantErr: place.ErrInvalidSlug},
+		{name: "double hyphen", catName: validName, catSlug: "kopi--tubruk", wantErr: place.ErrInvalidSlug},
+		{name: "space inside slug", catName: validName, catSlug: "kopi tubruk", wantErr: place.ErrInvalidSlug},
+		{name: "slash in slug", catName: validName, catSlug: "kopi/teh", wantErr: place.ErrInvalidSlug},
+		{name: "non-ASCII letter in slug", catName: validName, catSlug: "kopi-é", wantErr: place.ErrInvalidSlug},
+		{name: "missing slug", catName: validName, catSlug: "", wantErr: place.ErrInvalidSlug},
 	}
 
 	for _, tc := range tests {
@@ -424,43 +430,43 @@ func TestService_CreateCategoryField(t *testing.T) {
 		in      place.CategoryField
 		wantErr error
 	}{
-		{"lowercase key", field("halal", "Halal", place.FieldTypeBoolean), nil},
-		{"key with a digit after the first letter", field("a1", "Halal", place.FieldTypeBoolean), nil},
-		{"key with underscores", field("wifi_available", "Wi-Fi", place.FieldTypeBoolean), nil},
-		{"key of 64 characters", field("a"+strings.Repeat("b", 63), "Label", place.FieldTypeText), nil},
-		{"key surrounding spaces are removed", field(" halal ", "Halal", place.FieldTypeBoolean), nil},
-		{"empty key", field("", "Halal", place.FieldTypeBoolean), place.ErrInvalidFieldKey},
-		{"key starts with a digit", field("1halal", "Halal", place.FieldTypeBoolean), place.ErrInvalidFieldKey},
-		{"key starts with an underscore", field("_halal", "Halal", place.FieldTypeBoolean), place.ErrInvalidFieldKey},
-		{"uppercase key", field("Halal", "Halal", place.FieldTypeBoolean), place.ErrInvalidFieldKey},
-		{"hyphen in key", field("wifi-available", "Wi-Fi", place.FieldTypeBoolean), place.ErrInvalidFieldKey},
-		{"space inside key", field("has space", "Halal", place.FieldTypeBoolean), place.ErrInvalidFieldKey},
-		{"key of 65 characters", field("a"+strings.Repeat("b", 64), "Label", place.FieldTypeText), place.ErrInvalidFieldKey},
+		{name: "lowercase key", in: field("halal", "Halal", place.FieldTypeBoolean), wantErr: nil},
+		{name: "key with a digit after the first letter", in: field("a1", "Halal", place.FieldTypeBoolean), wantErr: nil},
+		{name: "key with underscores", in: field("wifi_available", "Wi-Fi", place.FieldTypeBoolean), wantErr: nil},
+		{name: "key of 64 characters", in: field("a"+strings.Repeat("b", 63), "Label", place.FieldTypeText), wantErr: nil},
+		{name: "key surrounding spaces are removed", in: field(" halal ", "Halal", place.FieldTypeBoolean), wantErr: nil},
+		{name: "empty key", in: field("", "Halal", place.FieldTypeBoolean), wantErr: place.ErrInvalidFieldKey},
+		{name: "key starts with a digit", in: field("1halal", "Halal", place.FieldTypeBoolean), wantErr: place.ErrInvalidFieldKey},
+		{name: "key starts with an underscore", in: field("_halal", "Halal", place.FieldTypeBoolean), wantErr: place.ErrInvalidFieldKey},
+		{name: "uppercase key", in: field("Halal", "Halal", place.FieldTypeBoolean), wantErr: place.ErrInvalidFieldKey},
+		{name: "hyphen in key", in: field("wifi-available", "Wi-Fi", place.FieldTypeBoolean), wantErr: place.ErrInvalidFieldKey},
+		{name: "space inside key", in: field("has space", "Halal", place.FieldTypeBoolean), wantErr: place.ErrInvalidFieldKey},
+		{name: "key of 65 characters", in: field("a"+strings.Repeat("b", 64), "Label", place.FieldTypeText), wantErr: place.ErrInvalidFieldKey},
 
-		{"label surrounding spaces are removed", field("halal", "  Halal  ", place.FieldTypeBoolean), nil},
-		{"label of 100 characters", field("halal", strings.Repeat("é", 100), place.FieldTypeBoolean), nil},
-		{"label of 101 characters", field("halal", strings.Repeat("é", 101), place.FieldTypeBoolean), place.ErrInvalidFieldLabel},
-		{"label of 21 family emoji", field("halal", strings.Repeat(family, 21), place.FieldTypeBoolean), place.ErrInvalidFieldLabel},
-		{"blank label", field("halal", "   ", place.FieldTypeBoolean), place.ErrInvalidFieldLabel},
+		{name: "label surrounding spaces are removed", in: field("halal", "  Halal  ", place.FieldTypeBoolean), wantErr: nil},
+		{name: "label of 100 characters", in: field("halal", strings.Repeat("é", 100), place.FieldTypeBoolean), wantErr: nil},
+		{name: "label of 101 characters", in: field("halal", strings.Repeat("é", 101), place.FieldTypeBoolean), wantErr: place.ErrInvalidFieldLabel},
+		{name: "label of 21 family emoji", in: field("halal", strings.Repeat(family, 21), place.FieldTypeBoolean), wantErr: place.ErrInvalidFieldLabel},
+		{name: "blank label", in: field("halal", "   ", place.FieldTypeBoolean), wantErr: place.ErrInvalidFieldLabel},
 
-		{"text type", field("notes", "Notes", place.FieldTypeText), nil},
-		{"number type", field("seats", "Seats", place.FieldTypeNumber), nil},
-		{"boolean type", field("halal", "Halal", place.FieldTypeBoolean), nil},
-		{"range type", field("price_range", "Price", place.FieldTypeRange), nil},
-		{"date type", field("opened_on", "Opened", place.FieldTypeDate), nil},
-		{"unknown type", field("halal", "Halal", "email"), place.ErrInvalidFieldDataType},
-		{"type name in uppercase", field("halal", "Halal", "Text"), place.ErrInvalidFieldDataType},
-		{"empty type", field("halal", "Halal", ""), place.ErrInvalidFieldDataType},
+		{name: "text type", in: field("notes", "Notes", place.FieldTypeText), wantErr: nil},
+		{name: "number type", in: field("seats", "Seats", place.FieldTypeNumber), wantErr: nil},
+		{name: "boolean type", in: field("halal", "Halal", place.FieldTypeBoolean), wantErr: nil},
+		{name: "range type", in: field("price_range", "Price", place.FieldTypeRange), wantErr: nil},
+		{name: "date type", in: field("opened_on", "Opened", place.FieldTypeDate), wantErr: nil},
+		{name: "unknown type", in: field("halal", "Halal", "email"), wantErr: place.ErrInvalidFieldDataType},
+		{name: "type name in uppercase", in: field("halal", "Halal", "Text"), wantErr: place.ErrInvalidFieldDataType},
+		{name: "empty type", in: field("halal", "Halal", ""), wantErr: place.ErrInvalidFieldDataType},
 
-		{"options on a text field", field("notes", "Notes", place.FieldTypeText, "a"), place.ErrFieldOptionsNotAllowed},
-		{"options on a boolean field", field("halal", "Halal", place.FieldTypeBoolean, "yes"), place.ErrFieldOptionsNotAllowed},
-		{"select without options", field("payment", "Payment", place.FieldTypeSelect), place.ErrFieldOptionsRequired},
-		{"select with a blank option", field("payment", "Payment", place.FieldTypeSelect, "cash", ""), place.ErrFieldOptionsRequired},
-		{"select with a whitespace-only option", field("payment", "Payment", place.FieldTypeSelect, "cash", "   "), place.ErrFieldOptionsRequired},
-		{"select with a repeated option", field("payment", "Payment", place.FieldTypeSelect, "cash", "cash"), place.ErrFieldOptionsRequired},
-		{"select with an option repeated after trimming", field("payment", "Payment", place.FieldTypeSelect, "cash", " cash "), place.ErrFieldOptionsRequired},
-		{"select with options", field("payment", "Payment", place.FieldTypeSelect, "cash", "card"), nil},
-		{"select options surrounding spaces are removed", field("payment", "Payment", place.FieldTypeSelect, "  cash ", "card"), nil},
+		{name: "options on a text field", in: field("notes", "Notes", place.FieldTypeText, "a"), wantErr: place.ErrFieldOptionsNotAllowed},
+		{name: "options on a boolean field", in: field("halal", "Halal", place.FieldTypeBoolean, "yes"), wantErr: place.ErrFieldOptionsNotAllowed},
+		{name: "select without options", in: field("payment", "Payment", place.FieldTypeSelect), wantErr: place.ErrFieldOptionsRequired},
+		{name: "select with a blank option", in: field("payment", "Payment", place.FieldTypeSelect, "cash", ""), wantErr: place.ErrFieldOptionsRequired},
+		{name: "select with a whitespace-only option", in: field("payment", "Payment", place.FieldTypeSelect, "cash", "   "), wantErr: place.ErrFieldOptionsRequired},
+		{name: "select with a repeated option", in: field("payment", "Payment", place.FieldTypeSelect, "cash", "cash"), wantErr: place.ErrFieldOptionsRequired},
+		{name: "select with an option repeated after trimming", in: field("payment", "Payment", place.FieldTypeSelect, "cash", " cash "), wantErr: place.ErrFieldOptionsRequired},
+		{name: "select with options", in: field("payment", "Payment", place.FieldTypeSelect, "cash", "card"), wantErr: nil},
+		{name: "select options surrounding spaces are removed", in: field("payment", "Payment", place.FieldTypeSelect, "  cash ", "card"), wantErr: nil},
 	}
 
 	for _, tc := range tests {
@@ -589,8 +595,8 @@ func TestService_UpdatePlace_LookupFailure(t *testing.T) {
 		getErr  error
 		wantErr error
 	}{
-		{"unknown place", place.ErrPlaceNotFound, place.ErrPlaceNotFound},
-		{"lookup failure is returned", boom, boom},
+		{name: "unknown place", getErr: place.ErrPlaceNotFound, wantErr: place.ErrPlaceNotFound},
+		{name: "lookup failure is returned", getErr: boom, wantErr: boom},
 	}
 
 	for _, tc := range tests {
@@ -614,22 +620,22 @@ func TestService_UpdatePlace_Fields(t *testing.T) {
 		patch  place.PlacePatch
 		change func(*place.Place) // turns savedKopi into the wanted stored place
 	}{
-		{"empty patch changes nothing", place.PlacePatch{}, func(*place.Place) {}},
-		{"name is trimmed", place.PlacePatch{Name: present("  Kopi Baru\t")},
-			func(p *place.Place) { p.Name = "Kopi Baru" }},
-		{"address is replaced", place.PlacePatch{Address: present("Jl. Kemang 2")},
-			func(p *place.Place) { p.Address = ptr("Jl. Kemang 2") }},
-		{"location is replaced", place.PlacePatch{Location: present(*postgis.MustPoint(106.85, -6.18))},
-			func(p *place.Place) { p.Location = postgis.MustPoint(106.85, -6.18) }},
-		{"sub-district is replaced", place.PlacePatch{SubDistrictID: present(int64(2))},
-			func(p *place.Place) { p.SubDistrictID = 2 }},
-		{"null clears every nullable field", place.PlacePatch{
+		{name: "empty patch changes nothing", patch: place.PlacePatch{}, change: func(*place.Place) {}},
+		{name: "name is trimmed", patch: place.PlacePatch{Name: present("  Kopi Baru\t")},
+			change: func(p *place.Place) { p.Name = "Kopi Baru" }},
+		{name: "address is replaced", patch: place.PlacePatch{Address: present("Jl. Kemang 2")},
+			change: func(p *place.Place) { p.Address = ptr("Jl. Kemang 2") }},
+		{name: "location is replaced", patch: place.PlacePatch{Location: present(*postgis.MustPoint(106.85, -6.18))},
+			change: func(p *place.Place) { p.Location = postgis.MustPoint(106.85, -6.18) }},
+		{name: "sub-district is replaced", patch: place.PlacePatch{SubDistrictID: present(int64(2))},
+			change: func(p *place.Place) { p.SubDistrictID = 2 }},
+		{name: "null clears every nullable field", patch: place.PlacePatch{
 			Address:             null[string](),
 			Location:            null[postgis.Point](),
 			OperatingHours:      null[string](),
 			EstimatedPriceRange: null[string](),
 			ShortDescription:    null[string](),
-		}, func(p *place.Place) {
+		}, change: func(p *place.Place) {
 			p.Address, p.Location, p.OperatingHours = nil, nil, nil
 			p.EstimatedPriceRange, p.ShortDescription = nil, nil
 		}},
@@ -660,14 +666,14 @@ func TestService_UpdatePlace_Name(t *testing.T) {
 		wantName string
 		wantErr  error
 	}{
-		{"surrounding spaces are removed", "  Kopi Baru  ", "Kopi Baru", nil},
-		{"empty", "", "", place.ErrInvalidName},
-		{"spaces only", "   ", "", place.ErrInvalidName},
-		{"150 characters is allowed", long, long, nil},
-		{"151 characters is too long", long + "a", "", place.ErrPlaceNameTooLong},
-		{"150 multibyte characters is allowed", strings.Repeat("é", 150), strings.Repeat("é", 150), nil},
-		{"151 multibyte characters is too long", strings.Repeat("é", 151), "", place.ErrPlaceNameTooLong},
-		{"length is counted after trimming", "  " + long + "  ", long, nil},
+		{name: "surrounding spaces are removed", input: "  Kopi Baru  ", wantName: "Kopi Baru", wantErr: nil},
+		{name: "empty", input: "", wantName: "", wantErr: place.ErrInvalidName},
+		{name: "spaces only", input: "   ", wantName: "", wantErr: place.ErrInvalidName},
+		{name: "150 characters is allowed", input: long, wantName: long, wantErr: nil},
+		{name: "151 characters is too long", input: long + "a", wantName: "", wantErr: place.ErrPlaceNameTooLong},
+		{name: "150 multibyte characters is allowed", input: strings.Repeat("é", 150), wantName: strings.Repeat("é", 150), wantErr: nil},
+		{name: "151 multibyte characters is too long", input: strings.Repeat("é", 151), wantName: "", wantErr: place.ErrPlaceNameTooLong},
+		{name: "length is counted after trimming", input: "  " + long + "  ", wantName: long, wantErr: nil},
 	}
 
 	for _, tc := range tests {
@@ -699,10 +705,10 @@ func TestService_UpdatePlace_Location(t *testing.T) {
 		lat     float64
 		wantErr error
 	}{
-		{"inside Indonesia", 106.8, -6.2, nil},
-		{"on the western edge", 95, -2, nil},
-		{"west of the Indonesia box", 94.9, -2, place.ErrInvalidLocation},
-		{"north of the Indonesia box", 110, 6.5, place.ErrInvalidLocation},
+		{name: "inside Indonesia", lon: 106.8, lat: -6.2, wantErr: nil},
+		{name: "on the western edge", lon: 95, lat: -2, wantErr: nil},
+		{name: "west of the Indonesia box", lon: 94.9, lat: -2, wantErr: place.ErrInvalidLocation},
+		{name: "north of the Indonesia box", lon: 110, lat: 6.5, wantErr: place.ErrInvalidLocation},
 	}
 
 	for _, tc := range tests {
@@ -736,11 +742,11 @@ func TestService_UpdatePlace_Attributes(t *testing.T) {
 		wantAttrs string
 		wantErr   error
 	}{
-		{"new attributes replace the old ones", present(json.RawMessage(`{"halal":false}`)), `{"halal":false}`, nil},
-		{"null attributes become an empty object", null[json.RawMessage](), `{}`, nil},
-		{"unknown key is rejected", present(json.RawMessage(`{"parking":true}`)), "", place.ErrInvalidAttributes},
-		{"wrong type is rejected", present(json.RawMessage(`{"seats":"many"}`)), "", place.ErrInvalidAttributes},
-		{"array is rejected", present(json.RawMessage(`[1]`)), "", place.ErrInvalidAttributes},
+		{name: "new attributes replace the old ones", attrs: present(json.RawMessage(`{"halal":false}`)), wantAttrs: `{"halal":false}`, wantErr: nil},
+		{name: "null attributes become an empty object", attrs: null[json.RawMessage](), wantAttrs: `{}`, wantErr: nil},
+		{name: "unknown key is rejected", attrs: present(json.RawMessage(`{"parking":true}`)), wantAttrs: "", wantErr: place.ErrInvalidAttributes},
+		{name: "wrong type is rejected", attrs: present(json.RawMessage(`{"seats":"many"}`)), wantAttrs: "", wantErr: place.ErrInvalidAttributes},
+		{name: "array is rejected", attrs: present(json.RawMessage(`[1]`)), wantAttrs: "", wantErr: place.ErrInvalidAttributes},
 	}
 
 	for _, tc := range tests {
@@ -772,20 +778,54 @@ func TestService_UpdatePlace_Category(t *testing.T) {
 		wantAttrs      string
 		wantErr        error
 	}{
-		{"attributes that fit the new category are kept", `{"contact":"0812","seats":12}`,
-			place.PlacePatch{CategoryID: present(int64(1))}, 1, `{"contact":"0812","seats":12}`, nil},
-		{"attributes missing a required field of the new category are rejected", `{"halal":true,"seats":12}`,
-			place.PlacePatch{CategoryID: present(int64(1))}, 0, "", place.ErrInvalidAttributes},
-		{"attributes unknown to the new category are rejected", `{"contact":"0812"}`,
-			place.PlacePatch{CategoryID: present(int64(2))}, 0, "", place.ErrInvalidAttributes},
-		{"new attributes are checked against the new category", `{"contact":"0812"}`,
-			place.PlacePatch{CategoryID: present(int64(1)), Attributes: present(json.RawMessage(`{"seats":12}`))},
-			0, "", place.ErrInvalidAttributes},
-		{"new attributes that fit the new category are stored", `{"halal":true}`,
-			place.PlacePatch{CategoryID: present(int64(1)), Attributes: present(json.RawMessage(`{"contact":"0812"}`))},
-			1, `{"contact":"0812"}`, nil},
-		{"unknown category is rejected", `{"halal":true}`,
-			place.PlacePatch{CategoryID: present(int64(99))}, 0, "", place.ErrCategoryNotFound},
+		{
+			name:           "attributes that fit the new category are kept",
+			attrs:          `{"contact":"0812","seats":12}`,
+			patch:          place.PlacePatch{CategoryID: present(int64(1))},
+			wantCategoryID: 1,
+			wantAttrs:      `{"contact":"0812","seats":12}`,
+			wantErr:        nil,
+		},
+		{
+			name:           "attributes missing a required field of the new category are rejected",
+			attrs:          `{"halal":true,"seats":12}`,
+			patch:          place.PlacePatch{CategoryID: present(int64(1))},
+			wantCategoryID: 0,
+			wantAttrs:      "",
+			wantErr:        place.ErrInvalidAttributes,
+		},
+		{
+			name:           "attributes unknown to the new category are rejected",
+			attrs:          `{"contact":"0812"}`,
+			patch:          place.PlacePatch{CategoryID: present(int64(2))},
+			wantCategoryID: 0,
+			wantAttrs:      "",
+			wantErr:        place.ErrInvalidAttributes,
+		},
+		{
+			name:           "new attributes are checked against the new category",
+			attrs:          `{"contact":"0812"}`,
+			patch:          place.PlacePatch{CategoryID: present(int64(1)), Attributes: present(json.RawMessage(`{"seats":12}`))},
+			wantCategoryID: 0,
+			wantAttrs:      "",
+			wantErr:        place.ErrInvalidAttributes,
+		},
+		{
+			name:           "new attributes that fit the new category are stored",
+			attrs:          `{"halal":true}`,
+			patch:          place.PlacePatch{CategoryID: present(int64(1)), Attributes: present(json.RawMessage(`{"contact":"0812"}`))},
+			wantCategoryID: 1,
+			wantAttrs:      `{"contact":"0812"}`,
+			wantErr:        nil,
+		},
+		{
+			name:           "unknown category is rejected",
+			attrs:          `{"halal":true}`,
+			patch:          place.PlacePatch{CategoryID: present(int64(99))},
+			wantCategoryID: 0,
+			wantAttrs:      "",
+			wantErr:        place.ErrCategoryNotFound,
+		},
 	}
 
 	for _, tc := range tests {
@@ -822,10 +862,10 @@ func TestService_UpdatePlace_Storage(t *testing.T) {
 		updateErr error // returned when the place is stored
 		wantErr   error // nil means the call succeeds
 	}{
-		{"storage reports the place is gone", place.ErrPlaceNotFound, place.ErrPlaceNotFound},
-		{"storage reports an unknown sub-district", place.ErrSubDistrictNotFound, place.ErrSubDistrictNotFound},
-		{"storage failure is returned", boom, boom},
-		{"stored place is returned", nil, nil},
+		{name: "storage reports the place is gone", updateErr: place.ErrPlaceNotFound, wantErr: place.ErrPlaceNotFound},
+		{name: "storage reports an unknown sub-district", updateErr: place.ErrSubDistrictNotFound, wantErr: place.ErrSubDistrictNotFound},
+		{name: "storage failure is returned", updateErr: boom, wantErr: boom},
+		{name: "stored place is returned", updateErr: nil, wantErr: nil},
 	}
 
 	for _, tc := range tests {
@@ -854,9 +894,9 @@ func TestService_DeletePlace(t *testing.T) {
 		repoErr error
 		wantErr error
 	}{
-		{"deletes the place", nil, nil},
-		{"unknown place", place.ErrPlaceNotFound, place.ErrPlaceNotFound},
-		{"storage failure is returned", boom, boom},
+		{name: "deletes the place", repoErr: nil, wantErr: nil},
+		{name: "unknown place", repoErr: place.ErrPlaceNotFound, wantErr: place.ErrPlaceNotFound},
+		{name: "storage failure is returned", repoErr: boom, wantErr: boom},
 	}
 
 	for _, tc := range tests {

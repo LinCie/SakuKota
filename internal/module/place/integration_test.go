@@ -259,22 +259,22 @@ func TestIntegration_ListPlacesFilters(t *testing.T) {
 		target string
 		want   []int64
 	}{
-		{"no filters returns everything in id order", "/places", []int64{1, 2, 3, 4, 5}},
-		{"sub-district", "/places?sub_district_id=1", []int64{1, 2}},
-		{"one category", "/places?category_id=1", []int64{1, 3, 4}},
-		{"two categories match either", "/places?category_id=1,2", []int64{1, 2, 3, 4, 5}},
-		{"overlapping categories do not duplicate rows", "/places?category_id=1,1", []int64{1, 3, 4}},
-		{"sub-district and category combine", "/places?sub_district_id=2&category_id=2", []int64{5}},
-		{"query matches the name, case-insensitively", "/places?q=KOPI%20SENJA", []int64{2}},
-		{"query matches the address", "/places?q=jl.%20merdeka", []int64{1}},
-		{"query matches the description", "/places?q=nasi", []int64{1, 3}},
-		{"query matches the category name", "/places?q=warung", []int64{1, 3, 4}},
-		{"query is literal for percent signs", "/places?q=%25", []int64{4}},
-		{"query is literal for underscores", "/places?q=_", nil},
-		{"attributes are not searched", "/places?q=hidden_gem", nil},
-		{"whitespace-only query is no search", "/places?q=%20%20", []int64{1, 2, 3, 4, 5}},
-		{"query combines with filters", "/places?sub_district_id=2&category_id=1&q=bakso", []int64{4}},
-		{"no matches is an empty list", "/places?q=zzz", nil},
+		{name: "no filters returns everything in id order", target: "/places", want: []int64{1, 2, 3, 4, 5}},
+		{name: "sub-district", target: "/places?sub_district_id=1", want: []int64{1, 2}},
+		{name: "one category", target: "/places?category_id=1", want: []int64{1, 3, 4}},
+		{name: "two categories match either", target: "/places?category_id=1,2", want: []int64{1, 2, 3, 4, 5}},
+		{name: "overlapping categories do not duplicate rows", target: "/places?category_id=1,1", want: []int64{1, 3, 4}},
+		{name: "sub-district and category combine", target: "/places?sub_district_id=2&category_id=2", want: []int64{5}},
+		{name: "query matches the name, case-insensitively", target: "/places?q=KOPI%20SENJA", want: []int64{2}},
+		{name: "query matches the address", target: "/places?q=jl.%20merdeka", want: []int64{1}},
+		{name: "query matches the description", target: "/places?q=nasi", want: []int64{1, 3}},
+		{name: "query matches the category name", target: "/places?q=warung", want: []int64{1, 3, 4}},
+		{name: "query is literal for percent signs", target: "/places?q=%25", want: []int64{4}},
+		{name: "query is literal for underscores", target: "/places?q=_", want: nil},
+		{name: "attributes are not searched", target: "/places?q=hidden_gem", want: nil},
+		{name: "whitespace-only query is no search", target: "/places?q=%20%20", want: []int64{1, 2, 3, 4, 5}},
+		{name: "query combines with filters", target: "/places?sub_district_id=2&category_id=1&q=bakso", want: []int64{4}},
+		{name: "no matches is an empty list", target: "/places?q=zzz", want: nil},
 	}
 
 	for _, tc := range tests {
@@ -301,8 +301,8 @@ func TestIntegration_ListPlacesUnknownFilters(t *testing.T) {
 		target   string
 		wantCode string
 	}{
-		{"unknown sub-district", "/places?sub_district_id=99", "sub_district_not_found"},
-		{"unknown category in the list", "/places?category_id=1,99", "category_not_found"},
+		{name: "unknown sub-district", target: "/places?sub_district_id=99", wantCode: "sub_district_not_found"},
+		{name: "unknown category in the list", target: "/places?category_id=1,99", wantCode: "category_not_found"},
 	}
 
 	for _, tc := range tests {
@@ -329,10 +329,10 @@ func TestIntegration_CategoryNamesAreUniqueIgnoringCase(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{"same name in lowercase", "warung", "warung-2", http.StatusConflict, "category_exists"},
-		{"same name in uppercase", "WARUNG", "warung-3", http.StatusConflict, "category_exists"},
-		{"same slug", "Kedai", "warung", http.StatusConflict, "category_exists"},
-		{"different name and slug", "Kedai Warung", "kedai-warung", http.StatusCreated, ""},
+		{name: "same name in lowercase", newName: "warung", newSlug: "warung-2", wantStatus: http.StatusConflict, wantCode: "category_exists"},
+		{name: "same name in uppercase", newName: "WARUNG", newSlug: "warung-3", wantStatus: http.StatusConflict, wantCode: "category_exists"},
+		{name: "same slug", newName: "Kedai", newSlug: "warung", wantStatus: http.StatusConflict, wantCode: "category_exists"},
+		{name: "different name and slug", newName: "Kedai Warung", newSlug: "kedai-warung", wantStatus: http.StatusCreated, wantCode: ""},
 	}
 
 	for _, tc := range tests {
@@ -505,19 +505,19 @@ func TestIntegration_CreatePlaceRules(t *testing.T) {
 		wantCode   string // empty on success
 		wantStored int
 	}{
-		{"minimal place", `{` + kopi + `}`, http.StatusCreated, "", 1},
-		{"blank name", `{"name":"  ","sub_district_id":1,"category_id":2}`, http.StatusBadRequest, "validation_error", 0},
-		{"unknown sub-district", `{"name":"Kopi Senja","sub_district_id":99,"category_id":2}`, http.StatusBadRequest, "validation_error", 0},
-		{"unknown category", `{"name":"Kopi Senja","sub_district_id":1,"category_id":99}`, http.StatusBadRequest, "validation_error", 0},
-		{"location in Jakarta", `{` + kopi + `,"location":{"type":"Point","coordinates":[106.8,-6.2]}}`, http.StatusCreated, "", 1},
-		{"location in Tokyo", `{` + kopi + `,"location":{"type":"Point","coordinates":[139.7,35.7]}}`, http.StatusBadRequest, "validation_error", 0},
-		{"location at null island", `{` + kopi + `,"location":{"type":"Point","coordinates":[0,0]}}`, http.StatusBadRequest, "validation_error", 0},
-		{"swapped Jakarta coordinates", `{` + kopi + `,"location":{"type":"Point","coordinates":[-6.2,106.8]}}`, http.StatusBadRequest, "invalid_body", 0},
-		{"latitude above 90", `{` + kopi + `,"location":{"type":"Point","coordinates":[106.8,91]}}`, http.StatusBadRequest, "invalid_body", 0},
-		{"missing required attribute", `{` + warung + `,"attributes":{"seats":2}}`, http.StatusBadRequest, "validation_error", 0},
-		{"unknown attribute key", `{` + warung + `,"attributes":{"contact":"0812","parking":true}}`, http.StatusBadRequest, "validation_error", 0},
-		{"null optional attribute is accepted", `{` + warung + `,"attributes":{"contact":"0812","seats":null}}`, http.StatusCreated, "", 1},
-		{"unknown top-level keys are ignored", `{` + kopi + `,"id":999,"created_at":"yesterday"}`, http.StatusCreated, "", 1},
+		{name: "minimal place", body: `{` + kopi + `}`, wantStatus: http.StatusCreated, wantCode: "", wantStored: 1},
+		{name: "blank name", body: `{"name":"  ","sub_district_id":1,"category_id":2}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 0},
+		{name: "unknown sub-district", body: `{"name":"Kopi Senja","sub_district_id":99,"category_id":2}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 0},
+		{name: "unknown category", body: `{"name":"Kopi Senja","sub_district_id":1,"category_id":99}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 0},
+		{name: "location in Jakarta", body: `{` + kopi + `,"location":{"type":"Point","coordinates":[106.8,-6.2]}}`, wantStatus: http.StatusCreated, wantCode: "", wantStored: 1},
+		{name: "location in Tokyo", body: `{` + kopi + `,"location":{"type":"Point","coordinates":[139.7,35.7]}}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 0},
+		{name: "location at null island", body: `{` + kopi + `,"location":{"type":"Point","coordinates":[0,0]}}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 0},
+		{name: "swapped Jakarta coordinates", body: `{` + kopi + `,"location":{"type":"Point","coordinates":[-6.2,106.8]}}`, wantStatus: http.StatusBadRequest, wantCode: "invalid_body", wantStored: 0},
+		{name: "latitude above 90", body: `{` + kopi + `,"location":{"type":"Point","coordinates":[106.8,91]}}`, wantStatus: http.StatusBadRequest, wantCode: "invalid_body", wantStored: 0},
+		{name: "missing required attribute", body: `{` + warung + `,"attributes":{"seats":2}}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 0},
+		{name: "unknown attribute key", body: `{` + warung + `,"attributes":{"contact":"0812","parking":true}}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 0},
+		{name: "null optional attribute is accepted", body: `{` + warung + `,"attributes":{"contact":"0812","seats":null}}`, wantStatus: http.StatusCreated, wantCode: "", wantStored: 1},
+		{name: "unknown top-level keys are ignored", body: `{` + kopi + `,"id":999,"created_at":"yesterday"}`, wantStatus: http.StatusCreated, wantCode: "", wantStored: 1},
 	}
 
 	for _, tc := range tests {
@@ -546,8 +546,8 @@ func TestIntegration_PlaceNamesMayRepeatInDistrict(t *testing.T) {
 		first  string
 		second string
 	}{
-		{"same name", "Warung Bu Ani", "Warung Bu Ani"},
-		{"same name in another case", "Warung Bu Ani", "warung bu ani"},
+		{name: "same name", first: "Warung Bu Ani", second: "Warung Bu Ani"},
+		{name: "same name in another case", first: "Warung Bu Ani", second: "warung bu ani"},
 	}
 
 	for _, tc := range tests {
@@ -583,29 +583,29 @@ func TestIntegration_StoredAttributesComeBackExactly(t *testing.T) {
 		wantAttributes string
 	}{
 		{
-			"large integer keeps every digit",
-			`{"name":"Warung Bu Ani","sub_district_id":1,"category_id":1,"attributes":{"contact":"0812","seats":12345678901234567890}}`,
-			`{"contact":"0812","seats":12345678901234567890}`,
+			name:           "large integer keeps every digit",
+			body:           `{"name":"Warung Bu Ani","sub_district_id":1,"category_id":1,"attributes":{"contact":"0812","seats":12345678901234567890}}`,
+			wantAttributes: `{"contact":"0812","seats":12345678901234567890}`,
 		},
 		{
-			"decimal keeps its trailing zero",
-			`{"name":"Warung Bu Ani","sub_district_id":1,"category_id":1,"attributes":{"contact":"0812","seats":1.50}}`,
-			`{"contact":"0812","seats":1.50}`,
+			name:           "decimal keeps its trailing zero",
+			body:           `{"name":"Warung Bu Ani","sub_district_id":1,"category_id":1,"attributes":{"contact":"0812","seats":1.50}}`,
+			wantAttributes: `{"contact":"0812","seats":1.50}`,
 		},
 		{
-			"text keeps quotes, emoji, and SQL-like content",
-			`{"name":"Warung Bu Ani","sub_district_id":1,"category_id":1,"attributes":{"contact":"🍜 \"Bu Ani\" '; DROP TABLE places; --"}}`,
-			`{"contact":"🍜 \"Bu Ani\" '; DROP TABLE places; --"}`,
+			name:           "text keeps quotes, emoji, and SQL-like content",
+			body:           `{"name":"Warung Bu Ani","sub_district_id":1,"category_id":1,"attributes":{"contact":"🍜 \"Bu Ani\" '; DROP TABLE places; --"}}`,
+			wantAttributes: `{"contact":"🍜 \"Bu Ani\" '; DROP TABLE places; --"}`,
 		},
 		{
-			"optional null is dropped",
-			`{"name":"Warung Bu Ani","sub_district_id":1,"category_id":1,"attributes":{"contact":"0812","seats":null}}`,
-			`{"contact":"0812"}`,
+			name:           "optional null is dropped",
+			body:           `{"name":"Warung Bu Ani","sub_district_id":1,"category_id":1,"attributes":{"contact":"0812","seats":null}}`,
+			wantAttributes: `{"contact":"0812"}`,
 		},
 		{
-			"no attributes is an empty object",
-			`{"name":"Kopi Senja","sub_district_id":1,"category_id":2}`,
-			`{}`,
+			name:           "no attributes is an empty object",
+			body:           `{"name":"Kopi Senja","sub_district_id":1,"category_id":2}`,
+			wantAttributes: `{}`,
 		},
 	}
 
@@ -706,24 +706,40 @@ func TestIntegration_CreatePlaceIdempotencyKey(t *testing.T) {
 		wantSameID bool
 	}{
 		{
-			"retry with the same key returns the original place",
-			[]attempt{{"k1", bodyA, http.StatusCreated, ""}, {"k1", bodyA, http.StatusCreated, ""}},
-			1, true,
+			name: "retry with the same key returns the original place",
+			attempts: []attempt{
+				{key: "k1", body: bodyA, wantStatus: http.StatusCreated, wantCode: ""},
+				{key: "k1", body: bodyA, wantStatus: http.StatusCreated, wantCode: ""},
+			},
+			wantStored: 1,
+			wantSameID: true,
 		},
 		{
-			"same key with a different body is rejected",
-			[]attempt{{"k1", bodyA, http.StatusCreated, ""}, {"k1", bodyB, http.StatusConflict, "idempotency_key_reused"}},
-			1, false,
+			name: "same key with a different body is rejected",
+			attempts: []attempt{
+				{key: "k1", body: bodyA, wantStatus: http.StatusCreated, wantCode: ""},
+				{key: "k1", body: bodyB, wantStatus: http.StatusConflict, wantCode: "idempotency_key_reused"},
+			},
+			wantStored: 1,
+			wantSameID: false,
 		},
 		{
-			"requests without a key are not deduplicated",
-			[]attempt{{"", bodyA, http.StatusCreated, ""}, {"", bodyA, http.StatusCreated, ""}},
-			2, false,
+			name: "requests without a key are not deduplicated",
+			attempts: []attempt{
+				{key: "", body: bodyA, wantStatus: http.StatusCreated, wantCode: ""},
+				{key: "", body: bodyA, wantStatus: http.StatusCreated, wantCode: ""},
+			},
+			wantStored: 2,
+			wantSameID: false,
 		},
 		{
-			"different keys create different places",
-			[]attempt{{"k1", bodyA, http.StatusCreated, ""}, {"k2", bodyA, http.StatusCreated, ""}},
-			2, false,
+			name: "different keys create different places",
+			attempts: []attempt{
+				{key: "k1", body: bodyA, wantStatus: http.StatusCreated, wantCode: ""},
+				{key: "k2", body: bodyA, wantStatus: http.StatusCreated, wantCode: ""},
+			},
+			wantStored: 2,
+			wantSameID: false,
 		},
 	}
 
@@ -825,10 +841,10 @@ func TestIntegration_StorageFailureHidesDetails(t *testing.T) {
 		target string
 		body   string
 	}{
-		{"list places", http.MethodGet, "/places", ""},
-		{"list categories", http.MethodGet, "/categories", ""},
-		{"create category", http.MethodPost, "/categories", `{"name":"Kedai","slug":"kedai"}`},
-		{"create place", http.MethodPost, "/places", `{"name":"Kopi","sub_district_id":1,"category_id":2}`},
+		{name: "list places", method: http.MethodGet, target: "/places", body: ""},
+		{name: "list categories", method: http.MethodGet, target: "/categories", body: ""},
+		{name: "create category", method: http.MethodPost, target: "/categories", body: `{"name":"Kedai","slug":"kedai"}`},
+		{name: "create place", method: http.MethodPost, target: "/places", body: `{"name":"Kopi","sub_district_id":1,"category_id":2}`},
 	}
 
 	for _, tc := range tests {
@@ -867,15 +883,15 @@ func TestIntegration_PatchPlace(t *testing.T) {
 		wantCode   string
 		check      func(t *testing.T, rows []placeRow) // nil means the places must not change
 	}{
-		{"renames a place and keeps its other fields", "/places/1", `{"name":"Warung Baru"}`, http.StatusOK, "",
-			func(t *testing.T, rows []placeRow) {
+		{name: "renames a place and keeps its other fields", target: "/places/1", body: `{"name":"Warung Baru"}`, wantStatus: http.StatusOK, wantCode: "",
+			check: func(t *testing.T, rows []placeRow) {
 				p := findPlace(t, rows, 1)
 				if p.Name != "Warung Baru" || p.Address == nil || *p.Address != "Jl. Merdeka 1" {
 					t.Errorf("place 1 = name %q, address %v; want Warung Baru and Jl. Merdeka 1", p.Name, p.Address)
 				}
 			}},
-		{"null clears an optional field", "/places/1", `{"address":null}`, http.StatusOK, "",
-			func(t *testing.T, rows []placeRow) {
+		{name: "null clears an optional field", target: "/places/1", body: `{"address":null}`, wantStatus: http.StatusOK, wantCode: "",
+			check: func(t *testing.T, rows []placeRow) {
 				p := findPlace(t, rows, 1)
 				if p.Address != nil {
 					t.Errorf("address = %q, want null", *p.Address)
@@ -884,28 +900,28 @@ func TestIntegration_PatchPlace(t *testing.T) {
 					t.Errorf("name = %q, want Warung Bu Ani", p.Name)
 				}
 			}},
-		{"location is stored and listed", "/places/1", `{"location":{"type":"Point","coordinates":[106.8,-6.2]}}`, http.StatusOK, "",
-			func(t *testing.T, rows []placeRow) {
+		{name: "location is stored and listed", target: "/places/1", body: `{"location":{"type":"Point","coordinates":[106.8,-6.2]}}`, wantStatus: http.StatusOK, wantCode: "",
+			check: func(t *testing.T, rows []placeRow) {
 				assertJSON(t, findPlace(t, rows, 1).Location, `{"type":"Point","coordinates":[106.8,-6.2]}`)
 			}},
-		{"moves a place to a category with the attributes it needs", "/places/2",
-			`{"category_id":1,"attributes":{"contact":"0812"}}`, http.StatusOK, "",
-			func(t *testing.T, rows []placeRow) {
+		{name: "moves a place to a category with the attributes it needs", target: "/places/2",
+			body: `{"category_id":1,"attributes":{"contact":"0812"}}`, wantStatus: http.StatusOK, wantCode: "",
+			check: func(t *testing.T, rows []placeRow) {
 				p := findPlace(t, rows, 2)
 				if p.Category.ID != 1 {
 					t.Errorf("category = %d, want 1", p.Category.ID)
 				}
 				assertJSON(t, p.Attributes, `{"contact":"0812"}`)
 			}},
-		{"an empty body changes nothing", "/places/1", `{}`, http.StatusOK, "", nil},
-		{"unknown place", "/places/99", `{"name":"Warung Baru"}`, http.StatusNotFound, "place_not_found", nil},
-		{"invalid body", "/places/1", `{"name":5}`, http.StatusBadRequest, "invalid_body", nil},
-		{"name longer than 150 characters", "/places/1",
-			`{"name":"` + strings.Repeat("a", 151) + `"}`, http.StatusBadRequest, "validation_error", nil},
-		{"unknown sub-district", "/places/1", `{"sub_district_id":99}`, http.StatusBadRequest, "validation_error", nil},
-		{"unknown category", "/places/1", `{"category_id":99}`, http.StatusBadRequest, "validation_error", nil},
-		{"attributes miss the required field of the category", "/places/1",
-			`{"attributes":{"seats":3}}`, http.StatusBadRequest, "validation_error", nil},
+		{name: "an empty body changes nothing", target: "/places/1", body: `{}`, wantStatus: http.StatusOK, wantCode: "", check: nil},
+		{name: "unknown place", target: "/places/99", body: `{"name":"Warung Baru"}`, wantStatus: http.StatusNotFound, wantCode: "place_not_found", check: nil},
+		{name: "invalid body", target: "/places/1", body: `{"name":5}`, wantStatus: http.StatusBadRequest, wantCode: "invalid_body", check: nil},
+		{name: "name longer than 150 characters", target: "/places/1",
+			body: `{"name":"` + strings.Repeat("a", 151) + `"}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", check: nil},
+		{name: "unknown sub-district", target: "/places/1", body: `{"sub_district_id":99}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", check: nil},
+		{name: "unknown category", target: "/places/1", body: `{"category_id":99}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", check: nil},
+		{name: "attributes miss the required field of the category", target: "/places/1",
+			body: `{"attributes":{"seats":3}}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", check: nil},
 	}
 
 	for _, tc := range tests {
@@ -947,9 +963,9 @@ func TestIntegration_DeletePlace(t *testing.T) {
 		wantCode   string
 		wantIDs    []int64
 	}{
-		{"deletes the place", "/places/2", http.StatusNoContent, "", []int64{1, 3, 4, 5}},
-		{"unknown place leaves the places", "/places/99", http.StatusNotFound, "place_not_found", all},
-		{"invalid id leaves the places", "/places/abc", http.StatusBadRequest, "invalid_place_id", all},
+		{name: "deletes the place", target: "/places/2", wantStatus: http.StatusNoContent, wantCode: "", wantIDs: []int64{1, 3, 4, 5}},
+		{name: "unknown place leaves the places", target: "/places/99", wantStatus: http.StatusNotFound, wantCode: "place_not_found", wantIDs: all},
+		{name: "invalid id leaves the places", target: "/places/abc", wantStatus: http.StatusBadRequest, wantCode: "invalid_place_id", wantIDs: all},
 	}
 
 	for _, tc := range tests {

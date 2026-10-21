@@ -123,17 +123,17 @@ func TestHandler_GetPlaces_RejectsMalformedFilters(t *testing.T) {
 		target   string
 		wantCode string
 	}{
-		{"sub_district_id is not a number", "/places?sub_district_id=abc", "invalid_sub_district_id"},
-		{"sub_district_id is fractional", "/places?sub_district_id=1.5", "invalid_sub_district_id"},
-		{"sub_district_id is zero", "/places?sub_district_id=0", "invalid_sub_district_id"},
-		{"sub_district_id is negative", "/places?sub_district_id=-3", "invalid_sub_district_id"},
-		{"sub_district_id overflows 64 bits", "/places?sub_district_id=99999999999999999999", "invalid_sub_district_id"},
-		{"category_id has a non-number", "/places?category_id=1,x", "invalid_category_id"},
-		{"category_id has an empty element", "/places?category_id=1,,2", "invalid_category_id"},
-		{"category_id ends with a comma", "/places?category_id=1,", "invalid_category_id"},
-		{"category_id is zero", "/places?category_id=0", "invalid_category_id"},
-		{"category_id is negative", "/places?category_id=-1", "invalid_category_id"},
-		{"category_id has a zero element", "/places?category_id=1,0", "invalid_category_id"},
+		{name: "sub_district_id is not a number", target: "/places?sub_district_id=abc", wantCode: "invalid_sub_district_id"},
+		{name: "sub_district_id is fractional", target: "/places?sub_district_id=1.5", wantCode: "invalid_sub_district_id"},
+		{name: "sub_district_id is zero", target: "/places?sub_district_id=0", wantCode: "invalid_sub_district_id"},
+		{name: "sub_district_id is negative", target: "/places?sub_district_id=-3", wantCode: "invalid_sub_district_id"},
+		{name: "sub_district_id overflows 64 bits", target: "/places?sub_district_id=99999999999999999999", wantCode: "invalid_sub_district_id"},
+		{name: "category_id has a non-number", target: "/places?category_id=1,x", wantCode: "invalid_category_id"},
+		{name: "category_id has an empty element", target: "/places?category_id=1,,2", wantCode: "invalid_category_id"},
+		{name: "category_id ends with a comma", target: "/places?category_id=1,", wantCode: "invalid_category_id"},
+		{name: "category_id is zero", target: "/places?category_id=0", wantCode: "invalid_category_id"},
+		{name: "category_id is negative", target: "/places?category_id=-1", wantCode: "invalid_category_id"},
+		{name: "category_id has a zero element", target: "/places?category_id=1,0", wantCode: "invalid_category_id"},
 	}
 
 	for _, tc := range tests {
@@ -152,12 +152,12 @@ func TestHandler_GetPlaces_PassesFilterToService(t *testing.T) {
 		target string
 		want   place.PlaceFilter
 	}{
-		{"no filters", "/places", place.PlaceFilter{}},
-		{"query is trimmed", "/places?q=%20%20kopi%20%20", place.PlaceFilter{Query: "kopi"}},
-		{"whitespace-only query means no search", "/places?q=%20%20%20", place.PlaceFilter{}},
-		{"empty parameters are absent", "/places?sub_district_id=&category_id=", place.PlaceFilter{}},
-		{"all filters together", "/places?sub_district_id=7&category_id=1,2&q=kopi",
-			place.PlaceFilter{SubDistrictID: 7, CategoryIDs: []int64{1, 2}, Query: "kopi"}},
+		{name: "no filters", target: "/places", want: place.PlaceFilter{}},
+		{name: "query is trimmed", target: "/places?q=%20%20kopi%20%20", want: place.PlaceFilter{Query: "kopi"}},
+		{name: "whitespace-only query means no search", target: "/places?q=%20%20%20", want: place.PlaceFilter{}},
+		{name: "empty parameters are absent", target: "/places?sub_district_id=&category_id=", want: place.PlaceFilter{}},
+		{name: "all filters together", target: "/places?sub_district_id=7&category_id=1,2&q=kopi",
+			want: place.PlaceFilter{SubDistrictID: 7, CategoryIDs: []int64{1, 2}, Query: "kopi"}},
 	}
 
 	for _, tc := range tests {
@@ -178,10 +178,10 @@ func TestHandler_GetPlaces_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{"unknown sub-district", place.ErrSubDistrictNotFound, http.StatusNotFound, "sub_district_not_found"},
-		{"unknown category", place.ErrCategoryNotFound, http.StatusNotFound, "category_not_found"},
-		{"wrapped unknown category", fmt.Errorf("filter: %w", place.ErrCategoryNotFound), http.StatusNotFound, "category_not_found"},
-		{"storage failure", errors.New("storage failure"), http.StatusInternalServerError, "internal_error"},
+		{name: "unknown sub-district", err: place.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "sub_district_not_found"},
+		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusNotFound, wantCode: "category_not_found"},
+		{name: "wrapped unknown category", err: fmt.Errorf("filter: %w", place.ErrCategoryNotFound), wantStatus: http.StatusNotFound, wantCode: "category_not_found"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
 	}
 
 	for _, tc := range tests {
@@ -230,11 +230,11 @@ func TestHandler_GetCategories_Success(t *testing.T) {
 		categories []place.Category
 		want       string
 	}{
-		{"no categories", []place.Category{}, `[]`},
+		{name: "no categories", categories: []place.Category{}, want: `[]`},
 		{
-			"a category without fields lists an empty fields array",
-			[]place.Category{{ID: 1, Name: "Warung", Slug: "warung"}},
-			`[{"id":1,"name":"Warung","slug":"warung","fields":[]}]`,
+			name:       "a category without fields lists an empty fields array",
+			categories: []place.Category{{ID: 1, Name: "Warung", Slug: "warung"}},
+			want:       `[{"id":1,"name":"Warung","slug":"warung","fields":[]}]`,
 		},
 	}
 
@@ -258,10 +258,10 @@ func TestHandler_CreateCategory_RejectsMalformedBodies(t *testing.T) {
 		name string
 		body string
 	}{
-		{"empty body", ``},
-		{"truncated JSON", `{"name":"Kopi","slug":"kopi"`},
-		{"name is a number", `{"name":5,"slug":"kopi"}`},
-		{"body is an array", `[]`},
+		{name: "empty body", body: ``},
+		{name: "truncated JSON", body: `{"name":"Kopi","slug":"kopi"`},
+		{name: "name is a number", body: `{"name":5,"slug":"kopi"}`},
+		{name: "body is an array", body: `[]`},
 	}
 
 	for _, tc := range tests {
@@ -280,11 +280,11 @@ func TestHandler_CreateCategory_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{"invalid name", place.ErrInvalidCategoryName, http.StatusBadRequest, "validation_error"},
-		{"invalid slug", place.ErrInvalidSlug, http.StatusBadRequest, "validation_error"},
-		{"duplicate name or slug", place.ErrCategoryExists, http.StatusConflict, "category_exists"},
-		{"wrapped duplicate", fmt.Errorf("create: %w", place.ErrCategoryExists), http.StatusConflict, "category_exists"},
-		{"storage failure", errors.New("storage failure"), http.StatusInternalServerError, "internal_error"},
+		{name: "invalid name", err: place.ErrInvalidCategoryName, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "invalid slug", err: place.ErrInvalidSlug, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "duplicate name or slug", err: place.ErrCategoryExists, wantStatus: http.StatusConflict, wantCode: "category_exists"},
+		{name: "wrapped duplicate", err: fmt.Errorf("create: %w", place.ErrCategoryExists), wantStatus: http.StatusConflict, wantCode: "category_exists"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
 	}
 
 	for _, tc := range tests {
@@ -336,9 +336,9 @@ func TestHandler_CreateCategoryField_RejectsMalformedRequests(t *testing.T) {
 		body     string
 		wantCode string
 	}{
-		{"category id is not a number", "/categories/abc/fields", validBody, "invalid_category_id"},
-		{"truncated JSON", "/categories/1/fields", `{"key":"halal"`, "invalid_body"},
-		{"options is not a list", "/categories/1/fields", `{"key":"halal","label":"Halal","data_type":"select","options":"cash"}`, "invalid_body"},
+		{name: "category id is not a number", target: "/categories/abc/fields", body: validBody, wantCode: "invalid_category_id"},
+		{name: "truncated JSON", target: "/categories/1/fields", body: `{"key":"halal"`, wantCode: "invalid_body"},
+		{name: "options is not a list", target: "/categories/1/fields", body: `{"key":"halal","label":"Halal","data_type":"select","options":"cash"}`, wantCode: "invalid_body"},
 	}
 
 	for _, tc := range tests {
@@ -357,15 +357,15 @@ func TestHandler_CreateCategoryField_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{"invalid key", place.ErrInvalidFieldKey, http.StatusBadRequest, "validation_error"},
-		{"invalid label", place.ErrInvalidFieldLabel, http.StatusBadRequest, "validation_error"},
-		{"invalid sort order", place.ErrInvalidFieldSortOrder, http.StatusBadRequest, "validation_error"},
-		{"invalid data type", place.ErrInvalidFieldDataType, http.StatusBadRequest, "validation_error"},
-		{"select without options", place.ErrFieldOptionsRequired, http.StatusBadRequest, "validation_error"},
-		{"options on a non-select", place.ErrFieldOptionsNotAllowed, http.StatusBadRequest, "validation_error"},
-		{"unknown category", place.ErrCategoryNotFound, http.StatusNotFound, "category_not_found"},
-		{"duplicate key", place.ErrCategoryFieldExists, http.StatusConflict, "category_field_exists"},
-		{"storage failure", errors.New("storage failure"), http.StatusInternalServerError, "internal_error"},
+		{name: "invalid key", err: place.ErrInvalidFieldKey, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "invalid label", err: place.ErrInvalidFieldLabel, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "invalid sort order", err: place.ErrInvalidFieldSortOrder, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "invalid data type", err: place.ErrInvalidFieldDataType, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "select without options", err: place.ErrFieldOptionsRequired, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "options on a non-select", err: place.ErrFieldOptionsNotAllowed, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusNotFound, wantCode: "category_not_found"},
+		{name: "duplicate key", err: place.ErrCategoryFieldExists, wantStatus: http.StatusConflict, wantCode: "category_field_exists"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
 	}
 
 	for _, tc := range tests {
@@ -423,13 +423,13 @@ func TestHandler_CreatePlace_RejectsMalformedBodies(t *testing.T) {
 		name string
 		body string
 	}{
-		{"empty body", ``},
-		{"truncated JSON", `{"name":"Kopi"`},
-		{"sub_district_id is a string", `{"name":"Kopi","sub_district_id":"one","category_id":2}`},
-		{"location is a line", prefix + `{"type":"LineString","coordinates":[[106.8,-6.2],[106.9,-6.3]]}}`},
-		{"coordinates are swapped", prefix + `{"type":"Point","coordinates":[-6.2,106.8]}}`},
-		{"latitude above 90", prefix + `{"type":"Point","coordinates":[106.8,91]}}`},
-		{"longitude above 180", prefix + `{"type":"Point","coordinates":[181,-6.2]}}`},
+		{name: "empty body", body: ``},
+		{name: "truncated JSON", body: `{"name":"Kopi"`},
+		{name: "sub_district_id is a string", body: `{"name":"Kopi","sub_district_id":"one","category_id":2}`},
+		{name: "location is a line", body: prefix + `{"type":"LineString","coordinates":[[106.8,-6.2],[106.9,-6.3]]}}`},
+		{name: "coordinates are swapped", body: prefix + `{"type":"Point","coordinates":[-6.2,106.8]}}`},
+		{name: "latitude above 90", body: prefix + `{"type":"Point","coordinates":[106.8,91]}}`},
+		{name: "longitude above 180", body: prefix + `{"type":"Point","coordinates":[181,-6.2]}}`},
 	}
 
 	for _, tc := range tests {
@@ -448,12 +448,12 @@ func TestHandler_CreatePlace_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{"blank name", place.ErrInvalidName, http.StatusBadRequest, "validation_error"},
-		{"unknown sub-district", place.ErrSubDistrictNotFound, http.StatusBadRequest, "validation_error"},
-		{"unknown category", place.ErrCategoryNotFound, http.StatusBadRequest, "validation_error"},
-		{"invalid attributes", place.ErrInvalidAttributes, http.StatusBadRequest, "validation_error"},
-		{"wrapped invalid attributes", fmt.Errorf("%w: %q is required", place.ErrInvalidAttributes, "contact"), http.StatusBadRequest, "validation_error"},
-		{"storage failure", errors.New("storage failure"), http.StatusInternalServerError, "internal_error"},
+		{name: "blank name", err: place.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "unknown sub-district", err: place.ErrSubDistrictNotFound, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "invalid attributes", err: place.ErrInvalidAttributes, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "wrapped invalid attributes", err: fmt.Errorf("%w: %q is required", place.ErrInvalidAttributes, "contact"), wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
 	}
 
 	for _, tc := range tests {
@@ -534,14 +534,20 @@ func TestHandler_ContextReachesService(t *testing.T) {
 		name   string
 		newCtx func() (context.Context, context.CancelFunc)
 	}{
-		{"client disconnected", func() (context.Context, context.CancelFunc) {
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-			return ctx, cancel
-		}},
-		{"deadline passes while storage is slow", func() (context.Context, context.CancelFunc) {
-			return context.WithTimeout(context.Background(), 20*time.Millisecond)
-		}},
+		{
+			name: "client disconnected",
+			newCtx: func() (context.Context, context.CancelFunc) {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx, cancel
+			},
+		},
+		{
+			name: "deadline passes while storage is slow",
+			newCtx: func() (context.Context, context.CancelFunc) {
+				return context.WithTimeout(context.Background(), 20*time.Millisecond)
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -580,21 +586,51 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 		body   string
 		fail   func(svc *mock.MockService)
 	}{
-		{"list places", http.MethodGet, "/places", "", func(s *mock.MockService) {
-			s.EXPECT().GetMany(gomock.Any(), gomock.Any()).Return(nil, dbErr)
-		}},
-		{"list categories", http.MethodGet, "/categories", "", func(s *mock.MockService) {
-			s.EXPECT().GetCategories(gomock.Any()).Return(nil, dbErr)
-		}},
-		{"create category", http.MethodPost, "/categories", `{"name":"Kopi","slug":"kopi"}`, func(s *mock.MockService) {
-			s.EXPECT().CreateCategory(gomock.Any(), gomock.Any()).Return(nil, dbErr)
-		}},
-		{"create field", http.MethodPost, "/categories/1/fields", `{"key":"halal","label":"Halal","data_type":"boolean"}`, func(s *mock.MockService) {
-			s.EXPECT().CreateCategoryField(gomock.Any(), gomock.Any()).Return(nil, dbErr)
-		}},
-		{"create place", http.MethodPost, "/places", `{"name":"Kopi","sub_district_id":1,"category_id":2}`, func(s *mock.MockService) {
-			s.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, dbErr)
-		}},
+		{
+			name:   "list places",
+			method: http.MethodGet,
+			target: "/places",
+			body:   "",
+			fail: func(s *mock.MockService) {
+				s.EXPECT().GetMany(gomock.Any(), gomock.Any()).Return(nil, dbErr)
+			},
+		},
+		{
+			name:   "list categories",
+			method: http.MethodGet,
+			target: "/categories",
+			body:   "",
+			fail: func(s *mock.MockService) {
+				s.EXPECT().GetCategories(gomock.Any()).Return(nil, dbErr)
+			},
+		},
+		{
+			name:   "create category",
+			method: http.MethodPost,
+			target: "/categories",
+			body:   `{"name":"Kopi","slug":"kopi"}`,
+			fail: func(s *mock.MockService) {
+				s.EXPECT().CreateCategory(gomock.Any(), gomock.Any()).Return(nil, dbErr)
+			},
+		},
+		{
+			name:   "create field",
+			method: http.MethodPost,
+			target: "/categories/1/fields",
+			body:   `{"key":"halal","label":"Halal","data_type":"boolean"}`,
+			fail: func(s *mock.MockService) {
+				s.EXPECT().CreateCategoryField(gomock.Any(), gomock.Any()).Return(nil, dbErr)
+			},
+		},
+		{
+			name:   "create place",
+			method: http.MethodPost,
+			target: "/places",
+			body:   `{"name":"Kopi","sub_district_id":1,"category_id":2}`,
+			fail: func(s *mock.MockService) {
+				s.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, dbErr)
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -622,23 +658,23 @@ func TestHandler_PatchPlace_RejectsInvalidRequests(t *testing.T) {
 		body     string
 		wantCode string
 	}{
-		{"place id is not a number", "/places/abc", `{"name":"Kopi"}`, "invalid_place_id"},
-		{"place id is fractional", "/places/1.5", `{"name":"Kopi"}`, "invalid_place_id"},
-		{"place id is zero", "/places/0", `{"name":"Kopi"}`, "invalid_place_id"},
-		{"place id is negative", "/places/-1", `{"name":"Kopi"}`, "invalid_place_id"},
-		{"empty body", "/places/1", ``, "invalid_body"},
-		{"truncated JSON", "/places/1", `{"name":"Kopi"`, "invalid_body"},
-		{"body is an array", "/places/1", `[]`, "invalid_body"},
-		{"body is null", "/places/1", `null`, "invalid_body"},
-		{"name is a number", "/places/1", `{"name":5}`, "invalid_body"},
-		{"name is null", "/places/1", `{"name":null}`, "invalid_body"},
-		{"sub_district_id is null", "/places/1", `{"sub_district_id":null}`, "invalid_body"},
-		{"category_id is null", "/places/1", `{"category_id":null}`, "invalid_body"},
-		{"sub_district_id is a string", "/places/1", `{"sub_district_id":"one"}`, "invalid_body"},
-		{"location is a line", "/places/1",
-			`{"location":{"type":"LineString","coordinates":[[106.8,-6.2],[106.9,-6.3]]}}`, "invalid_body"},
-		{"location coordinates are swapped", "/places/1",
-			`{"location":{"type":"Point","coordinates":[-6.2,106.8]}}`, "invalid_body"},
+		{name: "place id is not a number", target: "/places/abc", body: `{"name":"Kopi"}`, wantCode: "invalid_place_id"},
+		{name: "place id is fractional", target: "/places/1.5", body: `{"name":"Kopi"}`, wantCode: "invalid_place_id"},
+		{name: "place id is zero", target: "/places/0", body: `{"name":"Kopi"}`, wantCode: "invalid_place_id"},
+		{name: "place id is negative", target: "/places/-1", body: `{"name":"Kopi"}`, wantCode: "invalid_place_id"},
+		{name: "empty body", target: "/places/1", body: ``, wantCode: "invalid_body"},
+		{name: "truncated JSON", target: "/places/1", body: `{"name":"Kopi"`, wantCode: "invalid_body"},
+		{name: "body is an array", target: "/places/1", body: `[]`, wantCode: "invalid_body"},
+		{name: "body is null", target: "/places/1", body: `null`, wantCode: "invalid_body"},
+		{name: "name is a number", target: "/places/1", body: `{"name":5}`, wantCode: "invalid_body"},
+		{name: "name is null", target: "/places/1", body: `{"name":null}`, wantCode: "invalid_body"},
+		{name: "sub_district_id is null", target: "/places/1", body: `{"sub_district_id":null}`, wantCode: "invalid_body"},
+		{name: "category_id is null", target: "/places/1", body: `{"category_id":null}`, wantCode: "invalid_body"},
+		{name: "sub_district_id is a string", target: "/places/1", body: `{"sub_district_id":"one"}`, wantCode: "invalid_body"},
+		{name: "location is a line", target: "/places/1",
+			body: `{"location":{"type":"LineString","coordinates":[[106.8,-6.2],[106.9,-6.3]]}}`, wantCode: "invalid_body"},
+		{name: "location coordinates are swapped", target: "/places/1",
+			body: `{"location":{"type":"Point","coordinates":[-6.2,106.8]}}`, wantCode: "invalid_body"},
 	}
 
 	for _, tc := range tests {
@@ -659,26 +695,26 @@ func TestHandler_PatchPlace_PassesPatchToService(t *testing.T) {
 		wantID int64
 		want   place.PlacePatch
 	}{
-		{"empty body changes nothing", "/places/9", `{}`, 9, place.PlacePatch{}},
-		{"name is passed as sent", "/places/9", `{"name":"  Kopi Senja  "}`, 9,
-			place.PlacePatch{Name: present("  Kopi Senja  ")}},
-		{"null clears an optional field", "/places/9", `{"address":null}`, 9,
-			place.PlacePatch{Address: null[string]()}},
-		{"text is replaced", "/places/9", `{"operating_hours":"08:00-17:00"}`, 9,
-			place.PlacePatch{OperatingHours: present("08:00-17:00")}},
-		{"location is replaced", "/places/9", `{"location":{"type":"Point","coordinates":[106.8,-6.2]}}`, 9,
-			place.PlacePatch{Location: present(*postgis.MustPoint(106.8, -6.2))}},
-		{"null clears location", "/places/9", `{"location":null}`, 9,
-			place.PlacePatch{Location: null[postgis.Point]()}},
-		{"sub-district and category are replaced", "/places/9", `{"sub_district_id":2,"category_id":3}`, 9,
-			place.PlacePatch{SubDistrictID: present(int64(2)), CategoryID: present(int64(3))}},
-		{"attributes are passed as sent", "/places/9", `{"attributes":{"contact":"0812"}}`, 9,
-			place.PlacePatch{Attributes: present(json.RawMessage(`{"contact":"0812"}`))}},
-		{"null clears attributes", "/places/9", `{"attributes":null}`, 9,
-			place.PlacePatch{Attributes: null[json.RawMessage]()}},
-		{"client id and unknown keys are ignored", "/places/9",
-			`{"id":99,"created_at":"yesterday","name":"Kopi"}`, 9,
-			place.PlacePatch{Name: present("Kopi")}},
+		{name: "empty body changes nothing", target: "/places/9", body: `{}`, wantID: 9, want: place.PlacePatch{}},
+		{name: "name is passed as sent", target: "/places/9", body: `{"name":"  Kopi Senja  "}`, wantID: 9,
+			want: place.PlacePatch{Name: present("  Kopi Senja  ")}},
+		{name: "null clears an optional field", target: "/places/9", body: `{"address":null}`, wantID: 9,
+			want: place.PlacePatch{Address: null[string]()}},
+		{name: "text is replaced", target: "/places/9", body: `{"operating_hours":"08:00-17:00"}`, wantID: 9,
+			want: place.PlacePatch{OperatingHours: present("08:00-17:00")}},
+		{name: "location is replaced", target: "/places/9", body: `{"location":{"type":"Point","coordinates":[106.8,-6.2]}}`, wantID: 9,
+			want: place.PlacePatch{Location: present(*postgis.MustPoint(106.8, -6.2))}},
+		{name: "null clears location", target: "/places/9", body: `{"location":null}`, wantID: 9,
+			want: place.PlacePatch{Location: null[postgis.Point]()}},
+		{name: "sub-district and category are replaced", target: "/places/9", body: `{"sub_district_id":2,"category_id":3}`, wantID: 9,
+			want: place.PlacePatch{SubDistrictID: present(int64(2)), CategoryID: present(int64(3))}},
+		{name: "attributes are passed as sent", target: "/places/9", body: `{"attributes":{"contact":"0812"}}`, wantID: 9,
+			want: place.PlacePatch{Attributes: present(json.RawMessage(`{"contact":"0812"}`))}},
+		{name: "null clears attributes", target: "/places/9", body: `{"attributes":null}`, wantID: 9,
+			want: place.PlacePatch{Attributes: null[json.RawMessage]()}},
+		{name: "client id and unknown keys are ignored", target: "/places/9",
+			body: `{"id":99,"created_at":"yesterday","name":"Kopi"}`, wantID: 9,
+			want: place.PlacePatch{Name: present("Kopi")}},
 	}
 
 	for _, tc := range tests {
@@ -701,16 +737,16 @@ func TestHandler_PatchPlace_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{"unknown place", place.ErrPlaceNotFound, http.StatusNotFound, "place_not_found"},
-		{"wrapped unknown place", fmt.Errorf("update: %w", place.ErrPlaceNotFound), http.StatusNotFound, "place_not_found"},
-		{"blank name", place.ErrInvalidName, http.StatusBadRequest, "validation_error"},
-		{"name too long", place.ErrPlaceNameTooLong, http.StatusBadRequest, "validation_error"},
-		{"unknown sub-district", place.ErrSubDistrictNotFound, http.StatusBadRequest, "validation_error"},
-		{"unknown category", place.ErrCategoryNotFound, http.StatusBadRequest, "validation_error"},
-		{"invalid attributes", place.ErrInvalidAttributes, http.StatusBadRequest, "validation_error"},
-		{"wrapped invalid attributes", fmt.Errorf("%w: %q is required", place.ErrInvalidAttributes, "contact"), http.StatusBadRequest, "validation_error"},
-		{"location outside Indonesia", place.ErrInvalidLocation, http.StatusBadRequest, "validation_error"},
-		{"storage failure", errors.New("storage failure"), http.StatusInternalServerError, "internal_error"},
+		{name: "unknown place", err: place.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "place_not_found"},
+		{name: "wrapped unknown place", err: fmt.Errorf("update: %w", place.ErrPlaceNotFound), wantStatus: http.StatusNotFound, wantCode: "place_not_found"},
+		{name: "blank name", err: place.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "name too long", err: place.ErrPlaceNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "unknown sub-district", err: place.ErrSubDistrictNotFound, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "invalid attributes", err: place.ErrInvalidAttributes, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "wrapped invalid attributes", err: fmt.Errorf("%w: %q is required", place.ErrInvalidAttributes, "contact"), wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "location outside Indonesia", err: place.ErrInvalidLocation, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
 	}
 
 	for _, tc := range tests {
@@ -766,10 +802,10 @@ func TestHandler_DeletePlace_RejectsInvalidID(t *testing.T) {
 		name   string
 		target string
 	}{
-		{"place id is not a number", "/places/abc"},
-		{"place id is fractional", "/places/1.5"},
-		{"place id is zero", "/places/0"},
-		{"place id is negative", "/places/-1"},
+		{name: "place id is not a number", target: "/places/abc"},
+		{name: "place id is fractional", target: "/places/1.5"},
+		{name: "place id is zero", target: "/places/0"},
+		{name: "place id is negative", target: "/places/-1"},
 	}
 
 	for _, tc := range tests {
@@ -789,9 +825,9 @@ func TestHandler_DeletePlace_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{"unknown place", place.ErrPlaceNotFound, http.StatusNotFound, "place_not_found"},
-		{"wrapped unknown place", fmt.Errorf("delete: %w", place.ErrPlaceNotFound), http.StatusNotFound, "place_not_found"},
-		{"storage failure", errors.New("storage failure"), http.StatusInternalServerError, "internal_error"},
+		{name: "unknown place", err: place.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "place_not_found"},
+		{name: "wrapped unknown place", err: fmt.Errorf("delete: %w", place.ErrPlaceNotFound), wantStatus: http.StatusNotFound, wantCode: "place_not_found"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
 	}
 
 	for _, tc := range tests {
