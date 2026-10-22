@@ -59,7 +59,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrEmailTaken):
 			httpx.RespondError(w, http.StatusConflict, "email_taken", err.Error())
 		default:
-			httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			httpx.RespondInternalError(w)
 		}
 		return
 	}
@@ -80,7 +80,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 			httpx.RespondError(w, http.StatusUnauthorized, "invalid_credentials", err.Error())
 			return
 		}
-		httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		httpx.RespondInternalError(w)
 		return
 	}
 
@@ -102,7 +102,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 			httpx.RespondError(w, http.StatusUnauthorized, "invalid_refresh_token", err.Error())
 			return
 		}
-		httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		httpx.RespondInternalError(w)
 		return
 	}
 
@@ -116,7 +116,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 
 	if cookie, err := r.Cookie(refreshCookieName); err == nil {
 		if err := h.service.Logout(r.Context(), cookie.Value); err != nil {
-			httpx.RespondError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			httpx.RespondInternalError(w)
 			return
 		}
 	}
