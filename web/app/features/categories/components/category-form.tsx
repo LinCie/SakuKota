@@ -1,7 +1,7 @@
-import { TextField } from "~/shared/components/form-fields";
+import { TextField } from "~/shared/components/field";
 import { FormSection } from "~/shared/components/form-section";
 import type { AppFormApi } from "~/shared/form-api";
-import { useSlugFollow } from "~/shared/hooks/use-slug-follow";
+import { useSlugFollow } from "~/shared/hooks";
 
 import type { CategoryValues } from "../schemas";
 

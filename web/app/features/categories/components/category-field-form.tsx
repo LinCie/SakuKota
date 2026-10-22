@@ -4,11 +4,11 @@ import {
   SelectField,
   TextAreaField,
   TextField,
-} from "~/shared/components/form-fields";
+} from "~/shared/components/field";
 import { CheckboxField } from "~/shared/components/checkbox-field";
 import { FormSection } from "~/shared/components/form-section";
 import type { AppFormApi } from "~/shared/form-api";
-import { useSlugFollow } from "~/shared/hooks/use-slug-follow";
+import { useSlugFollow } from "~/shared/hooks";
 
 import { FIELD_TYPES } from "../field-types";
 import type { CategoryFieldValues } from "../schemas";

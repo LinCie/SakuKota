@@ -8,10 +8,8 @@ import {
   MapEmptyState,
   type EmptyState,
 } from "~/features/places/components/map-empty-state";
-import {
-  PlaceDetails,
-  PlaceList,
-} from "~/features/places/components/place-board";
+import { PlaceDetails } from "~/features/places/components/place-details";
+import { PlaceList } from "~/features/places/components/place-list";
 import { SurvivalMap } from "~/features/places/components/survival-map";
 import { getSubDistricts } from "~/features/subdistricts/api";
 import { KecamatanBoard } from "~/features/subdistricts/components/kecamatan-board";

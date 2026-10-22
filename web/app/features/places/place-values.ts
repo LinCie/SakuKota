@@ -1,9 +1,13 @@
 import type { SubDistrict } from "~/features/subdistricts/types";
-import { orNull } from "~/shared/components/form-fields";
+import { orNull } from "~/shared/text";
 
 import type { CreatePlaceRequest } from "./api";
 import { isRange } from "./attribute-format";
-import { buildAttributes, parseNumber, type AttributeValues } from "./schemas";
+import {
+  buildAttributes,
+  parseNumber,
+  type AttributeValues,
+} from "./attribute-values";
 import type { CategoryField, Place } from "./types";
 
 /** The place form's values, as typed. */

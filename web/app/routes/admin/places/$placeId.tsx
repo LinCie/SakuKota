@@ -5,7 +5,7 @@ import { getPlace } from "~/features/places/api";
 import { PlaceDetailPage } from "~/features/places/components/place-detail-page";
 import { loadPlaceData } from "~/features/places/load-place-data";
 import { LoadingState } from "~/shared/components/loading-state";
-import { unwrap } from "~/shared/unwrap";
+import { unwrap } from "~/shared/api";
 
 export const Route = createFileRoute("/admin/places/$placeId")({
   loader: async ({ params }) => {

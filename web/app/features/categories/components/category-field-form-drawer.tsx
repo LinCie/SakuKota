@@ -2,17 +2,17 @@ import { useForm, useStore } from "@tanstack/react-form";
 import { useRouter } from "@tanstack/react-router";
 
 import { createCategoryField } from "~/features/places/api";
-import { FormAlert } from "~/shared/components/form-fields";
+import { FormAlert } from "~/shared/components/form-alert";
 import { FormDrawer } from "~/shared/components/form-drawer";
-import { useAction } from "~/shared/hooks/use-action";
+import { useAction } from "~/shared/hooks";
 import { toastManager } from "~/shared/toast-manager";
 import { writeErrorMessage } from "~/shared/write-error";
 
 import {
-  categoryFieldSchema,
   emptyCategoryFieldValues,
   toCategoryFieldRequest,
-} from "../schemas";
+} from "../category-field-values";
+import { categoryFieldSchema } from "../schemas";
 import { CategoryFieldForm } from "./category-field-form";
 
 type CategoryFieldFormDrawerProps = {

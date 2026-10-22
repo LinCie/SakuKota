@@ -1,11 +1,5 @@
 import { z } from "zod";
 
-/** Digits only; dots and spaces are accepted as thousands separators. */
-export function parseRupiah(text: string): number | null {
-  const digits = text.replace(/[.\s]/g, "");
-  return digits === "" ? null : Number(digits);
-}
-
 export const subDistrictSchema = z.object({
   name: z.string().trim().min(1, "Nama kecamatan wajib diisi."),
   slug: z

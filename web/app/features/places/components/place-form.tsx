@@ -8,12 +8,13 @@ import {
   SelectField,
   TextAreaField,
   TextField,
-} from "~/shared/components/form-fields";
+} from "~/shared/components/field";
 import { FormSection } from "~/shared/components/form-section";
-import { useCurrentPosition } from "~/shared/hooks/use-current-position";
+import { useCurrentPosition } from "~/shared/hooks";
 import type { AppFormApi } from "~/shared/form-api";
 
-import { attributeErrors, parseNumber, validCoordinate } from "../schemas";
+import { attributeErrors, parseNumber } from "../attribute-values";
+import { validCoordinate } from "../schemas";
 import type { PlaceValues } from "../place-values";
 import type { CategoryDetail, Place } from "../types";
 import { CategoryFieldInput } from "./category-field-input";

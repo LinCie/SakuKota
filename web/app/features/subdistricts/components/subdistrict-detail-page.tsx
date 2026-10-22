@@ -8,8 +8,7 @@ import { orMissing } from "~/shared/components/missing-slot";
 import { PageHeader } from "~/shared/components/page-header";
 import { SectionCard } from "~/shared/components/section-card";
 import { formatRupiah } from "~/shared/format";
-import { useDeletion } from "~/shared/hooks/use-deletion";
-import { useDisclosure } from "~/shared/hooks/use-disclosure";
+import { useDeletion, useDisclosure } from "~/shared/hooks";
 import { toastManager } from "~/shared/toast-manager";
 import { writeErrorMessage } from "~/shared/write-error";
 

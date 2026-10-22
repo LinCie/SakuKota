@@ -4,7 +4,7 @@ import { AdminRouteError } from "~/features/admin/components/admin-route-error";
 import { getCategory } from "~/features/places/api";
 import { CategoryDetailPage } from "~/features/categories/components/category-detail-page";
 import { LoadingState } from "~/shared/components/loading-state";
-import { unwrap } from "~/shared/unwrap";
+import { unwrap } from "~/shared/api";
 
 export const Route = createFileRoute("/admin/categories/$categoryId")({
   loader: async ({ params }) => ({

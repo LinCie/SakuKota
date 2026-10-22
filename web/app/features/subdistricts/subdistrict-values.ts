@@ -1,7 +1,6 @@
-import { orNull } from "~/shared/components/form-fields";
+import { orNull } from "~/shared/text";
 
 import type { CreateSubDistrictRequest } from "./api";
-import { parseRupiah } from "./schemas";
 import type { SubDistrict } from "./types";
 
 /** The kecamatan form's values, as typed. */
@@ -37,6 +36,12 @@ export function subDistrictToValues(
         : String(subDistrict.estimated_daily_spending),
     mapImageUrl: subDistrict.static_map_image_url ?? "",
   };
+}
+
+/** Digits only; dots and spaces are accepted as thousands separators. */
+function parseRupiah(text: string): number | null {
+  const digits = text.replace(/[.\s]/g, "");
+  return digits === "" ? null : Number(digits);
 }
 
 /** The request body for creating or replacing a kecamatan. */

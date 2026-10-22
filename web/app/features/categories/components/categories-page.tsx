@@ -9,9 +9,7 @@ import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { PageHeader } from "~/shared/components/page-header";
 import { SearchField } from "~/shared/components/search-field";
 import { formatNumber } from "~/shared/format";
-import { useDeletion } from "~/shared/hooks/use-deletion";
-import { useDisclosure } from "~/shared/hooks/use-disclosure";
-import { useTableQuery } from "~/shared/hooks/use-table-query";
+import { useDeletion, useDisclosure, useTableQuery } from "~/shared/hooks";
 import { toastManager } from "~/shared/toast-manager";
 import { writeErrorMessage } from "~/shared/write-error";
 

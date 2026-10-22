@@ -5,11 +5,9 @@ import { useState } from "react";
 import { login, register } from "~/features/auth/api";
 import { signUpSchema } from "~/features/auth/schemas";
 import { saveSession } from "~/features/auth/session";
-import {
-  FormAlert,
-  SubmitPlate,
-  TextField,
-} from "~/shared/components/form-fields";
+import { FormAlert } from "~/shared/components/form-alert";
+import { SubmitPlate } from "~/shared/components/submit-plate";
+import { TextField } from "~/shared/components/field";
 
 export const Route = createFileRoute("/_auth/daftar")({
   head: () => ({ meta: [{ title: "Daftar · Rantau" }] }),

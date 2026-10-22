@@ -1,5 +1,5 @@
 import type { AnyFieldApi } from "@tanstack/react-form";
-import { ChevronDown, CircleAlert } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import type {
   InputHTMLAttributes,
   ReactNode,
@@ -8,7 +8,6 @@ import type {
 } from "react";
 
 import { cn } from "~/shared/cn";
-import { signButtonClass } from "./menu-board";
 
 /** Shared look of a paint-white control; the border turns chili when invalid. */
 export function controlClass(invalid: boolean) {
@@ -16,12 +15,6 @@ export function controlClass(invalid: boolean) {
     "bg-paint text-ink focus-visible:outline-cat w-full rounded-[3px] border-2 px-3 focus-visible:outline-2 focus-visible:outline-offset-2",
     invalid ? "border-chili" : "border-ink",
   );
-}
-
-/** A text value as a nullable string: blank becomes null. */
-export function orNull(text: string) {
-  const trimmed = text.trim();
-  return trimmed === "" ? null : trimmed;
 }
 
 /** A field's label; optional fields say so, so required ones need no mark. */
@@ -290,47 +283,5 @@ export function SelectField({
       />
       <FieldMessage id={messageId} error={error} hint={hint} />
     </div>
-  );
-}
-
-/** A form-level error message. */
-export function FormAlert({ children }: { children: ReactNode }) {
-  return (
-    <div
-      role="alert"
-      className="border-chili text-ink flex items-start gap-2 rounded-[3px] border-2 px-3 py-2.5 text-sm font-semibold"
-    >
-      <CircleAlert
-        aria-hidden="true"
-        className="text-chili mt-0.5 size-4 shrink-0"
-        strokeWidth={2.5}
-      />
-      <p>{children}</p>
-    </div>
-  );
-}
-
-/**
- * The full-width yellow sign plate that submits a form. `form` targets a form
- * elsewhere in the page, such as one in a scrolling body above a sticky footer.
- */
-export function SubmitPlate({
-  pending,
-  form,
-  children,
-}: {
-  pending: boolean;
-  form?: string;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="submit"
-      form={form}
-      disabled={pending}
-      className={cn(signButtonClass, "disabled:bg-sign-soft mt-1 h-11 w-full")}
-    >
-      {pending ? "Memproses…" : children}
-    </button>
   );
 }

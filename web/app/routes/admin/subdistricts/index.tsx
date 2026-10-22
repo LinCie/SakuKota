@@ -4,7 +4,7 @@ import { AdminRouteError } from "~/features/admin/components/admin-route-error";
 import { getSubDistricts } from "~/features/subdistricts/api";
 import { SubDistrictsPage } from "~/features/subdistricts/components/subdistricts-page";
 import { LoadingState } from "~/shared/components/loading-state";
-import { unwrap } from "~/shared/unwrap";
+import { unwrap } from "~/shared/api";
 
 export const Route = createFileRoute("/admin/subdistricts/")({
   loader: async () => ({ subDistricts: unwrap(await getSubDistricts()) }),
