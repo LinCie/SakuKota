@@ -18,7 +18,7 @@
     },
     {
       "name": "Places",
-      "description": "List and create places."
+      "description": "List, create, update, and delete places."
     },
     {
       "name": "Categories",
@@ -26,7 +26,7 @@
     },
     {
       "name": "Sub-districts",
-      "description": "List and create sub-districts."
+      "description": "List, read, create, update, and delete sub-districts."
     }
   ],
   "paths": {
@@ -148,7 +148,7 @@
             }
           },
           "401": {
-            "description": "The refresh token cookie is missing, or the refresh token is invalid or expired. The cookie is cleared.",
+            "description": "The refresh token cookie is missing, or the refresh token is invalid or expired. The cookie is cleared when the token is invalid or expired.",
             "headers": {
               "Set-Cookie": {
                 "description": "Expired refresh_token cookie scoped to /v1/auth.",
@@ -237,13 +237,25 @@
             }
           },
           "400": {
-            "description": "sub_district_id or category_id is not a valid integer.",
+            "description": "sub_district_id or category_id is not a valid positive integer.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
                 "example": {
                   "code": "invalid_category_id",
                   "message": "invalid category_id"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The sub-district or category filter refers to an ID that does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "sub_district_not_found",
+                  "message": "sub-district not found"
                 }
               }
             }
@@ -257,6 +269,15 @@
         "summary": "Create a place",
         "description": "Creates a place. Requires the admin role. The attributes object must match the fields of the chosen category: required fields must be present, and unknown keys are rejected.",
         "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional. Retrying the same request with the same key returns the place from the first request. Reusing the key for a different request returns 409.",
+            "schema": { "type": "string" }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -294,6 +315,133 @@
           "400": { "$ref": "#/components/responses/ValidationError" },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": {
+            "description": "The Idempotency-Key was already used for a different request.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "idempotency_key_reused",
+                  "message": "idempotency key was already used for a different request"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/places/{id}": {
+      "patch": {
+        "tags": ["Places"],
+        "operationId": "updatePlace",
+        "summary": "Update a place",
+        "description": "Partially updates a place. Requires the admin role. Keys left out keep their current value, and nullable fields accept null to clear them. If category_id or attributes change, the attributes are validated against the category's fields.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Place ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdatePlaceRequest" },
+              "example": {
+                "name": "Warung Bu Sri Pusat",
+                "operating_hours": "08:00-22:00"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Place updated successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PlaceResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The place ID is invalid, the body is malformed, a required field is set to null, or a value failed validation.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "validation_error",
+                  "message": "name is required"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The place does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "place_not_found",
+                  "message": "place not found"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      },
+      "delete": {
+        "tags": ["Places"],
+        "operationId": "deletePlace",
+        "summary": "Delete a place",
+        "description": "Deletes a place. Requires the admin role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Place ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Place deleted successfully. No response body."
+          },
+          "400": {
+            "description": "The place ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "invalid_place_id",
+                  "message": "invalid place_id"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The place does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "place_not_found",
+                  "message": "place not found"
+                }
+              }
+            }
+          },
           "500": { "$ref": "#/components/responses/InternalServerError" }
         }
       }
@@ -524,6 +672,193 @@
           "500": { "$ref": "#/components/responses/InternalServerError" }
         }
       }
+    },
+    "/v1/subdistricts/{id}": {
+      "get": {
+        "tags": ["Sub-districts"],
+        "operationId": "getSubDistrict",
+        "summary": "Get a sub-district",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Sub-district ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sub-district retrieved successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SubDistrictResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The sub-district ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "invalid_sub_district_id",
+                  "message": "invalid sub_district_id"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The sub-district does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "sub_district_not_found",
+                  "message": "sub-district not found"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      },
+      "patch": {
+        "tags": ["Sub-districts"],
+        "operationId": "updateSubDistrict",
+        "summary": "Update a sub-district",
+        "description": "Partially updates a sub-district. Requires the admin role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Sub-district ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateSubDistrictRequest" },
+              "example": {
+                "estimated_daily_spending": 175000
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sub-district updated successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SubDistrictResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The sub-district ID is invalid, the body is malformed, a required field is set to null, or a value failed validation.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "validation_error",
+                  "message": "name must be 1-100 characters"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The sub-district does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "sub_district_not_found",
+                  "message": "sub-district not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A sub-district with this name or slug already exists.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "sub_district_exists",
+                  "message": "sub-district with this name or slug already exists"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      },
+      "delete": {
+        "tags": ["Sub-districts"],
+        "operationId": "deleteSubDistrict",
+        "summary": "Delete a sub-district",
+        "description": "Deletes a sub-district. Requires the admin role. Fails with 409 while places reference it.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Sub-district ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Sub-district deleted successfully. No response body."
+          },
+          "400": {
+            "description": "The sub-district ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "invalid_sub_district_id",
+                  "message": "invalid sub_district_id"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The sub-district does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "sub_district_not_found",
+                  "message": "sub-district not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The sub-district is referenced by places.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "sub_district_in_use",
+                  "message": "sub-district is referenced by places"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
     }
   },
   "components": {
@@ -583,7 +918,7 @@
       },
       "Point": {
         "type": "object",
-        "description": "GeoJSON Point in WGS 84 (SRID 4326). Coordinates are [longitude, latitude].",
+        "description": "GeoJSON Point in WGS 84 (SRID 4326). Coordinates are [longitude, latitude] and must lie within Indonesia: longitude 95 to 141, latitude -11 to 6.",
         "required": ["type", "coordinates"],
         "properties": {
           "type": { "type": "string", "const": "Point" },
@@ -613,8 +948,31 @@
           "estimated_price_range": { "type": ["string", "null"], "maxLength": 100 },
           "short_description": { "type": ["string", "null"] },
           "attributes": {
-            "type": "object",
+            "type": ["object", "null"],
             "description": "Values for the chosen category's custom fields, keyed by field key. Required fields must be present."
+          }
+        }
+      },
+      "UpdatePlaceRequest": {
+        "type": "object",
+        "description": "Partial update. Keys left out keep their current value. sub_district_id, category_id, and name cannot be null; other nullable fields accept null to clear them.",
+        "properties": {
+          "sub_district_id": { "type": "integer", "format": "int64" },
+          "category_id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 150 },
+          "address": { "type": ["string", "null"], "maxLength": 255 },
+          "location": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/Point" },
+              { "type": "null" }
+            ]
+          },
+          "operating_hours": { "type": ["string", "null"], "maxLength": 255 },
+          "estimated_price_range": { "type": ["string", "null"], "maxLength": 100 },
+          "short_description": { "type": ["string", "null"] },
+          "attributes": {
+            "type": ["object", "null"],
+            "description": "Replaces all attributes when set. Must match the fields of the place's category."
           }
         }
       },
@@ -724,8 +1082,8 @@
           },
           "sort_order": {
             "type": "integer",
-            "minimum": 0,
-            "description": "1-based position to insert the field at; later fields shift down. Omitted or 0 adds the field last."
+            "minimum": 1,
+            "description": "1-based position to insert the field at; later fields shift down. Omitted adds the field last."
           }
         }
       },
@@ -761,7 +1119,19 @@
           "slug": { "type": "string", "minLength": 1, "maxLength": 100 },
           "flood_history": { "type": ["string", "null"] },
           "safety_crime_information": { "type": ["string", "null"] },
-          "estimated_daily_spending": { "type": ["number", "null"] },
+          "estimated_daily_spending": { "type": ["number", "null"], "minimum": 0, "maximum": 99999999.99 },
+          "static_map_image_url": { "type": ["string", "null"], "maxLength": 255 }
+        }
+      },
+      "UpdateSubDistrictRequest": {
+        "type": "object",
+        "description": "Partial update. Keys left out keep their current value. name and slug cannot be null; other nullable fields accept null to clear them.",
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "slug": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "flood_history": { "type": ["string", "null"] },
+          "safety_crime_information": { "type": ["string", "null"] },
+          "estimated_daily_spending": { "type": ["number", "null"], "minimum": 0, "maximum": 99999999.99 },
           "static_map_image_url": { "type": ["string", "null"], "maxLength": 255 }
         }
       },
@@ -816,7 +1186,7 @@
         }
       },
       "ValidationError": {
-        "description": "The request body failed validation.",
+        "description": "The request body is malformed or failed validation.",
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/Error" },
