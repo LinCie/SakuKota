@@ -205,3 +205,19 @@ export function apiPost<T, C extends string = string>(
 ): Promise<ApiResult<T, C>> {
   return apiResult<T, C>(api.post(path, options));
 }
+
+/** PATCH `path` and normalize the response into an `ApiResult`. */
+export function apiPatch<T, C extends string = string>(
+  path: string,
+  options?: Options,
+): Promise<ApiResult<T, C>> {
+  return apiResult<T, C>(api.patch(path, options));
+}
+
+/** DELETE `path` and normalize the response into an `ApiResult`. */
+export function apiDelete<T, C extends string = string>(
+  path: string,
+  options?: Options,
+): Promise<ApiResult<T, C>> {
+  return apiResult<T, C>(api.delete(path, options));
+}

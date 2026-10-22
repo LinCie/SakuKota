@@ -1,5 +1,7 @@
 import {
+  apiDelete,
   apiGet,
+  apiPatch,
   apiPost,
   type AdminWriteErrorCode,
   type ApiResult,
@@ -20,6 +22,13 @@ import type {
 export type PlaceErrorCode =
   CommonApiErrorCode | "invalid_sub_district_id" | "invalid_category_id";
 export type CategoryErrorCode = CommonApiErrorCode;
+export type UpdatePlaceErrorCode =
+  | AdminWriteErrorCode
+  | "invalid_place_id"
+  | "validation_error"
+  | "place_not_found";
+export type DeletePlaceErrorCode =
+  AdminWriteErrorCode | "invalid_place_id" | "place_not_found";
 export type CreatePlaceErrorCode = AdminWriteErrorCode | "validation_error";
 export type CreateCategoryErrorCode =
   AdminWriteErrorCode | "validation_error" | "category_exists";
@@ -50,6 +59,19 @@ export type CreatePlaceRequest = {
   short_description?: string | null;
   /** Values of the category's custom fields, keyed by `CategoryField.key`. */
   attributes?: Record<string, unknown>;
+};
+
+export type UpdatePlaceRequest = {
+  sub_district_id?: number;
+  category_id?: number;
+  name?: string;
+  address?: string | null;
+  location?: GeoPoint | null;
+  operating_hours?: string | null;
+  estimated_price_range?: string | null;
+  short_description?: string | null;
+  /** Replaces all attributes when set; must match the category's fields. */
+  attributes?: Record<string, unknown> | null;
 };
 
 export type CreateCategoryRequest = {
@@ -98,6 +120,21 @@ export function createPlace(
   body: CreatePlaceRequest,
 ): Promise<ApiResult<Place, CreatePlaceErrorCode>> {
   return apiPost<Place, CreatePlaceErrorCode>("places", { json: body });
+}
+
+/** Admin only. */
+export function updatePlace(
+  id: number,
+  body: UpdatePlaceRequest,
+): Promise<ApiResult<Place, UpdatePlaceErrorCode>> {
+  return apiPatch<Place, UpdatePlaceErrorCode>(`places/${id}`, { json: body });
+}
+
+/** Admin only. */
+export function deletePlace(
+  id: number,
+): Promise<ApiResult<void, DeletePlaceErrorCode>> {
+  return apiDelete<void, DeletePlaceErrorCode>(`places/${id}`);
 }
 
 /** Admin only. */
