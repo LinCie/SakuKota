@@ -17,9 +17,7 @@ export type SubDistrictErrorCode = CommonApiErrorCode;
 export type CreateSubDistrictErrorCode =
   AdminWriteErrorCode | "validation_error" | "sub_district_exists";
 export type GetSubDistrictErrorCode =
-  | CommonApiErrorCode
-  | "invalid_sub_district_id"
-  | "sub_district_not_found";
+  CommonApiErrorCode | "invalid_sub_district_id" | "sub_district_not_found";
 export type UpdateSubDistrictErrorCode =
   | AdminWriteErrorCode
   | "validation_error"

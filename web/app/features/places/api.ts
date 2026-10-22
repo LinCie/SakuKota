@@ -21,7 +21,22 @@ import type {
 
 export type PlaceErrorCode =
   CommonApiErrorCode | "invalid_sub_district_id" | "invalid_category_id";
+export type GetPlaceErrorCode =
+  CommonApiErrorCode | "invalid_place_id" | "place_not_found";
 export type CategoryErrorCode = CommonApiErrorCode;
+export type GetCategoryErrorCode =
+  CommonApiErrorCode | "invalid_category_id" | "category_not_found";
+export type UpdateCategoryErrorCode =
+  | AdminWriteErrorCode
+  | "invalid_category_id"
+  | "validation_error"
+  | "category_not_found"
+  | "category_exists";
+export type DeleteCategoryErrorCode =
+  | AdminWriteErrorCode
+  | "invalid_category_id"
+  | "category_not_found"
+  | "category_in_use";
 export type UpdatePlaceErrorCode =
   | AdminWriteErrorCode
   | "invalid_place_id"
@@ -79,6 +94,8 @@ export type CreateCategoryRequest = {
   slug: string;
 };
 
+export type UpdateCategoryRequest = Partial<CreateCategoryRequest>;
+
 export type CreateCategoryFieldRequest = {
   key: string;
   label: string;
@@ -109,10 +126,24 @@ export function getPlaces(
   return apiGet<Place[], PlaceErrorCode>("places", { searchParams });
 }
 
+export function getPlace(
+  id: number,
+): Promise<ApiResult<Place, GetPlaceErrorCode>> {
+  return apiGet<Place, GetPlaceErrorCode>(`places/${id}`);
+}
+
 export function getCategories(): Promise<
   ApiResult<CategoryDetail[], CategoryErrorCode>
 > {
   return apiGet<CategoryDetail[], CategoryErrorCode>("places/categories");
+}
+
+export function getCategory(
+  id: number,
+): Promise<ApiResult<CategoryDetail, GetCategoryErrorCode>> {
+  return apiGet<CategoryDetail, GetCategoryErrorCode>(
+    `places/categories/${id}`,
+  );
 }
 
 /** Admin only. */
@@ -144,6 +175,24 @@ export function createCategory(
   return apiPost<CategoryDetail, CreateCategoryErrorCode>("places/categories", {
     json: body,
   });
+}
+
+/** Admin only. */
+export function updateCategory(
+  id: number,
+  body: UpdateCategoryRequest,
+): Promise<ApiResult<CategoryDetail, UpdateCategoryErrorCode>> {
+  return apiPatch<CategoryDetail, UpdateCategoryErrorCode>(
+    `places/categories/${id}`,
+    { json: body },
+  );
+}
+
+/** Admin only. */
+export function deleteCategory(
+  id: number,
+): Promise<ApiResult<void, DeleteCategoryErrorCode>> {
+  return apiDelete<void, DeleteCategoryErrorCode>(`places/categories/${id}`);
 }
 
 /** Admin only. */

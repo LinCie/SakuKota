@@ -1,7 +1,7 @@
 import type { ApiErrorResponse } from "./api";
 
-/** A form-level message for a rejected admin write (create). */
-export function adminWriteError(
+/** A form-level message for a write the server rejected. */
+export function writeErrorMessage(
   status: number,
   error: ApiErrorResponse,
 ): string {

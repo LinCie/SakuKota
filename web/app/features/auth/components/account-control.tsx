@@ -41,7 +41,7 @@ export function AccountControl({ className }: { className?: string }) {
 
   // The admin plate is icon-only on phones, where it replaces the name.
   const admin = isAdmin(session);
-  const adminLink = admin && pathname !== "/admin";
+  const adminLink = admin && !pathname.startsWith("/admin");
 
   return (
     <div className={cn("flex items-center gap-3", className)}>

@@ -356,3 +356,12 @@ WHERE NOT EXISTS (
       AND existing.name = sp.name
 );
 
+-- Default admin account. Password: admin123 (change after first sign-in).
+INSERT INTO USERS (name, email, password_hash, role)
+VALUES (
+    'Admin',
+    'admin@rantau.go',
+    '$argon2id$v=19$m=19456,t=2,p=1$8BH3b7P0mSW3iajNf9Rv4w$NDJvbJFopj4gJxJqltPEI+QcFoBc0dopSeoKBZyXrIQ',
+    'admin'
+)
+ON CONFLICT (email) DO NOTHING;
