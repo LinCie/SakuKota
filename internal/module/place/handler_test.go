@@ -134,6 +134,11 @@ func TestHandler_GetPlaces_RejectsMalformedFilters(t *testing.T) {
 		{name: "category_id is zero", target: "/places?category_id=0", wantCode: "invalid_category_id"},
 		{name: "category_id is negative", target: "/places?category_id=-1", wantCode: "invalid_category_id"},
 		{name: "category_id has a zero element", target: "/places?category_id=1,0", wantCode: "invalid_category_id"},
+		{name: "limit is not a number", target: "/places?limit=abc", wantCode: "invalid_limit"},
+		{name: "limit is fractional", target: "/places?limit=2.5", wantCode: "invalid_limit"},
+		{name: "limit is zero", target: "/places?limit=0", wantCode: "invalid_limit"},
+		{name: "limit is negative", target: "/places?limit=-3", wantCode: "invalid_limit"},
+		{name: "limit overflows 64 bits", target: "/places?limit=99999999999999999999", wantCode: "invalid_limit"},
 	}
 
 	for _, tc := range tests {
@@ -158,6 +163,10 @@ func TestHandler_GetPlaces_PassesFilterToService(t *testing.T) {
 		{name: "empty parameters are absent", target: "/places?sub_district_id=&category_id=", want: place.PlaceFilter{}},
 		{name: "all filters together", target: "/places?sub_district_id=7&category_id=1,2&q=kopi",
 			want: place.PlaceFilter{SubDistrictID: 7, CategoryIDs: []int64{1, 2}, Query: "kopi"}},
+		{name: "limit is passed", target: "/places?limit=25", want: place.PlaceFilter{Limit: 25}},
+		{name: "empty limit is absent", target: "/places?limit=", want: place.PlaceFilter{}},
+		{name: "all filters together with limit", target: "/places?sub_district_id=7&category_id=1,2&q=kopi&limit=25",
+			want: place.PlaceFilter{SubDistrictID: 7, CategoryIDs: []int64{1, 2}, Query: "kopi", Limit: 25}},
 	}
 
 	for _, tc := range tests {

@@ -38,6 +38,8 @@ type PlaceFilter struct {
 	// Query is matched case-insensitively against the name, address,
 	// short description, and category name.
 	Query string
+	// Limit caps the number of places returned, lowest ids first. Zero applies no limit.
+	Limit int
 }
 
 // PlacePatch holds the fields a client may change on a place. A field that is

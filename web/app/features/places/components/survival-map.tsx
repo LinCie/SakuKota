@@ -14,6 +14,9 @@ import { signIcon } from "./map-icons";
 import { ZoomPlate } from "./zoom-plate";
 
 const FIT_OPTIONS = { padding: [56, 56] as [number, number], maxZoom: 16 };
+// Below this zoom the map asks for at most MAP_PLACE_LIMIT places.
+const MAP_UNLIMITED_ZOOM = 15;
+const MAP_PLACE_LIMIT = 25;
 // ZoomPlate replaces Leaflet's zoom control.
 const MAP_OPTIONS: Leaflet.MapOptions = { zoomControl: false };
 
@@ -46,6 +49,11 @@ function coveredHeight(
   );
 }
 
+/** The place limit for a zoom level; undefined shows every place. */
+function placeLimitForZoom(zoom: number) {
+  return zoom < MAP_UNLIMITED_ZOOM ? MAP_PLACE_LIMIT : undefined;
+}
+
 type SurvivalMapProps = {
   /** Places to plant as signs. The map frames them when the kecamatan changes. */
   places: Place[];
@@ -53,6 +61,8 @@ type SurvivalMapProps = {
   focusKey: string;
   selectedId: number | null;
   onSelect: (placeId: number) => void;
+  /** Reports the place limit for the current zoom, after each zoom change. */
+  onLimitChange: (limit: number | undefined) => void;
   /** A bottom sheet that may cover the map; the selected sign is kept above it. */
   sheetRef?: RefObject<HTMLElement | null>;
   /** Overlay rendered above the map, e.g. the empty state. */
@@ -64,6 +74,7 @@ export function SurvivalMap({
   focusKey,
   selectedId,
   onSelect,
+  onLimitChange,
   sheetRef,
   children,
 }: SurvivalMapProps) {
@@ -72,6 +83,20 @@ export function SurvivalMap({
   const focusedKeyRef = useRef<string | null>(null);
   const leaflet = useLeafletMap(containerRef, MAP_OPTIONS);
   const onSelectEvent = useEffectEvent(onSelect);
+  const onLimitChangeEvent = useEffectEvent(onLimitChange);
+
+  // Registered before the framing effect below, so the zoom its fitBounds
+  // causes is reported.
+  useEffect(() => {
+    if (!leaflet) return;
+    const { map } = leaflet;
+    const reportLimit = () =>
+      onLimitChangeEvent(placeLimitForZoom(map.getZoom()));
+    map.on("zoomend", reportLimit);
+    return () => {
+      map.off("zoomend", reportLimit);
+    };
+  }, [leaflet]);
 
   // Frame the selected kecamatan: jump on first load, fly afterwards.
   useEffect(() => {

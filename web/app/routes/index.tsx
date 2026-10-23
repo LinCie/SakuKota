@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-import { getCategories, getPlaces } from "~/features/places/api";
+import { getCategories, getPlace, getPlaces } from "~/features/places/api";
 import { CategoryNav } from "~/features/places/components/category-nav";
 import { HomeHeader } from "~/features/places/components/home-header";
 import {
@@ -11,6 +11,7 @@ import {
 import { PlaceDetails } from "~/features/places/components/place-details";
 import { PlaceList } from "~/features/places/components/place-list";
 import { SurvivalMap } from "~/features/places/components/survival-map";
+import type { Place } from "~/features/places/types";
 import { getSubDistricts } from "~/features/subdistricts/api";
 import { KecamatanBoard } from "~/features/subdistricts/components/kecamatan-board";
 import { ErrorBoard } from "~/shared/components/error-board";
@@ -20,6 +21,8 @@ type HomeSearch = {
   /** Comma-separated category slugs; absent means every category. */
   kategori?: string;
   q?: string;
+  /** Caps the places to the lowest ids while the map is zoomed out. */
+  limit?: number;
   tempat?: number;
 };
 
@@ -34,22 +37,31 @@ function activeCategorySlugs(kategori: string | undefined) {
   return (kategori ?? "").split(",").filter(Boolean);
 }
 
+// A limit must be a positive whole number; anything else is dropped.
+function searchLimit(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>): HomeSearch => ({
     kecamatan: searchString(search.kecamatan),
     kategori: searchString(search.kategori),
     q: searchString(search.q),
+    limit: searchLimit(search.limit),
     tempat: typeof search.tempat === "number" ? search.tempat : undefined,
   }),
   // The kecamatan, categories, and search are applied by the backend; the
   // selected place (`tempat`) is picked from the loaded results, so changing
   // it doesn't reload.
-  loaderDeps: ({ search: { kecamatan, kategori, q } }) => ({
+  loaderDeps: ({ search: { kecamatan, kategori, q, limit } }) => ({
     kecamatan,
     kategori,
     q,
+    limit,
   }),
-  loader: async ({ deps: { kecamatan, kategori, q } }) => {
+  loader: async ({ deps: { kecamatan, kategori, q, limit } }) => {
     const [categories, subDistricts] = await Promise.all([
       getCategories(),
       getSubDistricts(),
@@ -69,6 +81,7 @@ export const Route = createFileRoute("/")({
             .filter((category) => activeSlugs.includes(category.slug))
             .map((category) => category.id),
           q: q?.trim(),
+          limit,
         })
       : null;
     if (places && !places.ok) throw new Error(places.error.message);
@@ -131,14 +144,33 @@ function Home() {
 
   const needle = query.trim();
 
-  const selectedPlace =
+  const listedPlace =
     visiblePlaces.find((place) => place.id === search.tempat) ?? null;
+  // A zoomed-out list can drop the selected place; it is fetched so its details stay open.
+  const [detachedPlace, setDetachedPlace] = useState<Place | null>(null);
+  const isListed = listedPlace !== null;
+  useEffect(() => {
+    if (search.tempat === undefined || isListed) return;
+    let ignore = false;
+    void getPlace(search.tempat).then((result) => {
+      if (!ignore) setDetachedPlace(result.ok ? result.data : null);
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [search.tempat, isListed]);
+  const selectedPlace =
+    listedPlace ?? (detachedPlace?.id === search.tempat ? detachedPlace : null);
   const selectedFields =
     categories.find((category) => category.id === selectedPlace?.category.id)
       ?.fields ?? [];
 
   function selectPlace(placeId: number | null) {
     updateParams({ tempat: placeId ?? undefined });
+  }
+
+  function setLimit(limit: number | undefined) {
+    if (limit !== search.limit) updateParams({ limit });
   }
 
   function toggleCategory(slug: string) {
@@ -203,7 +235,7 @@ function Home() {
         onSearch={() => updateParams({ q: draft.trim() || undefined })}
         onClearSearch={clearSearch}
         onKecamatanChange={(slug) =>
-          updateParams({ kecamatan: slug, tempat: undefined })
+          updateParams({ kecamatan: slug, tempat: undefined, limit: undefined })
         }
         onOpenInfo={() => setInfoOpen(true)}
       />
@@ -229,6 +261,7 @@ function Home() {
             focusKey={subDistrict?.slug ?? ""}
             selectedId={selectedPlace?.id ?? null}
             onSelect={selectPlace}
+            onLimitChange={setLimit}
             sheetRef={sheetRef}
           >
             {emptyState ? <MapEmptyState {...emptyState} /> : null}

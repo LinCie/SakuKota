@@ -119,10 +119,12 @@ func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([
 				OR p.address ILIKE $3
 				OR p.short_description ILIKE $3
 				OR c.name ILIKE $3)
-		ORDER BY p.id`,
+		ORDER BY p.id
+		LIMIT NULLIF($4::bigint, 0)`,
 		filter.SubDistrictID,
 		filter.CategoryIDs,
 		pattern,
+		filter.Limit,
 	)
 	if err != nil {
 		return nil, err

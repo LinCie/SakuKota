@@ -317,6 +317,37 @@ func TestIntegration_ListPlacesUnknownFilters(t *testing.T) {
 	}
 }
 
+func TestIntegration_ListPlacesLimit(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+		want   []int64
+	}{
+		{name: "limit keeps the lowest ids", target: "/places?limit=2", want: []int64{1, 2}},
+		{name: "limit above the count returns everything", target: "/places?limit=50", want: []int64{1, 2, 3, 4, 5}},
+		{name: "limit applies after the sub-district filter", target: "/places?sub_district_id=2&limit=2", want: []int64{3, 4}},
+		{name: "limit applies after the category filter", target: "/places?category_id=1&limit=2", want: []int64{1, 3}},
+		{name: "limit applies after the query", target: "/places?q=nasi&limit=1", want: []int64{1}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resetDB(t)
+			seedCatalog(t)
+			seedPlaces(t)
+
+			rows := listPlaces(t, integrationRouter(testDB), tc.target)
+			got := make([]int64, 0, len(rows))
+			for _, r := range rows {
+				got = append(got, r.ID)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("place IDs = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // -----------------------------------------------------------------------------
 // Categories
 // -----------------------------------------------------------------------------

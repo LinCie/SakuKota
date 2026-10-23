@@ -20,7 +20,10 @@ import type {
 // -----------------------------------------------------------------------------
 
 export type PlaceErrorCode =
-  CommonApiErrorCode | "invalid_sub_district_id" | "invalid_category_id";
+  | CommonApiErrorCode
+  | "invalid_sub_district_id"
+  | "invalid_category_id"
+  | "invalid_limit";
 export type GetPlaceErrorCode =
   CommonApiErrorCode | "invalid_place_id" | "place_not_found";
 export type CategoryErrorCode = CommonApiErrorCode;
@@ -61,6 +64,8 @@ export type GetPlacesParams = {
   categoryIds?: number[];
   /** Case-insensitive search term, matching the `q` query param. */
   q?: string;
+  /** Keeps only the lowest-id places, matching the `limit` query param. */
+  limit?: number;
 };
 
 export type CreatePlaceRequest = {
@@ -114,7 +119,7 @@ export type CreateCategoryFieldRequest = {
 export function getPlaces(
   params: GetPlacesParams = {},
 ): Promise<ApiResult<Place[], PlaceErrorCode>> {
-  const { subDistrictId, categoryIds, q } = params;
+  const { subDistrictId, categoryIds, q, limit } = params;
   const searchParams = new URLSearchParams();
   if (subDistrictId !== undefined) {
     searchParams.set("sub_district_id", String(subDistrictId));
@@ -122,6 +127,7 @@ export function getPlaces(
   if (categoryIds?.length)
     searchParams.set("category_id", categoryIds.join(","));
   if (q) searchParams.set("q", q);
+  if (limit !== undefined) searchParams.set("limit", String(limit));
 
   return apiGet<Place[], PlaceErrorCode>("places", { searchParams });
 }

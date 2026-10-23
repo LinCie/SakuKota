@@ -31,7 +31,8 @@ func NewHandler(service Service) *Handler {
 // -----------------------------------------------------------------------------
 
 // GetPlaces lists places, optionally filtered by `sub_district_id`,
-// `category_id` (comma-separated, matches any), and a `q` search term.
+// `category_id` (comma-separated, matches any), and a `q` search term, and
+// capped to the `limit` lowest ids.
 func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	filter := PlaceFilter{Query: strings.TrimSpace(query.Get("q"))}
@@ -54,6 +55,15 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 			}
 			filter.CategoryIDs = append(filter.CategoryIDs, id)
 		}
+	}
+
+	if param := query.Get("limit"); param != "" {
+		limit, err := strconv.Atoi(param)
+		if err != nil || limit <= 0 {
+			httpx.RespondError(w, http.StatusBadRequest, "invalid_limit", "invalid limit")
+			return
+		}
+		filter.Limit = limit
 	}
 
 	places, err := h.service.GetMany(r.Context(), filter)
