@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { AdminRouteError } from "~/features/admin/components/admin-route-error";
 import { getCategories } from "~/features/places/api";
-import { CategoriesPage } from "~/features/categories/components/categories-page";
+import { CategoriesPage } from "~/features/categories/pages/categories-page";
 import { LoadingState } from "~/shared/components/loading-state";
 import { unwrap } from "~/shared/api";
 
