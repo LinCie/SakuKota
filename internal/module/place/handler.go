@@ -1,12 +1,8 @@
 package place
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -119,8 +115,8 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 // CreateCategoryField adds a custom field to the category given by the `id`
 // path parameter.
 func (h *Handler) CreateCategoryField(w http.ResponseWriter, r *http.Request) {
-	categoryID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
+	categoryID, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
 		httpx.RespondError(w, http.StatusBadRequest, "invalid_category_id", "invalid category_id")
 		return
 	}
@@ -155,30 +151,13 @@ func (h *Handler) CreateCategoryField(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
-		return
-	}
-
 	var req CreatePlaceRequest
-	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
 		return
 	}
 
-	in := toPlace(req)
-	if key := r.Header.Get("Idempotency-Key"); key != "" {
-		// The hash tells a retry of the same request from a reuse of the key.
-		sum := sha256.Sum256(body)
-		in.IdempotencyKey = key
-		in.RequestHash = hex.EncodeToString(sum[:])
-	}
-
-	p, err := h.service.Create(r.Context(), in)
-	if err == nil && p == nil {
-		err = errors.New("service returned no place")
-	}
+	p, err := h.service.Create(r.Context(), toPlace(req))
 	if err != nil {
 		respondPlaceError(w, err)
 		return
@@ -203,9 +182,6 @@ func (h *Handler) PatchPlace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p, err := h.service.Update(r.Context(), id, PlacePatch(*req))
-	if err == nil && p == nil {
-		err = errors.New("service returned no place")
-	}
 	if err != nil {
 		respondPlaceError(w, err)
 		return
@@ -246,8 +222,6 @@ func respondPlaceError(w http.ResponseWriter, err error) {
 		errors.Is(err, ErrInvalidAttributes),
 		errors.Is(err, ErrInvalidLocation):
 		httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
-	case errors.Is(err, ErrIdempotencyKeyReused):
-		httpx.RespondError(w, http.StatusConflict, "idempotency_key_reused", err.Error())
 	default:
 		httpx.RespondInternalError(w)
 	}

@@ -22,19 +22,13 @@ const (
 
 var errInvalidHash = errors.New("invalid argon2id hash")
 
-type argon2Hasher struct{}
-
-func NewArgon2Hasher() PasswordHasher {
-	return &argon2Hasher{}
-}
-
 // -----------------------------------------------------------------------------
-// argon2Hasher
+// Password hashing
 // -----------------------------------------------------------------------------
 
-// HashPassword returns an argon2id hash of password encoded in the PHC
+// hashPassword returns an argon2id hash of password encoded in the PHC
 // string format: $argon2id$v=19$m=...,t=...,p=...$salt$hash
-func (h *argon2Hasher) HashPassword(password string) (string, error) {
+func hashPassword(password string) (string, error) {
 	salt := make([]byte, argonSaltLen)
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
@@ -50,8 +44,8 @@ func (h *argon2Hasher) HashPassword(password string) (string, error) {
 	), nil
 }
 
-// VerifyPassword reports whether password matches the encoded argon2id hash.
-func (h *argon2Hasher) VerifyPassword(password, encodedHash string) (bool, error) {
+// verifyPassword reports whether password matches the encoded argon2id hash.
+func verifyPassword(password, encodedHash string) (bool, error) {
 	parts := strings.Split(encodedHash, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" {
 		return false, errInvalidHash

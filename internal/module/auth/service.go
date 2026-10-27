@@ -9,7 +9,6 @@ import (
 	"errors"
 	"net/mail"
 	"strings"
-	"time"
 
 	"rantau-go/internal/config"
 	"rantau-go/internal/jwt"
@@ -34,35 +33,17 @@ type Repository interface {
 	GetByID(ctx context.Context, id int64) (*User, error)
 }
 
-// PasswordHasher defines the password hashing operations required by the service.
-type PasswordHasher interface {
-	HashPassword(password string) (string, error)
-	VerifyPassword(password, encodedHash string) (bool, error)
-}
-
-// RefreshStore defines the refresh token storage operations required by the
-// service. Tokens are stored by their hash, never in raw form.
-type RefreshStore interface {
-	Save(ctx context.Context, tokenHash string, userID int64, ttl time.Duration) error
-	// Consume returns the token's user ID and removes the token. It returns
-	// ErrInvalidRefreshToken if the token is unknown or expired.
-	Consume(ctx context.Context, tokenHash string) (int64, error)
-	Delete(ctx context.Context, tokenHash string) error
-}
-
 type service struct {
-	cfg    config.Config
-	repo   Repository
-	hasher PasswordHasher
-	store  RefreshStore
+	cfg   config.Config
+	repo  Repository
+	store *memoryRefreshStore
 }
 
-func NewService(cfg config.Config, repo Repository, hasher PasswordHasher, store RefreshStore) Service {
+func NewService(cfg config.Config, repo Repository, store *memoryRefreshStore) Service {
 	return &service{
-		cfg:    cfg,
-		repo:   repo,
-		hasher: hasher,
-		store:  store,
+		cfg:   cfg,
+		repo:  repo,
+		store: store,
 	}
 }
 
@@ -85,7 +66,7 @@ func (s *service) Register(ctx context.Context, u *User, password string) (*User
 		return nil, ErrWeakPassword
 	}
 
-	hash, err := s.hasher.HashPassword(password)
+	hash, err := hashPassword(password)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +85,7 @@ func (s *service) Login(ctx context.Context, email, password string) (*User, *To
 		return nil, nil, err
 	}
 
-	ok, err := s.hasher.VerifyPassword(password, u.PasswordHash)
+	ok, err := verifyPassword(password, u.PasswordHash)
 	if err != nil {
 		return nil, nil, err
 	}

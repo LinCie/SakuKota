@@ -190,8 +190,7 @@ func (r *postgresRepository) CreateCategory(ctx context.Context, c *Category) (*
 		c.Slug,
 	)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == database.UniqueViolation {
+		if database.IsCode(err, database.UniqueViolation) {
 			return nil, ErrCategoryExists
 		}
 		return nil, err
@@ -263,8 +262,7 @@ func (r *postgresRepository) CreateCategoryField(ctx context.Context, f *Categor
 		sortOrder,
 	)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == database.UniqueViolation {
+		if database.IsCode(err, database.UniqueViolation) {
 			return nil, ErrCategoryFieldExists
 		}
 		return nil, err
@@ -277,23 +275,12 @@ func (r *postgresRepository) CreateCategoryField(ctx context.Context, f *Categor
 	return &created, nil
 }
 
-// Create inserts the place and returns it joined with its category. A request
-// with an idempotency key is stored once and replayed on retries.
+// Create inserts the place and returns it joined with its category.
 func (r *postgresRepository) Create(ctx context.Context, p *Place) (*Place, error) {
-	if p.IdempotencyKey == "" {
-		return insertPlace(ctx, r.db, p)
-	}
-
-	return r.createOnce(ctx, p)
-}
-
-// insertPlace inserts the place through q and returns it joined with its category.
-func insertPlace(ctx context.Context, q sqlx.QueryerContext, p *Place) (*Place, error) {
 	var created Place
 
-	err := sqlx.GetContext(
+	err := r.db.GetContext(
 		ctx,
-		q,
 		&created,
 		`WITH inserted AS (
 			INSERT INTO PLACES (sub_district_id, category_id, name, address,
@@ -322,80 +309,6 @@ func insertPlace(ctx context.Context, q sqlx.QueryerContext, p *Place) (*Place, 
 	}
 
 	return &created, nil
-}
-
-// createOnce stores the place together with its idempotency key. If the key is
-// already taken, the place holding it is returned when the request matches, and
-// ErrIdempotencyKeyReused is returned when it does not.
-func (r *postgresRepository) createOnce(ctx context.Context, p *Place) (*Place, error) {
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-
-	created, err := insertPlace(ctx, tx, p)
-	if err != nil {
-		return nil, err
-	}
-
-	// A concurrent request with the same key waits here until this transaction
-	// ends, then inserts nothing.
-	result, err := tx.ExecContext(
-		ctx,
-		`INSERT INTO PLACE_IDEMPOTENCY_KEYS (key, request_hash, place_id)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (key) DO NOTHING`,
-		p.IdempotencyKey,
-		p.RequestHash,
-		created.ID,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return nil, err
-	}
-	if rows == 1 {
-		if err := tx.Commit(); err != nil {
-			return nil, err
-		}
-		return created, nil
-	}
-
-	// Discard this request's copy of the place and answer with the one that
-	// holds the key.
-	if err := tx.Rollback(); err != nil {
-		return nil, err
-	}
-
-	return r.replay(ctx, p)
-}
-
-// replay returns the place holding the request's idempotency key, or
-// ErrIdempotencyKeyReused if the key belongs to a different request.
-func (r *postgresRepository) replay(ctx context.Context, p *Place) (*Place, error) {
-	var stored struct {
-		RequestHash string `db:"request_hash"`
-		PlaceID     int64  `db:"place_id"`
-	}
-
-	err := r.db.GetContext(
-		ctx,
-		&stored,
-		`SELECT request_hash, place_id FROM PLACE_IDEMPOTENCY_KEYS WHERE key = $1`,
-		p.IdempotencyKey,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if stored.RequestHash != p.RequestHash {
-		return nil, ErrIdempotencyKeyReused
-	}
-
-	return r.GetPlace(ctx, stored.PlaceID)
 }
 
 // GetPlace returns the place with its category, or ErrPlaceNotFound.

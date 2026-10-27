@@ -33,7 +33,6 @@ var (
 	ErrCategoryFieldExists    = errors.New("field with this key already exists in the category")
 	ErrInvalidAttributes      = errors.New("invalid attributes")
 	ErrInvalidLocation        = errors.New("location must be within Indonesia")
-	ErrIdempotencyKeyReused   = errors.New("idempotency key was already used for a different request")
 )
 
 var (

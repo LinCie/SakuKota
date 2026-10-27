@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
 
 	"rantau-go/internal/database"
@@ -92,7 +91,7 @@ func (r *postgresRepository) Create(ctx context.Context, sd *SubDistrict) (*SubD
 		sd.StaticMapImageURL,
 	)
 	if err != nil {
-		if hasPgCode(err, database.UniqueViolation) {
+		if database.IsCode(err, database.UniqueViolation) {
 			return nil, ErrSubDistrictExists
 		}
 		return nil, err
@@ -124,7 +123,7 @@ func (r *postgresRepository) Update(ctx context.Context, sd *SubDistrict) (*SubD
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrSubDistrictNotFound
 		}
-		if hasPgCode(err, database.UniqueViolation) {
+		if database.IsCode(err, database.UniqueViolation) {
 			return nil, ErrSubDistrictExists
 		}
 		return nil, err
@@ -136,7 +135,7 @@ func (r *postgresRepository) Update(ctx context.Context, sd *SubDistrict) (*SubD
 func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
 	result, err := r.db.ExecContext(ctx, `DELETE FROM SUB_DISTRICTS WHERE id = $1`, id)
 	if err != nil {
-		if hasPgCode(err, database.ForeignKeyViolation) {
+		if database.IsCode(err, database.ForeignKeyViolation) {
 			return ErrSubDistrictInUse
 		}
 		return err
@@ -151,10 +150,4 @@ func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
 	}
 
 	return nil
-}
-
-// hasPgCode reports whether err is a PostgreSQL error with the given SQLSTATE code.
-func hasPgCode(err error, code string) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == code
 }

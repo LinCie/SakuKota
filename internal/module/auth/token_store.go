@@ -18,7 +18,7 @@ type memoryRefreshStore struct {
 	tokens map[string]memoryRefreshEntry
 }
 
-func NewMemoryRefreshStore() RefreshStore {
+func NewMemoryRefreshStore() *memoryRefreshStore {
 	return &memoryRefreshStore{
 		tokens: make(map[string]memoryRefreshEntry),
 	}

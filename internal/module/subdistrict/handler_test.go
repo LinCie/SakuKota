@@ -198,14 +198,6 @@ func TestHandler_GetSubDistrict_MapsServiceErrors(t *testing.T) {
 	}
 }
 
-func TestHandler_GetSubDistrict_NilResultIsAnInternalError(t *testing.T) {
-	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().GetSubDistrict(gomock.Any(), gomock.Any()).Return(nil, nil)
-
-	rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/subdistricts/1", ""))
-	assertError(t, rec, http.StatusInternalServerError, "internal_error")
-}
-
 func TestHandler_GetSubDistrict_Success(t *testing.T) {
 	svc := mock.NewMockService(gomock.NewController(t))
 	svc.EXPECT().GetSubDistrict(gomock.Any(), int64(3)).Return(&subdistrict.SubDistrict{
@@ -279,15 +271,6 @@ func TestHandler_CreateSubDistrict_MapsServiceErrors(t *testing.T) {
 			assertError(t, rec, tc.wantStatus, tc.wantCode)
 		})
 	}
-}
-
-func TestHandler_CreateSubDistrict_NilResultIsAnInternalError(t *testing.T) {
-	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, nil)
-
-	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/subdistricts",
-		`{"name":"Menteng","slug":"menteng"}`))
-	assertError(t, rec, http.StatusInternalServerError, "internal_error")
 }
 
 func TestHandler_CreateSubDistrict_Success(t *testing.T) {
@@ -564,14 +547,6 @@ func TestHandler_PatchSubDistrict_MapsServiceErrors(t *testing.T) {
 			assertError(t, rec, tc.wantStatus, tc.wantCode)
 		})
 	}
-}
-
-func TestHandler_PatchSubDistrict_NilResultIsAnInternalError(t *testing.T) {
-	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
-
-	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, "/subdistricts/1", `{"name":"Menteng"}`))
-	assertError(t, rec, http.StatusInternalServerError, "internal_error")
 }
 
 func TestHandler_PatchSubDistrict_Success(t *testing.T) {

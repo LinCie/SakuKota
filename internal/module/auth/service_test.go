@@ -3,6 +3,7 @@ package auth_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,7 +17,8 @@ import (
 const (
 	testEmail    = "ana@example.com"
 	testPassword = "correct-horse"
-	testHash     = "hashed"
+	// testPasswordHash is an argon2id hash of testPassword in the format hashPassword produces.
+	testPasswordHash = "$argon2id$v=19$m=19456,t=2,p=1$MDEyMzQ1Njc4OWFiY2RlZg$Y7M1bhWqqijLLRFsFRE4eQcEvQVz3Bj9bWBHHIpCniI"
 )
 
 var errBoom = errors.New("boom")
@@ -30,36 +32,26 @@ func testConfig() config.Config {
 	}
 }
 
-func newService(t *testing.T) (auth.Service, *mock.MockRepository, *mock.MockPasswordHasher, *mock.MockRefreshStore) {
+// newService uses the real password hashing and refresh store; only the
+// repository is mocked.
+func newService(t *testing.T) (auth.Service, *mock.MockRepository) {
 	t.Helper()
-	ctrl := gomock.NewController(t)
-	repo := mock.NewMockRepository(ctrl)
-	hasher := mock.NewMockPasswordHasher(ctrl)
-	store := mock.NewMockRefreshStore(ctrl)
-	return auth.NewService(testConfig(), repo, hasher, store), repo, hasher, store
+	repo := mock.NewMockRepository(gomock.NewController(t))
+	return auth.NewService(testConfig(), repo, auth.NewMemoryRefreshStore()), repo
 }
 
-// issueSession logs in testEmail and returns the issued tokens along with the
-// key the refresh store was asked to save them under.
-func issueSession(t *testing.T, svc auth.Service, repo *mock.MockRepository, hasher *mock.MockPasswordHasher, store *mock.MockRefreshStore) (*auth.Tokens, string) {
+// issueSession logs in testEmail and returns the issued tokens.
+func issueSession(t *testing.T, svc auth.Service, repo *mock.MockRepository) *auth.Tokens {
 	t.Helper()
 
 	repo.EXPECT().GetByEmail(gomock.Any(), testEmail).
-		Return(&auth.User{ID: 7, Email: testEmail, PasswordHash: testHash}, nil)
-	hasher.EXPECT().VerifyPassword(testPassword, testHash).Return(true, nil)
-
-	var key string
-	store.EXPECT().Save(gomock.Any(), gomock.Any(), int64(7), gomock.Any()).DoAndReturn(
-		func(_ context.Context, k string, _ int64, _ time.Duration) error {
-			key = k
-			return nil
-		})
+		Return(&auth.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)
 
 	_, tokens, err := svc.Login(context.Background(), testEmail, testPassword)
 	if err != nil {
 		t.Fatalf("login: %v", err)
 	}
-	return tokens, key
+	return tokens
 }
 
 // -----------------------------------------------------------------------------
@@ -67,14 +59,14 @@ func issueSession(t *testing.T, svc auth.Service, repo *mock.MockRepository, has
 // -----------------------------------------------------------------------------
 
 func TestService_Register_NormalizesAndStoresHashedUser(t *testing.T) {
-	svc, repo, hasher, _ := newService(t)
+	svc, repo := newService(t)
 
-	hasher.EXPECT().HashPassword(testPassword).Return(testHash, nil)
-	repo.EXPECT().Create(gomock.Any(), &auth.User{
-		Name:         "Ana",
-		Email:        testEmail,
-		PasswordHash: testHash,
-	}).Return(&auth.User{ID: 1, Name: "Ana", Email: testEmail, PasswordHash: testHash}, nil)
+	var stored *auth.User
+	repo.EXPECT().Create(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, u *auth.User) (*auth.User, error) {
+			stored = u
+			return &auth.User{ID: 1, Name: u.Name, Email: u.Email, PasswordHash: u.PasswordHash}, nil
+		})
 
 	u, err := svc.Register(context.Background(), &auth.User{Name: "  Ana  ", Email: "  ANA@Example.COM "}, testPassword)
 	if err != nil {
@@ -82,6 +74,12 @@ func TestService_Register_NormalizesAndStoresHashedUser(t *testing.T) {
 	}
 	if u.ID != 1 {
 		t.Errorf("ID = %d, want 1", u.ID)
+	}
+	if stored.Name != "Ana" || stored.Email != testEmail {
+		t.Errorf("stored name, email = %q, %q; want Ana, %s", stored.Name, stored.Email, testEmail)
+	}
+	if !strings.HasPrefix(stored.PasswordHash, "$argon2id$") {
+		t.Errorf("stored password is not an argon2id hash: %q", stored.PasswordHash)
 	}
 }
 
@@ -101,8 +99,8 @@ func TestService_Register_RejectsInvalidInput(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// No expectations: invalid input must never reach hashing or storage.
-			svc, _, _, _ := newService(t)
+			// No expectations: invalid input must never reach storage.
+			svc, _ := newService(t)
 
 			_, err := svc.Register(context.Background(), &auth.User{Name: tc.userName, Email: tc.email}, tc.password)
 			if !errors.Is(err, tc.want) {
@@ -113,9 +111,8 @@ func TestService_Register_RejectsInvalidInput(t *testing.T) {
 }
 
 func TestService_Register_AcceptsEightCharacterPassword(t *testing.T) {
-	svc, repo, hasher, _ := newService(t)
+	svc, repo := newService(t)
 
-	hasher.EXPECT().HashPassword("12345678").Return(testHash, nil)
 	repo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&auth.User{ID: 1}, nil)
 
 	if _, err := svc.Register(context.Background(), &auth.User{Name: "Ana", Email: testEmail}, "12345678"); err != nil {
@@ -124,9 +121,8 @@ func TestService_Register_AcceptsEightCharacterPassword(t *testing.T) {
 }
 
 func TestService_Register_DuplicateEmailIsReturned(t *testing.T) {
-	svc, repo, hasher, _ := newService(t)
+	svc, repo := newService(t)
 
-	hasher.EXPECT().HashPassword(testPassword).Return(testHash, nil)
 	repo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, auth.ErrEmailTaken)
 
 	_, err := svc.Register(context.Background(), &auth.User{Name: "Ana", Email: testEmail}, testPassword)
@@ -135,34 +131,15 @@ func TestService_Register_DuplicateEmailIsReturned(t *testing.T) {
 	}
 }
 
-func TestService_Register_HashFailureStopsBeforeStorage(t *testing.T) {
-	svc, _, hasher, _ := newService(t)
-
-	hasher.EXPECT().HashPassword(testPassword).Return("", errBoom)
-
-	_, err := svc.Register(context.Background(), &auth.User{Name: "Ana", Email: testEmail}, testPassword)
-	if !errors.Is(err, errBoom) {
-		t.Errorf("error = %v, want %v", err, errBoom)
-	}
-}
-
 // -----------------------------------------------------------------------------
 // Login
 // -----------------------------------------------------------------------------
 
 func TestService_Login_NormalizesEmailAndIssuesTokens(t *testing.T) {
-	svc, repo, hasher, store := newService(t)
+	svc, repo := newService(t)
 
 	repo.EXPECT().GetByEmail(gomock.Any(), testEmail).
-		Return(&auth.User{ID: 7, Email: testEmail, PasswordHash: testHash}, nil)
-	hasher.EXPECT().VerifyPassword(testPassword, testHash).Return(true, nil)
-
-	var key string
-	store.EXPECT().Save(gomock.Any(), gomock.Any(), int64(7), testConfig().RefreshTokenExpiry).DoAndReturn(
-		func(_ context.Context, k string, _ int64, _ time.Duration) error {
-			key = k
-			return nil
-		})
+		Return(&auth.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)
 
 	u, tokens, err := svc.Login(context.Background(), "  ANA@Example.com ", testPassword)
 	if err != nil {
@@ -174,39 +151,37 @@ func TestService_Login_NormalizesEmailAndIssuesTokens(t *testing.T) {
 	if tokens.AccessToken == "" || tokens.RefreshToken == "" {
 		t.Error("login must return both an access token and a refresh token")
 	}
-	if key == tokens.RefreshToken {
-		t.Error("raw refresh token was passed to the store")
-	}
 }
 
 func TestService_Login_InvalidCredentials(t *testing.T) {
 	tests := []struct {
-		name  string
-		setup func(*mock.MockRepository, *mock.MockPasswordHasher)
+		name     string
+		setup    func(*mock.MockRepository)
+		password string
 	}{
 		{
 			name: "unknown email",
-			setup: func(repo *mock.MockRepository, _ *mock.MockPasswordHasher) {
+			setup: func(repo *mock.MockRepository) {
 				repo.EXPECT().GetByEmail(gomock.Any(), testEmail).Return(nil, auth.ErrNotFound)
 			},
+			password: testPassword,
 		},
 		{
 			name: "wrong password",
-			setup: func(repo *mock.MockRepository, hasher *mock.MockPasswordHasher) {
+			setup: func(repo *mock.MockRepository) {
 				repo.EXPECT().GetByEmail(gomock.Any(), testEmail).
-					Return(&auth.User{ID: 7, Email: testEmail, PasswordHash: testHash}, nil)
-				hasher.EXPECT().VerifyPassword(gomock.Any(), testHash).Return(false, nil)
+					Return(&auth.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)
 			},
+			password: "wrong-horse",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// No store expectations: a failed login must not create a session.
-			svc, repo, hasher, _ := newService(t)
-			tc.setup(repo, hasher)
+			svc, repo := newService(t)
+			tc.setup(repo)
 
-			u, tokens, err := svc.Login(context.Background(), testEmail, testPassword)
+			u, tokens, err := svc.Login(context.Background(), testEmail, tc.password)
 			if !errors.Is(err, auth.ErrInvalidCredentials) {
 				t.Errorf("error = %v, want %v", err, auth.ErrInvalidCredentials)
 			}
@@ -218,7 +193,7 @@ func TestService_Login_InvalidCredentials(t *testing.T) {
 }
 
 func TestService_Login_RepositoryFailureIsNotBadCredentials(t *testing.T) {
-	svc, repo, _, _ := newService(t)
+	svc, repo := newService(t)
 
 	repo.EXPECT().GetByEmail(gomock.Any(), testEmail).Return(nil, errBoom)
 
@@ -231,36 +206,18 @@ func TestService_Login_RepositoryFailureIsNotBadCredentials(t *testing.T) {
 	}
 }
 
-func TestService_Login_HashVerificationFailureIsReturned(t *testing.T) {
-	svc, repo, hasher, _ := newService(t)
+func TestService_Login_CorruptHashIsNotBadCredentials(t *testing.T) {
+	svc, repo := newService(t)
 
 	repo.EXPECT().GetByEmail(gomock.Any(), testEmail).
 		Return(&auth.User{ID: 7, Email: testEmail, PasswordHash: "corrupt"}, nil)
-	hasher.EXPECT().VerifyPassword(testPassword, "corrupt").Return(false, errBoom)
 
 	_, _, err := svc.Login(context.Background(), testEmail, testPassword)
-	if !errors.Is(err, errBoom) {
-		t.Errorf("error = %v, want %v", err, errBoom)
+	if err == nil {
+		t.Fatal("login with a corrupt stored hash succeeded")
 	}
 	if errors.Is(err, auth.ErrInvalidCredentials) {
-		t.Error("hash verification failure was reported as invalid credentials")
-	}
-}
-
-func TestService_Login_StoreFailureReturnsNoTokens(t *testing.T) {
-	svc, repo, hasher, store := newService(t)
-
-	repo.EXPECT().GetByEmail(gomock.Any(), testEmail).
-		Return(&auth.User{ID: 7, Email: testEmail, PasswordHash: testHash}, nil)
-	hasher.EXPECT().VerifyPassword(testPassword, testHash).Return(true, nil)
-	store.EXPECT().Save(gomock.Any(), gomock.Any(), int64(7), gomock.Any()).Return(errBoom)
-
-	u, tokens, err := svc.Login(context.Background(), testEmail, testPassword)
-	if !errors.Is(err, errBoom) {
-		t.Errorf("error = %v, want %v", err, errBoom)
-	}
-	if u != nil || tokens != nil {
-		t.Error("login returned a user or tokens after the session could not be saved")
+		t.Error("corrupt stored hash was reported as invalid credentials")
 	}
 }
 
@@ -269,13 +226,11 @@ func TestService_Login_StoreFailureReturnsNoTokens(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestService_Refresh_ConsumesOldSessionAndIssuesNewTokens(t *testing.T) {
-	svc, repo, hasher, store := newService(t)
-	first, key := issueSession(t, svc, repo, hasher, store)
+	svc, repo := newService(t)
+	first := issueSession(t, svc, repo)
 
-	store.EXPECT().Consume(gomock.Any(), key).Return(int64(7), nil)
 	repo.EXPECT().GetByID(gomock.Any(), int64(7)).
-		Return(&auth.User{ID: 7, Email: testEmail, PasswordHash: testHash}, nil)
-	store.EXPECT().Save(gomock.Any(), gomock.Any(), int64(7), gomock.Any()).Return(nil)
+		Return(&auth.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)
 
 	u, second, err := svc.Refresh(context.Background(), first.RefreshToken)
 	if err != nil {
@@ -290,12 +245,15 @@ func TestService_Refresh_ConsumesOldSessionAndIssuesNewTokens(t *testing.T) {
 	if second.RefreshToken == first.RefreshToken {
 		t.Error("refresh token was not rotated")
 	}
+
+	// The old refresh token was consumed, so reusing it must fail.
+	if _, _, err := svc.Refresh(context.Background(), first.RefreshToken); !errors.Is(err, auth.ErrInvalidRefreshToken) {
+		t.Errorf("reused refresh token: error = %v, want %v", err, auth.ErrInvalidRefreshToken)
+	}
 }
 
 func TestService_Refresh_UnknownTokenIsRejected(t *testing.T) {
-	svc, _, _, store := newService(t)
-
-	store.EXPECT().Consume(gomock.Any(), gomock.Any()).Return(int64(0), auth.ErrInvalidRefreshToken)
+	svc, _ := newService(t)
 
 	_, _, err := svc.Refresh(context.Background(), "never-issued")
 	if !errors.Is(err, auth.ErrInvalidRefreshToken) {
@@ -304,13 +262,12 @@ func TestService_Refresh_UnknownTokenIsRejected(t *testing.T) {
 }
 
 func TestService_Refresh_DeletedUserIsRejected(t *testing.T) {
-	svc, repo, hasher, store := newService(t)
-	first, key := issueSession(t, svc, repo, hasher, store)
+	svc, repo := newService(t)
+	first := issueSession(t, svc, repo)
 
-	store.EXPECT().Consume(gomock.Any(), key).Return(int64(7), nil)
 	repo.EXPECT().GetByID(gomock.Any(), int64(7)).Return(nil, auth.ErrNotFound)
 
-	// No Save expectation: no session may be issued for a missing user.
+	// No session may be issued for a missing user.
 	_, _, err := svc.Refresh(context.Background(), first.RefreshToken)
 	if !errors.Is(err, auth.ErrInvalidRefreshToken) {
 		t.Errorf("error = %v, want %v", err, auth.ErrInvalidRefreshToken)
@@ -318,10 +275,9 @@ func TestService_Refresh_DeletedUserIsRejected(t *testing.T) {
 }
 
 func TestService_Refresh_RepositoryFailureIsReturned(t *testing.T) {
-	svc, repo, hasher, store := newService(t)
-	first, key := issueSession(t, svc, repo, hasher, store)
+	svc, repo := newService(t)
+	first := issueSession(t, svc, repo)
 
-	store.EXPECT().Consume(gomock.Any(), key).Return(int64(7), nil)
 	repo.EXPECT().GetByID(gomock.Any(), int64(7)).Return(nil, errBoom)
 
 	_, _, err := svc.Refresh(context.Background(), first.RefreshToken)
@@ -337,24 +293,15 @@ func TestService_Refresh_RepositoryFailureIsReturned(t *testing.T) {
 // Logout
 // -----------------------------------------------------------------------------
 
-func TestService_Logout_RevokesSessionKey(t *testing.T) {
-	svc, repo, hasher, store := newService(t)
-	first, key := issueSession(t, svc, repo, hasher, store)
-
-	store.EXPECT().Delete(gomock.Any(), key).Return(nil)
+func TestService_Logout_RevokesSession(t *testing.T) {
+	svc, repo := newService(t)
+	first := issueSession(t, svc, repo)
 
 	if err := svc.Logout(context.Background(), first.RefreshToken); err != nil {
-		t.Errorf("logout: %v", err)
+		t.Fatalf("logout: %v", err)
 	}
-}
 
-func TestService_Logout_StoreFailureIsReturned(t *testing.T) {
-	svc, repo, hasher, store := newService(t)
-	first, _ := issueSession(t, svc, repo, hasher, store)
-
-	store.EXPECT().Delete(gomock.Any(), gomock.Any()).Return(errBoom)
-
-	if err := svc.Logout(context.Background(), first.RefreshToken); !errors.Is(err, errBoom) {
-		t.Errorf("error = %v, want %v", err, errBoom)
+	if _, _, err := svc.Refresh(context.Background(), first.RefreshToken); !errors.Is(err, auth.ErrInvalidRefreshToken) {
+		t.Errorf("refresh after logout: error = %v, want %v", err, auth.ErrInvalidRefreshToken)
 	}
 }

@@ -14,9 +14,8 @@ type Module struct {
 
 func NewModule(db *sqlx.DB, cfg config.Config) *Module {
 	repo := NewPostgresRepository(db)
-	hasher := NewArgon2Hasher()
 	store := NewMemoryRefreshStore()
-	service := NewService(cfg, repo, hasher, store)
+	service := NewService(cfg, repo, store)
 	handler := NewHandler(cfg, service)
 
 	return &Module{

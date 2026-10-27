@@ -2,8 +2,6 @@ package place
 
 import (
 	"github.com/jmoiron/sqlx"
-
-	"rantau-go/internal/config"
 )
 
 // Module wires up the place module's repository, service, and handler.
@@ -12,7 +10,7 @@ type Module struct {
 	Handler *Handler
 }
 
-func NewModule(db *sqlx.DB, cfg config.Config) *Module {
+func NewModule(db *sqlx.DB) *Module {
 	repo := NewPostgresRepository(db)
 	service := NewService(repo)
 	handler := NewHandler(service)

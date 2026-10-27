@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
 
 	"rantau-go/internal/database"
@@ -39,8 +38,7 @@ func (r *postgresRepository) Create(ctx context.Context, u *User) (*User, error)
 		u.PasswordHash,
 	)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == database.UniqueViolation {
+		if database.IsCode(err, database.UniqueViolation) {
 			return nil, ErrEmailTaken
 		}
 		return nil, err

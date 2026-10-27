@@ -43,9 +43,6 @@ func (h *Handler) GetSubDistrict(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sd, err := h.service.GetSubDistrict(r.Context(), id)
-	if err == nil && sd == nil {
-		err = errors.New("service returned no sub-district")
-	}
 	if err != nil {
 		if errors.Is(err, ErrSubDistrictNotFound) {
 			httpx.RespondError(w, http.StatusNotFound, "sub_district_not_found", err.Error())
@@ -66,9 +63,6 @@ func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sd, err := h.service.Create(r.Context(), toSubDistrict(req))
-	if err == nil && sd == nil {
-		err = errors.New("service returned no sub-district")
-	}
 	if err != nil {
 		respondSubDistrictError(w, err)
 		return
@@ -93,9 +87,6 @@ func (h *Handler) PatchSubDistrict(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sd, err := h.service.Update(r.Context(), id, SubDistrictPatch(*req))
-	if err == nil && sd == nil {
-		err = errors.New("service returned no sub-district")
-	}
 	if err != nil {
 		respondSubDistrictError(w, err)
 		return

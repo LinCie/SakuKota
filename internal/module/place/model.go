@@ -24,10 +24,6 @@ type Place struct {
 	// object keyed by CategoryField.Key.
 	Attributes json.RawMessage `db:"attributes"`
 	Category   Category        `db:"category"`
-	// IdempotencyKey and RequestHash identify a create request that the client
-	// may retry. They are empty when the request carries no Idempotency-Key.
-	IdempotencyKey string `db:"-"`
-	RequestHash    string `db:"-"`
 }
 
 // PlaceFilter narrows the places returned by GetMany. Zero values apply no filter.

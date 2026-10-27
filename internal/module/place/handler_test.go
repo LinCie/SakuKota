@@ -478,15 +478,6 @@ func TestHandler_CreatePlace_MapsServiceErrors(t *testing.T) {
 	}
 }
 
-func TestHandler_CreatePlace_NilResultIsAnInternalError(t *testing.T) {
-	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, nil)
-
-	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/places",
-		`{"name":"Kopi","sub_district_id":1,"category_id":2}`))
-	assertError(t, rec, http.StatusInternalServerError, "internal_error")
-}
-
 func TestHandler_CreatePlace_Success(t *testing.T) {
 	svc := mock.NewMockService(gomock.NewController(t))
 
@@ -768,14 +759,6 @@ func TestHandler_PatchPlace_MapsServiceErrors(t *testing.T) {
 			assertError(t, rec, tc.wantStatus, tc.wantCode)
 		})
 	}
-}
-
-func TestHandler_PatchPlace_NilResultIsAnInternalError(t *testing.T) {
-	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
-
-	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, "/places/1", `{"name":"Kopi"}`))
-	assertError(t, rec, http.StatusInternalServerError, "internal_error")
 }
 
 func TestHandler_PatchPlace_Success(t *testing.T) {
