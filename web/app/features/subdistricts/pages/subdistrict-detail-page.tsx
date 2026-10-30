@@ -13,7 +13,7 @@ import { toastManager } from "~/shared/toast-manager";
 import { writeErrorMessage } from "~/shared/write-error";
 
 import { deleteSubDistrict } from "../api";
-import { SubDistrictFormDrawer } from "./subdistrict-form-drawer";
+import { SubDistrictFormDrawer } from "../components/subdistrict-form-drawer";
 import type { SubDistrict } from "../types";
 
 /** One kecamatan: its area info, with edit and delete. */

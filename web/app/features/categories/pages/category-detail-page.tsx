@@ -14,8 +14,8 @@ import { toastManager } from "~/shared/toast-manager";
 import { writeErrorMessage } from "~/shared/write-error";
 
 import { fieldTypeLabel } from "../field-types";
-import { CategoryFieldFormDrawer } from "./category-field-form-drawer";
-import { CategoryFormDrawer } from "./category-form-drawer";
+import { CategoryFieldFormDrawer } from "../components/category-field-form-drawer";
+import { CategoryFormDrawer } from "../components/category-form-drawer";
 
 const fieldColumns: Column<CategoryField>[] = [
   {

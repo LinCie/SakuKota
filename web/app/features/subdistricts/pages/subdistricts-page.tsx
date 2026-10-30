@@ -13,8 +13,8 @@ import { writeErrorMessage } from "~/shared/write-error";
 
 import { deleteSubDistrict } from "../api";
 import type { SubDistrict } from "../types";
-import { SubDistrictFormDrawer } from "./subdistrict-form-drawer";
-import { SubDistrictsTable } from "./subdistricts-table";
+import { SubDistrictFormDrawer } from "../components/subdistrict-form-drawer";
+import { SubDistrictsTable } from "../components/subdistricts-table";
 
 function subDistrictSearchText(subDistrict: SubDistrict) {
   return [subDistrict.name, subDistrict.slug].join(" ");

@@ -14,8 +14,8 @@ import { writeErrorMessage } from "~/shared/write-error";
 
 import { deletePlace } from "../api";
 import type { CategoryDetail, Place } from "../types";
-import { PlaceFormDrawer } from "./place-form-drawer";
-import { PlacesTable } from "./places-table";
+import { PlaceFormDrawer } from "../components/place-form-drawer";
+import { PlacesTable } from "../components/places-table";
 
 type PlacesPageProps = {
   places: Place[];

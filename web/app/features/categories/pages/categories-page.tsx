@@ -13,8 +13,8 @@ import { useDeletion, useDisclosure, useTableQuery } from "~/shared/hooks";
 import { toastManager } from "~/shared/toast-manager";
 import { writeErrorMessage } from "~/shared/write-error";
 
-import { CategoriesTable } from "./categories-table";
-import { CategoryFormDrawer } from "./category-form-drawer";
+import { CategoriesTable } from "../components/categories-table";
+import { CategoryFormDrawer } from "../components/category-form-drawer";
 
 function categorySearchText(category: CategoryDetail) {
   return [category.name, category.slug].join(" ");

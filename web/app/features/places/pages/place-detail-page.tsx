@@ -15,8 +15,8 @@ import { writeErrorMessage } from "~/shared/write-error";
 import { deletePlace } from "../api";
 import { attributeValue } from "../attribute-format";
 import type { CategoryDetail, Place } from "../types";
-import { CategoryBadge } from "./category-sign";
-import { PlaceFormDrawer } from "./place-form-drawer";
+import { CategoryBadge } from "../components/category-sign";
+import { PlaceFormDrawer } from "../components/place-form-drawer";
 
 type PlaceDetailPageProps = {
   place: Place;
