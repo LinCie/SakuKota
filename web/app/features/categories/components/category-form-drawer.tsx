@@ -1,13 +1,14 @@
 import { useForm, useStore } from "@tanstack/react-form";
-import { useRouter } from "@tanstack/react-router";
 
-import { createCategory, updateCategory } from "~/features/places/api";
+import {
+  useCreateCategory,
+  useUpdateCategory,
+} from "~/features/places/queries";
 import type { CategoryDetail } from "~/features/places/types";
 import { FormAlert } from "~/shared/components/form-alert";
 import { FormDrawer } from "~/shared/components/form-drawer";
-import { useAction } from "~/shared/hooks";
 import { toastManager } from "~/shared/toast-manager";
-import { writeErrorMessage } from "~/shared/write-error";
+import { hasErrorCode, writeErrorMessage } from "~/shared/write-error";
 
 import { categorySchema, type CategoryValues } from "../schemas";
 import { CategoryForm } from "./category-form";
@@ -25,8 +26,9 @@ export function CategoryFormDrawer({
   onOpenChange,
   category,
 }: CategoryFormDrawerProps) {
-  const router = useRouter();
-  const action = useAction();
+  const createCategory = useCreateCategory();
+  const updateCategory = useUpdateCategory();
+  const mutation = category ? updateCategory : createCategory;
   const initial: CategoryValues = category
     ? { name: category.name, slug: category.slug }
     : { name: "", slug: "" };
@@ -34,29 +36,22 @@ export function CategoryFormDrawer({
   const form = useForm({
     defaultValues: initial,
     validators: { onSubmit: categorySchema },
-    onSubmit: async ({ value }) => {
+    onSubmit: ({ value }) => {
       const body = { name: value.name.trim(), slug: value.slug.trim() };
+      const onSuccess = () => {
+        toastManager.add({
+          title: category
+            ? "Perubahan kategori disimpan"
+            : `Kategori ditambahkan: ${body.name}`,
+        });
+        onOpenChange(false);
+      };
 
-      const saved = await action.run(async () => {
-        const result = category
-          ? await updateCategory(category.id, body)
-          : await createCategory(body);
-        if (!result.ok) {
-          return result.error.code === "category_exists"
-            ? "Kategori dengan nama atau slug ini sudah ada."
-            : writeErrorMessage(result.status, result.error);
-        }
-        await router.invalidate();
-        return null;
-      });
-      if (!saved) return;
-
-      toastManager.add({
-        title: category
-          ? "Perubahan kategori disimpan"
-          : `Kategori ditambahkan: ${body.name}`,
-      });
-      onOpenChange(false);
+      if (category) {
+        updateCategory.mutate({ id: category.id, body }, { onSuccess });
+      } else {
+        createCategory.mutate(body, { onSuccess });
+      }
     },
   });
 
@@ -68,16 +63,22 @@ export function CategoryFormDrawer({
       onOpenChange={onOpenChange}
       onClosed={() => {
         form.reset(initial);
-        action.clearError();
+        mutation.reset();
       }}
       title={category ? "Ubah kategori" : "Tambah kategori"}
       description="Nama kategori dan slugnya."
       dirty={dirty}
       formId="category-form"
-      pending={action.pending}
+      pending={mutation.isPending}
       submitLabel={category ? "Simpan perubahan" : "Tambah kategori"}
     >
-      {action.error ? <FormAlert>{action.error}</FormAlert> : null}
+      {mutation.error ? (
+        <FormAlert>
+          {hasErrorCode(mutation.error, "category_exists")
+            ? "Kategori dengan nama atau slug ini sudah ada."
+            : writeErrorMessage(mutation.error)}
+        </FormAlert>
+      ) : null}
       <CategoryForm form={form} formId="category-form" followSlug={!category} />
     </FormDrawer>
   );

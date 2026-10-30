@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 
@@ -8,12 +9,12 @@ import { orMissing } from "~/shared/components/missing-slot";
 import { PageHeader } from "~/shared/components/page-header";
 import { SectionCard } from "~/shared/components/section-card";
 import { formatRupiah } from "~/shared/format";
-import { useDeletion, useDisclosure } from "~/shared/hooks";
+import { useDisclosure } from "~/shared/hooks";
 import { toastManager } from "~/shared/toast-manager";
-import { writeErrorMessage } from "~/shared/write-error";
+import { hasErrorCode, writeErrorMessage } from "~/shared/write-error";
 
-import { deleteSubDistrict } from "../api";
 import { SubDistrictFormDrawer } from "../components/subdistrict-form-drawer";
+import { subDistrictKeys, useDeleteSubDistrict } from "../queries";
 import type { SubDistrict } from "../types";
 
 /** One kecamatan: its area info, with edit and delete. */
@@ -23,21 +24,29 @@ export function SubDistrictDetailPage({
   subDistrict: SubDistrict;
 }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const drawer = useDisclosure();
+  const confirm = useDisclosure();
+  const deleteSubDistrict = useDeleteSubDistrict();
 
-  const deletion = useDeletion<SubDistrict>(
-    async (target) => {
-      const result = await deleteSubDistrict(target.id);
-      if (result.ok) return null;
-      return result.error.code === "sub_district_in_use"
-        ? "Kecamatan ini masih punya tempat. Pindahkan atau hapus tempatnya dulu."
-        : writeErrorMessage(result.status, result.error);
-    },
-    (target) => {
-      toastManager.add({ title: `Kecamatan dihapus: ${target.name}` });
-      void navigate({ to: "/admin/subdistricts" });
-    },
-  );
+  function confirmDelete() {
+    deleteSubDistrict.mutate(subDistrict.id, {
+      onSuccess: async () => {
+        toastManager.add({ title: `Kecamatan dihapus: ${subDistrict.name}` });
+        await navigate({ to: "/admin/subdistricts" });
+        // Removed only once this page is gone, so it doesn't refetch the kecamatan.
+        queryClient.removeQueries({
+          queryKey: subDistrictKeys.detail(subDistrict.id),
+        });
+      },
+    });
+  }
+
+  const deleteError = !deleteSubDistrict.error
+    ? null
+    : hasErrorCode(deleteSubDistrict.error, "sub_district_in_use")
+      ? "Kecamatan ini masih punya tempat. Pindahkan atau hapus tempatnya dulu."
+      : writeErrorMessage(deleteSubDistrict.error);
 
   const items: DetailItem[] = [
     {
@@ -96,7 +105,7 @@ export function SubDistrictDetailPage({
             </Button>
             <Button
               className="text-chili"
-              onClick={() => deletion.request(subDistrict)}
+              onClick={() => confirm.setOpen(true)}
             >
               <Trash2 aria-hidden="true" className="size-4" strokeWidth={2.5} />
               Hapus
@@ -117,16 +126,17 @@ export function SubDistrictDetailPage({
       />
 
       <ConfirmDialog
-        open={deletion.target !== null}
+        open={confirm.open}
         onOpenChange={(open) => {
-          if (!open) deletion.close();
+          confirm.setOpen(open);
+          if (!open) deleteSubDistrict.reset();
         }}
         title="Hapus kecamatan?"
         description={`Kec. ${subDistrict.name} akan dihapus. Kecamatan yang masih punya tempat tidak bisa dihapus.`}
         confirmLabel="Hapus kecamatan"
-        pending={deletion.pending}
-        error={deletion.error}
-        onConfirm={() => void deletion.confirm()}
+        pending={deleteSubDistrict.isPending}
+        error={deleteError}
+        onConfirm={confirmDelete}
       />
     </>
   );

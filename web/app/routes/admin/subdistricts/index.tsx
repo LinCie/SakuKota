@@ -1,13 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { AdminRouteError } from "~/features/admin/components/admin-route-error";
-import { getSubDistricts } from "~/features/subdistricts/api";
 import { SubDistrictsPage } from "~/features/subdistricts/pages/subdistricts-page";
+import {
+  subDistrictsQuery,
+  useSubDistricts,
+} from "~/features/subdistricts/queries";
 import { LoadingState } from "~/shared/components/loading-state";
-import { unwrap } from "~/shared/api";
 
 export const Route = createFileRoute("/admin/subdistricts/")({
-  loader: async () => ({ subDistricts: unwrap(await getSubDistricts()) }),
+  loader: ({ context: { queryClient } }) =>
+    queryClient.ensureQueryData(subDistrictsQuery()),
   pendingComponent: LoadingState,
   errorComponent: AdminRouteError,
   head: () => ({ meta: [{ title: "Kecamatan · Admin Rantau" }] }),
@@ -15,5 +18,6 @@ export const Route = createFileRoute("/admin/subdistricts/")({
 });
 
 function SubDistrictsRoute() {
-  return <SubDistrictsPage {...Route.useLoaderData()} />;
+  const { data: subDistricts } = useSubDistricts();
+  return <SubDistrictsPage subDistricts={subDistricts} />;
 }

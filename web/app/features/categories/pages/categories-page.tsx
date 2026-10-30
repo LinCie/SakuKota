@@ -1,17 +1,17 @@
-import { useNavigate, useRouter } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
-import { deleteCategory } from "~/features/places/api";
+import { useDeleteCategory } from "~/features/places/queries";
 import type { CategoryDetail } from "~/features/places/types";
 import { Button } from "~/shared/components/button";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { PageHeader } from "~/shared/components/page-header";
 import { SearchField } from "~/shared/components/search-field";
 import { formatNumber } from "~/shared/format";
-import { useDeletion, useDisclosure, useTableQuery } from "~/shared/hooks";
+import { useDisclosure, useTableQuery } from "~/shared/hooks";
 import { toastManager } from "~/shared/toast-manager";
-import { writeErrorMessage } from "~/shared/write-error";
+import { hasErrorCode, writeErrorMessage } from "~/shared/write-error";
 
 import { CategoriesTable } from "../components/categories-table";
 import { CategoryFormDrawer } from "../components/category-form-drawer";
@@ -26,27 +26,37 @@ export function CategoriesPage({
 }: {
   categories: CategoryDetail[];
 }) {
-  const router = useRouter();
   const navigate = useNavigate();
   const search = useTableQuery(categories, categorySearchText);
   const drawer = useDisclosure();
   // Null while adding; the category being edited otherwise.
   const [editing, setEditing] = useState<CategoryDetail | null>(null);
 
-  const deletion = useDeletion<CategoryDetail>(
-    async (category) => {
-      const result = await deleteCategory(category.id);
-      if (result.ok) {
-        await router.invalidate();
-        return null;
-      }
-      return result.error.code === "category_in_use"
-        ? "Kategori ini masih dipakai tempat. Pindahkan atau hapus tempatnya dulu."
-        : writeErrorMessage(result.status, result.error);
-    },
-    (category) =>
-      toastManager.add({ title: `Kategori dihapus: ${category.name}` }),
-  );
+  const deleteCategory = useDeleteCategory();
+  // The category awaiting delete confirmation.
+  const [deleting, setDeleting] = useState<CategoryDetail | null>(null);
+
+  function closeDelete() {
+    setDeleting(null);
+    deleteCategory.reset();
+  }
+
+  function confirmDelete() {
+    if (!deleting) return;
+    const category = deleting;
+    deleteCategory.mutate(category.id, {
+      onSuccess: () => {
+        toastManager.add({ title: `Kategori dihapus: ${category.name}` });
+        setDeleting(null);
+      },
+    });
+  }
+
+  const deleteError = !deleteCategory.error
+    ? null
+    : hasErrorCode(deleteCategory.error, "category_in_use")
+      ? "Kategori ini masih dipakai tempat. Pindahkan atau hapus tempatnya dulu."
+      : writeErrorMessage(deleteCategory.error);
 
   function openCreate() {
     setEditing(null);
@@ -93,7 +103,7 @@ export function CategoriesPage({
           })
         }
         onEdit={openEdit}
-        onDelete={deletion.request}
+        onDelete={setDeleting}
       />
 
       <CategoryFormDrawer
@@ -104,16 +114,16 @@ export function CategoriesPage({
       />
 
       <ConfirmDialog
-        open={deletion.target !== null}
+        open={deleting !== null}
         onOpenChange={(open) => {
-          if (!open) deletion.close();
+          if (!open) closeDelete();
         }}
         title="Hapus kategori?"
-        description={`${deletion.target?.name ?? "Kategori ini"} akan dihapus beserta field-nya. Kategori yang masih dipakai tempat tidak bisa dihapus.`}
+        description={`${deleting?.name ?? "Kategori ini"} akan dihapus beserta field-nya. Kategori yang masih dipakai tempat tidak bisa dihapus.`}
         confirmLabel="Hapus kategori"
-        pending={deletion.pending}
-        error={deletion.error}
-        onConfirm={() => void deletion.confirm()}
+        pending={deleteCategory.isPending}
+        error={deleteError}
+        onConfirm={confirmDelete}
       />
     </>
   );

@@ -1,7 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-import { getCategories, getPlace, getPlaces } from "~/features/places/api";
+import type { GetPlacesParams } from "~/features/places/api";
 import { CategoryNav } from "~/features/places/components/category-nav";
 import { HomeHeader } from "~/features/places/components/home-header";
 import {
@@ -11,8 +12,19 @@ import {
 import { PlaceDetails } from "~/features/places/components/place-details";
 import { PlaceList } from "~/features/places/components/place-list";
 import { SurvivalMap } from "~/features/places/components/survival-map";
-import type { Place } from "~/features/places/types";
-import { getSubDistricts } from "~/features/subdistricts/api";
+import {
+  categoriesQuery,
+  placeQuery,
+  placesQuery,
+  useCategories,
+  usePlaces,
+} from "~/features/places/queries";
+import type { CategoryDetail } from "~/features/places/types";
+import {
+  subDistrictsQuery,
+  useSubDistricts,
+} from "~/features/subdistricts/queries";
+import type { SubDistrict } from "~/features/subdistricts/types";
 import { KecamatanBoard } from "~/features/subdistricts/components/kecamatan-board";
 import { ErrorBoard } from "~/shared/components/error-board";
 
@@ -44,6 +56,31 @@ function searchLimit(value: unknown) {
     : undefined;
 }
 
+type PlacesFilters = Pick<HomeSearch, "kecamatan" | "kategori" | "q" | "limit">;
+
+/**
+ * The kecamatan on show (the one in the URL, else the first) and the places
+ * query for the filters. With no kecamatan at all there are no places either.
+ */
+function placesSelection(
+  { kecamatan, kategori, q, limit }: PlacesFilters,
+  categories: CategoryDetail[],
+  subDistricts: SubDistrict[],
+) {
+  const subDistrict =
+    subDistricts.find((sd) => sd.slug === kecamatan) ?? subDistricts[0];
+  const activeSlugs = activeCategorySlugs(kategori);
+  const params: GetPlacesParams = {
+    subDistrictId: subDistrict?.id,
+    categoryIds: categories
+      .filter((category) => activeSlugs.includes(category.slug))
+      .map((category) => category.id),
+    q: q?.trim(),
+    limit,
+  };
+  return { subDistrict, params };
+}
+
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>): HomeSearch => ({
     kecamatan: searchString(search.kecamatan),
@@ -61,37 +98,13 @@ export const Route = createFileRoute("/")({
     q,
     limit,
   }),
-  loader: async ({ deps: { kecamatan, kategori, q, limit } }) => {
+  loader: async ({ context: { queryClient }, deps }) => {
     const [categories, subDistricts] = await Promise.all([
-      getCategories(),
-      getSubDistricts(),
+      queryClient.ensureQueryData(categoriesQuery()),
+      queryClient.ensureQueryData(subDistrictsQuery()),
     ]);
-    if (!categories.ok) throw new Error(categories.error.message);
-    if (!subDistricts.ok) throw new Error(subDistricts.error.message);
-
-    const subDistrict =
-      subDistricts.data.find((sd) => sd.slug === kecamatan) ??
-      subDistricts.data[0];
-    const activeSlugs = activeCategorySlugs(kategori);
-
-    const places = subDistrict
-      ? await getPlaces({
-          subDistrictId: subDistrict.id,
-          categoryIds: categories.data
-            .filter((category) => activeSlugs.includes(category.slug))
-            .map((category) => category.id),
-          q: q?.trim(),
-          limit,
-        })
-      : null;
-    if (places && !places.ok) throw new Error(places.error.message);
-
-    return {
-      places: places ? places.data : [],
-      categories: categories.data,
-      subDistricts: subDistricts.data,
-      subDistrict,
-    };
+    const { params } = placesSelection(deps, categories, subDistricts);
+    await queryClient.ensureQueryData(placesQuery(params));
   },
   head: () => ({
     meta: [
@@ -108,13 +121,15 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const {
-    places: visiblePlaces,
+  const search = Route.useSearch();
+  const { data: categories } = useCategories();
+  const { data: subDistricts } = useSubDistricts();
+  const { subDistrict, params } = placesSelection(
+    search,
     categories,
     subDistricts,
-    subDistrict,
-  } = Route.useLoaderData();
-  const search = Route.useSearch();
+  );
+  const { data: visiblePlaces } = usePlaces(params);
   const navigate = Route.useNavigate();
   const [infoOpen, setInfoOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -147,20 +162,11 @@ function Home() {
   const listedPlace =
     visiblePlaces.find((place) => place.id === search.tempat) ?? null;
   // A zoomed-out list can drop the selected place; it is fetched so its details stay open.
-  const [detachedPlace, setDetachedPlace] = useState<Place | null>(null);
-  const isListed = listedPlace !== null;
-  useEffect(() => {
-    if (search.tempat === undefined || isListed) return;
-    let ignore = false;
-    void getPlace(search.tempat).then((result) => {
-      if (!ignore) setDetachedPlace(result.ok ? result.data : null);
-    });
-    return () => {
-      ignore = true;
-    };
-  }, [search.tempat, isListed]);
-  const selectedPlace =
-    listedPlace ?? (detachedPlace?.id === search.tempat ? detachedPlace : null);
+  const { data: detachedPlace } = useQuery({
+    ...placeQuery(search.tempat ?? 0),
+    enabled: search.tempat !== undefined && listedPlace === null,
+  });
+  const selectedPlace = listedPlace ?? detachedPlace ?? null;
   const selectedFields =
     categories.find((category) => category.id === selectedPlace?.category.id)
       ?.fields ?? [];

@@ -1,20 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { AdminRouteError } from "~/features/admin/components/admin-route-error";
-import { getCategory } from "~/features/places/api";
 import { CategoryDetailPage } from "~/features/categories/pages/category-detail-page";
+import { categoryQuery, useCategory } from "~/features/places/queries";
 import { LoadingState } from "~/shared/components/loading-state";
-import { unwrap } from "~/shared/api";
 
 export const Route = createFileRoute("/admin/categories/$categoryId")({
-  loader: async ({ params }) => ({
-    category: unwrap(await getCategory(Number(params.categoryId))),
-  }),
+  loader: ({ context: { queryClient }, params }) =>
+    queryClient.ensureQueryData(categoryQuery(Number(params.categoryId))),
   pendingComponent: LoadingState,
   errorComponent: AdminRouteError,
   component: CategoryDetailRoute,
 });
 
 function CategoryDetailRoute() {
-  return <CategoryDetailPage {...Route.useLoaderData()} />;
+  const { categoryId } = Route.useParams();
+  const { data: category } = useCategory(Number(categoryId));
+  return <CategoryDetailPage category={category} />;
 }

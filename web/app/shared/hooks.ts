@@ -2,35 +2,6 @@ import { useMemo, useRef, useState } from "react";
 
 import { slugify } from "~/shared/text";
 
-/**
- * Runs an async task with pending and error state. The task resolves to an
- * error message, or null on success; `run` resolves to whether it succeeded.
- */
-export function useAction() {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function run(task: () => Promise<string | null>): Promise<boolean> {
-    setPending(true);
-    setError(null);
-    try {
-      const message = await task();
-      if (message) {
-        setError(message);
-        return false;
-      }
-      return true;
-    } catch {
-      setError("Tidak bisa terhubung ke server. Coba lagi.");
-      return false;
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return { pending, error, run, clearError: () => setError(null) };
-}
-
 export type Position = { lat: number; lng: number };
 
 /** Reads the device's current position once, handing it to `onFound`. */
@@ -59,42 +30,6 @@ export function useCurrentPosition() {
   }
 
   return { locating, error, locate };
-}
-
-/**
- * Asks before deleting: holds the item awaiting confirmation, runs `remove`
- * on confirm, and clears the confirmation once it succeeds. `remove` resolves
- * to an error message, or null on success.
- */
-export function useDeletion<T>(
-  remove: (item: T) => Promise<string | null>,
-  onRemoved: (item: T) => void,
-) {
-  const [target, setTarget] = useState<T | null>(null);
-  const action = useAction();
-
-  function close() {
-    setTarget(null);
-    action.clearError();
-  }
-
-  async function confirm() {
-    if (target === null) return;
-    const removed = await action.run(() => remove(target));
-    if (removed) {
-      onRemoved(target);
-      close();
-    }
-  }
-
-  return {
-    target,
-    pending: action.pending,
-    error: action.error,
-    request: setTarget,
-    close,
-    confirm,
-  };
 }
 
 /** Open state for a drawer or dialog. */

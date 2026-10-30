@@ -222,8 +222,24 @@ export function apiDelete<T, C extends string = string>(
   return apiResult<T, C>(api.delete(path, options));
 }
 
-/** The data of a successful result; throws the server's message otherwise, for route loaders. */
+/**
+ * Thrown for a backend error response, carrying its HTTP status and error
+ * code. Query and mutation functions throw it so TanStack Query sees failures.
+ */
+export class ApiError<C extends string = string> extends Error {
+  readonly status: number;
+  readonly code: C;
+
+  constructor(status: number, error: ApiErrorResponse<C>) {
+    super(error.message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = error.code;
+  }
+}
+
+/** The data of a successful result; throws an `ApiError` otherwise. */
 export function unwrap<T, C extends string>(result: ApiResult<T, C>): T {
-  if (!result.ok) throw new Error(result.error.message);
+  if (!result.ok) throw new ApiError(result.status, result.error);
   return result.data;
 }

@@ -4,8 +4,8 @@ import {
   apiPatch,
   apiPost,
   type AdminWriteErrorCode,
-  type ApiResult,
   type CommonApiErrorCode,
+  unwrap,
 } from "~/shared/api";
 import type {
   CategoryDetail,
@@ -16,7 +16,9 @@ import type {
 } from "./types";
 
 // -----------------------------------------------------------------------------
-// Request params / error codes (service-layer concerns, not domain shapes)
+// Request params / error codes (service-layer concerns, not domain shapes).
+// Services resolve to the response data and throw an `ApiError` carrying one
+// of these codes when the backend rejects the request.
 // -----------------------------------------------------------------------------
 
 export type PlaceErrorCode =
@@ -118,9 +120,9 @@ export type CreateCategoryFieldRequest = {
 // Services (see internal/router/router.go)
 // -----------------------------------------------------------------------------
 
-export function getPlaces(
+export async function getPlaces(
   params: GetPlacesParams = {},
-): Promise<ApiResult<Place[], PlaceErrorCode>> {
+): Promise<Place[]> {
   const { subDistrictId, categoryIds, q, limit } = params;
   const searchParams = new URLSearchParams();
   if (subDistrictId !== undefined) {
@@ -131,85 +133,94 @@ export function getPlaces(
   if (q) searchParams.set("q", q);
   if (limit !== undefined) searchParams.set("limit", String(limit));
 
-  return apiGet<Place[], PlaceErrorCode>("places", { searchParams });
+  return unwrap(
+    await apiGet<Place[], PlaceErrorCode>("places", { searchParams }),
+  );
 }
 
-export function getPlace(
-  id: number,
-): Promise<ApiResult<Place, GetPlaceErrorCode>> {
-  return apiGet<Place, GetPlaceErrorCode>(`places/${id}`);
+export async function getPlace(id: number): Promise<Place> {
+  return unwrap(await apiGet<Place, GetPlaceErrorCode>(`places/${id}`));
 }
 
-export function getCategories(): Promise<
-  ApiResult<CategoryDetail[], CategoryErrorCode>
-> {
-  return apiGet<CategoryDetail[], CategoryErrorCode>("places/categories");
+export async function getCategories(): Promise<CategoryDetail[]> {
+  return unwrap(
+    await apiGet<CategoryDetail[], CategoryErrorCode>("places/categories"),
+  );
 }
 
-export function getCategory(
-  id: number,
-): Promise<ApiResult<CategoryDetail, GetCategoryErrorCode>> {
-  return apiGet<CategoryDetail, GetCategoryErrorCode>(
-    `places/categories/${id}`,
+export async function getCategory(id: number): Promise<CategoryDetail> {
+  return unwrap(
+    await apiGet<CategoryDetail, GetCategoryErrorCode>(
+      `places/categories/${id}`,
+    ),
   );
 }
 
 /** Admin only. */
-export function createPlace(
-  body: CreatePlaceRequest,
-): Promise<ApiResult<Place, CreatePlaceErrorCode>> {
-  return apiPost<Place, CreatePlaceErrorCode>("places", { json: body });
+export async function createPlace(body: CreatePlaceRequest): Promise<Place> {
+  return unwrap(
+    await apiPost<Place, CreatePlaceErrorCode>("places", { json: body }),
+  );
 }
 
 /** Admin only. */
-export function updatePlace(
+export async function updatePlace(
   id: number,
   body: UpdatePlaceRequest,
-): Promise<ApiResult<Place, UpdatePlaceErrorCode>> {
-  return apiPatch<Place, UpdatePlaceErrorCode>(`places/${id}`, { json: body });
-}
-
-/** Admin only. */
-export function deletePlace(
-  id: number,
-): Promise<ApiResult<void, DeletePlaceErrorCode>> {
-  return apiDelete<void, DeletePlaceErrorCode>(`places/${id}`);
-}
-
-/** Admin only. */
-export function createCategory(
-  body: CreateCategoryRequest,
-): Promise<ApiResult<CategoryDetail, CreateCategoryErrorCode>> {
-  return apiPost<CategoryDetail, CreateCategoryErrorCode>("places/categories", {
-    json: body,
-  });
-}
-
-/** Admin only. */
-export function updateCategory(
-  id: number,
-  body: UpdateCategoryRequest,
-): Promise<ApiResult<CategoryDetail, UpdateCategoryErrorCode>> {
-  return apiPatch<CategoryDetail, UpdateCategoryErrorCode>(
-    `places/categories/${id}`,
-    { json: body },
+): Promise<Place> {
+  return unwrap(
+    await apiPatch<Place, UpdatePlaceErrorCode>(`places/${id}`, {
+      json: body,
+    }),
   );
 }
 
 /** Admin only. */
-export function deleteCategory(
-  id: number,
-): Promise<ApiResult<void, DeleteCategoryErrorCode>> {
-  return apiDelete<void, DeleteCategoryErrorCode>(`places/categories/${id}`);
+export async function deletePlace(id: number): Promise<void> {
+  unwrap(await apiDelete<void, DeletePlaceErrorCode>(`places/${id}`));
 }
 
 /** Admin only. */
-export function createCategoryField(
+export async function createCategory(
+  body: CreateCategoryRequest,
+): Promise<CategoryDetail> {
+  return unwrap(
+    await apiPost<CategoryDetail, CreateCategoryErrorCode>(
+      "places/categories",
+      { json: body },
+    ),
+  );
+}
+
+/** Admin only. */
+export async function updateCategory(
+  id: number,
+  body: UpdateCategoryRequest,
+): Promise<CategoryDetail> {
+  return unwrap(
+    await apiPatch<CategoryDetail, UpdateCategoryErrorCode>(
+      `places/categories/${id}`,
+      { json: body },
+    ),
+  );
+}
+
+/** Admin only. */
+export async function deleteCategory(id: number): Promise<void> {
+  unwrap(
+    await apiDelete<void, DeleteCategoryErrorCode>(`places/categories/${id}`),
+  );
+}
+
+/** Admin only. */
+export async function createCategoryField(
   categoryId: number,
   body: CreateCategoryFieldRequest,
-): Promise<ApiResult<CategoryField, CreateCategoryFieldErrorCode>> {
-  return apiPost<CategoryField, CreateCategoryFieldErrorCode>(
-    `places/categories/${categoryId}/fields`,
-    { json: body },
+): Promise<CategoryField> {
+  return unwrap(
+    await apiPost<CategoryField, CreateCategoryFieldErrorCode>(
+      `places/categories/${categoryId}/fields`,
+      { json: body },
+    ),
   );
 }

@@ -1,12 +1,10 @@
 import { useForm, useStore } from "@tanstack/react-form";
-import { useRouter } from "@tanstack/react-router";
 
-import { createCategoryField } from "~/features/places/api";
+import { useCreateCategoryField } from "~/features/places/queries";
 import { FormAlert } from "~/shared/components/form-alert";
 import { FormDrawer } from "~/shared/components/form-drawer";
-import { useAction } from "~/shared/hooks";
 import { toastManager } from "~/shared/toast-manager";
-import { writeErrorMessage } from "~/shared/write-error";
+import { hasErrorCode, writeErrorMessage } from "~/shared/write-error";
 
 import {
   emptyCategoryFieldValues,
@@ -27,29 +25,22 @@ export function CategoryFieldFormDrawer({
   onOpenChange,
   categoryId,
 }: CategoryFieldFormDrawerProps) {
-  const router = useRouter();
-  const action = useAction();
+  const mutation = useCreateCategoryField();
 
   const form = useForm({
     defaultValues: emptyCategoryFieldValues,
     validators: { onSubmit: categoryFieldSchema },
-    onSubmit: async ({ value }) => {
+    onSubmit: ({ value }) => {
       const body = toCategoryFieldRequest(value);
-
-      const saved = await action.run(async () => {
-        const result = await createCategoryField(categoryId, body);
-        if (!result.ok) {
-          return result.error.code === "category_field_exists"
-            ? "Kunci ini sudah dipakai field lain di kategori ini."
-            : writeErrorMessage(result.status, result.error);
-        }
-        await router.invalidate();
-        return null;
-      });
-      if (!saved) return;
-
-      toastManager.add({ title: `Field ditambahkan: ${body.label}` });
-      onOpenChange(false);
+      mutation.mutate(
+        { categoryId, body },
+        {
+          onSuccess: () => {
+            toastManager.add({ title: `Field ditambahkan: ${body.label}` });
+            onOpenChange(false);
+          },
+        },
+      );
     },
   });
 
@@ -61,16 +52,22 @@ export function CategoryFieldFormDrawer({
       onOpenChange={onOpenChange}
       onClosed={() => {
         form.reset(emptyCategoryFieldValues);
-        action.clearError();
+        mutation.reset();
       }}
       title="Tambah field"
       description="Field tambahan yang diisi untuk setiap tempat di kategori ini."
       dirty={dirty}
       formId="category-field-form"
-      pending={action.pending}
+      pending={mutation.isPending}
       submitLabel="Tambah field"
     >
-      {action.error ? <FormAlert>{action.error}</FormAlert> : null}
+      {mutation.error ? (
+        <FormAlert>
+          {hasErrorCode(mutation.error, "category_field_exists")
+            ? "Kunci ini sudah dipakai field lain di kategori ini."
+            : writeErrorMessage(mutation.error)}
+        </FormAlert>
+      ) : null}
       <CategoryFieldForm form={form} formId="category-field-form" />
     </FormDrawer>
   );

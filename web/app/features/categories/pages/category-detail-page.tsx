@@ -1,7 +1,8 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
 
-import { deleteCategory } from "~/features/places/api";
+import { categoryKeys, useDeleteCategory } from "~/features/places/queries";
 import type { CategoryDetail, CategoryField } from "~/features/places/types";
 import { Button } from "~/shared/components/button";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
@@ -9,9 +10,9 @@ import { DataTable, type Column } from "~/shared/components/data-table";
 import { EmptyState } from "~/shared/components/empty-state";
 import { PageHeader } from "~/shared/components/page-header";
 import { SectionCard } from "~/shared/components/section-card";
-import { useDeletion, useDisclosure } from "~/shared/hooks";
+import { useDisclosure } from "~/shared/hooks";
 import { toastManager } from "~/shared/toast-manager";
-import { writeErrorMessage } from "~/shared/write-error";
+import { hasErrorCode, writeErrorMessage } from "~/shared/write-error";
 
 import { fieldTypeLabel } from "../field-types";
 import { CategoryFieldFormDrawer } from "../components/category-field-form-drawer";
@@ -55,22 +56,30 @@ const fieldColumns: Column<CategoryField>[] = [
 /** One category: its details and custom fields, with edit, delete, and add field. */
 export function CategoryDetailPage({ category }: { category: CategoryDetail }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const editDrawer = useDisclosure();
   const fieldDrawer = useDisclosure();
+  const confirm = useDisclosure();
+  const deleteCategory = useDeleteCategory();
 
-  const deletion = useDeletion<CategoryDetail>(
-    async (target) => {
-      const result = await deleteCategory(target.id);
-      if (result.ok) return null;
-      return result.error.code === "category_in_use"
-        ? "Kategori ini masih dipakai tempat. Pindahkan atau hapus tempatnya dulu."
-        : writeErrorMessage(result.status, result.error);
-    },
-    (target) => {
-      toastManager.add({ title: `Kategori dihapus: ${target.name}` });
-      void navigate({ to: "/admin/categories" });
-    },
-  );
+  function confirmDelete() {
+    deleteCategory.mutate(category.id, {
+      onSuccess: async () => {
+        toastManager.add({ title: `Kategori dihapus: ${category.name}` });
+        await navigate({ to: "/admin/categories" });
+        // Removed only once this page is gone, so it doesn't refetch the category.
+        queryClient.removeQueries({
+          queryKey: categoryKeys.detail(category.id),
+        });
+      },
+    });
+  }
+
+  const deleteError = !deleteCategory.error
+    ? null
+    : hasErrorCode(deleteCategory.error, "category_in_use")
+      ? "Kategori ini masih dipakai tempat. Pindahkan atau hapus tempatnya dulu."
+      : writeErrorMessage(deleteCategory.error);
 
   return (
     <>
@@ -94,7 +103,7 @@ export function CategoryDetailPage({ category }: { category: CategoryDetail }) {
             </Button>
             <Button
               className="text-chili"
-              onClick={() => deletion.request(category)}
+              onClick={() => confirm.setOpen(true)}
             >
               <Trash2 aria-hidden="true" className="size-4" strokeWidth={2.5} />
               Hapus
@@ -138,16 +147,17 @@ export function CategoryDetailPage({ category }: { category: CategoryDetail }) {
       />
 
       <ConfirmDialog
-        open={deletion.target !== null}
+        open={confirm.open}
         onOpenChange={(open) => {
-          if (!open) deletion.close();
+          confirm.setOpen(open);
+          if (!open) deleteCategory.reset();
         }}
         title="Hapus kategori?"
         description={`${category.name} akan dihapus beserta field-nya. Kategori yang masih dipakai tempat tidak bisa dihapus.`}
         confirmLabel="Hapus kategori"
-        pending={deletion.pending}
-        error={deletion.error}
-        onConfirm={() => void deletion.confirm()}
+        pending={deleteCategory.isPending}
+        error={deleteError}
+        onConfirm={confirmDelete}
       />
     </>
   );

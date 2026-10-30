@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 
@@ -8,15 +9,15 @@ import { DetailList, type DetailItem } from "~/shared/components/detail-list";
 import { MissingSlot, orMissing } from "~/shared/components/missing-slot";
 import { PageHeader } from "~/shared/components/page-header";
 import { SectionCard } from "~/shared/components/section-card";
-import { useDeletion, useDisclosure } from "~/shared/hooks";
+import { useDisclosure } from "~/shared/hooks";
 import { toastManager } from "~/shared/toast-manager";
 import { writeErrorMessage } from "~/shared/write-error";
 
-import { deletePlace } from "../api";
 import { attributeValue } from "../attribute-format";
 import type { CategoryDetail, Place } from "../types";
 import { CategoryBadge } from "../components/category-sign";
 import { PlaceFormDrawer } from "../components/place-form-drawer";
+import { placeKeys, useDeletePlace } from "../queries";
 
 type PlaceDetailPageProps = {
   place: Place;
@@ -33,18 +34,25 @@ export function PlaceDetailPage({
   places,
 }: PlaceDetailPageProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const drawer = useDisclosure();
+  const confirm = useDisclosure();
+  const deletePlace = useDeletePlace();
 
-  const deletion = useDeletion<Place>(
-    async (target) => {
-      const result = await deletePlace(target.id);
-      return result.ok ? null : writeErrorMessage(result.status, result.error);
-    },
-    (target) => {
-      toastManager.add({ title: `Tempat dihapus: ${target.name}` });
-      void navigate({ to: "/admin/places" });
-    },
-  );
+  function confirmDelete() {
+    deletePlace.mutate(place.id, {
+      onSuccess: async () => {
+        toastManager.add({ title: `Tempat dihapus: ${place.name}` });
+        await navigate({ to: "/admin/places" });
+        // Removed only once this page is gone, so it doesn't refetch the place.
+        queryClient.removeQueries({ queryKey: placeKeys.detail(place.id) });
+      },
+    });
+  }
+
+  const deleteError = deletePlace.error
+    ? writeErrorMessage(deletePlace.error)
+    : null;
 
   const category = categories.find((c) => c.id === place.category.id);
   const fields = category?.fields ?? [];
@@ -120,7 +128,7 @@ export function PlaceDetailPage({
             </Button>
             <Button
               className="text-chili"
-              onClick={() => deletion.request(place)}
+              onClick={() => confirm.setOpen(true)}
             >
               <Trash2 aria-hidden="true" className="size-4" strokeWidth={2.5} />
               Hapus
@@ -151,16 +159,17 @@ export function PlaceDetailPage({
       />
 
       <ConfirmDialog
-        open={deletion.target !== null}
+        open={confirm.open}
         onOpenChange={(open) => {
-          if (!open) deletion.close();
+          confirm.setOpen(open);
+          if (!open) deletePlace.reset();
         }}
         title="Hapus tempat?"
         description={`${place.name} akan dihapus dari peta. Tindakan ini tidak bisa dibatalkan.`}
         confirmLabel="Hapus tempat"
-        pending={deletion.pending}
-        error={deletion.error}
-        onConfirm={() => void deletion.confirm()}
+        pending={deletePlace.isPending}
+        error={deleteError}
+        onConfirm={confirmDelete}
       />
     </>
   );

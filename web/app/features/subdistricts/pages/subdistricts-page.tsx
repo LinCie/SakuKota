@@ -1,4 +1,4 @@
-import { useNavigate, useRouter } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
@@ -7,14 +7,14 @@ import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { PageHeader } from "~/shared/components/page-header";
 import { SearchField } from "~/shared/components/search-field";
 import { formatNumber } from "~/shared/format";
-import { useDeletion, useDisclosure, useTableQuery } from "~/shared/hooks";
+import { useDisclosure, useTableQuery } from "~/shared/hooks";
 import { toastManager } from "~/shared/toast-manager";
-import { writeErrorMessage } from "~/shared/write-error";
+import { hasErrorCode, writeErrorMessage } from "~/shared/write-error";
 
-import { deleteSubDistrict } from "../api";
 import type { SubDistrict } from "../types";
 import { SubDistrictFormDrawer } from "../components/subdistrict-form-drawer";
 import { SubDistrictsTable } from "../components/subdistricts-table";
+import { useDeleteSubDistrict } from "../queries";
 
 function subDistrictSearchText(subDistrict: SubDistrict) {
   return [subDistrict.name, subDistrict.slug].join(" ");
@@ -26,27 +26,37 @@ export function SubDistrictsPage({
 }: {
   subDistricts: SubDistrict[];
 }) {
-  const router = useRouter();
   const navigate = useNavigate();
   const search = useTableQuery(subDistricts, subDistrictSearchText);
   const drawer = useDisclosure();
   // Null while adding; the kecamatan being edited otherwise.
   const [editing, setEditing] = useState<SubDistrict | null>(null);
 
-  const deletion = useDeletion<SubDistrict>(
-    async (subDistrict) => {
-      const result = await deleteSubDistrict(subDistrict.id);
-      if (result.ok) {
-        await router.invalidate();
-        return null;
-      }
-      return result.error.code === "sub_district_in_use"
-        ? "Kecamatan ini masih punya tempat. Pindahkan atau hapus tempatnya dulu."
-        : writeErrorMessage(result.status, result.error);
-    },
-    (subDistrict) =>
-      toastManager.add({ title: `Kecamatan dihapus: ${subDistrict.name}` }),
-  );
+  const deleteSubDistrict = useDeleteSubDistrict();
+  // The kecamatan awaiting delete confirmation.
+  const [deleting, setDeleting] = useState<SubDistrict | null>(null);
+
+  function closeDelete() {
+    setDeleting(null);
+    deleteSubDistrict.reset();
+  }
+
+  function confirmDelete() {
+    if (!deleting) return;
+    const subDistrict = deleting;
+    deleteSubDistrict.mutate(subDistrict.id, {
+      onSuccess: () => {
+        toastManager.add({ title: `Kecamatan dihapus: ${subDistrict.name}` });
+        setDeleting(null);
+      },
+    });
+  }
+
+  const deleteError = !deleteSubDistrict.error
+    ? null
+    : hasErrorCode(deleteSubDistrict.error, "sub_district_in_use")
+      ? "Kecamatan ini masih punya tempat. Pindahkan atau hapus tempatnya dulu."
+      : writeErrorMessage(deleteSubDistrict.error);
 
   function openCreate() {
     setEditing(null);
@@ -93,7 +103,7 @@ export function SubDistrictsPage({
           })
         }
         onEdit={openEdit}
-        onDelete={deletion.request}
+        onDelete={setDeleting}
       />
 
       <SubDistrictFormDrawer
@@ -104,16 +114,16 @@ export function SubDistrictsPage({
       />
 
       <ConfirmDialog
-        open={deletion.target !== null}
+        open={deleting !== null}
         onOpenChange={(open) => {
-          if (!open) deletion.close();
+          if (!open) closeDelete();
         }}
         title="Hapus kecamatan?"
-        description={`Kec. ${deletion.target?.name ?? ""} akan dihapus. Kecamatan yang masih punya tempat tidak bisa dihapus.`}
+        description={`Kec. ${deleting?.name ?? ""} akan dihapus. Kecamatan yang masih punya tempat tidak bisa dihapus.`}
         confirmLabel="Hapus kecamatan"
-        pending={deletion.pending}
-        error={deletion.error}
-        onConfirm={() => void deletion.confirm()}
+        pending={deleteSubDistrict.isPending}
+        error={deleteError}
+        onConfirm={confirmDelete}
       />
     </>
   );

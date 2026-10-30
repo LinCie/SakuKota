@@ -20,6 +20,9 @@ importers:
       '@tanstack/react-form':
         specifier: ^1.33.5
         version: 1.33.5(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@tanstack/react-query':
+        specifier: ^5.105.0
+        version: 5.105.0(@types/react@19.3.0)(react@19.3.0)
       '@tanstack/react-router':
         specifier: ^1.170.40
         version: 1.170.40(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -570,6 +573,9 @@ packages:
     resolution: {integrity: sha512-y/xtNPNt/YeyoVxE/JCx+T7yjEzpezmbb+toK8DDD1P4m7Kzs5YR956+7OKexG3f8aXgC3rLZl7b1V+yNUSy5w==}
     engines: {node: '>=18'}
 
+  '@tanstack/query-core@5.105.0':
+    resolution: {integrity: sha512-7p56vRmT/z4UJ6sctGIdl5WRUQyUv53IUpUwEKi2g97zMbO7zh8ZsCLffGAvCPBR4xD72e3VXsDyLwXHhoNTMQ==}
+
   '@tanstack/react-form@1.33.5':
     resolution: {integrity: sha512-LlRB28qJwO/QCGaHvWnbdh4haBgTFiZVmzA2uzxSBS3YA7/IqrQ6HOBK70CkFQ+DbflZ7NawsmSln13h5iIdTA==}
     peerDependencies:
@@ -577,6 +583,15 @@ packages:
       react: ^17.0.0 || ^18.0.0 || ^19.0.0
     peerDependenciesMeta:
       '@tanstack/react-start':
+        optional: true
+
+  '@tanstack/react-query@5.105.0':
+    resolution: {integrity: sha512-y+hMuDERvgg6ay1da0V1a6ZC0ZONt7dELxSFkqRZuwm7p1TTZs0MoXrPlBRflIpRoYjvzQVYxycnLImpFLhWrw==}
+    peerDependencies:
+      '@types/react': ^18 || ^19
+      react: ^18 || ^19
+    peerDependenciesMeta:
+      '@types/react':
         optional: true
 
   '@tanstack/react-router@1.170.40':
@@ -1983,6 +1998,8 @@ snapshots:
 
   '@tanstack/pacer-lite@0.1.1': {}
 
+  '@tanstack/query-core@5.105.0': {}
+
   '@tanstack/react-form@1.33.5(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       '@tanstack/form-core': 1.33.5
@@ -1990,6 +2007,13 @@ snapshots:
       react: 19.3.0
     transitivePeerDependencies:
       - react-dom
+
+  '@tanstack/react-query@5.105.0(@types/react@19.3.0)(react@19.3.0)':
+    dependencies:
+      '@tanstack/query-core': 5.105.0
+      react: 19.3.0
+    optionalDependencies:
+      '@types/react': 19.3.0
 
   '@tanstack/react-router@1.170.40(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:

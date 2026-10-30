@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { AdminRouteError } from "~/features/admin/components/admin-route-error";
-import { getCategories } from "~/features/places/api";
 import { CategoriesPage } from "~/features/categories/pages/categories-page";
+import { categoriesQuery, useCategories } from "~/features/places/queries";
 import { LoadingState } from "~/shared/components/loading-state";
-import { unwrap } from "~/shared/api";
 
 export const Route = createFileRoute("/admin/categories/")({
-  loader: async () => ({ categories: unwrap(await getCategories()) }),
+  loader: ({ context: { queryClient } }) =>
+    queryClient.ensureQueryData(categoriesQuery()),
   pendingComponent: LoadingState,
   errorComponent: AdminRouteError,
   head: () => ({ meta: [{ title: "Kategori · Admin Rantau" }] }),
@@ -15,5 +15,6 @@ export const Route = createFileRoute("/admin/categories/")({
 });
 
 function CategoriesRoute() {
-  return <CategoriesPage {...Route.useLoaderData()} />;
+  const { data: categories } = useCategories();
+  return <CategoriesPage categories={categories} />;
 }

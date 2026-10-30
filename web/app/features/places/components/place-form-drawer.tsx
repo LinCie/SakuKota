@@ -1,19 +1,17 @@
 import { useForm, useStore } from "@tanstack/react-form";
-import { useRouter } from "@tanstack/react-router";
 
 import type { SubDistrict } from "~/features/subdistricts/types";
 import { FormAlert } from "~/shared/components/form-alert";
 import { FormDrawer } from "~/shared/components/form-drawer";
-import { useAction } from "~/shared/hooks";
 import { toastManager } from "~/shared/toast-manager";
 import { writeErrorMessage } from "~/shared/write-error";
 
-import { createPlace, updatePlace } from "../api";
 import {
   emptyPlaceValues,
   placeToValues,
   toPlaceRequest,
 } from "../place-values";
+import { useCreatePlace, useUpdatePlace } from "../queries";
 import { placeSchema } from "../schemas";
 import type { CategoryDetail, Place } from "../types";
 import { PlaceForm } from "./place-form";
@@ -37,8 +35,9 @@ export function PlaceFormDrawer({
   subDistricts,
   places,
 }: PlaceFormDrawerProps) {
-  const router = useRouter();
-  const action = useAction();
+  const createPlace = useCreatePlace();
+  const updatePlace = useUpdatePlace();
+  const mutation = place ? updatePlace : createPlace;
 
   const fieldsOf = (categoryId: number) =>
     categories.find((c) => c.id === categoryId)?.fields ?? [];
@@ -49,25 +48,19 @@ export function PlaceFormDrawer({
   const form = useForm({
     defaultValues: initial,
     validators: { onSubmit: placeSchema },
-    onSubmit: async ({ value }) => {
+    onSubmit: ({ value }) => {
       const body = toPlaceRequest(value, fieldsOf(Number(value.categoryId)));
+      const onSuccess = () => {
+        toastManager.add({
+          title: place
+            ? "Perubahan tempat disimpan"
+            : `Tempat ditambahkan: ${body.name}`,
+        });
+        onOpenChange(false);
+      };
 
-      const saved = await action.run(async () => {
-        const result = place
-          ? await updatePlace(place.id, body)
-          : await createPlace(body);
-        if (!result.ok) return writeErrorMessage(result.status, result.error);
-        await router.invalidate();
-        return null;
-      });
-      if (!saved) return;
-
-      toastManager.add({
-        title: place
-          ? "Perubahan tempat disimpan"
-          : `Tempat ditambahkan: ${body.name}`,
-      });
-      onOpenChange(false);
+      if (place) updatePlace.mutate({ id: place.id, body }, { onSuccess });
+      else createPlace.mutate(body, { onSuccess });
     },
   });
 
@@ -79,16 +72,18 @@ export function PlaceFormDrawer({
       onOpenChange={onOpenChange}
       onClosed={() => {
         form.reset(initial);
-        action.clearError();
+        mutation.reset();
       }}
       title={place ? "Ubah tempat" : "Tambah tempat"}
       description="Kecamatan, kategori, lokasi, dan detail tempat."
       dirty={dirty}
       formId="place-form"
-      pending={action.pending}
+      pending={mutation.isPending}
       submitLabel={place ? "Simpan perubahan" : "Tambah tempat"}
     >
-      {action.error ? <FormAlert>{action.error}</FormAlert> : null}
+      {mutation.error ? (
+        <FormAlert>{writeErrorMessage(mutation.error)}</FormAlert>
+      ) : null}
       <PlaceForm
         form={form}
         formId="place-form"

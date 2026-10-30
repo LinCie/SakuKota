@@ -1,4 +1,4 @@
-import { useNavigate, useRouter } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
@@ -7,15 +7,15 @@ import { Button } from "~/shared/components/button";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { PageHeader } from "~/shared/components/page-header";
 import { SearchField } from "~/shared/components/search-field";
-import { useDeletion, useDisclosure, useTableQuery } from "~/shared/hooks";
+import { useDisclosure, useTableQuery } from "~/shared/hooks";
 import { formatNumber } from "~/shared/format";
 import { toastManager } from "~/shared/toast-manager";
 import { writeErrorMessage } from "~/shared/write-error";
 
-import { deletePlace } from "../api";
 import type { CategoryDetail, Place } from "../types";
 import { PlaceFormDrawer } from "../components/place-form-drawer";
 import { PlacesTable } from "../components/places-table";
+import { useDeletePlace } from "../queries";
 
 type PlacesPageProps = {
   places: Place[];
@@ -33,22 +33,35 @@ export function PlacesPage({
   subDistricts,
   categories,
 }: PlacesPageProps) {
-  const router = useRouter();
   const navigate = useNavigate();
   const search = useTableQuery(places, placeSearchText);
   const drawer = useDisclosure();
   // Null while adding; the place being edited otherwise.
   const [editing, setEditing] = useState<Place | null>(null);
 
-  const deletion = useDeletion<Place>(
-    async (place) => {
-      const result = await deletePlace(place.id);
-      if (!result.ok) return writeErrorMessage(result.status, result.error);
-      await router.invalidate();
-      return null;
-    },
-    (place) => toastManager.add({ title: `Tempat dihapus: ${place.name}` }),
-  );
+  const deletePlace = useDeletePlace();
+  // The place awaiting delete confirmation.
+  const [deleting, setDeleting] = useState<Place | null>(null);
+
+  function closeDelete() {
+    setDeleting(null);
+    deletePlace.reset();
+  }
+
+  function confirmDelete() {
+    if (!deleting) return;
+    const place = deleting;
+    deletePlace.mutate(place.id, {
+      onSuccess: () => {
+        toastManager.add({ title: `Tempat dihapus: ${place.name}` });
+        setDeleting(null);
+      },
+    });
+  }
+
+  const deleteError = deletePlace.error
+    ? writeErrorMessage(deletePlace.error)
+    : null;
 
   function openCreate() {
     setEditing(null);
@@ -96,7 +109,7 @@ export function PlacesPage({
           })
         }
         onEdit={openEdit}
-        onDelete={deletion.request}
+        onDelete={setDeleting}
       />
 
       <PlaceFormDrawer
@@ -110,16 +123,16 @@ export function PlacesPage({
       />
 
       <ConfirmDialog
-        open={deletion.target !== null}
+        open={deleting !== null}
         onOpenChange={(open) => {
-          if (!open) deletion.close();
+          if (!open) closeDelete();
         }}
         title="Hapus tempat?"
-        description={`${deletion.target?.name ?? "Tempat ini"} akan dihapus dari peta. Tindakan ini tidak bisa dibatalkan.`}
+        description={`${deleting?.name ?? "Tempat ini"} akan dihapus dari peta. Tindakan ini tidak bisa dibatalkan.`}
         confirmLabel="Hapus tempat"
-        pending={deletion.pending}
-        error={deletion.error}
-        onConfirm={() => void deletion.confirm()}
+        pending={deletePlace.isPending}
+        error={deleteError}
+        onConfirm={confirmDelete}
       />
     </>
   );

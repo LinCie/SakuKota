@@ -1,13 +1,11 @@
 import { useForm, useStore } from "@tanstack/react-form";
-import { useRouter } from "@tanstack/react-router";
 
 import { FormAlert } from "~/shared/components/form-alert";
 import { FormDrawer } from "~/shared/components/form-drawer";
-import { useAction } from "~/shared/hooks";
 import { toastManager } from "~/shared/toast-manager";
-import { writeErrorMessage } from "~/shared/write-error";
+import { hasErrorCode, writeErrorMessage } from "~/shared/write-error";
 
-import { createSubDistrict, updateSubDistrict } from "../api";
+import { useCreateSubDistrict, useUpdateSubDistrict } from "../queries";
 import { subDistrictSchema } from "../schemas";
 import {
   emptySubDistrictValues,
@@ -30,8 +28,9 @@ export function SubDistrictFormDrawer({
   onOpenChange,
   subDistrict,
 }: SubDistrictFormDrawerProps) {
-  const router = useRouter();
-  const action = useAction();
+  const createSubDistrict = useCreateSubDistrict();
+  const updateSubDistrict = useUpdateSubDistrict();
+  const mutation = subDistrict ? updateSubDistrict : createSubDistrict;
   const initial = subDistrict
     ? subDistrictToValues(subDistrict)
     : emptySubDistrictValues;
@@ -39,29 +38,22 @@ export function SubDistrictFormDrawer({
   const form = useForm({
     defaultValues: initial,
     validators: { onSubmit: subDistrictSchema },
-    onSubmit: async ({ value }) => {
+    onSubmit: ({ value }) => {
       const body = toSubDistrictRequest(value);
+      const onSuccess = () => {
+        toastManager.add({
+          title: subDistrict
+            ? "Perubahan kecamatan disimpan"
+            : `Kecamatan ditambahkan: ${body.name}`,
+        });
+        onOpenChange(false);
+      };
 
-      const saved = await action.run(async () => {
-        const result = subDistrict
-          ? await updateSubDistrict(subDistrict.id, body)
-          : await createSubDistrict(body);
-        if (!result.ok) {
-          return result.error.code === "sub_district_exists"
-            ? "Kecamatan dengan nama atau slug ini sudah ada."
-            : writeErrorMessage(result.status, result.error);
-        }
-        await router.invalidate();
-        return null;
-      });
-      if (!saved) return;
-
-      toastManager.add({
-        title: subDistrict
-          ? "Perubahan kecamatan disimpan"
-          : `Kecamatan ditambahkan: ${body.name}`,
-      });
-      onOpenChange(false);
+      if (subDistrict) {
+        updateSubDistrict.mutate({ id: subDistrict.id, body }, { onSuccess });
+      } else {
+        createSubDistrict.mutate(body, { onSuccess });
+      }
     },
   });
 
@@ -73,16 +65,22 @@ export function SubDistrictFormDrawer({
       onOpenChange={onOpenChange}
       onClosed={() => {
         form.reset(initial);
-        action.clearError();
+        mutation.reset();
       }}
       title={subDistrict ? "Ubah kecamatan" : "Tambah kecamatan"}
       description="Identitas dan info area untuk peta dan perkiraan biaya."
       dirty={dirty}
       formId="subdistrict-form"
-      pending={action.pending}
+      pending={mutation.isPending}
       submitLabel={subDistrict ? "Simpan perubahan" : "Tambah kecamatan"}
     >
-      {action.error ? <FormAlert>{action.error}</FormAlert> : null}
+      {mutation.error ? (
+        <FormAlert>
+          {hasErrorCode(mutation.error, "sub_district_exists")
+            ? "Kecamatan dengan nama atau slug ini sudah ada."
+            : writeErrorMessage(mutation.error)}
+        </FormAlert>
+      ) : null}
       <SubDistrictForm
         form={form}
         formId="subdistrict-form"

@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -10,7 +11,27 @@ import "@fontsource/bungee/latin-400.css";
 import "@fontsource-variable/figtree";
 import "./app.css";
 
-const router = createRouter({ routeTree, scrollRestoration: true });
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // ky already retries network failures, and backend errors won't change.
+      retry: false,
+      // Loaders fill the cache right before a page mounts; a short stale time
+      // keeps the page from refetching on mount, while mutations invalidate
+      // what they change.
+      staleTime: 30_000,
+    },
+    mutations: { retry: false },
+  },
+});
+
+const router = createRouter({
+  routeTree,
+  context: { queryClient },
+  scrollRestoration: true,
+  // TanStack Query owns caching, so preloads always run the loaders.
+  defaultPreloadStaleTime: 0,
+});
 
 declare module "@tanstack/react-router" {
   interface Register {
@@ -26,6 +47,8 @@ await refreshSession();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
   </StrictMode>,
 );
