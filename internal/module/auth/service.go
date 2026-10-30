@@ -12,11 +12,10 @@ import (
 
 	"rantau-go/internal/config"
 	"rantau-go/internal/jwt"
+	"rantau-go/internal/module/users"
 )
 
 var (
-	ErrNotFound            = errors.New("user not found")
-	ErrEmailTaken          = errors.New("email already registered")
 	ErrInvalidName         = errors.New("name is required")
 	ErrInvalidEmail        = errors.New("invalid email")
 	ErrWeakPassword        = errors.New("password must be at least 8 characters")
@@ -26,23 +25,33 @@ var (
 
 const refreshTokenBytes = 32
 
-// Repository defines the persistence operations required by the service.
-type Repository interface {
-	Create(ctx context.Context, u *User) (*User, error)
-	GetByEmail(ctx context.Context, email string) (*User, error)
-	GetByID(ctx context.Context, id int64) (*User, error)
+// Service defines the operations required by the handler.
+//
+//go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
+type Service interface {
+	Register(ctx context.Context, u *users.User, password string) (*users.User, error)
+	Login(ctx context.Context, email, password string) (*users.User, *Tokens, error)
+	Refresh(ctx context.Context, refreshToken string) (*users.User, *Tokens, error)
+	Logout(ctx context.Context, refreshToken string) error
+}
+
+// UserService defines the user operations required by the auth service.
+type UserService interface {
+	Create(ctx context.Context, u *users.User) (*users.User, error)
+	GetByEmail(ctx context.Context, email string) (*users.User, error)
+	GetByID(ctx context.Context, id int64) (*users.User, error)
 }
 
 type service struct {
 	cfg   config.Config
-	repo  Repository
+	users UserService
 	store *memoryRefreshStore
 }
 
-func NewService(cfg config.Config, repo Repository, store *memoryRefreshStore) Service {
+func NewService(cfg config.Config, users UserService, store *memoryRefreshStore) Service {
 	return &service{
 		cfg:   cfg,
-		repo:  repo,
+		users: users,
 		store: store,
 	}
 }
@@ -51,7 +60,7 @@ func NewService(cfg config.Config, repo Repository, store *memoryRefreshStore) S
 // service
 // -----------------------------------------------------------------------------
 
-func (s *service) Register(ctx context.Context, u *User, password string) (*User, error) {
+func (s *service) Register(ctx context.Context, u *users.User, password string) (*users.User, error) {
 	u.Name = strings.TrimSpace(u.Name)
 	if u.Name == "" {
 		return nil, ErrInvalidName
@@ -73,13 +82,13 @@ func (s *service) Register(ctx context.Context, u *User, password string) (*User
 
 	u.PasswordHash = hash
 
-	return s.repo.Create(ctx, u)
+	return s.users.Create(ctx, u)
 }
 
-func (s *service) Login(ctx context.Context, email, password string) (*User, *Tokens, error) {
-	u, err := s.repo.GetByEmail(ctx, normalizeEmail(email))
+func (s *service) Login(ctx context.Context, email, password string) (*users.User, *Tokens, error) {
+	u, err := s.users.GetByEmail(ctx, normalizeEmail(email))
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
+		if errors.Is(err, users.ErrNotFound) {
 			return nil, nil, ErrInvalidCredentials
 		}
 		return nil, nil, err
@@ -103,16 +112,16 @@ func (s *service) Login(ctx context.Context, email, password string) (*User, *To
 
 // Refresh exchanges a valid refresh token for the user and a new token pair.
 // The old refresh token is consumed, so it cannot be reused.
-func (s *service) Refresh(ctx context.Context, refreshToken string) (*User, *Tokens, error) {
+func (s *service) Refresh(ctx context.Context, refreshToken string) (*users.User, *Tokens, error) {
 	userID, err := s.store.Consume(ctx, hashToken(refreshToken))
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Reload the user so the new access token reflects their current role.
-	u, err := s.repo.GetByID(ctx, userID)
+	u, err := s.users.GetByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
+		if errors.Is(err, users.ErrNotFound) {
 			return nil, nil, ErrInvalidRefreshToken
 		}
 		return nil, nil, err
@@ -130,7 +139,7 @@ func (s *service) Logout(ctx context.Context, refreshToken string) error {
 	return s.store.Delete(ctx, hashToken(refreshToken))
 }
 
-func (s *service) issueTokens(ctx context.Context, u *User) (*Tokens, error) {
+func (s *service) issueTokens(ctx context.Context, u *users.User) (*Tokens, error) {
 	accessToken, err := jwt.GenerateToken(s.cfg, u.ID, u.Role)
 	if err != nil {
 		return nil, err

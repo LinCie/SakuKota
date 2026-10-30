@@ -13,6 +13,7 @@ import (
 
 	"rantau-go/internal/module/auth"
 	"rantau-go/internal/module/auth/mock"
+	"rantau-go/internal/module/users"
 )
 
 const refreshCookieName = "refresh_token"
@@ -88,8 +89,8 @@ func expectCookieCleared(t *testing.T, rec *httptest.ResponseRecorder) {
 
 func TestHandler_Register_Created(t *testing.T) {
 	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().Register(gomock.Any(), &auth.User{Name: "Ana", Email: testEmail}, "password123").
-		Return(&auth.User{ID: 1, Name: "Ana", Email: testEmail}, nil)
+	svc.EXPECT().Register(gomock.Any(), &users.User{Name: "Ana", Email: testEmail}, "password123").
+		Return(&users.User{ID: 1, Name: "Ana", Email: testEmail}, nil)
 
 	h := auth.NewHandler(testConfig(), svc)
 	rec := do(h.Register, `{"name":"Ana","email":"ana@example.com","password":"password123"}`)
@@ -128,7 +129,7 @@ func TestHandler_Register_ErrorMapping(t *testing.T) {
 		{name: "invalid name", err: auth.ErrInvalidName, status: http.StatusBadRequest, code: "validation_error"},
 		{name: "invalid email", err: auth.ErrInvalidEmail, status: http.StatusBadRequest, code: "validation_error"},
 		{name: "weak password", err: auth.ErrWeakPassword, status: http.StatusBadRequest, code: "validation_error"},
-		{name: "email taken", err: auth.ErrEmailTaken, status: http.StatusConflict, code: "email_taken"},
+		{name: "email taken", err: users.ErrEmailTaken, status: http.StatusConflict, code: "email_taken"},
 		{name: "unexpected failure", err: errBoom, status: http.StatusInternalServerError, code: "internal_error"},
 	}
 
@@ -164,7 +165,7 @@ func TestHandler_Register_InternalErrorHidesDetails(t *testing.T) {
 func TestHandler_Login_Success(t *testing.T) {
 	svc := mock.NewMockService(gomock.NewController(t))
 	svc.EXPECT().Login(gomock.Any(), testEmail, "password123").Return(
-		&auth.User{ID: 1, Name: "Ana", Email: testEmail},
+		&users.User{ID: 1, Name: "Ana", Email: testEmail},
 		&auth.Tokens{AccessToken: "access-1", RefreshToken: "refresh-1"},
 		nil,
 	)
@@ -250,7 +251,7 @@ func TestHandler_Refresh_MissingCookie(t *testing.T) {
 func TestHandler_Refresh_Success(t *testing.T) {
 	svc := mock.NewMockService(gomock.NewController(t))
 	svc.EXPECT().Refresh(gomock.Any(), "refresh-1").Return(
-		&auth.User{ID: 1, Name: "Ana", Email: testEmail},
+		&users.User{ID: 1, Name: "Ana", Email: testEmail},
 		&auth.Tokens{AccessToken: "access-2", RefreshToken: "refresh-2"},
 		nil,
 	)

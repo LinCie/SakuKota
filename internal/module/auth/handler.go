@@ -1,13 +1,13 @@
 package auth
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 
 	"rantau-go/internal/config"
 	"rantau-go/internal/httpx"
+	"rantau-go/internal/module/users"
 )
 
 const (
@@ -17,14 +17,6 @@ const (
 	// (see web/vite.config.ts).
 	refreshCookiePath = "/v1/auth"
 )
-
-// Service defines the operations required by the handler.
-type Service interface {
-	Register(ctx context.Context, u *User, password string) (*User, error)
-	Login(ctx context.Context, email, password string) (*User, *Tokens, error)
-	Refresh(ctx context.Context, refreshToken string) (*User, *Tokens, error)
-	Logout(ctx context.Context, refreshToken string) error
-}
 
 type Handler struct {
 	cfg     config.Config
@@ -56,7 +48,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 			errors.Is(err, ErrInvalidEmail),
 			errors.Is(err, ErrWeakPassword):
 			httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
-		case errors.Is(err, ErrEmailTaken):
+		case errors.Is(err, users.ErrEmailTaken):
 			httpx.RespondError(w, http.StatusConflict, "email_taken", err.Error())
 		default:
 			httpx.RespondInternalError(w)

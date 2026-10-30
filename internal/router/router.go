@@ -13,6 +13,7 @@ import (
 	"rantau-go/internal/module/auth"
 	"rantau-go/internal/module/place"
 	"rantau-go/internal/module/subdistrict"
+	"rantau-go/internal/module/users"
 )
 
 type Router struct {
@@ -33,7 +34,8 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 	r.Get("/docs", docs.Scalar)
 	r.Get("/openapi.json", docs.OpenAPI)
 
-	authModule := auth.NewModule(db, cfg)
+	usersModule := users.NewModule(db)
+	authModule := auth.NewModule(cfg, usersModule.Service)
 	placeModule := place.NewModule(db)
 	subdisctrictModule := subdistrict.NewModule(db)
 

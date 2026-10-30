@@ -1,6 +1,10 @@
 package auth
 
-import "time"
+import (
+	"time"
+
+	"rantau-go/internal/module/users"
+)
 
 // RegisterRequest is the API payload for registering a User.
 type RegisterRequest struct {
@@ -35,21 +39,21 @@ type UserResponse struct {
 // Conversions
 // -----------------------------------------------------------------------------
 
-func toUser(req RegisterRequest) *User {
-	return &User{
+func toUser(req RegisterRequest) *users.User {
+	return &users.User{
 		Name:  req.Name,
 		Email: req.Email,
 	}
 }
 
-func toSessionResponse(u *User, t *Tokens) SessionResponse {
+func toSessionResponse(u *users.User, t *Tokens) SessionResponse {
 	return SessionResponse{
 		User:        toUserResponse(u),
 		AccessToken: t.AccessToken,
 	}
 }
 
-func toUserResponse(u *User) UserResponse {
+func toUserResponse(u *users.User) UserResponse {
 	return UserResponse{
 		ID:        u.ID,
 		Name:      u.Name,
