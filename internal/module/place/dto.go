@@ -43,39 +43,6 @@ func (r *UpdatePlaceRequest) clearsRequiredField() bool {
 		(r.Name.Set && r.Name.Value == nil)
 }
 
-// CreateCategoryRequest is the API payload for creating a Category.
-type CreateCategoryRequest struct {
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-}
-
-// UpdateCategoryRequest is the API payload for partially updating a Category.
-// Keys left out keep their current value.
-type UpdateCategoryRequest struct {
-	Name httpx.Optional[string] `json:"name"`
-	Slug httpx.Optional[string] `json:"slug"`
-}
-
-// clearsRequiredField reports whether the client sent null for a field that
-// cannot be cleared.
-func (r *UpdateCategoryRequest) clearsRequiredField() bool {
-	return (r.Name.Set && r.Name.Value == nil) ||
-		(r.Slug.Set && r.Slug.Value == nil)
-}
-
-// CreateCategoryFieldRequest is the API payload for adding a custom field to
-// a Category.
-type CreateCategoryFieldRequest struct {
-	Key      string   `json:"key"`
-	Label    string   `json:"label"`
-	DataType string   `json:"data_type"`
-	Required bool     `json:"required"`
-	Options  []string `json:"options"`
-	// SortOrder is the 1-based position to insert the field at, moving the
-	// fields from there on down. Omitted, the field goes last.
-	SortOrder *int32 `json:"sort_order"`
-}
-
 // PlaceResponse is the API representation of a Place.
 type PlaceResponse struct {
 	ID                  int64            `json:"id"`
@@ -92,9 +59,12 @@ type PlaceResponse struct {
 
 // CategoryResponse is the API representation of the Category of a place.
 type CategoryResponse struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Slug  string `json:"slug"`
+	Code  string `json:"code"`
+	Label string `json:"label"`
+	Color string `json:"color"`
 }
 
 // CategoryDetailResponse is the API representation of a Category with the
@@ -103,6 +73,9 @@ type CategoryDetailResponse struct {
 	ID     int64                   `json:"id"`
 	Name   string                  `json:"name"`
 	Slug   string                  `json:"slug"`
+	Code   string                  `json:"code"`
+	Label  string                  `json:"label"`
+	Color  string                  `json:"color"`
 	Fields []CategoryFieldResponse `json:"fields"`
 }
 
@@ -136,25 +109,6 @@ func toPlace(req CreatePlaceRequest) *Place {
 	}
 }
 
-func toCategory(req CreateCategoryRequest) *Category {
-	return &Category{
-		Name: req.Name,
-		Slug: req.Slug,
-	}
-}
-
-func toCategoryField(categoryID int64, req CreateCategoryFieldRequest) *CategoryField {
-	return &CategoryField{
-		CategoryID: categoryID,
-		Key:        req.Key,
-		Label:      req.Label,
-		DataType:   req.DataType,
-		Required:   req.Required,
-		Options:    req.Options,
-		SortOrder:  req.SortOrder,
-	}
-}
-
 func toPlaceResponse(p Place) PlaceResponse {
 	return PlaceResponse{
 		ID:                  p.ID,
@@ -182,9 +136,12 @@ func toPlaceResponses(places []Place) []PlaceResponse {
 
 func toCategoryResponse(c Category) CategoryResponse {
 	return CategoryResponse{
-		ID:   c.ID,
-		Name: c.Name,
-		Slug: c.Slug,
+		ID:    c.ID,
+		Name:  c.Name,
+		Slug:  c.Slug,
+		Code:  c.Code,
+		Label: c.Label,
+		Color: c.Color,
 	}
 }
 
@@ -199,6 +156,9 @@ func toCategoryDetailResponse(c Category) CategoryDetailResponse {
 		ID:     c.ID,
 		Name:   c.Name,
 		Slug:   c.Slug,
+		Code:   c.Code,
+		Label:  c.Label,
+		Color:  c.Color,
 		Fields: fields,
 	}
 }
@@ -214,11 +174,6 @@ func toCategoryDetailResponses(categories []Category) []CategoryDetailResponse {
 }
 
 func toCategoryFieldResponse(f CategoryField) CategoryFieldResponse {
-	var sortOrder int32
-	if f.SortOrder != nil {
-		sortOrder = *f.SortOrder
-	}
-
 	return CategoryFieldResponse{
 		ID:         f.ID,
 		CategoryID: f.CategoryID,
@@ -227,6 +182,6 @@ func toCategoryFieldResponse(f CategoryField) CategoryFieldResponse {
 		DataType:   f.DataType,
 		Required:   f.Required,
 		Options:    f.Options,
-		SortOrder:  sortOrder,
+		SortOrder:  f.SortOrder,
 	}
 }

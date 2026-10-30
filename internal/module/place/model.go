@@ -52,19 +52,19 @@ type PlacePatch struct {
 	Attributes          httpx.Optional[json.RawMessage]
 }
 
-// Category represents a row in the CATEGORIES table.
+// Category represents a row in the CATEGORIES table. Categories are defined by
+// the migrations, not created through the API.
 type Category struct {
-	ID     int64           `db:"id"`
-	Name   string          `db:"name"`
-	Slug   string          `db:"slug"`
+	ID   int64  `db:"id"`
+	Name string `db:"name"`
+	Slug string `db:"slug"`
+	// Code is the single character that marks the category on a map sign.
+	Code string `db:"code"`
+	// Label is the short name clients display.
+	Label string `db:"label"`
+	// Color is the palette key clients style the category with.
+	Color  string          `db:"color"`
 	Fields []CategoryField `db:"-"`
-}
-
-// CategoryPatch holds the fields a client may change on a category. A field
-// that is not Set keeps its current value.
-type CategoryPatch struct {
-	Name httpx.Optional[string]
-	Slug httpx.Optional[string]
 }
 
 // CategoryField represents a row in the CATEGORY_FIELDS table: a custom field
@@ -78,8 +78,7 @@ type CategoryField struct {
 	Required   bool         `db:"required"`
 	Options    FieldOptions `db:"options"`
 	// SortOrder is the field's 1-based position among its category's fields.
-	// On create, nil adds the field last.
-	SortOrder *int32 `db:"sort_order"`
+	SortOrder int32 `db:"sort_order"`
 }
 
 // FieldOptions are the allowed values of a select field, stored as a JSONB

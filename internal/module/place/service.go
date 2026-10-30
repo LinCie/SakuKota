@@ -5,18 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"rantau-go/internal/postgis"
-)
-
-var (
-	fieldKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
-	slugPattern     = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 )
 
 // Service defines the operations required by the handler.
@@ -28,10 +22,6 @@ type Service interface {
 	GetPlace(ctx context.Context, id int64) (*Place, error)
 	GetCategories(ctx context.Context) ([]Category, error)
 	GetCategory(ctx context.Context, id int64) (*Category, error)
-	CreateCategory(ctx context.Context, c *Category) (*Category, error)
-	UpdateCategory(ctx context.Context, id int64, patch CategoryPatch) (*Category, error)
-	DeleteCategory(ctx context.Context, id int64) error
-	CreateCategoryField(ctx context.Context, f *CategoryField) (*CategoryField, error)
 	Update(ctx context.Context, id int64, patch PlacePatch) (*Place, error)
 	Delete(ctx context.Context, id int64) error
 }
@@ -89,95 +79,6 @@ func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
 	p.Attributes = attributes
 
 	return s.repo.Create(ctx, p)
-}
-
-func (s *service) CreateCategory(ctx context.Context, c *Category) (*Category, error) {
-	if err := validateCategory(c); err != nil {
-		return nil, err
-	}
-
-	return s.repo.CreateCategory(ctx, c)
-}
-
-// UpdateCategory applies the patch to the stored category. The result is
-// validated as a whole, so a patch cannot leave the category invalid.
-func (s *service) UpdateCategory(ctx context.Context, id int64, patch CategoryPatch) (*Category, error) {
-	c, err := s.repo.GetCategory(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	if patch.Name.Set && patch.Name.Value != nil {
-		c.Name = *patch.Name.Value
-	}
-
-	if patch.Slug.Set && patch.Slug.Value != nil {
-		c.Slug = *patch.Slug.Value
-	}
-
-	if err := validateCategory(c); err != nil {
-		return nil, err
-	}
-
-	return s.repo.UpdateCategory(ctx, c)
-}
-
-func (s *service) DeleteCategory(ctx context.Context, id int64) error {
-	return s.repo.DeleteCategory(ctx, id)
-}
-
-// validateCategory trims the name and slug, then checks them against their limits.
-func validateCategory(c *Category) error {
-	c.Name = strings.TrimSpace(c.Name)
-	if c.Name == "" || utf8.RuneCountInString(c.Name) > maxNameLength {
-		return ErrInvalidCategoryName
-	}
-
-	c.Slug = strings.TrimSpace(c.Slug)
-	if utf8.RuneCountInString(c.Slug) > maxNameLength || !slugPattern.MatchString(c.Slug) {
-		return ErrInvalidSlug
-	}
-
-	return nil
-}
-
-func (s *service) CreateCategoryField(ctx context.Context, f *CategoryField) (*CategoryField, error) {
-	f.Key = strings.TrimSpace(f.Key)
-	if !fieldKeyPattern.MatchString(f.Key) {
-		return nil, ErrInvalidFieldKey
-	}
-
-	f.Label = strings.TrimSpace(f.Label)
-	if f.Label == "" || utf8.RuneCountInString(f.Label) > maxNameLength {
-		return nil, ErrInvalidFieldLabel
-	}
-
-	if f.SortOrder != nil && *f.SortOrder < 1 {
-		return nil, ErrInvalidFieldSortOrder
-	}
-
-	switch f.DataType {
-	case FieldTypeText, FieldTypeNumber, FieldTypeBoolean, FieldTypeRange, FieldTypeDate:
-		if len(f.Options) > 0 {
-			return nil, ErrFieldOptionsNotAllowed
-		}
-		f.Options = nil
-	case FieldTypeSelect:
-		if len(f.Options) == 0 {
-			return nil, ErrFieldOptionsRequired
-		}
-		for i, option := range f.Options {
-			option = strings.TrimSpace(option)
-			if option == "" || slices.Contains(f.Options[:i], option) {
-				return nil, ErrFieldOptionsRequired
-			}
-			f.Options[i] = option
-		}
-	default:
-		return nil, ErrInvalidFieldDataType
-	}
-
-	return s.repo.CreateCategoryField(ctx, f)
 }
 
 // Update applies the patch to the stored place. Attributes are checked against

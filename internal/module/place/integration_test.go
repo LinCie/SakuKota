@@ -13,7 +13,6 @@ import (
 	"reflect"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/jmoiron/sqlx"
@@ -93,7 +92,8 @@ func mustExec(t *testing.T, query string) {
 func seedCatalog(t *testing.T) {
 	t.Helper()
 	mustExec(t, `INSERT INTO SUB_DISTRICTS (name, slug) VALUES ('Menteng', 'menteng'), ('Kemang', 'kemang')`)
-	mustExec(t, `INSERT INTO CATEGORIES (name, slug) VALUES ('Warung', 'warung'), ('Kopi', 'kopi')`)
+	mustExec(t, `INSERT INTO CATEGORIES (name, slug, code, label, color)
+		VALUES ('Warung', 'warung', 'W', 'Warung', 'chili'), ('Kopi', 'kopi', 'K', 'Kopi', 'plum')`)
 }
 
 // seedWarungFields gives Warung a required "contact" text field and an
@@ -181,56 +181,9 @@ func listPlaces(t *testing.T, router http.Handler, target string) []placeRow {
 	return rows
 }
 
-// fieldJSON builds a text field body. extra is appended to the object, for
-// example `,"sort_order":1`.
-func fieldJSON(key, extra string) string {
-	return fmt.Sprintf(`{"key":%q,"label":"Label","data_type":"text"%s}`, key, extra)
-}
-
-type fieldStep struct {
-	category   string // "warung", "kopi", or "missing"
-	body       string
-	wantStatus int
-	wantCode   string
-}
-
-// added is a step that must create the field.
-func added(category, key, extra string) fieldStep {
-	return fieldStep{category: category, body: fieldJSON(key, extra), wantStatus: http.StatusCreated}
-}
-
-// refused is a step that must fail with the given status and code.
-func refused(category, key, extra string, status int, code string) fieldStep {
-	return fieldStep{category: category, body: fieldJSON(key, extra), wantStatus: status, wantCode: code}
-}
-
 type fieldRow struct {
 	Key       string `json:"key"`
 	SortOrder int    `json:"sort_order"`
-}
-
-// listFields returns the fields of the named category in the order the API lists them.
-func listFields(t *testing.T, router http.Handler, category string) []fieldRow {
-	t.Helper()
-	rec := call(t, router, http.MethodGet, "/categories", "")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /categories: status %d; body: %s", rec.Code, rec.Body)
-	}
-
-	var cats []struct {
-		Name   string     `json:"name"`
-		Fields []fieldRow `json:"fields"`
-	}
-	if err := json.Unmarshal(responseData(t, rec), &cats); err != nil {
-		t.Fatalf("GET /categories: %v", err)
-	}
-	for _, c := range cats {
-		if c.Name == category {
-			return c.Fields
-		}
-	}
-	t.Fatalf("category %q is not listed", category)
-	return nil
 }
 
 // assertKeys checks the keys in list order, and that positions run 1..n with
@@ -345,179 +298,6 @@ func TestIntegration_ListPlacesLimit(t *testing.T) {
 				t.Errorf("place IDs = %v, want %v", got, tc.want)
 			}
 		})
-	}
-}
-
-// -----------------------------------------------------------------------------
-// Categories
-// -----------------------------------------------------------------------------
-
-func TestIntegration_CategoryNamesAreUniqueIgnoringCase(t *testing.T) {
-	tests := []struct {
-		name       string
-		newName    string
-		newSlug    string
-		wantStatus int
-		wantCode   string
-	}{
-		{name: "same name in lowercase", newName: "warung", newSlug: "warung-2", wantStatus: http.StatusConflict, wantCode: "category_exists"},
-		{name: "same name in uppercase", newName: "WARUNG", newSlug: "warung-3", wantStatus: http.StatusConflict, wantCode: "category_exists"},
-		{name: "same slug", newName: "Kedai", newSlug: "warung", wantStatus: http.StatusConflict, wantCode: "category_exists"},
-		{name: "different name and slug", newName: "Kedai Warung", newSlug: "kedai-warung", wantStatus: http.StatusCreated, wantCode: ""},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			resetDB(t)
-			router := integrationRouter(testDB)
-
-			if rec := call(t, router, http.MethodPost, "/categories", `{"name":"Warung","slug":"warung"}`); rec.Code != http.StatusCreated {
-				t.Fatalf("setup: status %d; body: %s", rec.Code, rec.Body)
-			}
-
-			body := fmt.Sprintf(`{"name":%q,"slug":%q}`, tc.newName, tc.newSlug)
-			rec := call(t, router, http.MethodPost, "/categories", body)
-			if tc.wantCode != "" {
-				assertError(t, rec, tc.wantStatus, tc.wantCode)
-			} else if rec.Code != tc.wantStatus {
-				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tc.wantStatus, rec.Body)
-			}
-		})
-	}
-}
-
-// -----------------------------------------------------------------------------
-// Adding fields
-// -----------------------------------------------------------------------------
-
-func TestIntegration_FieldPositions(t *testing.T) {
-	categoryIDs := map[string]int{"warung": 1, "kopi": 2, "missing": 99}
-
-	tests := []struct {
-		name       string
-		steps      []fieldStep
-		wantWarung []string // keys in list order after the steps
-		wantKopi   []string
-	}{
-		{
-			name:       "without sort_order each field is appended last",
-			steps:      []fieldStep{added("warung", "a", ""), added("warung", "b", ""), added("warung", "c", "")},
-			wantWarung: []string{"a", "b", "c"},
-		},
-		{
-			name:       "sort_order 1 puts the field first",
-			steps:      []fieldStep{added("warung", "a", ""), added("warung", "b", ""), added("warung", "c", `,"sort_order":1`)},
-			wantWarung: []string{"c", "a", "b"},
-		},
-		{
-			name:       "a middle insert keeps the other fields in order",
-			steps:      []fieldStep{added("warung", "a", ""), added("warung", "b", ""), added("warung", "c", ""), added("warung", "d", `,"sort_order":2`)},
-			wantWarung: []string{"a", "d", "b", "c"},
-		},
-		{
-			name:       "one past the last position is accepted and goes last",
-			steps:      []fieldStep{added("warung", "a", ""), added("warung", "b", ""), added("warung", "c", `,"sort_order":3`)},
-			wantWarung: []string{"a", "b", "c"},
-		},
-		{
-			name:       "beyond one past the last is rejected",
-			steps:      []fieldStep{added("warung", "a", ""), added("warung", "b", ""), refused("warung", "c", `,"sort_order":4`, http.StatusBadRequest, "validation_error")},
-			wantWarung: []string{"a", "b"},
-		},
-		{
-			name:       "sort_order 0 is rejected and stores nothing",
-			steps:      []fieldStep{added("warung", "a", ""), refused("warung", "b", `,"sort_order":0`, http.StatusBadRequest, "validation_error")},
-			wantWarung: []string{"a"},
-		},
-		{
-			name:       "negative sort_order is rejected and stores nothing",
-			steps:      []fieldStep{added("warung", "a", ""), refused("warung", "b", `,"sort_order":-1`, http.StatusBadRequest, "validation_error")},
-			wantWarung: []string{"a"},
-		},
-		{
-			name: "a duplicate key is rejected without shifting other fields",
-			steps: []fieldStep{
-				added("warung", "a", ""), added("warung", "b", ""), added("warung", "c", ""),
-				refused("warung", "a", `,"sort_order":1`, http.StatusConflict, "category_field_exists"),
-			},
-			wantWarung: []string{"a", "b", "c"},
-		},
-		{
-			name: "a key with surrounding spaces conflicts with its trimmed form",
-			steps: []fieldStep{
-				added("warung", "halal", ""),
-				refused("warung", " halal ", "", http.StatusConflict, "category_field_exists"),
-			},
-			wantWarung: []string{"halal"},
-		},
-		{
-			name:       "the same key in another category is accepted",
-			steps:      []fieldStep{added("warung", "a", ""), added("kopi", "a", "")},
-			wantWarung: []string{"a"},
-			wantKopi:   []string{"a"},
-		},
-		{
-			name:       "unknown category returns 404 and stores nothing",
-			steps:      []fieldStep{refused("missing", "a", "", http.StatusNotFound, "category_not_found")},
-			wantWarung: nil,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			resetDB(t)
-			seedCatalog(t)
-			router := integrationRouter(testDB)
-
-			for i, s := range tc.steps {
-				rec := call(t, router, http.MethodPost, fmt.Sprintf("/categories/%d/fields", categoryIDs[s.category]), s.body)
-				if s.wantCode != "" {
-					assertError(t, rec, s.wantStatus, s.wantCode)
-				} else if rec.Code != s.wantStatus {
-					t.Fatalf("step %d: status = %d, want %d; body: %s", i, rec.Code, s.wantStatus, rec.Body)
-				}
-			}
-
-			assertKeys(t, listFields(t, router, "Warung"), tc.wantWarung)
-			assertKeys(t, listFields(t, router, "Kopi"), tc.wantKopi)
-		})
-	}
-}
-
-func TestIntegration_ConcurrentFieldsGetDistinctPositions(t *testing.T) {
-	resetDB(t)
-	seedCatalog(t)
-	router := integrationRouter(testDB)
-
-	const n = 10
-	statuses := make([]int, n)
-
-	var wg sync.WaitGroup
-	for i := range n {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			body := fmt.Sprintf(`{"key":"field_%d","label":"Field %d","data_type":"text"}`, i, i)
-			rec := httptest.NewRecorder()
-			router.ServeHTTP(rec, jsonRequest(http.MethodPost, "/categories/1/fields", body))
-			statuses[i] = rec.Code
-		}()
-	}
-	wg.Wait()
-
-	for i, s := range statuses {
-		if s != http.StatusCreated {
-			t.Errorf("concurrent add %d: status %d, want 201", i, s)
-		}
-	}
-	fields := listFields(t, router, "Warung")
-	if len(fields) != n {
-		t.Fatalf("listed %d fields, want %d", len(fields), n)
-	}
-	for i, f := range fields {
-		if f.SortOrder != i+1 {
-			t.Errorf("position %d holds %q with sort_order %d", i+1, f.Key, f.SortOrder)
-		}
 	}
 }
 
@@ -689,32 +469,6 @@ func TestIntegration_CreatedPlaceIsListedAsSent(t *testing.T) {
 	assertJSON(t, p.Location, `{"type":"Point","coordinates":[106.8,-6.2]}`)
 }
 
-func TestIntegration_AddingRequiredFieldLeavesExistingPlacesAlone(t *testing.T) {
-	resetDB(t)
-	seedCatalog(t)
-	router := integrationRouter(testDB)
-
-	// Created while Warung has no fields.
-	if rec := call(t, router, http.MethodPost, "/places", `{"name":"Warung Bu Ani","sub_district_id":1,"category_id":1}`); rec.Code != http.StatusCreated {
-		t.Fatalf("setup place: status %d; body: %s", rec.Code, rec.Body)
-	}
-
-	// Warung then gets a required field.
-	field := `{"key":"contact","label":"Contact","data_type":"text","required":true}`
-	if rec := call(t, router, http.MethodPost, "/categories/1/fields", field); rec.Code != http.StatusCreated {
-		t.Fatalf("add field: status %d; body: %s", rec.Code, rec.Body)
-	}
-
-	rows := listPlaces(t, router, "/places")
-	if len(rows) != 1 || rows[0].Name != "Warung Bu Ani" {
-		t.Fatalf("existing place is no longer listed as before: %+v", rows)
-	}
-	assertJSON(t, rows[0].Attributes, `{}`)
-
-	rec := call(t, router, http.MethodPost, "/places", `{"name":"Warung Pagi","sub_district_id":1,"category_id":1}`)
-	assertError(t, rec, http.StatusBadRequest, "validation_error")
-}
-
 // -----------------------------------------------------------------------------
 // Failures
 // -----------------------------------------------------------------------------
@@ -738,7 +492,6 @@ func TestIntegration_StorageFailureHidesDetails(t *testing.T) {
 	}{
 		{name: "list places", method: http.MethodGet, target: "/places", body: ""},
 		{name: "list categories", method: http.MethodGet, target: "/categories", body: ""},
-		{name: "create category", method: http.MethodPost, target: "/categories", body: `{"name":"Kedai","slug":"kedai"}`},
 		{name: "create place", method: http.MethodPost, target: "/places", body: `{"name":"Kopi","sub_district_id":1,"category_id":2}`},
 	}
 
@@ -961,6 +714,9 @@ func TestIntegration_GetCategory(t *testing.T) {
 		ID     int64      `json:"id"`
 		Name   string     `json:"name"`
 		Slug   string     `json:"slug"`
+		Code   string     `json:"code"`
+		Label  string     `json:"label"`
+		Color  string     `json:"color"`
 		Fields []fieldRow `json:"fields"`
 	}
 
@@ -970,10 +726,11 @@ func TestIntegration_GetCategory(t *testing.T) {
 		wantStatus int
 		wantCode   string
 		wantName   string
+		wantStyle  string // code, label and color, joined by spaces
 		wantKeys   []string
 	}{
-		{name: "category with fields in order", target: "/categories/1", wantStatus: http.StatusOK, wantName: "Warung", wantKeys: []string{"contact", "seats"}},
-		{name: "category without fields", target: "/categories/2", wantStatus: http.StatusOK, wantName: "Kopi", wantKeys: []string{}},
+		{name: "category with fields in order", target: "/categories/1", wantStatus: http.StatusOK, wantName: "Warung", wantStyle: "W Warung chili", wantKeys: []string{"contact", "seats"}},
+		{name: "category without fields", target: "/categories/2", wantStatus: http.StatusOK, wantName: "Kopi", wantStyle: "K Kopi plum", wantKeys: []string{}},
 		{name: "unknown category", target: "/categories/99", wantStatus: http.StatusNotFound, wantCode: "category_not_found"},
 		{name: "invalid id", target: "/categories/abc", wantStatus: http.StatusBadRequest, wantCode: "invalid_category_id"},
 	}
@@ -996,211 +753,13 @@ func TestIntegration_GetCategory(t *testing.T) {
 			if got.Name != tc.wantName {
 				t.Errorf("name = %q, want %q", got.Name, tc.wantName)
 			}
+			if style := got.Code + " " + got.Label + " " + got.Color; style != tc.wantStyle {
+				t.Errorf("code, label and color = %q, want %q", style, tc.wantStyle)
+			}
 			if got.Fields == nil {
 				t.Error("fields is null, want an array")
 			}
 			assertKeys(t, got.Fields, tc.wantKeys)
 		})
-	}
-}
-
-// -----------------------------------------------------------------------------
-// Updating categories
-// -----------------------------------------------------------------------------
-
-func TestIntegration_PatchCategory(t *testing.T) {
-	tests := []struct {
-		name       string
-		target     string
-		body       string
-		wantStatus int
-		wantCode   string
-		wantName   string // category 1 after the request
-		wantSlug   string
-	}{
-		{name: "renames only", target: "/categories/1", body: `{"name":"Warung Makan"}`, wantStatus: http.StatusOK, wantName: "Warung Makan", wantSlug: "warung"},
-		{name: "changes the slug only", target: "/categories/1", body: `{"slug":"warung-makan"}`, wantStatus: http.StatusOK, wantName: "Warung", wantSlug: "warung-makan"},
-		{name: "changes name and slug", target: "/categories/1", body: `{"name":"Kedai","slug":"kedai"}`, wantStatus: http.StatusOK, wantName: "Kedai", wantSlug: "kedai"},
-		{name: "empty patch changes nothing", target: "/categories/1", body: `{}`, wantStatus: http.StatusOK, wantName: "Warung", wantSlug: "warung"},
-		{name: "may change only the case of its own name", target: "/categories/1", body: `{"name":"WARUNG"}`, wantStatus: http.StatusOK, wantName: "WARUNG", wantSlug: "warung"},
-		{name: "may resend its own name and slug", target: "/categories/1", body: `{"name":"Warung","slug":"warung"}`, wantStatus: http.StatusOK, wantName: "Warung", wantSlug: "warung"},
-		{name: "name of another category", target: "/categories/1", body: `{"name":"Kopi"}`, wantStatus: http.StatusConflict, wantCode: "category_exists", wantName: "Warung", wantSlug: "warung"},
-		{name: "name of another category ignoring case", target: "/categories/1", body: `{"name":"kOpI"}`, wantStatus: http.StatusConflict, wantCode: "category_exists", wantName: "Warung", wantSlug: "warung"},
-		{name: "slug of another category", target: "/categories/1", body: `{"slug":"kopi"}`, wantStatus: http.StatusConflict, wantCode: "category_exists", wantName: "Warung", wantSlug: "warung"},
-		{name: "a conflict leaves the other field unchanged", target: "/categories/1", body: `{"name":"Kedai","slug":"kopi"}`, wantStatus: http.StatusConflict, wantCode: "category_exists", wantName: "Warung", wantSlug: "warung"},
-		{name: "blank name", target: "/categories/1", body: `{"name":"  "}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantName: "Warung", wantSlug: "warung"},
-		{name: "invalid slug", target: "/categories/1", body: `{"slug":"Not A Slug"}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantName: "Warung", wantSlug: "warung"},
-		{name: "name cannot be null", target: "/categories/1", body: `{"name":null}`, wantStatus: http.StatusBadRequest, wantCode: "invalid_body", wantName: "Warung", wantSlug: "warung"},
-		{name: "unknown category", target: "/categories/99", body: `{"name":"Kedai"}`, wantStatus: http.StatusNotFound, wantCode: "category_not_found", wantName: "Warung", wantSlug: "warung"},
-		{name: "invalid id", target: "/categories/abc", body: `{"name":"Kedai"}`, wantStatus: http.StatusBadRequest, wantCode: "invalid_category_id", wantName: "Warung", wantSlug: "warung"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			resetDB(t)
-			seedCatalog(t)
-			seedWarungFields(t)
-			seedPlaces(t)
-
-			router := integrationRouter(testDB)
-			rec := call(t, router, http.MethodPatch, tc.target, tc.body)
-			if tc.wantCode != "" {
-				assertError(t, rec, tc.wantStatus, tc.wantCode)
-			} else if rec.Code != tc.wantStatus {
-				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tc.wantStatus, rec.Body)
-			}
-
-			var stored struct {
-				Name string `db:"name"`
-				Slug string `db:"slug"`
-			}
-			if err := testDB.Get(&stored, `SELECT name, slug FROM CATEGORIES WHERE id = 1`); err != nil {
-				t.Fatalf("read category: %v", err)
-			}
-			if stored.Name != tc.wantName || stored.Slug != tc.wantSlug {
-				t.Errorf("stored category = %q/%q, want %q/%q", stored.Name, stored.Slug, tc.wantName, tc.wantSlug)
-			}
-
-			// Updating a category never touches its fields or its places.
-			assertKeys(t, listFields(t, router, stored.Name), []string{"contact", "seats"})
-			if n := countPlaces(t); n != 5 {
-				t.Errorf("%d places, want 5", n)
-			}
-		})
-	}
-}
-
-func TestIntegration_PatchCategoryResponseAndPlaces(t *testing.T) {
-	resetDB(t)
-	seedCatalog(t)
-	seedWarungFields(t)
-	seedPlaces(t)
-	router := integrationRouter(testDB)
-
-	rec := call(t, router, http.MethodPatch, "/categories/1", `{"name":"Warung Makan","slug":"warung-makan"}`)
-	assertData(t, rec, http.StatusOK, `{
-		"id": 1,
-		"name": "Warung Makan",
-		"slug": "warung-makan",
-		"fields": [
-			{"id": 1, "category_id": 1, "key": "contact", "label": "Contact", "data_type": "text", "required": true, "options": null, "sort_order": 1},
-			{"id": 2, "category_id": 1, "key": "seats", "label": "Seats", "data_type": "number", "required": false, "options": null, "sort_order": 2}
-		]
-	}`)
-
-	// Places keep their category, which now shows the new name.
-	for _, p := range listPlaces(t, router, "/places?category_id=1") {
-		if p.Category.ID != 1 || p.Category.Name != "Warung Makan" || p.Category.Slug != "warung-makan" {
-			t.Errorf("place %d category = %+v, want Warung Makan (1)", p.ID, p.Category)
-		}
-	}
-}
-
-// -----------------------------------------------------------------------------
-// Deleting categories
-// -----------------------------------------------------------------------------
-
-func TestIntegration_DeleteCategory(t *testing.T) {
-	tests := []struct {
-		name           string
-		places         bool // seed places, which use both categories
-		target         string
-		wantStatus     int
-		wantCode       string
-		wantCategories []string // names left, by id
-		wantWarungKeys int      // fields left on Warung
-	}{
-		{name: "deletes an unused category with its fields", target: "/categories/1", wantStatus: http.StatusNoContent, wantCategories: []string{"Kopi"}, wantWarungKeys: 0},
-		{name: "deletes an unused category without fields", target: "/categories/2", wantStatus: http.StatusNoContent, wantCategories: []string{"Warung"}, wantWarungKeys: 2},
-		{name: "refuses a category that has places", places: true, target: "/categories/1", wantStatus: http.StatusConflict, wantCode: "category_in_use", wantCategories: []string{"Warung", "Kopi"}, wantWarungKeys: 2},
-		{name: "unknown category", target: "/categories/99", wantStatus: http.StatusNotFound, wantCode: "category_not_found", wantCategories: []string{"Warung", "Kopi"}, wantWarungKeys: 2},
-		{name: "invalid id", target: "/categories/abc", wantStatus: http.StatusBadRequest, wantCode: "invalid_category_id", wantCategories: []string{"Warung", "Kopi"}, wantWarungKeys: 2},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			resetDB(t)
-			seedCatalog(t)
-			seedWarungFields(t)
-			if tc.places {
-				seedPlaces(t)
-			}
-
-			router := integrationRouter(testDB)
-			rec := call(t, router, http.MethodDelete, tc.target, "")
-			if tc.wantCode != "" {
-				assertError(t, rec, tc.wantStatus, tc.wantCode)
-			} else if rec.Code != tc.wantStatus {
-				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tc.wantStatus, rec.Body)
-			}
-
-			var names []string
-			if err := testDB.Select(&names, `SELECT name FROM CATEGORIES ORDER BY id`); err != nil {
-				t.Fatalf("read categories: %v", err)
-			}
-			if !slices.Equal(names, tc.wantCategories) {
-				t.Errorf("categories = %v, want %v", names, tc.wantCategories)
-			}
-
-			var fields int
-			if err := testDB.Get(&fields, `SELECT COUNT(*) FROM CATEGORY_FIELDS WHERE category_id = 1`); err != nil {
-				t.Fatalf("count fields: %v", err)
-			}
-			if fields != tc.wantWarungKeys {
-				t.Errorf("Warung has %d fields, want %d", fields, tc.wantWarungKeys)
-			}
-
-			if tc.places {
-				if n := countPlaces(t); n != 5 {
-					t.Errorf("%d places, want 5", n)
-				}
-			}
-		})
-	}
-}
-
-func TestIntegration_DeleteCategoryKeepsOtherCategoriesFields(t *testing.T) {
-	resetDB(t)
-	seedCatalog(t)
-	seedWarungFields(t)
-	mustExec(t, `INSERT INTO CATEGORY_FIELDS (category_id, key, label, data_type, required, sort_order)
-		VALUES (2, 'halal', 'Halal', 'boolean', FALSE, 1)`)
-
-	router := integrationRouter(testDB)
-	if rec := call(t, router, http.MethodDelete, "/categories/2", ""); rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want 204; body: %s", rec.Code, rec.Body)
-	}
-
-	assertKeys(t, listFields(t, router, "Warung"), []string{"contact", "seats"})
-}
-
-func TestIntegration_DeleteCategoryTwice(t *testing.T) {
-	resetDB(t)
-	seedCatalog(t)
-
-	router := integrationRouter(testDB)
-	if first := call(t, router, http.MethodDelete, "/categories/1", ""); first.Code != http.StatusNoContent {
-		t.Fatalf("first delete: status %d; body: %s", first.Code, first.Body)
-	}
-
-	assertError(t, call(t, router, http.MethodDelete, "/categories/1", ""), http.StatusNotFound, "category_not_found")
-}
-
-func TestIntegration_DeleteCategoryAfterItsPlacesAreDeleted(t *testing.T) {
-	resetDB(t)
-	seedCatalog(t)
-	seedPlaces(t)
-
-	router := integrationRouter(testDB)
-	assertError(t, call(t, router, http.MethodDelete, "/categories/2", ""), http.StatusConflict, "category_in_use")
-
-	for _, id := range []int{2, 5} { // the places in Kopi
-		if rec := call(t, router, http.MethodDelete, fmt.Sprintf("/places/%d", id), ""); rec.Code != http.StatusNoContent {
-			t.Fatalf("delete place %d: status %d; body: %s", id, rec.Code, rec.Body)
-		}
-	}
-
-	if rec := call(t, router, http.MethodDelete, "/categories/2", ""); rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want 204; body: %s", rec.Code, rec.Body)
 	}
 }

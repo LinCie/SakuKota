@@ -4,10 +4,10 @@ Rantau ("rantaugo") is a Go REST API with a React/Vite frontend. The Go module i
 
 ## What the repository contains
 
-- `cmd/` — API and database migration entry points
+- `cmd/` — API, database migration, and seed entry points
 - `internal/module/` — backend features organized by domain
-- `internal/` — shared HTTP, routing, database, and PostGIS packages
-- `migrations/` — database schema migrations
+- `internal/` — shared config, HTTP, middleware, routing, database, and PostGIS packages
+- `migrations/` — database schema migrations, which also define the categories and their custom fields
 - `web/` — standalone React and TypeScript frontend
 
 ## Conventions
@@ -15,6 +15,7 @@ Rantau ("rantaugo") is a Go REST API with a React/Vite frontend. The Go module i
 - Backend features are organized by domain, with HTTP, business logic, and data access kept in separate layers.
 - Shared backend infrastructure lives outside the domain modules.
 - The frontend is maintained as a separate app in `web/`.
+- Categories and their custom fields are defined in migrations, not created through the API. The API returns each category's `code`, `label`, and `color` (a palette key), and the frontend maps `color` to its styles.
 - Follow the existing Go and TypeScript style in the relevant area.
 
 ## Task Execution

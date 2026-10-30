@@ -269,7 +269,7 @@ A signwriter's tin set: a few saturated, flat enamel colours over warm paint whi
 - **Soft Ink** (ink-soft): secondary text (addresses, count sentence, leader labels, placeholder text), the missing-slot text, and the scrollbar thumb. Ink at reduced opacity (20–60%) supplies dashed dividers, inactive outlines, and the modal backdrop (60%).
 
 ### Named Rules
-**The One Hue Per Category Rule.** Each category owns exactly one paint: Warung chili (W), Penjahit plum (J), Klinik blue (K), Laundry yellow (L), Apotek green (A). The same hue marks its filter plate, map sign, list code plate, and badge; unknown categories fall back to an ink plate with their initial.
+**The One Hue Per Category Rule.** Each category owns exactly one paint: Warung chili (W), Penjahit plum (J), Klinik blue (K), Laundry yellow (L), Apotek green (A). The same hue marks its filter plate, map sign, list code plate, and badge; each category's code, label, and hue come from the API (`code`, `label`, `color`), and the app maps the `color` key to its paints.
 
 **The Yellow Takes Ink Rule.** Sign yellow is never lettered in paint white. Yellow plates carry ink text and an ink border; the inactive Laundry plate is outlined in ink at 60%, not yellow, because yellow on paint white is illegible.
 

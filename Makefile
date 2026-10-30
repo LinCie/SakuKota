@@ -4,7 +4,8 @@
 
 DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/rantaugo?sslmode=disable
 MIGRATIONS_DIR ?= migrations
-export DATABASE_URL MIGRATIONS_DIR
+# Pass everything from .env (JWT_SECRET, PORT, ...) on to the commands below.
+.EXPORT_ALL_VARIABLES:
 GOOSE := go run github.com/pressly/goose/v3/cmd/goose@v3.27.3
 
 dev-backend:
@@ -26,10 +27,10 @@ dev:
 		wait -n'
 
 start:
-	go run ./cmd/web
+	go run ./cmd/api
 
 build:
-	go build -o ./bin/web ./cmd/web
+	go build -o ./bin/api ./cmd/api
 
 postgres-up:
 	docker compose up -d postgres

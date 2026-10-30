@@ -21,10 +21,6 @@ type Repository interface {
 	Create(ctx context.Context, p *Place) (*Place, error)
 	GetCategories(ctx context.Context) ([]Category, error)
 	GetCategory(ctx context.Context, id int64) (*Category, error)
-	CreateCategory(ctx context.Context, c *Category) (*Category, error)
-	UpdateCategory(ctx context.Context, c *Category) (*Category, error)
-	DeleteCategory(ctx context.Context, id int64) error
-	CreateCategoryField(ctx context.Context, f *CategoryField) (*CategoryField, error)
 	GetPlace(ctx context.Context, id int64) (*Place, error)
 	Update(ctx context.Context, p *Place) (*Place, error)
 	Delete(ctx context.Context, id int64) error
@@ -51,7 +47,8 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 // match the nested Place.Category fields.
 const placeColumns = `p.id, p.sub_district_id, p.category_id, p.name, p.address,
 	p.location, p.operating_hours, p.estimated_price_range, p.short_description,
-	p.attributes, c.id AS "category.id", c.name AS "category.name", c.slug AS "category.slug"`
+	p.attributes, c.id AS "category.id", c.name AS "category.name", c.slug AS "category.slug",
+	c.code AS "category.code", c.label AS "category.label", c.color AS "category.color"`
 
 // checkFilterTargets returns ErrSubDistrictNotFound or ErrCategoryNotFound when
 // the filter names a sub-district or category that does not exist.
@@ -141,7 +138,7 @@ func (r *postgresRepository) GetCategories(ctx context.Context) ([]Category, err
 	err := r.db.SelectContext(
 		ctx,
 		&categories,
-		`SELECT id, name, slug FROM CATEGORIES`,
+		`SELECT id, name, slug, code, label, color FROM CATEGORIES`,
 	)
 	if err != nil {
 		return nil, err
@@ -161,7 +158,7 @@ func (r *postgresRepository) GetCategory(ctx context.Context, id int64) (*Catego
 	err := r.db.GetContext(
 		ctx,
 		&category,
-		`SELECT id, name, slug FROM CATEGORIES WHERE id = $1`,
+		`SELECT id, name, slug, code, label, color FROM CATEGORIES WHERE id = $1`,
 		id,
 	)
 	if err != nil {
@@ -177,170 +174,6 @@ func (r *postgresRepository) GetCategory(ctx context.Context, id int64) (*Catego
 	}
 
 	return &categories[0], nil
-}
-
-func (r *postgresRepository) CreateCategory(ctx context.Context, c *Category) (*Category, error) {
-	var created Category
-
-	err := r.db.GetContext(
-		ctx,
-		&created,
-		`INSERT INTO CATEGORIES (name, slug)
-		VALUES ($1, $2)
-		RETURNING id, name, slug`,
-		c.Name,
-		c.Slug,
-	)
-	if err != nil {
-		if database.IsCode(err, database.UniqueViolation) {
-			return nil, ErrCategoryExists
-		}
-		return nil, err
-	}
-
-	created.Fields = make([]CategoryField, 0)
-
-	return &created, nil
-}
-
-// UpdateCategory stores the category's name and slug and returns it with its
-// fields, or ErrCategoryNotFound.
-func (r *postgresRepository) UpdateCategory(ctx context.Context, c *Category) (*Category, error) {
-	var updated Category
-
-	err := r.db.GetContext(
-		ctx,
-		&updated,
-		`UPDATE CATEGORIES SET name = $2, slug = $3
-		WHERE id = $1
-		RETURNING id, name, slug`,
-		c.ID,
-		c.Name,
-		c.Slug,
-	)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrCategoryNotFound
-		}
-		if database.IsCode(err, database.UniqueViolation) {
-			return nil, ErrCategoryExists
-		}
-		return nil, err
-	}
-
-	categories := []Category{updated}
-	if err := r.attachFields(ctx, categories); err != nil {
-		return nil, err
-	}
-
-	return &categories[0], nil
-}
-
-// DeleteCategory removes the category and its fields. It returns
-// ErrCategoryNotFound if there is no such category, and ErrCategoryInUse, with
-// nothing removed, if places still belong to it.
-func (r *postgresRepository) DeleteCategory(ctx context.Context, id int64) error {
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.ExecContext(ctx, `DELETE FROM CATEGORY_FIELDS WHERE category_id = $1`, id); err != nil {
-		return err
-	}
-
-	result, err := tx.ExecContext(ctx, `DELETE FROM CATEGORIES WHERE id = $1`, id)
-	if err != nil {
-		if database.IsCode(err, database.ForeignKeyViolation) {
-			return ErrCategoryInUse
-		}
-		return err
-	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return ErrCategoryNotFound
-	}
-
-	return tx.Commit()
-}
-
-// CreateCategoryField adds the field at its SortOrder position, moving the
-// category's fields from that position on down, or last if SortOrder is nil.
-// The category row is locked for the duration, so concurrent adds to the same
-// category take turns and each sees the positions the others took.
-func (r *postgresRepository) CreateCategoryField(ctx context.Context, f *CategoryField) (*CategoryField, error) {
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-
-	var categoryID int64
-	err = tx.GetContext(ctx, &categoryID, `SELECT id FROM CATEGORIES WHERE id = $1 FOR UPDATE`, f.CategoryID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrCategoryNotFound
-		}
-		return nil, err
-	}
-
-	var count int32
-	err = tx.GetContext(ctx, &count, `SELECT COUNT(*) FROM CATEGORY_FIELDS WHERE category_id = $1`, f.CategoryID)
-	if err != nil {
-		return nil, err
-	}
-
-	sortOrder := count + 1
-	if f.SortOrder != nil {
-		if *f.SortOrder > sortOrder {
-			return nil, ErrInvalidFieldSortOrder
-		}
-
-		sortOrder = *f.SortOrder
-		_, err = tx.ExecContext(
-			ctx,
-			`UPDATE CATEGORY_FIELDS SET sort_order = sort_order + 1
-			WHERE category_id = $1 AND sort_order >= $2`,
-			f.CategoryID,
-			sortOrder,
-		)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	var created CategoryField
-	err = tx.GetContext(
-		ctx,
-		&created,
-		`INSERT INTO CATEGORY_FIELDS (category_id, key, label, data_type, required, options, sort_order)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id, category_id, key, label, data_type, required, options, sort_order`,
-		f.CategoryID,
-		f.Key,
-		f.Label,
-		f.DataType,
-		f.Required,
-		f.Options,
-		sortOrder,
-	)
-	if err != nil {
-		if database.IsCode(err, database.UniqueViolation) {
-			return nil, ErrCategoryFieldExists
-		}
-		return nil, err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-
-	return &created, nil
 }
 
 // Create inserts the place and returns it joined with its category.

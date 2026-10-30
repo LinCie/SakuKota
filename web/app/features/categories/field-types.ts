@@ -1,5 +1,5 @@
 /** The data types a category field can take, with their labels in the admin. */
-export const FIELD_TYPES = [
+const FIELD_TYPES = [
   { value: "text", label: "Teks" },
   { value: "number", label: "Angka" },
   { value: "boolean", label: "Ya / tidak" },

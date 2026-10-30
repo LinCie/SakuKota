@@ -11,11 +11,25 @@ CREATE TABLE SUB_DISTRICTS (
     static_map_image_url VARCHAR(255)
 );
 
+-- Categories are defined here, not through the API. `code`, `label` and
+-- `color` are how clients draw a category; `color` is a palette key that the
+-- web app maps to its styles.
 CREATE TABLE CATEGORIES (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
-    slug VARCHAR(100) NOT NULL UNIQUE
+    slug VARCHAR(100) NOT NULL UNIQUE,
+    code VARCHAR(1) NOT NULL,
+    label VARCHAR(100) NOT NULL,
+    color VARCHAR(20) NOT NULL CHECK (color IN ('chili', 'plum', 'cat', 'sign', 'board'))
 );
+
+INSERT INTO CATEGORIES (name, slug, code, label, color)
+VALUES
+    ('Affordable Food & Warung', 'affordable-food-warung', 'W', 'Warung', 'chili'),
+    ('Tailor', 'tailor', 'J', 'Penjahit', 'plum'),
+    ('Local Clinic', 'local-clinic', 'K', 'Klinik', 'cat'),
+    ('Laundry', 'laundry', 'L', 'Laundry', 'sign'),
+    ('Pharmacy', 'pharmacy', 'A', 'Apotek', 'board');
 
 CREATE TABLE PLACES (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

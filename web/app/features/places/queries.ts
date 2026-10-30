@@ -6,23 +6,17 @@ import {
 } from "@tanstack/react-query";
 
 import {
-  createCategory,
-  createCategoryField,
   createPlace,
-  deleteCategory,
   deletePlace,
   getCategories,
   getCategory,
   getPlace,
   getPlaces,
-  updateCategory,
   updatePlace,
-  type CreateCategoryFieldRequest,
   type GetPlacesParams,
-  type UpdateCategoryRequest,
   type UpdatePlaceRequest,
 } from "./api";
-import type { CategoryDetail, Place } from "./types";
+import type { Place } from "./types";
 
 // -----------------------------------------------------------------------------
 // Query keys
@@ -129,61 +123,5 @@ export function useDeletePlace() {
       });
       return queryClient.invalidateQueries({ queryKey: placeKeys.lists() });
     },
-  });
-}
-
-export function useCreateCategory() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: createCategory,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: categoryKeys.all }),
-  });
-}
-
-export function useUpdateCategory() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, body }: { id: number; body: UpdateCategoryRequest }) =>
-      updateCategory(id, body),
-    // Places embed their category's name and slug.
-    onSuccess: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: categoryKeys.all }),
-        queryClient.invalidateQueries({ queryKey: placeKeys.all }),
-      ]),
-  });
-}
-
-export function useDeleteCategory() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: deleteCategory,
-    onSuccess: (_data, id) => {
-      queryClient.setQueriesData<CategoryDetail[]>(
-        { queryKey: categoryKeys.lists() },
-        (categories) => categories?.filter((category) => category.id !== id),
-      );
-      queryClient.removeQueries({
-        queryKey: categoryKeys.detail(id),
-        type: "inactive",
-      });
-      return queryClient.invalidateQueries({ queryKey: categoryKeys.lists() });
-    },
-  });
-}
-
-export function useCreateCategoryField() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      categoryId,
-      body,
-    }: {
-      categoryId: number;
-      body: CreateCategoryFieldRequest;
-    }) => createCategoryField(categoryId, body),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: categoryKeys.all }),
   });
 }

@@ -23,10 +23,21 @@ export type Place = {
   category: Category;
 };
 
+/**
+ * The palette keys a category can be colored with. Categories are defined by
+ * the backend's migrations, whose `color` column only allows these.
+ */
+export type CategoryColor = "chili" | "plum" | "cat" | "sign" | "board";
+
 export type Category = {
   id: number;
   name: string;
   slug: string;
+  /** The single character that marks the category on a sign. */
+  code: string;
+  /** Short name to display. */
+  label: string;
+  color: CategoryColor;
 };
 
 /** A category with the custom fields its places carry. */

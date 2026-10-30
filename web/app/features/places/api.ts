@@ -7,13 +7,7 @@ import {
   type CommonApiErrorCode,
   unwrap,
 } from "~/shared/api";
-import type {
-  CategoryDetail,
-  CategoryField,
-  FieldDataType,
-  GeoPoint,
-  Place,
-} from "./types";
+import type { CategoryDetail, GeoPoint, Place } from "./types";
 
 // -----------------------------------------------------------------------------
 // Request params / error codes (service-layer concerns, not domain shapes).
@@ -33,17 +27,6 @@ export type GetPlaceErrorCode =
 export type CategoryErrorCode = CommonApiErrorCode;
 export type GetCategoryErrorCode =
   CommonApiErrorCode | "invalid_category_id" | "category_not_found";
-export type UpdateCategoryErrorCode =
-  | AdminWriteErrorCode
-  | "invalid_category_id"
-  | "validation_error"
-  | "category_not_found"
-  | "category_exists";
-export type DeleteCategoryErrorCode =
-  | AdminWriteErrorCode
-  | "invalid_category_id"
-  | "category_not_found"
-  | "category_in_use";
 export type UpdatePlaceErrorCode =
   | AdminWriteErrorCode
   | "invalid_place_id"
@@ -52,14 +35,6 @@ export type UpdatePlaceErrorCode =
 export type DeletePlaceErrorCode =
   AdminWriteErrorCode | "invalid_place_id" | "place_not_found";
 export type CreatePlaceErrorCode = AdminWriteErrorCode | "validation_error";
-export type CreateCategoryErrorCode =
-  AdminWriteErrorCode | "validation_error" | "category_exists";
-export type CreateCategoryFieldErrorCode =
-  | AdminWriteErrorCode
-  | "invalid_category_id"
-  | "validation_error"
-  | "category_not_found"
-  | "category_field_exists";
 
 export type GetPlacesParams = {
   /** Filters places to one sub-district, matching the `sub_district_id` query param. */
@@ -96,24 +71,6 @@ export type UpdatePlaceRequest = {
   short_description?: string | null;
   /** Replaces all attributes when set; must match the category's fields. */
   attributes?: Record<string, unknown> | null;
-};
-
-export type CreateCategoryRequest = {
-  name: string;
-  slug: string;
-};
-
-export type UpdateCategoryRequest = Partial<CreateCategoryRequest>;
-
-export type CreateCategoryFieldRequest = {
-  key: string;
-  label: string;
-  data_type: FieldDataType;
-  required?: boolean;
-  /** Allowed values; required for select fields, rejected for others. */
-  options?: string[];
-  /** 1-based position to insert the field at; omitted, the field goes last. */
-  sort_order?: number;
 };
 
 // -----------------------------------------------------------------------------
@@ -178,49 +135,4 @@ export async function updatePlace(
 /** Admin only. */
 export async function deletePlace(id: number): Promise<void> {
   unwrap(await apiDelete<void, DeletePlaceErrorCode>(`places/${id}`));
-}
-
-/** Admin only. */
-export async function createCategory(
-  body: CreateCategoryRequest,
-): Promise<CategoryDetail> {
-  return unwrap(
-    await apiPost<CategoryDetail, CreateCategoryErrorCode>(
-      "places/categories",
-      { json: body },
-    ),
-  );
-}
-
-/** Admin only. */
-export async function updateCategory(
-  id: number,
-  body: UpdateCategoryRequest,
-): Promise<CategoryDetail> {
-  return unwrap(
-    await apiPatch<CategoryDetail, UpdateCategoryErrorCode>(
-      `places/categories/${id}`,
-      { json: body },
-    ),
-  );
-}
-
-/** Admin only. */
-export async function deleteCategory(id: number): Promise<void> {
-  unwrap(
-    await apiDelete<void, DeleteCategoryErrorCode>(`places/categories/${id}`),
-  );
-}
-
-/** Admin only. */
-export async function createCategoryField(
-  categoryId: number,
-  body: CreateCategoryFieldRequest,
-): Promise<CategoryField> {
-  return unwrap(
-    await apiPost<CategoryField, CreateCategoryFieldErrorCode>(
-      `places/categories/${categoryId}/fields`,
-      { json: body },
-    ),
-  );
 }

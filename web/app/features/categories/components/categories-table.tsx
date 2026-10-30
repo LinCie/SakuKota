@@ -1,4 +1,4 @@
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Eye } from "lucide-react";
 
 import { CategoryBadge } from "~/features/places/components/category-sign";
 import type { CategoryDetail } from "~/features/places/types";
@@ -9,17 +9,10 @@ import { formatNumber } from "~/shared/format";
 type CategoriesTableProps = {
   categories: CategoryDetail[];
   onView: (category: CategoryDetail) => void;
-  onEdit: (category: CategoryDetail) => void;
-  onDelete: (category: CategoryDetail) => void;
 };
 
-/** All categories, with a row menu for view, edit, and delete. */
-export function CategoriesTable({
-  categories,
-  onView,
-  onEdit,
-  onDelete,
-}: CategoriesTableProps) {
+/** All categories, with a row menu to view one. */
+export function CategoriesTable({ categories, onView }: CategoriesTableProps) {
   const columns: Column<CategoryDetail>[] = [
     {
       key: "name",
@@ -52,13 +45,6 @@ export function CategoriesTable({
           label={`Aksi untuk kategori ${category.name}`}
           actions={[
             { label: "Lihat", icon: Eye, onSelect: () => onView(category) },
-            { label: "Ubah", icon: Pencil, onSelect: () => onEdit(category) },
-            {
-              label: "Hapus",
-              icon: Trash2,
-              destructive: true,
-              onSelect: () => onDelete(category),
-            },
           ]}
         />
       ),

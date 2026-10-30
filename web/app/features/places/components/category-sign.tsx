@@ -1,5 +1,5 @@
 import { cn } from "~/shared/cn";
-import type { Category } from "../types";
+import type { Category, CategoryColor } from "../types";
 
 export type CategoryStyle = {
   code: string;
@@ -10,51 +10,40 @@ export type CategoryStyle = {
   outline: string;
 };
 
-// Keyed by backend category slug (cmd/seed/seed.sql). Class strings are
-// complete literals so Tailwind can see them, including inside the map's
-// marker HTML.
-const CATEGORY_STYLES: Record<string, CategoryStyle> = {
-  "affordable-food-warung": {
-    code: "W",
-    label: "Warung",
+// The paints a category's `color` selects. Class strings are complete literals
+// so Tailwind can see them, including inside the map's marker HTML.
+const CATEGORY_COLORS: Record<
+  CategoryColor,
+  Pick<CategoryStyle, "solid" | "outline">
+> = {
+  chili: {
     solid: "bg-chili text-paint border-chili",
     outline: "border-chili text-chili",
   },
-  tailor: {
-    code: "J",
-    label: "Penjahit",
+  plum: {
     solid: "bg-plum text-paint border-plum",
     outline: "border-plum text-plum",
   },
-  "local-clinic": {
-    code: "K",
-    label: "Klinik",
+  cat: {
     solid: "bg-cat text-paint border-cat",
     outline: "border-cat text-cat",
   },
-  laundry: {
-    code: "L",
-    label: "Laundry",
+  sign: {
     solid: "bg-sign text-ink border-ink",
     outline: "border-ink/60 text-ink",
   },
-  pharmacy: {
-    code: "A",
-    label: "Apotek",
+  board: {
     solid: "bg-board text-paint border-board",
     outline: "border-board text-board",
   },
 };
 
 export function categoryStyle(category: Category): CategoryStyle {
-  return (
-    CATEGORY_STYLES[category.slug] ?? {
-      code: category.name.charAt(0).toUpperCase(),
-      label: category.name,
-      solid: "bg-ink text-paint border-ink",
-      outline: "border-ink text-ink",
-    }
-  );
+  return {
+    code: category.code,
+    label: category.label,
+    ...CATEGORY_COLORS[category.color],
+  };
 }
 
 /** Small painted code plate, e.g. the "W" on a warung sign. */

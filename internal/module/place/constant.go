@@ -21,9 +21,5 @@ const (
 	indonesiaMaxLatitude  = 6
 )
 
-// maxNameLength is the size of the VARCHAR(100) columns holding category names
-// and slugs and field labels. VARCHAR counts characters, not bytes.
-const maxNameLength = 100
-
 // maxPlaceNameLength is the size of the VARCHAR(150) column holding place names.
 const maxPlaceNameLength = 150

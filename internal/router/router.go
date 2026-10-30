@@ -74,23 +74,6 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 
 				// GET /v1/places/categories/{id}
 				r.Get("/{id}", placeModule.Handler.GetCategory)
-
-				r.Group(func(r chi.Router) {
-					r.Use(middleware.WithAuth(cfg))
-					r.Use(middleware.Guard([]string{"admin"}))
-
-					// POST /v1/places/categories
-					r.Post("/", placeModule.Handler.CreateCategory)
-
-					// PATCH /v1/places/categories/{id}
-					r.Patch("/{id}", placeModule.Handler.PatchCategory)
-
-					// DELETE /v1/places/categories/{id}
-					r.Delete("/{id}", placeModule.Handler.DeleteCategory)
-
-					// POST /v1/places/categories/{id}/fields
-					r.Post("/{id}/fields", placeModule.Handler.CreateCategoryField)
-				})
 			})
 		})
 

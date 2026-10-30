@@ -31,11 +31,7 @@ func newRouter(svc place.Service) http.Handler {
 	r.Patch("/places/{id}", h.PatchPlace)
 	r.Delete("/places/{id}", h.DeletePlace)
 	r.Get("/categories", h.GetCategories)
-	r.Post("/categories", h.CreateCategory)
 	r.Get("/categories/{id}", h.GetCategory)
-	r.Patch("/categories/{id}", h.PatchCategory)
-	r.Delete("/categories/{id}", h.DeleteCategory)
-	r.Post("/categories/{id}/fields", h.CreateCategoryField)
 	return r
 }
 
@@ -215,7 +211,7 @@ func TestHandler_GetPlaces_ResponseShape(t *testing.T) {
 		SubDistrictID: 1,
 		Name:          "Kopi Tubruk",
 		Attributes:    json.RawMessage(`{}`),
-		Category:      place.Category{ID: 2, Name: "Kopi", Slug: "kopi"},
+		Category:      place.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
 	}}, nil)
 
 	rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/places", ""))
@@ -229,7 +225,7 @@ func TestHandler_GetPlaces_ResponseShape(t *testing.T) {
 		"estimated_price_range": null,
 		"short_description": null,
 		"attributes": {},
-		"category": {"id": 2, "name": "Kopi", "slug": "kopi"}
+		"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 	}]`)
 }
 
@@ -246,8 +242,8 @@ func TestHandler_GetCategories_Success(t *testing.T) {
 		{name: "no categories", categories: []place.Category{}, want: `[]`},
 		{
 			name:       "a category without fields lists an empty fields array",
-			categories: []place.Category{{ID: 1, Name: "Warung", Slug: "warung"}},
-			want:       `[{"id":1,"name":"Warung","slug":"warung","fields":[]}]`,
+			categories: []place.Category{{ID: 1, Name: "Warung", Slug: "warung", Code: "W", Label: "Warung", Color: "chili"}},
+			want:       `[{"id":1,"name":"Warung","slug":"warung","code":"W","label":"Warung","color":"chili","fields":[]}]`,
 		},
 	}
 
@@ -259,169 +255,6 @@ func TestHandler_GetCategories_Success(t *testing.T) {
 			rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/categories", ""))
 			assertData(t, rec, http.StatusOK, tc.want)
 		})
-	}
-}
-
-// -----------------------------------------------------------------------------
-// POST /categories
-// -----------------------------------------------------------------------------
-
-func TestHandler_CreateCategory_RejectsMalformedBodies(t *testing.T) {
-	tests := []struct {
-		name string
-		body string
-	}{
-		{name: "empty body", body: ``},
-		{name: "truncated JSON", body: `{"name":"Kopi","slug":"kopi"`},
-		{name: "name is a number", body: `{"name":5,"slug":"kopi"}`},
-		{name: "body is an array", body: `[]`},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			svc := mock.NewMockService(gomock.NewController(t))
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/categories", tc.body))
-			assertError(t, rec, http.StatusBadRequest, "invalid_body")
-		})
-	}
-}
-
-func TestHandler_CreateCategory_MapsServiceErrors(t *testing.T) {
-	tests := []struct {
-		name       string
-		err        error
-		wantStatus int
-		wantCode   string
-	}{
-		{name: "invalid name", err: place.ErrInvalidCategoryName, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "invalid slug", err: place.ErrInvalidSlug, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "duplicate name or slug", err: place.ErrCategoryExists, wantStatus: http.StatusConflict, wantCode: "category_exists"},
-		{name: "wrapped duplicate", err: fmt.Errorf("create: %w", place.ErrCategoryExists), wantStatus: http.StatusConflict, wantCode: "category_exists"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().CreateCategory(gomock.Any(), gomock.Any()).Return(nil, tc.err)
-
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/categories", `{"name":"Kopi","slug":"kopi"}`))
-			assertError(t, rec, tc.wantStatus, tc.wantCode)
-		})
-	}
-}
-
-func TestHandler_CreateCategory_IgnoresUnknownKeys(t *testing.T) {
-	svc := mock.NewMockService(gomock.NewController(t))
-
-	var got *place.Category
-	svc.EXPECT().CreateCategory(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, c *place.Category) (*place.Category, error) {
-			got = c
-			return &place.Category{ID: 5, Name: c.Name, Slug: c.Slug}, nil
-		})
-
-	body := `{"name":"Kopi","slug":"kopi","id":99,"fields":[{"key":"halal"}],"unexpected":true}`
-	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/categories", body))
-
-	if got == nil {
-		t.Fatal("service was not called")
-	}
-	if got.Name != "Kopi" || got.Slug != "kopi" {
-		t.Errorf("service got name %q slug %q, want Kopi and kopi", got.Name, got.Slug)
-	}
-	if got.ID != 0 || len(got.Fields) != 0 {
-		t.Errorf("client-sent id or fields reached the service: id %d, %d fields", got.ID, len(got.Fields))
-	}
-	assertData(t, rec, http.StatusCreated, `{"id":5,"name":"Kopi","slug":"kopi","fields":[]}`)
-}
-
-// -----------------------------------------------------------------------------
-// POST /categories/{id}/fields
-// -----------------------------------------------------------------------------
-
-func TestHandler_CreateCategoryField_RejectsMalformedRequests(t *testing.T) {
-	validBody := `{"key":"halal","label":"Halal","data_type":"boolean"}`
-
-	tests := []struct {
-		name     string
-		target   string
-		body     string
-		wantCode string
-	}{
-		{name: "category id is not a number", target: "/categories/abc/fields", body: validBody, wantCode: "invalid_category_id"},
-		{name: "truncated JSON", target: "/categories/1/fields", body: `{"key":"halal"`, wantCode: "invalid_body"},
-		{name: "options is not a list", target: "/categories/1/fields", body: `{"key":"halal","label":"Halal","data_type":"select","options":"cash"}`, wantCode: "invalid_body"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			svc := mock.NewMockService(gomock.NewController(t))
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, tc.target, tc.body))
-			assertError(t, rec, http.StatusBadRequest, tc.wantCode)
-		})
-	}
-}
-
-func TestHandler_CreateCategoryField_MapsServiceErrors(t *testing.T) {
-	tests := []struct {
-		name       string
-		err        error
-		wantStatus int
-		wantCode   string
-	}{
-		{name: "invalid key", err: place.ErrInvalidFieldKey, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "invalid label", err: place.ErrInvalidFieldLabel, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "invalid sort order", err: place.ErrInvalidFieldSortOrder, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "invalid data type", err: place.ErrInvalidFieldDataType, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "select without options", err: place.ErrFieldOptionsRequired, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "options on a non-select", err: place.ErrFieldOptionsNotAllowed, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusNotFound, wantCode: "category_not_found"},
-		{name: "duplicate key", err: place.ErrCategoryFieldExists, wantStatus: http.StatusConflict, wantCode: "category_field_exists"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().CreateCategoryField(gomock.Any(), gomock.Any()).Return(nil, tc.err)
-
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/categories/3/fields",
-				`{"key":"halal","label":"Halal","data_type":"boolean"}`))
-			assertError(t, rec, tc.wantStatus, tc.wantCode)
-		})
-	}
-}
-
-func TestHandler_CreateCategoryField_UsesPathIDAndIgnoresUnknownKeys(t *testing.T) {
-	svc := mock.NewMockService(gomock.NewController(t))
-
-	var got *place.CategoryField
-	svc.EXPECT().CreateCategoryField(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, f *place.CategoryField) (*place.CategoryField, error) {
-			got = f
-			return &place.CategoryField{ID: 9, CategoryID: f.CategoryID, Key: f.Key, Label: f.Label, DataType: f.DataType}, nil
-		})
-
-	body := `{"key":"halal","label":"Halal","data_type":"boolean","category_id":99,"id":5,"unexpected":1}`
-	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/categories/3/fields", body))
-
-	if got == nil {
-		t.Fatal("service was not called")
-	}
-	if got.CategoryID != 3 {
-		t.Errorf("category id = %d, want 3 from the path", got.CategoryID)
-	}
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("status = %d, want 201; body: %s", rec.Code, rec.Body)
-	}
-
-	var created map[string]any
-	if err := json.Unmarshal(responseData(t, rec), &created); err != nil {
-		t.Fatalf("data is not JSON: %v", err)
-	}
-	if created["id"] != float64(9) || created["category_id"] != float64(3) || created["key"] != "halal" {
-		t.Errorf("created field = %v, want id 9, category_id 3, key halal", created)
 	}
 }
 
@@ -495,7 +328,7 @@ func TestHandler_CreatePlace_Success(t *testing.T) {
 				Name:          p.Name,
 				Location:      p.Location,
 				Attributes:    json.RawMessage(`{}`),
-				Category:      place.Category{ID: 2, Name: "Kopi", Slug: "kopi"},
+				Category:      place.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
 			}, nil
 		})
 
@@ -526,7 +359,7 @@ func TestHandler_CreatePlace_Success(t *testing.T) {
 		"estimated_price_range": null,
 		"short_description": null,
 		"attributes": {},
-		"category": {"id": 2, "name": "Kopi", "slug": "kopi"}
+		"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 	}`)
 }
 
@@ -610,24 +443,6 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			},
 		},
 		{
-			name:   "create category",
-			method: http.MethodPost,
-			target: "/categories",
-			body:   `{"name":"Kopi","slug":"kopi"}`,
-			fail: func(s *mock.MockService) {
-				s.EXPECT().CreateCategory(gomock.Any(), gomock.Any()).Return(nil, dbErr)
-			},
-		},
-		{
-			name:   "create field",
-			method: http.MethodPost,
-			target: "/categories/1/fields",
-			body:   `{"key":"halal","label":"Halal","data_type":"boolean"}`,
-			fail: func(s *mock.MockService) {
-				s.EXPECT().CreateCategoryField(gomock.Any(), gomock.Any()).Return(nil, dbErr)
-			},
-		},
-		{
 			name:   "create place",
 			method: http.MethodPost,
 			target: "/places",
@@ -652,24 +467,6 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			body:   "",
 			fail: func(s *mock.MockService) {
 				s.EXPECT().GetCategory(gomock.Any(), int64(1)).Return(nil, dbErr)
-			},
-		},
-		{
-			name:   "update category",
-			method: http.MethodPatch,
-			target: "/categories/1",
-			body:   `{"name":"Kopi"}`,
-			fail: func(s *mock.MockService) {
-				s.EXPECT().UpdateCategory(gomock.Any(), int64(1), gomock.Any()).Return(nil, dbErr)
-			},
-		},
-		{
-			name:   "delete category",
-			method: http.MethodDelete,
-			target: "/categories/1",
-			body:   "",
-			fail: func(s *mock.MockService) {
-				s.EXPECT().DeleteCategory(gomock.Any(), int64(1)).Return(dbErr)
 			},
 		},
 	}
@@ -808,7 +605,7 @@ func TestHandler_PatchPlace_Success(t *testing.T) {
 		SubDistrictID: 1,
 		Name:          "Kopi Senja",
 		Attributes:    json.RawMessage(`{}`),
-		Category:      place.Category{ID: 2, Name: "Kopi", Slug: "kopi"},
+		Category:      place.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
 	}, nil)
 
 	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, "/places/3", `{"name":"Kopi Senja"}`))
@@ -822,7 +619,7 @@ func TestHandler_PatchPlace_Success(t *testing.T) {
 		"estimated_price_range": null,
 		"short_description": null,
 		"attributes": {},
-		"category": {"id": 2, "name": "Kopi", "slug": "kopi"}
+		"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 	}`)
 }
 
@@ -946,7 +743,7 @@ func TestHandler_GetPlace_Success(t *testing.T) {
 		Address:       ptr("Jl. Sudirman 9"),
 		Location:      postgis.MustPoint(106.8, -6.2),
 		Attributes:    json.RawMessage(`{"halal":true}`),
-		Category:      place.Category{ID: 2, Name: "Kopi", Slug: "kopi"},
+		Category:      place.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
 	}, nil)
 
 	rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/places/3", ""))
@@ -960,7 +757,7 @@ func TestHandler_GetPlace_Success(t *testing.T) {
 		"estimated_price_range": null,
 		"short_description": null,
 		"attributes": {"halal": true},
-		"category": {"id": 2, "name": "Kopi", "slug": "kopi"}
+		"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 	}`)
 }
 
@@ -1019,15 +816,15 @@ func TestHandler_GetCategory_Success(t *testing.T) {
 	}{
 		{
 			name:     "a category without fields has an empty fields array",
-			category: place.Category{ID: 2, Name: "Kopi", Slug: "kopi"},
-			want:     `{"id":2,"name":"Kopi","slug":"kopi","fields":[]}`,
+			category: place.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
+			want:     `{"id":2,"name":"Kopi","slug":"kopi","code":"K","label":"Kopi","color":"plum","fields":[]}`,
 		},
 		{
 			name: "a category lists its fields",
-			category: place.Category{ID: 2, Name: "Kopi", Slug: "kopi", Fields: []place.CategoryField{
-				{ID: 9, CategoryID: 2, Key: "halal", Label: "Halal", DataType: place.FieldTypeBoolean, Required: true, SortOrder: ptr(int32(1))},
+			category: place.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum", Fields: []place.CategoryField{
+				{ID: 9, CategoryID: 2, Key: "halal", Label: "Halal", DataType: place.FieldTypeBoolean, Required: true, SortOrder: 1},
 			}},
-			want: `{"id":2,"name":"Kopi","slug":"kopi","fields":[
+			want: `{"id":2,"name":"Kopi","slug":"kopi","code":"K","label":"Kopi","color":"plum","fields":[
 				{"id":9,"category_id":2,"key":"halal","label":"Halal","data_type":"boolean","required":true,"options":null,"sort_order":1}
 			]}`,
 		},
@@ -1041,162 +838,5 @@ func TestHandler_GetCategory_Success(t *testing.T) {
 			rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/categories/2", ""))
 			assertData(t, rec, http.StatusOK, tc.want)
 		})
-	}
-}
-
-// -----------------------------------------------------------------------------
-// PATCH /categories/{id}
-// -----------------------------------------------------------------------------
-
-func TestHandler_PatchCategory_RejectsInvalidRequests(t *testing.T) {
-	tests := []struct {
-		name     string
-		target   string
-		body     string
-		wantCode string
-	}{
-		{name: "category id is not a number", target: "/categories/abc", body: `{"name":"Kopi"}`, wantCode: "invalid_category_id"},
-		{name: "category id is fractional", target: "/categories/1.5", body: `{"name":"Kopi"}`, wantCode: "invalid_category_id"},
-		{name: "category id is zero", target: "/categories/0", body: `{"name":"Kopi"}`, wantCode: "invalid_category_id"},
-		{name: "category id is negative", target: "/categories/-1", body: `{"name":"Kopi"}`, wantCode: "invalid_category_id"},
-		{name: "empty body", target: "/categories/1", body: ``, wantCode: "invalid_body"},
-		{name: "truncated JSON", target: "/categories/1", body: `{"name":"Kopi"`, wantCode: "invalid_body"},
-		{name: "body is null", target: "/categories/1", body: `null`, wantCode: "invalid_body"},
-		{name: "body is an array", target: "/categories/1", body: `[]`, wantCode: "invalid_body"},
-		{name: "name is a number", target: "/categories/1", body: `{"name":5}`, wantCode: "invalid_body"},
-		{name: "slug is a number", target: "/categories/1", body: `{"slug":5}`, wantCode: "invalid_body"},
-		{name: "name cannot be cleared", target: "/categories/1", body: `{"name":null}`, wantCode: "invalid_body"},
-		{name: "slug cannot be cleared", target: "/categories/1", body: `{"slug":null}`, wantCode: "invalid_body"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// No expectations: a rejected request must never reach the service.
-			svc := mock.NewMockService(gomock.NewController(t))
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, tc.target, tc.body))
-			assertError(t, rec, http.StatusBadRequest, tc.wantCode)
-		})
-	}
-}
-
-func TestHandler_PatchCategory_PassesPatchToService(t *testing.T) {
-	tests := []struct {
-		name string
-		body string
-		want place.CategoryPatch
-	}{
-		{name: "empty object changes nothing", body: `{}`, want: place.CategoryPatch{}},
-		{name: "name only", body: `{"name":"Kopi Baru"}`, want: place.CategoryPatch{Name: present("Kopi Baru")}},
-		{name: "slug only", body: `{"slug":"kopi-baru"}`, want: place.CategoryPatch{Slug: present("kopi-baru")}},
-		{
-			name: "name and slug",
-			body: `{"name":"Kopi Baru","slug":"kopi-baru"}`,
-			want: place.CategoryPatch{Name: present("Kopi Baru"), Slug: present("kopi-baru")},
-		},
-		{
-			name: "client-sent id and fields are ignored",
-			body: `{"name":"Kopi Baru","id":99,"fields":[{"key":"halal"}],"unexpected":true}`,
-			want: place.CategoryPatch{Name: present("Kopi Baru")},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().UpdateCategory(gomock.Any(), int64(2), tc.want).
-				Return(&place.Category{ID: 2, Name: "Kopi Baru", Slug: "kopi-baru"}, nil)
-
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, "/categories/2", tc.body))
-			assertData(t, rec, http.StatusOK, `{"id":2,"name":"Kopi Baru","slug":"kopi-baru","fields":[]}`)
-		})
-	}
-}
-
-func TestHandler_PatchCategory_MapsServiceErrors(t *testing.T) {
-	tests := []struct {
-		name       string
-		err        error
-		wantStatus int
-		wantCode   string
-	}{
-		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusNotFound, wantCode: "category_not_found"},
-		{name: "wrapped unknown category", err: fmt.Errorf("update: %w", place.ErrCategoryNotFound), wantStatus: http.StatusNotFound, wantCode: "category_not_found"},
-		{name: "invalid name", err: place.ErrInvalidCategoryName, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "invalid slug", err: place.ErrInvalidSlug, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "duplicate name or slug", err: place.ErrCategoryExists, wantStatus: http.StatusConflict, wantCode: "category_exists"},
-		{name: "wrapped duplicate", err: fmt.Errorf("update: %w", place.ErrCategoryExists), wantStatus: http.StatusConflict, wantCode: "category_exists"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().UpdateCategory(gomock.Any(), int64(1), gomock.Any()).Return(nil, tc.err)
-
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, "/categories/1", `{"name":"Kopi"}`))
-			assertError(t, rec, tc.wantStatus, tc.wantCode)
-		})
-	}
-}
-
-// -----------------------------------------------------------------------------
-// DELETE /categories/{id}
-// -----------------------------------------------------------------------------
-
-func TestHandler_DeleteCategory_RejectsInvalidID(t *testing.T) {
-	tests := []struct {
-		name   string
-		target string
-	}{
-		{name: "category id is not a number", target: "/categories/abc"},
-		{name: "category id is fractional", target: "/categories/1.5"},
-		{name: "category id is zero", target: "/categories/0"},
-		{name: "category id is negative", target: "/categories/-1"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			svc := mock.NewMockService(gomock.NewController(t))
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodDelete, tc.target, ""))
-			assertError(t, rec, http.StatusBadRequest, "invalid_category_id")
-		})
-	}
-}
-
-func TestHandler_DeleteCategory_MapsServiceErrors(t *testing.T) {
-	tests := []struct {
-		name       string
-		err        error
-		wantStatus int
-		wantCode   string
-	}{
-		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusNotFound, wantCode: "category_not_found"},
-		{name: "wrapped unknown category", err: fmt.Errorf("delete: %w", place.ErrCategoryNotFound), wantStatus: http.StatusNotFound, wantCode: "category_not_found"},
-		{name: "category still has places", err: place.ErrCategoryInUse, wantStatus: http.StatusConflict, wantCode: "category_in_use"},
-		{name: "wrapped category in use", err: fmt.Errorf("delete: %w", place.ErrCategoryInUse), wantStatus: http.StatusConflict, wantCode: "category_in_use"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().DeleteCategory(gomock.Any(), int64(4)).Return(tc.err)
-
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodDelete, "/categories/4", ""))
-			assertError(t, rec, tc.wantStatus, tc.wantCode)
-		})
-	}
-}
-
-func TestHandler_DeleteCategory_Success(t *testing.T) {
-	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().DeleteCategory(gomock.Any(), int64(4)).Return(nil)
-
-	rec := serve(t, newRouter(svc), jsonRequest(http.MethodDelete, "/categories/4", ""))
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want 204; body: %s", rec.Code, rec.Body)
-	}
-	if rec.Body.Len() != 0 {
-		t.Errorf("body = %q, want empty", rec.Body)
 	}
 }

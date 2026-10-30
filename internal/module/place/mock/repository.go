@@ -56,36 +56,6 @@ func (mr *MockRepositoryMockRecorder) Create(ctx, p any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockRepository)(nil).Create), ctx, p)
 }
 
-// CreateCategory mocks base method.
-func (m *MockRepository) CreateCategory(ctx context.Context, c *place.Category) (*place.Category, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateCategory", ctx, c)
-	ret0, _ := ret[0].(*place.Category)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CreateCategory indicates an expected call of CreateCategory.
-func (mr *MockRepositoryMockRecorder) CreateCategory(ctx, c any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCategory", reflect.TypeOf((*MockRepository)(nil).CreateCategory), ctx, c)
-}
-
-// CreateCategoryField mocks base method.
-func (m *MockRepository) CreateCategoryField(ctx context.Context, f *place.CategoryField) (*place.CategoryField, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateCategoryField", ctx, f)
-	ret0, _ := ret[0].(*place.CategoryField)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CreateCategoryField indicates an expected call of CreateCategoryField.
-func (mr *MockRepositoryMockRecorder) CreateCategoryField(ctx, f any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCategoryField", reflect.TypeOf((*MockRepository)(nil).CreateCategoryField), ctx, f)
-}
-
 // Delete mocks base method.
 func (m *MockRepository) Delete(ctx context.Context, id int64) error {
 	m.ctrl.T.Helper()
@@ -98,20 +68,6 @@ func (m *MockRepository) Delete(ctx context.Context, id int64) error {
 func (mr *MockRepositoryMockRecorder) Delete(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockRepository)(nil).Delete), ctx, id)
-}
-
-// DeleteCategory mocks base method.
-func (m *MockRepository) DeleteCategory(ctx context.Context, id int64) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteCategory", ctx, id)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteCategory indicates an expected call of DeleteCategory.
-func (mr *MockRepositoryMockRecorder) DeleteCategory(ctx, id any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteCategory", reflect.TypeOf((*MockRepository)(nil).DeleteCategory), ctx, id)
 }
 
 // GetCategories mocks base method.
@@ -187,19 +143,4 @@ func (m *MockRepository) Update(ctx context.Context, p *place.Place) (*place.Pla
 func (mr *MockRepositoryMockRecorder) Update(ctx, p any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockRepository)(nil).Update), ctx, p)
-}
-
-// UpdateCategory mocks base method.
-func (m *MockRepository) UpdateCategory(ctx context.Context, c *place.Category) (*place.Category, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateCategory", ctx, c)
-	ret0, _ := ret[0].(*place.Category)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateCategory indicates an expected call of UpdateCategory.
-func (mr *MockRepositoryMockRecorder) UpdateCategory(ctx, c any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateCategory", reflect.TypeOf((*MockRepository)(nil).UpdateCategory), ctx, c)
 }

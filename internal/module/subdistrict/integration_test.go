@@ -106,7 +106,7 @@ func seedSubDistricts(t *testing.T) {
 // sub-district is referenced by a place.
 func seedPlaceIn(t *testing.T, subDistrictID int64) {
 	t.Helper()
-	mustExec(t, `INSERT INTO CATEGORIES (name, slug) VALUES ('Warung', 'warung')`)
+	mustExec(t, `INSERT INTO CATEGORIES (name, slug, code, label, color) VALUES ('Warung', 'warung', 'W', 'Warung', 'chili')`)
 	mustExec(t, `INSERT INTO PLACES (sub_district_id, category_id, name) VALUES ($1, 1, 'Warung Bu Ani')`,
 		subDistrictID)
 }
