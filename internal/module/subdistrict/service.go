@@ -2,31 +2,8 @@ package subdistrict
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"unicode/utf8"
-)
-
-var (
-	ErrInvalidName                   = errors.New("name must be 1-100 characters")
-	ErrInvalidSlug                   = errors.New("slug must be 1-100 characters")
-	ErrSubDistrictExists             = errors.New("sub-district with this name or slug already exists")
-	ErrSubDistrictNotFound           = errors.New("sub-district not found")
-	ErrSubDistrictInUse              = errors.New("sub-district is referenced by places")
-	ErrInvalidEstimatedDailySpending = errors.New("estimated_daily_spending must be between 0 and 99999999.99")
-	ErrInvalidStaticMapImageURL      = errors.New("static_map_image_url must be 255 characters or fewer")
-)
-
-const (
-	// maxNameLength is the size of the VARCHAR(100) name and slug columns.
-	// VARCHAR counts characters, not bytes.
-	maxNameLength = 100
-
-	// maxStaticMapImageURLLength is the size of the VARCHAR(255) URL column.
-	maxStaticMapImageURLLength = 255
-
-	// maxEstimatedDailySpending is the largest value a DECIMAL(10,2) column holds.
-	maxEstimatedDailySpending = 99999999.99
 )
 
 // Service defines the operations required by the handler.

@@ -15,16 +15,6 @@ import (
 	"rantau-go/internal/module/users"
 )
 
-var (
-	ErrInvalidName         = errors.New("name is required")
-	ErrInvalidEmail        = errors.New("invalid email")
-	ErrWeakPassword        = errors.New("password must be at least 8 characters")
-	ErrInvalidCredentials  = errors.New("invalid email or password")
-	ErrInvalidRefreshToken = errors.New("invalid or expired refresh token")
-)
-
-const refreshTokenBytes = 32
-
 // Service defines the operations required by the handler.
 //
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock

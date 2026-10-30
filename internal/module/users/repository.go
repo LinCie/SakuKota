@@ -10,11 +10,6 @@ import (
 	"rantau-go/internal/database"
 )
 
-var (
-	ErrNotFound   = errors.New("user not found")
-	ErrEmailTaken = errors.New("email already registered")
-)
-
 // Repository defines the persistence operations for users.
 //
 //go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock

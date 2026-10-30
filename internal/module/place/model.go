@@ -60,19 +60,6 @@ type Category struct {
 	Fields []CategoryField `db:"-"`
 }
 
-// Data types a CategoryField can have. They are validated by the service, not
-// the database, so adding one needs no migration.
-const (
-	FieldTypeText    = "text"
-	FieldTypeNumber  = "number"
-	FieldTypeBoolean = "boolean"
-	FieldTypeSelect  = "select"
-	// FieldTypeRange values are objects of the form {"min": 1, "max": 2}.
-	FieldTypeRange = "range"
-	// FieldTypeDate values are strings in YYYY-MM-DD format.
-	FieldTypeDate = "date"
-)
-
 // CategoryField represents a row in the CATEGORY_FIELDS table: a custom field
 // that places in the category carry in their Attributes.
 type CategoryField struct {

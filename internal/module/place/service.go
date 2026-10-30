@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -16,44 +15,9 @@ import (
 )
 
 var (
-	ErrInvalidName            = errors.New("name is required")
-	ErrPlaceNameTooLong       = errors.New("name must be 150 characters or fewer")
-	ErrPlaceNotFound          = errors.New("place not found")
-	ErrInvalidCategoryName    = errors.New("name must be 1-100 characters")
-	ErrInvalidSlug            = errors.New("slug must be 1-100 lowercase letters or digits, with single hyphens between words")
-	ErrSubDistrictNotFound    = errors.New("sub-district not found")
-	ErrCategoryNotFound       = errors.New("category not found")
-	ErrCategoryExists         = errors.New("category with this name or slug already exists")
-	ErrInvalidFieldKey        = errors.New("key must be 1-64 lowercase letters, digits, or underscores, starting with a letter")
-	ErrInvalidFieldLabel      = errors.New("label must be 1-100 characters")
-	ErrInvalidFieldDataType   = errors.New("data_type must be one of text, number, boolean, select, range, date")
-	ErrFieldOptionsRequired   = errors.New("select fields require unique, non-blank options")
-	ErrFieldOptionsNotAllowed = errors.New("options are only allowed for select fields")
-	ErrInvalidFieldSortOrder  = errors.New("sort_order must be a positive position, or omitted to add the field last")
-	ErrCategoryFieldExists    = errors.New("field with this key already exists in the category")
-	ErrInvalidAttributes      = errors.New("invalid attributes")
-	ErrInvalidLocation        = errors.New("location must be within Indonesia")
-)
-
-var (
 	fieldKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 	slugPattern     = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 )
-
-// Indonesia's bounding box in degrees: west and east longitude, south and north latitude.
-const (
-	indonesiaMinLongitude = 95
-	indonesiaMaxLongitude = 141
-	indonesiaMinLatitude  = -11
-	indonesiaMaxLatitude  = 6
-)
-
-// maxNameLength is the size of the VARCHAR(100) columns holding category names
-// and slugs and field labels. VARCHAR counts characters, not bytes.
-const maxNameLength = 100
-
-// maxPlaceNameLength is the size of the VARCHAR(150) column holding place names.
-const maxPlaceNameLength = 150
 
 // Service defines the operations required by the handler.
 //

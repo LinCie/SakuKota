@@ -5,5 +5,3 @@ type Tokens struct {
 	AccessToken  string
 	RefreshToken string
 }
-
-const minPasswordLength = 8

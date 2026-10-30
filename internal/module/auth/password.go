@@ -4,23 +4,11 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
 )
-
-// Argon2id parameters, following the OWASP recommendation.
-const (
-	argonTime    uint32 = 2
-	argonMemory  uint32 = 19 * 1024
-	argonThreads uint8  = 1
-	argonKeyLen  uint32 = 32
-	argonSaltLen        = 16
-)
-
-var errInvalidHash = errors.New("invalid argon2id hash")
 
 // -----------------------------------------------------------------------------
 // Password hashing
@@ -48,31 +36,31 @@ func hashPassword(password string) (string, error) {
 func verifyPassword(password, encodedHash string) (bool, error) {
 	parts := strings.Split(encodedHash, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" {
-		return false, errInvalidHash
+		return false, ErrInvalidHash
 	}
 
 	var version int
 	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil {
-		return false, errInvalidHash
+		return false, ErrInvalidHash
 	}
 	if version != argon2.Version {
-		return false, errInvalidHash
+		return false, ErrInvalidHash
 	}
 
 	var memory, time uint32
 	var threads uint8
 	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &time, &threads); err != nil {
-		return false, errInvalidHash
+		return false, ErrInvalidHash
 	}
 
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
-		return false, errInvalidHash
+		return false, ErrInvalidHash
 	}
 
 	key, err := base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil {
-		return false, errInvalidHash
+		return false, ErrInvalidHash
 	}
 
 	otherKey := argon2.IDKey([]byte(password), salt, time, memory, threads, uint32(len(key)))

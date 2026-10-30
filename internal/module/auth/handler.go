@@ -10,14 +10,6 @@ import (
 	"rantau-go/internal/module/users"
 )
 
-const (
-	refreshCookieName = "refresh_token"
-	// refreshCookiePath scopes the cookie to the auth routes, the only ones
-	// that read it. A proxy serving the API under a prefix must rewrite it
-	// (see web/vite.config.ts).
-	refreshCookiePath = "/v1/auth"
-)
-
 type Handler struct {
 	cfg     config.Config
 	service Service
