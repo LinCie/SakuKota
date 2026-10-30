@@ -32,7 +32,7 @@ export type LoginRequest = {
 };
 
 // -----------------------------------------------------------------------------
-// Services (see internal/module/auth/route.go)
+// Services (see internal/router/router.go)
 // -----------------------------------------------------------------------------
 
 export function register(

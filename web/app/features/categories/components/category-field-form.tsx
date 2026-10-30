@@ -44,7 +44,10 @@ export function CategoryFieldForm({ form, formId }: CategoryFieldFormProps) {
               autoComplete="off"
               onValueChange={(value) => {
                 const next = keyFollow.slugFor(value);
-                if (next !== null) form.setFieldValue("key", next);
+                // Keys use underscores where slugs use hyphens.
+                if (next !== null) {
+                  form.setFieldValue("key", next.replace(/-/g, "_"));
+                }
               }}
             />
           )}

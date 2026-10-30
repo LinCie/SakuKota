@@ -20,6 +20,7 @@ export type GetSubDistrictErrorCode =
   CommonApiErrorCode | "invalid_sub_district_id" | "sub_district_not_found";
 export type UpdateSubDistrictErrorCode =
   | AdminWriteErrorCode
+  | "invalid_sub_district_id"
   | "validation_error"
   | "sub_district_not_found"
   | "sub_district_exists";
@@ -41,7 +42,7 @@ export type CreateSubDistrictRequest = {
 export type UpdateSubDistrictRequest = Partial<CreateSubDistrictRequest>;
 
 // -----------------------------------------------------------------------------
-// Services (see internal/module/subdistrict/route.go)
+// Services (see internal/router/router.go)
 // -----------------------------------------------------------------------------
 
 export function getSubDistricts(): Promise<

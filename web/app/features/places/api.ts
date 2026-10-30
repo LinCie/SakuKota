@@ -23,7 +23,9 @@ export type PlaceErrorCode =
   | CommonApiErrorCode
   | "invalid_sub_district_id"
   | "invalid_category_id"
-  | "invalid_limit";
+  | "invalid_limit"
+  | "sub_district_not_found"
+  | "category_not_found";
 export type GetPlaceErrorCode =
   CommonApiErrorCode | "invalid_place_id" | "place_not_found";
 export type CategoryErrorCode = CommonApiErrorCode;
@@ -113,7 +115,7 @@ export type CreateCategoryFieldRequest = {
 };
 
 // -----------------------------------------------------------------------------
-// Services (see internal/module/place/route.go)
+// Services (see internal/router/router.go)
 // -----------------------------------------------------------------------------
 
 export function getPlaces(
