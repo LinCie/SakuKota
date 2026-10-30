@@ -17,7 +17,7 @@ import (
 //
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
 type Service interface {
-	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error)
+	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error)
 	Create(ctx context.Context, p *Place) (*Place, error)
 	GetPlace(ctx context.Context, id int64) (*Place, error)
 	GetCategories(ctx context.Context) ([]Category, error)
@@ -40,7 +40,7 @@ func NewService(repo Repository) *service {
 // service
 // -----------------------------------------------------------------------------
 
-func (s *service) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error) {
+func (s *service) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error) {
 	return s.repo.GetMany(ctx, filter)
 }
 

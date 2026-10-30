@@ -3,6 +3,7 @@ package place
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -27,8 +28,9 @@ func NewHandler(service Service) *Handler {
 // -----------------------------------------------------------------------------
 
 // GetPlaces lists places, optionally filtered by `sub_district_id`,
-// `category_id` (comma-separated, matches any), and a `q` search term, and
-// capped to the `limit` lowest ids.
+// `category_id` (comma-separated, matches any), a `q` search term, and a
+// `bbox` (west,south,east,north), and capped to the `limit` lowest ids. The
+// response carries the total number of matches alongside the places.
 func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	filter := PlaceFilter{Query: strings.TrimSpace(query.Get("q"))}
@@ -62,7 +64,16 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 		filter.Limit = limit
 	}
 
-	places, err := h.service.GetMany(r.Context(), filter)
+	if param := query.Get("bbox"); param != "" {
+		bounds, ok := parseBoundingBox(param)
+		if !ok {
+			httpx.RespondError(w, http.StatusBadRequest, "invalid_bbox", "invalid bbox")
+			return
+		}
+		filter.Bounds = bounds
+	}
+
+	places, total, err := h.service.GetMany(r.Context(), filter)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrSubDistrictNotFound):
@@ -75,7 +86,37 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toPlaceResponses(places))
+	httpx.RespondJSON(w, http.StatusOK, PlacePageResponse{
+		Places: toPlaceResponses(places),
+		Total:  total,
+	})
+}
+
+// parseBoundingBox parses "west,south,east,north" in degrees. It reports false
+// unless there are four finite coordinates in range with west <= east and
+// south <= north.
+func parseBoundingBox(param string) (*BoundingBox, bool) {
+	parts := strings.Split(param, ",")
+	if len(parts) != 4 {
+		return nil, false
+	}
+
+	var coords [4]float64
+	for i, part := range parts {
+		f, err := strconv.ParseFloat(part, 64)
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+			return nil, false
+		}
+		coords[i] = f
+	}
+
+	b := BoundingBox{MinLng: coords[0], MinLat: coords[1], MaxLng: coords[2], MaxLat: coords[3]}
+	if b.MinLng < -180 || b.MaxLng > 180 || b.MinLat < -90 || b.MaxLat > 90 ||
+		b.MinLng > b.MaxLng || b.MinLat > b.MaxLat {
+		return nil, false
+	}
+
+	return &b, true
 }
 
 // GetPlace returns the place given by the `id` path parameter.

@@ -216,11 +216,26 @@
               "type": "string",
               "example": "1,3"
             }
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "description": "Only return places located inside this box, edges included, as west,south,east,north in degrees. West must not exceed east, nor south north. Places without a location are left out.",
+            "schema": {
+              "type": "string",
+              "example": "106.8084,-6.2292,106.8451,-6.2009"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Return at most this many places, lowest IDs first. total still counts every match.",
+            "schema": { "type": "integer", "minimum": 1 }
           }
         ],
         "responses": {
           "200": {
-            "description": "Places retrieved successfully. An empty result returns an empty data array.",
+            "description": "Places retrieved successfully, with the number of matches before the limit. An empty result returns an empty places array and a total of 0.",
             "content": {
               "application/json": {
                 "schema": {
@@ -228,8 +243,18 @@
                   "required": ["data"],
                   "properties": {
                     "data": {
-                      "type": "array",
-                      "items": { "$ref": "#/components/schemas/Place" }
+                      "type": "object",
+                      "required": ["places", "total"],
+                      "properties": {
+                        "places": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Place" }
+                        },
+                        "total": {
+                          "type": "integer",
+                          "description": "Places matching the filters, including those cut off by limit."
+                        }
+                      }
                     }
                   }
                 }
@@ -237,7 +262,7 @@
             }
           },
           "400": {
-            "description": "sub_district_id or category_id is not a valid positive integer.",
+            "description": "sub_district_id or category_id is not a valid positive integer, limit is not a positive integer, or bbox is not four valid coordinates (invalid_sub_district_id, invalid_category_id, invalid_limit, invalid_bbox).",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },

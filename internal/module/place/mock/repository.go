@@ -101,12 +101,13 @@ func (mr *MockRepositoryMockRecorder) GetCategory(ctx, id any) *gomock.Call {
 }
 
 // GetMany mocks base method.
-func (m *MockRepository) GetMany(ctx context.Context, filter place.PlaceFilter) ([]place.Place, error) {
+func (m *MockRepository) GetMany(ctx context.Context, filter place.PlaceFilter) ([]place.Place, int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMany", ctx, filter)
 	ret0, _ := ret[0].([]place.Place)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].(int)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // GetMany indicates an expected call of GetMany.

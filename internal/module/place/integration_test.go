@@ -121,6 +121,20 @@ func seedPlaces(t *testing.T) {
 		(2, 2, 'Toko Buku', 'Jl. Kemang Selatan 2', 'Buku bekas', '{"note": "hidden_gem"}')`)
 }
 
+// seedLocations places 1 to 4 in Jakarta; place 5 stays without a location:
+//
+//	1  106.83, -6.19  (Menteng)
+//	2  106.84, -6.20  (Menteng)
+//	3  106.81, -6.26  (Kemang)
+//	4  106.82, -6.27  (Kemang)
+func seedLocations(t *testing.T) {
+	t.Helper()
+	mustExec(t, `UPDATE PLACES p SET location = ST_SetSRID(ST_MakePoint(v.lng, v.lat), 4326)
+		FROM (VALUES (1, 106.83, -6.19), (2, 106.84, -6.20), (3, 106.81, -6.26), (4, 106.82, -6.27))
+			AS v(id, lng, lat)
+		WHERE p.id = v.id`)
+}
+
 // integrationRouter wires the real service and repository behind the HTTP handlers.
 func integrationRouter(db *sqlx.DB) http.Handler {
 	return newRouter(place.NewService(place.NewPostgresRepository(db)))
@@ -166,19 +180,39 @@ type placeRow struct {
 	} `json:"category"`
 }
 
-// listPlaces calls GET target and returns the places in the order the API lists them.
-func listPlaces(t *testing.T, router http.Handler, target string) []placeRow {
+type placePage struct {
+	Places []placeRow `json:"places"`
+	Total  int        `json:"total"`
+}
+
+// listPage calls GET target and returns the listed places and the total match count.
+func listPage(t *testing.T, router http.Handler, target string) placePage {
 	t.Helper()
 	rec := call(t, router, http.MethodGet, target, "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET %s: status %d; body: %s", target, rec.Code, rec.Body)
 	}
 
-	var rows []placeRow
-	if err := json.Unmarshal(responseData(t, rec), &rows); err != nil {
+	var page placePage
+	if err := json.Unmarshal(responseData(t, rec), &page); err != nil {
 		t.Fatalf("GET %s: %v", target, err)
 	}
-	return rows
+	return page
+}
+
+// listPlaces calls GET target and returns the places in the order the API lists them.
+func listPlaces(t *testing.T, router http.Handler, target string) []placeRow {
+	t.Helper()
+	return listPage(t, router, target).Places
+}
+
+// placeIDs returns the ids of rows in order.
+func placeIDs(rows []placeRow) []int64 {
+	ids := make([]int64, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, r.ID)
+	}
+	return ids
 }
 
 type fieldRow struct {
@@ -298,6 +332,86 @@ func TestIntegration_ListPlacesLimit(t *testing.T) {
 				t.Errorf("place IDs = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// everywhere is a bbox around all seeded locations.
+const everywhere = "bbox=106.0,-7.0,107.0,-6.0"
+
+func TestIntegration_ListPlacesBBox(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+		want   []int64
+	}{
+		{name: "bbox keeps the places inside it", target: "/places?bbox=106.80,-6.28,106.83,-6.25", want: []int64{3, 4}},
+		{name: "bbox drops places without a location", target: "/places?" + everywhere, want: []int64{1, 2, 3, 4}},
+		{name: "a place on the edge is inside", target: "/places?bbox=106.83,-6.19,106.90,-6.10", want: []int64{1}},
+		{name: "bbox with no places is an empty list", target: "/places?bbox=100,0,101,1", want: nil},
+		{name: "bbox combines with the sub-district", target: "/places?sub_district_id=1&" + everywhere, want: []int64{1, 2}},
+		{name: "bbox combines with the category", target: "/places?category_id=1&" + everywhere, want: []int64{1, 3, 4}},
+		{name: "bbox combines with the query", target: "/places?q=nasi&" + everywhere, want: []int64{1, 3}},
+		{name: "limit applies inside the bbox, lowest ids first", target: "/places?limit=2&bbox=106.80,-6.28,106.85,-6.18", want: []int64{1, 2}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resetDB(t)
+			seedCatalog(t)
+			seedPlaces(t)
+			seedLocations(t)
+
+			got := placeIDs(listPlaces(t, integrationRouter(testDB), tc.target))
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("place IDs = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIntegration_ListPlacesTotal(t *testing.T) {
+	tests := []struct {
+		name      string
+		target    string
+		wantIDs   []int64
+		wantTotal int
+	}{
+		{name: "no filters counts everything", target: "/places", wantIDs: []int64{1, 2, 3, 4, 5}, wantTotal: 5},
+		{name: "limit does not shrink the total", target: "/places?limit=2", wantIDs: []int64{1, 2}, wantTotal: 5},
+		{name: "total counts after the filters", target: "/places?sub_district_id=2&limit=2", wantIDs: []int64{3, 4}, wantTotal: 3},
+		{name: "total counts inside the bbox", target: "/places?limit=1&" + everywhere, wantIDs: []int64{1}, wantTotal: 4},
+		{name: "no matches has a zero total", target: "/places?q=zzz", wantIDs: nil, wantTotal: 0},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resetDB(t)
+			seedCatalog(t)
+			seedPlaces(t)
+			seedLocations(t)
+
+			page := listPage(t, integrationRouter(testDB), tc.target)
+			if got := placeIDs(page.Places); !slices.Equal(got, tc.wantIDs) {
+				t.Errorf("place IDs = %v, want %v", got, tc.wantIDs)
+			}
+			if page.Total != tc.wantTotal {
+				t.Errorf("total = %d, want %d", page.Total, tc.wantTotal)
+			}
+		})
+	}
+}
+
+func TestIntegration_PlaceLocationsHaveSpatialIndex(t *testing.T) {
+	var exists bool
+	err := testDB.Get(&exists, `SELECT EXISTS (
+		SELECT 1 FROM pg_indexes
+		WHERE tablename = 'places' AND indexdef ILIKE '%USING gist (location)%'
+	)`)
+	if err != nil {
+		t.Fatalf("query indexes: %v", err)
+	}
+	if !exists {
+		t.Error("PLACES.location has no GIST index")
 	}
 }
 

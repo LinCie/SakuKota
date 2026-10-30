@@ -139,6 +139,17 @@ func TestHandler_GetPlaces_RejectsMalformedFilters(t *testing.T) {
 		{name: "limit is zero", target: "/places?limit=0", wantCode: "invalid_limit"},
 		{name: "limit is negative", target: "/places?limit=-3", wantCode: "invalid_limit"},
 		{name: "limit overflows 64 bits", target: "/places?limit=99999999999999999999", wantCode: "invalid_limit"},
+		{name: "bbox is not numbers", target: "/places?bbox=abc", wantCode: "invalid_bbox"},
+		{name: "bbox has three values", target: "/places?bbox=106.8,-6.3,106.9", wantCode: "invalid_bbox"},
+		{name: "bbox has five values", target: "/places?bbox=106.8,-6.3,106.9,-6.1,1", wantCode: "invalid_bbox"},
+		{name: "bbox has an empty element", target: "/places?bbox=106.8,,106.9,-6.1", wantCode: "invalid_bbox"},
+		{name: "bbox has a non-number", target: "/places?bbox=106.8,x,106.9,-6.1", wantCode: "invalid_bbox"},
+		{name: "bbox has NaN", target: "/places?bbox=NaN,-6.3,106.9,-6.1", wantCode: "invalid_bbox"},
+		{name: "bbox has infinity", target: "/places?bbox=106.8,-6.3,Inf,-6.1", wantCode: "invalid_bbox"},
+		{name: "bbox west is east of east", target: "/places?bbox=106.9,-6.3,106.8,-6.1", wantCode: "invalid_bbox"},
+		{name: "bbox south is north of north", target: "/places?bbox=106.8,-6.1,106.9,-6.3", wantCode: "invalid_bbox"},
+		{name: "bbox longitude out of range", target: "/places?bbox=-181,-6.3,106.9,-6.1", wantCode: "invalid_bbox"},
+		{name: "bbox latitude out of range", target: "/places?bbox=106.8,-91,106.9,-6.1", wantCode: "invalid_bbox"},
 	}
 
 	for _, tc := range tests {
@@ -167,15 +178,20 @@ func TestHandler_GetPlaces_PassesFilterToService(t *testing.T) {
 		{name: "empty limit is absent", target: "/places?limit=", want: place.PlaceFilter{}},
 		{name: "all filters together with limit", target: "/places?sub_district_id=7&category_id=1,2&q=kopi&limit=25",
 			want: place.PlaceFilter{SubDistrictID: 7, CategoryIDs: []int64{1, 2}, Query: "kopi", Limit: 25}},
+		{name: "bbox is passed as west, south, east, north", target: "/places?bbox=106.8,-6.3,106.9,-6.1",
+			want: place.PlaceFilter{Bounds: &place.BoundingBox{MinLng: 106.8, MinLat: -6.3, MaxLng: 106.9, MaxLat: -6.1}}},
+		{name: "empty bbox is absent", target: "/places?bbox=", want: place.PlaceFilter{}},
+		{name: "bbox combines with limit", target: "/places?bbox=106.8,-6.3,106.9,-6.1&limit=25",
+			want: place.PlaceFilter{Bounds: &place.BoundingBox{MinLng: 106.8, MinLat: -6.3, MaxLng: 106.9, MaxLat: -6.1}, Limit: 25}},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().GetMany(gomock.Any(), tc.want).Return([]place.Place{}, nil)
+			svc.EXPECT().GetMany(gomock.Any(), tc.want).Return([]place.Place{}, 0, nil)
 
 			rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, tc.target, ""))
-			assertData(t, rec, http.StatusOK, `[]`)
+			assertData(t, rec, http.StatusOK, `{"places": [], "total": 0}`)
 		})
 	}
 }
@@ -196,7 +212,7 @@ func TestHandler_GetPlaces_MapsServiceErrors(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().GetMany(gomock.Any(), gomock.Any()).Return(nil, tc.err)
+			svc.EXPECT().GetMany(gomock.Any(), gomock.Any()).Return(nil, 0, tc.err)
 
 			rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/places?sub_district_id=7", ""))
 			assertError(t, rec, tc.wantStatus, tc.wantCode)
@@ -212,10 +228,11 @@ func TestHandler_GetPlaces_ResponseShape(t *testing.T) {
 		Name:          "Kopi Tubruk",
 		Attributes:    json.RawMessage(`{}`),
 		Category:      place.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
-	}}, nil)
+	}}, 12, nil)
 
+	// total counts every match, not just the places in this response.
 	rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/places", ""))
-	assertData(t, rec, http.StatusOK, `[{
+	assertData(t, rec, http.StatusOK, `{"total": 12, "places": [{
 		"id": 3,
 		"sub_district_id": 1,
 		"name": "Kopi Tubruk",
@@ -226,7 +243,7 @@ func TestHandler_GetPlaces_ResponseShape(t *testing.T) {
 		"short_description": null,
 		"attributes": {},
 		"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
-	}]`)
+	}]}`)
 }
 
 // -----------------------------------------------------------------------------
@@ -430,7 +447,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			target: "/places",
 			body:   "",
 			fail: func(s *mock.MockService) {
-				s.EXPECT().GetMany(gomock.Any(), gomock.Any()).Return(nil, dbErr)
+				s.EXPECT().GetMany(gomock.Any(), gomock.Any()).Return(nil, 0, dbErr)
 			},
 		},
 		{

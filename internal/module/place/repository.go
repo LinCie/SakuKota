@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -17,7 +19,7 @@ import (
 //
 //go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock
 type Repository interface {
-	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error)
+	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error)
 	Create(ctx context.Context, p *Place) (*Place, error)
 	GetCategories(ctx context.Context) ([]Category, error)
 	GetCategory(ctx context.Context, id int64) (*Category, error)
@@ -93,43 +95,83 @@ func (r *postgresRepository) checkFilterTargets(ctx context.Context, filter Plac
 	return nil
 }
 
-func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error) {
+// placeFrom is the FROM clause the place filters are written against.
+const placeFrom = ` FROM PLACES p JOIN CATEGORIES c ON c.id = p.category_id`
+
+// placeWhere returns the WHERE clause for the filter and its arguments. Only
+// the filters that are set become conditions, so cached statements get plans
+// that can use the indexes (a catch-all `$1 IS NULL OR ...` cannot).
+func placeWhere(filter PlaceFilter) (string, []any) {
+	var conditions []string
+	var args []any
+	arg := func(v any) string {
+		args = append(args, v)
+		return "$" + strconv.Itoa(len(args))
+	}
+
+	if filter.SubDistrictID != 0 {
+		conditions = append(conditions, "p.sub_district_id = "+arg(filter.SubDistrictID))
+	}
+
+	if len(filter.CategoryIDs) > 0 {
+		conditions = append(conditions, "p.category_id = ANY("+arg(filter.CategoryIDs)+")")
+	}
+
+	if filter.Query != "" {
+		pattern := arg("%" + likeEscaper.Replace(filter.Query) + "%")
+		conditions = append(conditions, fmt.Sprintf(
+			"(p.name ILIKE %[1]s OR p.address ILIKE %[1]s OR p.short_description ILIKE %[1]s OR c.name ILIKE %[1]s)",
+			pattern,
+		))
+	}
+
+	if b := filter.Bounds; b != nil {
+		conditions = append(conditions, fmt.Sprintf(
+			"p.location && ST_MakeEnvelope(%s, %s, %s, %s, 4326)",
+			arg(b.MinLng), arg(b.MinLat), arg(b.MaxLng), arg(b.MaxLat),
+		))
+	}
+
+	if len(conditions) == 0 {
+		return "", args
+	}
+
+	return " WHERE " + strings.Join(conditions, " AND "), args
+}
+
+// GetMany returns the places matching the filter and the number of matches
+// before the limit is applied.
+func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error) {
 	if err := r.checkFilterTargets(ctx, filter); err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+
+	where, args := placeWhere(filter)
+
+	query := `SELECT ` + placeColumns + placeFrom + where + ` ORDER BY p.id`
+	pageArgs := args
+	if filter.Limit > 0 {
+		// Clip so the limit is not written into args, which the count reuses.
+		pageArgs = append(slices.Clip(args), filter.Limit)
+		query += ` LIMIT $` + strconv.Itoa(len(pageArgs))
 	}
 
 	places := make([]Place, 0)
-
-	pattern := ""
-	if filter.Query != "" {
-		pattern = "%" + likeEscaper.Replace(filter.Query) + "%"
+	if err := r.db.SelectContext(ctx, &places, query, pageArgs...); err != nil {
+		return nil, 0, err
 	}
 
-	err := r.db.SelectContext(
-		ctx,
-		&places,
-		`SELECT `+placeColumns+`
-		FROM PLACES p
-		JOIN CATEGORIES c ON c.id = p.category_id
-		WHERE ($1::bigint = 0 OR p.sub_district_id = $1)
-			AND (COALESCE(CARDINALITY($2::bigint[]), 0) = 0 OR p.category_id = ANY($2))
-			AND ($3::text = ''
-				OR p.name ILIKE $3
-				OR p.address ILIKE $3
-				OR p.short_description ILIKE $3
-				OR c.name ILIKE $3)
-		ORDER BY p.id
-		LIMIT NULLIF($4::bigint, 0)`,
-		filter.SubDistrictID,
-		filter.CategoryIDs,
-		pattern,
-		filter.Limit,
-	)
-	if err != nil {
-		return nil, err
+	// Fewer places than the limit means none were cut off.
+	if filter.Limit == 0 || len(places) < filter.Limit {
+		return places, len(places), nil
 	}
 
-	return places, nil
+	var total int
+	if err := r.db.GetContext(ctx, &total, `SELECT COUNT(*)`+placeFrom+where, args...); err != nil {
+		return nil, 0, err
+	}
+
+	return places, total, nil
 }
 
 func (r *postgresRepository) GetCategories(ctx context.Context) ([]Category, error) {

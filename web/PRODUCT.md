@@ -29,7 +29,7 @@ Curated micro-services (warung, tailors, local clinics, laundries, pharmacies) r
 
 - Frontend: TanStack Router (file routes) + Tailwind CSS v4 in `web/`; Tailwind utilities only, no raw CSS.
 - Map: Leaflet (confirmed) with real coordinates from the API.
-- Backend (Go, PostGIS) endpoints: `GET /places/` (optional `sub_district_id`, comma-separated `category_id`, and `q` search), `GET /places/categories/`, `GET /subdistricts/`.
+- Backend (Go, PostGIS) endpoints: `GET /places/` (optional `sub_district_id`, comma-separated `category_id`, `q` search, `bbox` as `west,south,east,north`, and `limit`; returns `{places, total}`, where `total` counts every match before the limit), `GET /places/categories/`, `GET /subdistricts/`.
 - Categories: Affordable Food & Warung, Tailor, Local Clinic, Laundry, Pharmacy.
 - Place fields: name, address, location (GeoJSON point), operating hours, estimated price range, short description, plus custom fields per category (`attributes`, described by each category's `fields` from `GET /places/categories/`; data types text, number, boolean, select, range, date). Nullable fields must show placeholders ("Hours not available", "Data not available").
 - Kecamatan fields: flood history, safety/crime information, estimated daily spending (Rupiah), static map image URL.

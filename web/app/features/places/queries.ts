@@ -16,7 +16,7 @@ import {
   type GetPlacesParams,
   type UpdatePlaceRequest,
 } from "./api";
-import type { Place } from "./types";
+import type { PlacePage } from "./types";
 
 // -----------------------------------------------------------------------------
 // Query keys
@@ -113,9 +113,15 @@ export function useDeletePlace() {
       // Drop it from every cached list at once, so lists not on screen don't
       // show it until they refetch. A detail page on screen removes its own
       // query after navigating away.
-      queryClient.setQueriesData<Place[]>(
+      queryClient.setQueriesData<PlacePage>(
         { queryKey: placeKeys.lists() },
-        (places) => places?.filter((place) => place.id !== id),
+        (page) =>
+          page?.places.some((place) => place.id === id)
+            ? {
+                places: page.places.filter((place) => place.id !== id),
+                total: page.total - 1,
+              }
+            : page,
       );
       queryClient.removeQueries({
         queryKey: placeKeys.detail(id),

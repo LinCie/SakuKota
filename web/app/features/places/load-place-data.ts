@@ -25,6 +25,8 @@ export async function ensurePlaceData(queryClient: QueryClient) {
 export function usePlaceData() {
   const { data: categories } = useCategories();
   const { data: subDistricts } = useSubDistricts();
-  const { data: places } = usePlaces();
+  const {
+    data: { places },
+  } = usePlaces();
   return { categories, subDistricts, places };
 }

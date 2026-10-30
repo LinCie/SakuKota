@@ -34,8 +34,19 @@ type PlaceFilter struct {
 	// Query is matched case-insensitively against the name, address,
 	// short description, and category name.
 	Query string
+	// Bounds keeps places located inside the box, edges included.
+	Bounds *BoundingBox
 	// Limit caps the number of places returned, lowest ids first. Zero applies no limit.
 	Limit int
+}
+
+// BoundingBox is an area in degrees, from its west and south edges to its
+// east and north edges.
+type BoundingBox struct {
+	MinLng float64
+	MinLat float64
+	MaxLng float64
+	MaxLat float64
 }
 
 // PlacePatch holds the fields a client may change on a place. A field that is

@@ -57,6 +57,13 @@ type PlaceResponse struct {
 	Category            CategoryResponse `json:"category"`
 }
 
+// PlacePageResponse is the API representation of the places matching a
+// filter. Total counts every match, including those cut off by the limit.
+type PlacePageResponse struct {
+	Places []PlaceResponse `json:"places"`
+	Total  int             `json:"total"`
+}
+
 // CategoryResponse is the API representation of the Category of a place.
 type CategoryResponse struct {
 	ID    int64  `json:"id"`

@@ -54,6 +54,30 @@ function placeLimitForZoom(zoom: number) {
   return zoom < MAP_UNLIMITED_ZOOM ? MAP_PLACE_LIMIT : undefined;
 }
 
+/**
+ * The bounds as "west,south,east,north", rounded outward to 4 decimals
+ * (about 11 m) so small pans share a request, and clamped to valid
+ * coordinates since a zoomed-out map can show past them.
+ */
+function bboxParam(bounds: Leaflet.LatLngBounds) {
+  const edge = (value: number, max: number, round: (n: number) => number) =>
+    (round(Math.min(max, Math.max(-max, value)) * 1e4) / 1e4).toFixed(4);
+  return [
+    edge(bounds.getWest(), 180, Math.floor),
+    edge(bounds.getSouth(), 90, Math.floor),
+    edge(bounds.getEast(), 180, Math.ceil),
+    edge(bounds.getNorth(), 90, Math.ceil),
+  ].join(",");
+}
+
+/** The part of the map on show, as the places request filters it. */
+export type MapView = {
+  /** "west,south,east,north" in degrees. */
+  bbox: string;
+  /** The place limit for the zoom; undefined shows every place in view. */
+  limit: number | undefined;
+};
+
 type SurvivalMapProps = {
   /** Places to plant as signs. The map frames them when the kecamatan changes. */
   places: Place[];
@@ -61,8 +85,8 @@ type SurvivalMapProps = {
   focusKey: string;
   selectedId: number | null;
   onSelect: (placeId: number) => void;
-  /** Reports the place limit for the current zoom, after each zoom change. */
-  onLimitChange: (limit: number | undefined) => void;
+  /** Reports the view after each pan or zoom, so the places can follow it. */
+  onViewChange: (view: MapView) => void;
   /** A bottom sheet that may cover the map; the selected sign is kept above it. */
   sheetRef?: RefObject<HTMLElement | null>;
   /** Overlay rendered above the map, e.g. the empty state. */
@@ -74,7 +98,7 @@ export function SurvivalMap({
   focusKey,
   selectedId,
   onSelect,
-  onLimitChange,
+  onViewChange,
   sheetRef,
   children,
 }: SurvivalMapProps) {
@@ -83,18 +107,21 @@ export function SurvivalMap({
   const focusedKeyRef = useRef<string | null>(null);
   const leaflet = useLeafletMap(containerRef, MAP_OPTIONS);
   const onSelectEvent = useEffectEvent(onSelect);
-  const onLimitChangeEvent = useEffectEvent(onLimitChange);
+  const onViewChangeEvent = useEffectEvent(onViewChange);
 
-  // Registered before the framing effect below, so the zoom its fitBounds
+  // Registered before the framing effect below, so the move its fitBounds
   // causes is reported.
   useEffect(() => {
     if (!leaflet) return;
     const { map } = leaflet;
-    const reportLimit = () =>
-      onLimitChangeEvent(placeLimitForZoom(map.getZoom()));
-    map.on("zoomend", reportLimit);
+    const reportView = () =>
+      onViewChangeEvent({
+        bbox: bboxParam(map.getBounds()),
+        limit: placeLimitForZoom(map.getZoom()),
+      });
+    map.on("moveend", reportView);
     return () => {
-      map.off("zoomend", reportLimit);
+      map.off("moveend", reportView);
     };
   }, [leaflet]);
 

@@ -23,6 +23,12 @@ export type Place = {
   category: Category;
 };
 
+/** The places matching a filter, with how many match before the limit. */
+export type PlacePage = {
+  places: Place[];
+  total: number;
+};
+
 /**
  * The palette keys a category can be colored with. Categories are defined by
  * the backend's migrations, whose `color` column only allows these.

@@ -7,7 +7,7 @@ import {
   type CommonApiErrorCode,
   unwrap,
 } from "~/shared/api";
-import type { CategoryDetail, GeoPoint, Place } from "./types";
+import type { CategoryDetail, GeoPoint, Place, PlacePage } from "./types";
 
 // -----------------------------------------------------------------------------
 // Request params / error codes (service-layer concerns, not domain shapes).
@@ -20,6 +20,7 @@ export type PlaceErrorCode =
   | "invalid_sub_district_id"
   | "invalid_category_id"
   | "invalid_limit"
+  | "invalid_bbox"
   | "sub_district_not_found"
   | "category_not_found";
 export type GetPlaceErrorCode =
@@ -45,6 +46,8 @@ export type GetPlacesParams = {
   q?: string;
   /** Keeps only the lowest-id places, matching the `limit` query param. */
   limit?: number;
+  /** Keeps places inside "west,south,east,north" (degrees), matching the `bbox` query param. */
+  bbox?: string;
 };
 
 export type CreatePlaceRequest = {
@@ -79,8 +82,8 @@ export type UpdatePlaceRequest = {
 
 export async function getPlaces(
   params: GetPlacesParams = {},
-): Promise<Place[]> {
-  const { subDistrictId, categoryIds, q, limit } = params;
+): Promise<PlacePage> {
+  const { subDistrictId, categoryIds, q, limit, bbox } = params;
   const searchParams = new URLSearchParams();
   if (subDistrictId !== undefined) {
     searchParams.set("sub_district_id", String(subDistrictId));
@@ -89,9 +92,10 @@ export async function getPlaces(
     searchParams.set("category_id", categoryIds.join(","));
   if (q) searchParams.set("q", q);
   if (limit !== undefined) searchParams.set("limit", String(limit));
+  if (bbox) searchParams.set("bbox", bbox);
 
   return unwrap(
-    await apiGet<Place[], PlaceErrorCode>("places", { searchParams }),
+    await apiGet<PlacePage, PlaceErrorCode>("places", { searchParams }),
   );
 }
 

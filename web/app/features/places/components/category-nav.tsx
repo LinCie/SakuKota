@@ -10,6 +10,8 @@ type CategoryNavProps = {
   onShowAll: () => void;
   /** Places on the map now, within the chosen kecamatan. */
   placeCount: number;
+  /** Places matching the filters, including those the zoom limit leaves off the map. */
+  totalCount: number;
   areaName: string;
   /** The search text, shown in the count when it is not blank. */
   query: string;
@@ -22,6 +24,7 @@ export function CategoryNav({
   onToggle,
   onShowAll,
   placeCount,
+  totalCount,
   areaName,
   query,
 }: CategoryNavProps) {
@@ -87,7 +90,16 @@ export function CategoryNav({
       >
         <span className="font-sign text-ink text-base tabular-nums">
           {placeCount}
-        </span>{" "}
+        </span>
+        {placeCount < totalCount ? (
+          <>
+            {" "}
+            dari{" "}
+            <span className="font-sign text-ink text-base tabular-nums">
+              {totalCount}
+            </span>
+          </>
+        ) : null}{" "}
         tempat di Kec. {areaName}
         {needle ? <> untuk “{query}”</> : null}
       </p>

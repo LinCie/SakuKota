@@ -11,7 +11,10 @@ import {
 } from "~/features/places/components/map-empty-state";
 import { PlaceDetails } from "~/features/places/components/place-details";
 import { PlaceList } from "~/features/places/components/place-list";
-import { SurvivalMap } from "~/features/places/components/survival-map";
+import {
+  SurvivalMap,
+  type MapView,
+} from "~/features/places/components/survival-map";
 import {
   categoriesQuery,
   placeQuery,
@@ -35,6 +38,8 @@ type HomeSearch = {
   q?: string;
   /** Caps the places to the lowest ids while the map is zoomed out. */
   limit?: number;
+  /** The map's view as "west,south,east,north"; only places inside it are loaded. */
+  bbox?: string;
   tempat?: number;
 };
 
@@ -56,14 +61,37 @@ function searchLimit(value: unknown) {
     : undefined;
 }
 
-type PlacesFilters = Pick<HomeSearch, "kecamatan" | "kategori" | "q" | "limit">;
+const BBOX_COORDINATE = /^-?\d+(\.\d+)?$/;
+
+// A bbox must be "west,south,east,north" with west <= east and south <= north,
+// within valid coordinates; anything else is dropped.
+function searchBBox(value: unknown) {
+  if (typeof value !== "string") return undefined;
+  const parts = value.split(",");
+  if (parts.length !== 4 || !parts.every((part) => BBOX_COORDINATE.test(part)))
+    return undefined;
+  const [west, south, east, north] = parts.map(Number);
+  return -180 <= west &&
+    west <= east &&
+    east <= 180 &&
+    -90 <= south &&
+    south <= north &&
+    north <= 90
+    ? value
+    : undefined;
+}
+
+type PlacesFilters = Pick<
+  HomeSearch,
+  "kecamatan" | "kategori" | "q" | "limit" | "bbox"
+>;
 
 /**
  * The kecamatan on show (the one in the URL, else the first) and the places
  * query for the filters. With no kecamatan at all there are no places either.
  */
 function placesSelection(
-  { kecamatan, kategori, q, limit }: PlacesFilters,
+  { kecamatan, kategori, q, limit, bbox }: PlacesFilters,
   categories: CategoryDetail[],
   subDistricts: SubDistrict[],
 ) {
@@ -77,6 +105,7 @@ function placesSelection(
       .map((category) => category.id),
     q: q?.trim(),
     limit,
+    bbox,
   };
   return { subDistrict, params };
 }
@@ -87,16 +116,18 @@ export const Route = createFileRoute("/")({
     kategori: searchString(search.kategori),
     q: searchString(search.q),
     limit: searchLimit(search.limit),
+    bbox: searchBBox(search.bbox),
     tempat: typeof search.tempat === "number" ? search.tempat : undefined,
   }),
   // The kecamatan, categories, and search are applied by the backend; the
   // selected place (`tempat`) is picked from the loaded results, so changing
   // it doesn't reload.
-  loaderDeps: ({ search: { kecamatan, kategori, q, limit } }) => ({
+  loaderDeps: ({ search: { kecamatan, kategori, q, limit, bbox } }) => ({
     kecamatan,
     kategori,
     q,
     limit,
+    bbox,
   }),
   loader: async ({ context: { queryClient }, deps }) => {
     const [categories, subDistricts] = await Promise.all([
@@ -129,7 +160,9 @@ function Home() {
     categories,
     subDistricts,
   );
-  const { data: visiblePlaces } = usePlaces(params);
+  const {
+    data: { places: visiblePlaces, total: matchingPlaces },
+  } = usePlaces(params);
   const navigate = Route.useNavigate();
   const [infoOpen, setInfoOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -175,8 +208,10 @@ function Home() {
     updateParams({ tempat: placeId ?? undefined });
   }
 
-  function setLimit(limit: number | undefined) {
-    if (limit !== search.limit) updateParams({ limit });
+  function setView({ bbox, limit }: MapView) {
+    if (bbox !== search.bbox || limit !== search.limit) {
+      updateParams({ bbox, limit });
+    }
   }
 
   function toggleCategory(slug: string) {
@@ -210,8 +245,12 @@ function Home() {
   const allActive = activeSlugs.length === 0;
   const areaName = subDistrict?.name ?? "Jakarta";
 
+  // With a bbox the places follow the map, so no places only means none are
+  // in view. That is said in the list alone, leaving the map free to pan.
+  const inView = search.bbox !== undefined;
+
   let emptyState: EmptyState | null = null;
-  if (visiblePlaces.length === 0) {
+  if (visiblePlaces.length === 0 && !inView) {
     emptyState = needle
       ? {
           message: `Tidak ada hasil untuk “${query}” di ${areaName}.`,
@@ -230,6 +269,9 @@ function Home() {
             onAction: () => updateParams({ kategori: undefined }),
           };
   }
+  const emptyMessage = inView
+    ? `${needle ? `Tidak ada hasil untuk “${query}”` : "Tidak ada tempat"} di area peta ini. Geser atau perkecil peta.`
+    : (emptyState?.message ?? "");
 
   return (
     <div className="flex min-h-dvh flex-col md:h-dvh">
@@ -241,7 +283,13 @@ function Home() {
         onSearch={() => updateParams({ q: draft.trim() || undefined })}
         onClearSearch={clearSearch}
         onKecamatanChange={(slug) =>
-          updateParams({ kecamatan: slug, tempat: undefined, limit: undefined })
+          // The new kecamatan loads whole, so the map can frame it.
+          updateParams({
+            kecamatan: slug,
+            tempat: undefined,
+            limit: undefined,
+            bbox: undefined,
+          })
         }
         onOpenInfo={() => setInfoOpen(true)}
       />
@@ -252,6 +300,7 @@ function Home() {
         onToggle={toggleCategory}
         onShowAll={() => updateParams({ kategori: undefined })}
         placeCount={visiblePlaces.length}
+        totalCount={matchingPlaces}
         areaName={areaName}
         query={query}
       />
@@ -267,7 +316,7 @@ function Home() {
             focusKey={subDistrict?.slug ?? ""}
             selectedId={selectedPlace?.id ?? null}
             onSelect={selectPlace}
-            onLimitChange={setLimit}
+            onViewChange={setView}
             sheetRef={sheetRef}
           >
             {emptyState ? <MapEmptyState {...emptyState} /> : null}
@@ -285,7 +334,7 @@ function Home() {
             <PlaceList
               places={visiblePlaces}
               onSelect={selectPlace}
-              emptyMessage={emptyState?.message ?? ""}
+              emptyMessage={emptyMessage}
             />
           </div>
 
