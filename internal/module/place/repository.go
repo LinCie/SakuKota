@@ -22,6 +22,8 @@ type Repository interface {
 	GetCategories(ctx context.Context) ([]Category, error)
 	GetCategory(ctx context.Context, id int64) (*Category, error)
 	CreateCategory(ctx context.Context, c *Category) (*Category, error)
+	UpdateCategory(ctx context.Context, c *Category) (*Category, error)
+	DeleteCategory(ctx context.Context, id int64) error
 	CreateCategoryField(ctx context.Context, f *CategoryField) (*CategoryField, error)
 	GetPlace(ctx context.Context, id int64) (*Place, error)
 	Update(ctx context.Context, p *Place) (*Place, error)
@@ -199,6 +201,72 @@ func (r *postgresRepository) CreateCategory(ctx context.Context, c *Category) (*
 	created.Fields = make([]CategoryField, 0)
 
 	return &created, nil
+}
+
+// UpdateCategory stores the category's name and slug and returns it with its
+// fields, or ErrCategoryNotFound.
+func (r *postgresRepository) UpdateCategory(ctx context.Context, c *Category) (*Category, error) {
+	var updated Category
+
+	err := r.db.GetContext(
+		ctx,
+		&updated,
+		`UPDATE CATEGORIES SET name = $2, slug = $3
+		WHERE id = $1
+		RETURNING id, name, slug`,
+		c.ID,
+		c.Name,
+		c.Slug,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCategoryNotFound
+		}
+		if database.IsCode(err, database.UniqueViolation) {
+			return nil, ErrCategoryExists
+		}
+		return nil, err
+	}
+
+	categories := []Category{updated}
+	if err := r.attachFields(ctx, categories); err != nil {
+		return nil, err
+	}
+
+	return &categories[0], nil
+}
+
+// DeleteCategory removes the category and its fields. It returns
+// ErrCategoryNotFound if there is no such category, and ErrCategoryInUse, with
+// nothing removed, if places still belong to it.
+func (r *postgresRepository) DeleteCategory(ctx context.Context, id int64) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM CATEGORY_FIELDS WHERE category_id = $1`, id); err != nil {
+		return err
+	}
+
+	result, err := tx.ExecContext(ctx, `DELETE FROM CATEGORIES WHERE id = $1`, id)
+	if err != nil {
+		if database.IsCode(err, database.ForeignKeyViolation) {
+			return ErrCategoryInUse
+		}
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrCategoryNotFound
+	}
+
+	return tx.Commit()
 }
 
 // CreateCategoryField adds the field at its SortOrder position, moving the

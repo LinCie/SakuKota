@@ -78,6 +78,27 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toPlaceResponses(places))
 }
 
+// GetPlace returns the place given by the `id` path parameter.
+func (h *Handler) GetPlace(w http.ResponseWriter, r *http.Request) {
+	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_place_id", "invalid place_id")
+		return
+	}
+
+	p, err := h.service.GetPlace(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, ErrPlaceNotFound) {
+			httpx.RespondError(w, http.StatusNotFound, "place_not_found", err.Error())
+			return
+		}
+		httpx.RespondInternalError(w)
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p))
+}
+
 func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
 	categories, err := h.service.GetCategories(r.Context())
 	if err != nil {
@@ -86,6 +107,27 @@ func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.RespondJSON(w, http.StatusOK, toCategoryDetailResponses(categories))
+}
+
+// GetCategory returns the category given by the `id` path parameter.
+func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
+	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_category_id", "invalid category_id")
+		return
+	}
+
+	c, err := h.service.GetCategory(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, ErrCategoryNotFound) {
+			httpx.RespondError(w, http.StatusNotFound, "category_not_found", err.Error())
+			return
+		}
+		httpx.RespondInternalError(w)
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusOK, toCategoryDetailResponse(*c))
 }
 
 func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
@@ -110,6 +152,63 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.RespondJSON(w, http.StatusCreated, toCategoryDetailResponse(*c))
+}
+
+// PatchCategory partially updates the category given by the `id` path parameter.
+func (h *Handler) PatchCategory(w http.ResponseWriter, r *http.Request) {
+	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_category_id", "invalid category_id")
+		return
+	}
+
+	// A body of null decodes to a nil pointer and is rejected with the others.
+	var req *UpdateCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil || req.clearsRequiredField() {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+		return
+	}
+
+	c, err := h.service.UpdateCategory(r.Context(), id, CategoryPatch(*req))
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrCategoryNotFound):
+			httpx.RespondError(w, http.StatusNotFound, "category_not_found", err.Error())
+		case errors.Is(err, ErrInvalidCategoryName),
+			errors.Is(err, ErrInvalidSlug):
+			httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
+		case errors.Is(err, ErrCategoryExists):
+			httpx.RespondError(w, http.StatusConflict, "category_exists", err.Error())
+		default:
+			httpx.RespondInternalError(w)
+		}
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusOK, toCategoryDetailResponse(*c))
+}
+
+// DeleteCategory deletes the category given by the `id` path parameter.
+func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
+	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_category_id", "invalid category_id")
+		return
+	}
+
+	if err := h.service.DeleteCategory(r.Context(), id); err != nil {
+		switch {
+		case errors.Is(err, ErrCategoryNotFound):
+			httpx.RespondError(w, http.StatusNotFound, "category_not_found", err.Error())
+		case errors.Is(err, ErrCategoryInUse):
+			httpx.RespondError(w, http.StatusConflict, "category_in_use", err.Error())
+		default:
+			httpx.RespondInternalError(w)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // CreateCategoryField adds a custom field to the category given by the `id`

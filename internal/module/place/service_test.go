@@ -921,3 +921,273 @@ func TestService_DeletePlace(t *testing.T) {
 		})
 	}
 }
+
+// -----------------------------------------------------------------------------
+// Reading a place or a category
+// -----------------------------------------------------------------------------
+
+func TestService_GetPlace(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name    string
+		repoErr error
+		wantErr error
+	}{
+		{name: "returns the stored place", repoErr: nil, wantErr: nil},
+		{name: "unknown place", repoErr: place.ErrPlaceNotFound, wantErr: place.ErrPlaceNotFound},
+		{name: "storage failure is returned", repoErr: boom, wantErr: boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), tc.repoErr)
+
+			got, err := place.NewService(repo).GetPlace(context.Background(), 7)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+			if tc.wantErr == nil && (got == nil || got.ID != 7) {
+				t.Errorf("got %+v, want the stored place 7", got)
+			}
+		})
+	}
+}
+
+func TestService_GetCategory(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name    string
+		repoErr error
+		wantErr error
+	}{
+		{name: "returns the stored category with its fields", repoErr: nil, wantErr: nil},
+		{name: "unknown category", repoErr: place.ErrCategoryNotFound, wantErr: place.ErrCategoryNotFound},
+		{name: "storage failure is returned", repoErr: boom, wantErr: boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().GetCategory(gomock.Any(), int64(1)).Return(warungCategory(), tc.repoErr)
+
+			got, err := place.NewService(repo).GetCategory(context.Background(), 1)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+			if tc.wantErr == nil && (got == nil || got.ID != 1 || len(got.Fields) != 6) {
+				t.Errorf("got %+v, want Warung with its 6 fields", got)
+			}
+		})
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Updating and deleting categories
+// -----------------------------------------------------------------------------
+
+// savedKopiCategory is the stored category that updates start from.
+func savedKopiCategory() *place.Category {
+	c := openCategory()
+	c.Name = "Kopi"
+	c.Slug = "kopi"
+	return c
+}
+
+// updateCategory runs Service.UpdateCategory for category 2, where existing is
+// the stored category. It returns the category the repository was asked to
+// store, or nil if storage was never reached.
+func updateCategory(t *testing.T, patch place.CategoryPatch) (*place.Category, error) {
+	t.Helper()
+
+	repo := mock.NewMockRepository(gomock.NewController(t))
+	repo.EXPECT().GetCategory(gomock.Any(), int64(2)).Return(savedKopiCategory(), nil).AnyTimes()
+
+	var stored *place.Category
+	repo.EXPECT().UpdateCategory(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got *place.Category) (*place.Category, error) {
+			stored = got
+			return got, nil
+		}).AnyTimes()
+
+	_, err := place.NewService(repo).UpdateCategory(context.Background(), 2, patch)
+	return stored, err
+}
+
+func TestService_UpdateCategory_LookupFailure(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name    string
+		getErr  error
+		wantErr error
+	}{
+		{name: "unknown category", getErr: place.ErrCategoryNotFound, wantErr: place.ErrCategoryNotFound},
+		{name: "lookup failure is returned", getErr: boom, wantErr: boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// No UpdateCategory expectation: nothing may be stored when the category cannot be read.
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().GetCategory(gomock.Any(), int64(2)).Return(nil, tc.getErr)
+
+			_, err := place.NewService(repo).UpdateCategory(context.Background(), 2,
+				place.CategoryPatch{Name: present("Kopi Baru")})
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestService_UpdateCategory_Fields(t *testing.T) {
+	tests := []struct {
+		name     string
+		patch    place.CategoryPatch
+		wantName string
+		wantSlug string
+	}{
+		{name: "empty patch keeps everything", patch: place.CategoryPatch{}, wantName: "Kopi", wantSlug: "kopi"},
+		{name: "name only keeps the slug", patch: place.CategoryPatch{Name: present("Kopi Baru")}, wantName: "Kopi Baru", wantSlug: "kopi"},
+		{name: "slug only keeps the name", patch: place.CategoryPatch{Slug: present("kopi-baru")}, wantName: "Kopi", wantSlug: "kopi-baru"},
+		{
+			name:     "name and slug",
+			patch:    place.CategoryPatch{Name: present("Kopi Baru"), Slug: present("kopi-baru")},
+			wantName: "Kopi Baru",
+			wantSlug: "kopi-baru",
+		},
+		{name: "name surrounding spaces are removed", patch: place.CategoryPatch{Name: present("  Kopi Baru  ")}, wantName: "Kopi Baru", wantSlug: "kopi"},
+		{name: "slug surrounding spaces are removed", patch: place.CategoryPatch{Slug: present("  kopi-baru  ")}, wantName: "Kopi", wantSlug: "kopi-baru"},
+		{name: "null name keeps the name", patch: place.CategoryPatch{Name: null[string]()}, wantName: "Kopi", wantSlug: "kopi"},
+		{name: "null slug keeps the slug", patch: place.CategoryPatch{Slug: null[string]()}, wantName: "Kopi", wantSlug: "kopi"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			stored, err := updateCategory(t, tc.patch)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if stored == nil {
+				t.Fatal("update was not stored")
+			}
+			if stored.ID != 2 {
+				t.Errorf("stored ID = %d, want 2", stored.ID)
+			}
+			if stored.Name != tc.wantName {
+				t.Errorf("stored name = %q, want %q", stored.Name, tc.wantName)
+			}
+			if stored.Slug != tc.wantSlug {
+				t.Errorf("stored slug = %q, want %q", stored.Slug, tc.wantSlug)
+			}
+		})
+	}
+}
+
+func TestService_UpdateCategory_Validation(t *testing.T) {
+	tests := []struct {
+		name    string
+		patch   place.CategoryPatch
+		wantErr error
+	}{
+		{name: "name of 100 characters", patch: place.CategoryPatch{Name: present(strings.Repeat("é", 100))}, wantErr: nil},
+		{name: "name of 101 characters", patch: place.CategoryPatch{Name: present(strings.Repeat("é", 101))}, wantErr: place.ErrInvalidCategoryName},
+		{name: "name of 20 family emoji is 100 code points", patch: place.CategoryPatch{Name: present(strings.Repeat(family, 20))}, wantErr: nil},
+		{name: "name of 21 family emoji is 105 code points", patch: place.CategoryPatch{Name: present(strings.Repeat(family, 21))}, wantErr: place.ErrInvalidCategoryName},
+		{name: "blank name", patch: place.CategoryPatch{Name: present("   ")}, wantErr: place.ErrInvalidCategoryName},
+		{name: "empty name", patch: place.CategoryPatch{Name: present("")}, wantErr: place.ErrInvalidCategoryName},
+
+		{name: "slug of 100 characters", patch: place.CategoryPatch{Slug: present(strings.Repeat("a", 100))}, wantErr: nil},
+		{name: "slug of 101 characters", patch: place.CategoryPatch{Slug: present(strings.Repeat("a", 101))}, wantErr: place.ErrInvalidSlug},
+		{name: "uppercase slug", patch: place.CategoryPatch{Slug: present("Kopi")}, wantErr: place.ErrInvalidSlug},
+		{name: "underscore in slug", patch: place.CategoryPatch{Slug: present("kopi_tubruk")}, wantErr: place.ErrInvalidSlug},
+		{name: "leading hyphen", patch: place.CategoryPatch{Slug: present("-kopi")}, wantErr: place.ErrInvalidSlug},
+		{name: "trailing hyphen", patch: place.CategoryPatch{Slug: present("kopi-")}, wantErr: place.ErrInvalidSlug},
+		{name: "double hyphen", patch: place.CategoryPatch{Slug: present("kopi--tubruk")}, wantErr: place.ErrInvalidSlug},
+		{name: "space inside slug", patch: place.CategoryPatch{Slug: present("kopi tubruk")}, wantErr: place.ErrInvalidSlug},
+		{name: "empty slug", patch: place.CategoryPatch{Slug: present("")}, wantErr: place.ErrInvalidSlug},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			stored, err := updateCategory(t, tc.patch)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("err = %v, want %v", err, tc.wantErr)
+				}
+				if stored != nil {
+					t.Fatal("rejected update reached storage")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if stored == nil {
+				t.Fatal("accepted update was not stored")
+			}
+		})
+	}
+}
+
+func TestService_UpdateCategory_StorageResult(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name      string
+		updateErr error
+		wantErr   error
+	}{
+		{name: "returns the stored category", updateErr: nil, wantErr: nil},
+		{name: "duplicate name or slug", updateErr: place.ErrCategoryExists, wantErr: place.ErrCategoryExists},
+		{name: "category deleted meanwhile", updateErr: place.ErrCategoryNotFound, wantErr: place.ErrCategoryNotFound},
+		{name: "storage failure is returned", updateErr: boom, wantErr: boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().GetCategory(gomock.Any(), int64(2)).Return(savedKopiCategory(), nil)
+			repo.EXPECT().UpdateCategory(gomock.Any(), gomock.Any()).Return(&place.Category{ID: 2}, tc.updateErr)
+
+			got, err := place.NewService(repo).UpdateCategory(context.Background(), 2,
+				place.CategoryPatch{Name: present("Kopi Baru")})
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+			if tc.wantErr == nil && got.ID != 2 {
+				t.Errorf("returned ID = %d, want the stored category's ID 2", got.ID)
+			}
+		})
+	}
+}
+
+func TestService_DeleteCategory(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name    string
+		repoErr error
+		wantErr error
+	}{
+		{name: "deletes the category", repoErr: nil, wantErr: nil},
+		{name: "unknown category", repoErr: place.ErrCategoryNotFound, wantErr: place.ErrCategoryNotFound},
+		{name: "category still has places", repoErr: place.ErrCategoryInUse, wantErr: place.ErrCategoryInUse},
+		{name: "storage failure is returned", repoErr: boom, wantErr: boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().DeleteCategory(gomock.Any(), int64(2)).Return(tc.repoErr)
+
+			err := place.NewService(repo).DeleteCategory(context.Background(), 2)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}

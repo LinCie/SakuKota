@@ -25,8 +25,12 @@ var (
 type Service interface {
 	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, error)
 	Create(ctx context.Context, p *Place) (*Place, error)
+	GetPlace(ctx context.Context, id int64) (*Place, error)
 	GetCategories(ctx context.Context) ([]Category, error)
+	GetCategory(ctx context.Context, id int64) (*Category, error)
 	CreateCategory(ctx context.Context, c *Category) (*Category, error)
+	UpdateCategory(ctx context.Context, id int64, patch CategoryPatch) (*Category, error)
+	DeleteCategory(ctx context.Context, id int64) error
 	CreateCategoryField(ctx context.Context, f *CategoryField) (*CategoryField, error)
 	Update(ctx context.Context, id int64, patch PlacePatch) (*Place, error)
 	Delete(ctx context.Context, id int64) error
@@ -50,8 +54,16 @@ func (s *service) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, err
 	return s.repo.GetMany(ctx, filter)
 }
 
+func (s *service) GetPlace(ctx context.Context, id int64) (*Place, error) {
+	return s.repo.GetPlace(ctx, id)
+}
+
 func (s *service) GetCategories(ctx context.Context) ([]Category, error) {
 	return s.repo.GetCategories(ctx)
+}
+
+func (s *service) GetCategory(ctx context.Context, id int64) (*Category, error) {
+	return s.repo.GetCategory(ctx, id)
 }
 
 func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
@@ -80,17 +92,53 @@ func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
 }
 
 func (s *service) CreateCategory(ctx context.Context, c *Category) (*Category, error) {
+	if err := validateCategory(c); err != nil {
+		return nil, err
+	}
+
+	return s.repo.CreateCategory(ctx, c)
+}
+
+// UpdateCategory applies the patch to the stored category. The result is
+// validated as a whole, so a patch cannot leave the category invalid.
+func (s *service) UpdateCategory(ctx context.Context, id int64, patch CategoryPatch) (*Category, error) {
+	c, err := s.repo.GetCategory(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if patch.Name.Set && patch.Name.Value != nil {
+		c.Name = *patch.Name.Value
+	}
+
+	if patch.Slug.Set && patch.Slug.Value != nil {
+		c.Slug = *patch.Slug.Value
+	}
+
+	if err := validateCategory(c); err != nil {
+		return nil, err
+	}
+
+	return s.repo.UpdateCategory(ctx, c)
+}
+
+func (s *service) DeleteCategory(ctx context.Context, id int64) error {
+	return s.repo.DeleteCategory(ctx, id)
+}
+
+// validateCategory trims the name and slug, then checks them against their limits.
+func validateCategory(c *Category) error {
 	c.Name = strings.TrimSpace(c.Name)
 	if c.Name == "" || utf8.RuneCountInString(c.Name) > maxNameLength {
-		return nil, ErrInvalidCategoryName
+		return ErrInvalidCategoryName
 	}
 
 	c.Slug = strings.TrimSpace(c.Slug)
 	if utf8.RuneCountInString(c.Slug) > maxNameLength || !slugPattern.MatchString(c.Slug) {
-		return nil, ErrInvalidSlug
+		return ErrInvalidSlug
 	}
 
-	return s.repo.CreateCategory(ctx, c)
+	return nil
 }
 
 func (s *service) CreateCategoryField(ctx context.Context, f *CategoryField) (*CategoryField, error) {

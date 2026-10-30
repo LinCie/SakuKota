@@ -100,6 +100,20 @@ func (mr *MockServiceMockRecorder) Delete(ctx, id any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockService)(nil).Delete), ctx, id)
 }
 
+// DeleteCategory mocks base method.
+func (m *MockService) DeleteCategory(ctx context.Context, id int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteCategory", ctx, id)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteCategory indicates an expected call of DeleteCategory.
+func (mr *MockServiceMockRecorder) DeleteCategory(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteCategory", reflect.TypeOf((*MockService)(nil).DeleteCategory), ctx, id)
+}
+
 // GetCategories mocks base method.
 func (m *MockService) GetCategories(ctx context.Context) ([]place.Category, error) {
 	m.ctrl.T.Helper()
@@ -113,6 +127,21 @@ func (m *MockService) GetCategories(ctx context.Context) ([]place.Category, erro
 func (mr *MockServiceMockRecorder) GetCategories(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCategories", reflect.TypeOf((*MockService)(nil).GetCategories), ctx)
+}
+
+// GetCategory mocks base method.
+func (m *MockService) GetCategory(ctx context.Context, id int64) (*place.Category, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCategory", ctx, id)
+	ret0, _ := ret[0].(*place.Category)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCategory indicates an expected call of GetCategory.
+func (mr *MockServiceMockRecorder) GetCategory(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCategory", reflect.TypeOf((*MockService)(nil).GetCategory), ctx, id)
 }
 
 // GetMany mocks base method.
@@ -130,6 +159,21 @@ func (mr *MockServiceMockRecorder) GetMany(ctx, filter any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMany", reflect.TypeOf((*MockService)(nil).GetMany), ctx, filter)
 }
 
+// GetPlace mocks base method.
+func (m *MockService) GetPlace(ctx context.Context, id int64) (*place.Place, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPlace", ctx, id)
+	ret0, _ := ret[0].(*place.Place)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPlace indicates an expected call of GetPlace.
+func (mr *MockServiceMockRecorder) GetPlace(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlace", reflect.TypeOf((*MockService)(nil).GetPlace), ctx, id)
+}
+
 // Update mocks base method.
 func (m *MockService) Update(ctx context.Context, id int64, patch place.PlacePatch) (*place.Place, error) {
 	m.ctrl.T.Helper()
@@ -143,4 +187,19 @@ func (m *MockService) Update(ctx context.Context, id int64, patch place.PlacePat
 func (mr *MockServiceMockRecorder) Update(ctx, id, patch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockService)(nil).Update), ctx, id, patch)
+}
+
+// UpdateCategory mocks base method.
+func (m *MockService) UpdateCategory(ctx context.Context, id int64, patch place.CategoryPatch) (*place.Category, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateCategory", ctx, id, patch)
+	ret0, _ := ret[0].(*place.Category)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateCategory indicates an expected call of UpdateCategory.
+func (mr *MockServiceMockRecorder) UpdateCategory(ctx, id, patch any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateCategory", reflect.TypeOf((*MockService)(nil).UpdateCategory), ctx, id, patch)
 }

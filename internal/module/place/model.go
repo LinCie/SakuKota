@@ -60,6 +60,13 @@ type Category struct {
 	Fields []CategoryField `db:"-"`
 }
 
+// CategoryPatch holds the fields a client may change on a category. A field
+// that is not Set keeps its current value.
+type CategoryPatch struct {
+	Name httpx.Optional[string]
+	Slug httpx.Optional[string]
+}
+
 // CategoryField represents a row in the CATEGORY_FIELDS table: a custom field
 // that places in the category carry in their Attributes.
 type CategoryField struct {

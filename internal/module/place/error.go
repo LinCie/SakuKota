@@ -10,6 +10,7 @@ var (
 	ErrInvalidSlug            = errors.New("slug must be 1-100 lowercase letters or digits, with single hyphens between words")
 	ErrSubDistrictNotFound    = errors.New("sub-district not found")
 	ErrCategoryNotFound       = errors.New("category not found")
+	ErrCategoryInUse          = errors.New("category is referenced by places")
 	ErrCategoryExists         = errors.New("category with this name or slug already exists")
 	ErrInvalidFieldKey        = errors.New("key must be 1-64 lowercase letters, digits, or underscores, starting with a letter")
 	ErrInvalidFieldLabel      = errors.New("label must be 1-100 characters")

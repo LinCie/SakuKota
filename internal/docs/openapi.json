@@ -18,11 +18,11 @@
     },
     {
       "name": "Places",
-      "description": "List, create, update, and delete places."
+      "description": "List, get, create, update, and delete places."
     },
     {
       "name": "Categories",
-      "description": "List and create place categories, and add custom fields to them."
+      "description": "List, get, create, update, and delete place categories, and add custom fields to them."
     },
     {
       "name": "Sub-districts",
@@ -311,6 +311,56 @@
       }
     },
     "/v1/places/{id}": {
+      "get": {
+        "tags": ["Places"],
+        "operationId": "getPlace",
+        "summary": "Get a place",
+        "description": "Returns a place with its category.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Place ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Place retrieved successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PlaceResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The place ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "invalid_place_id",
+                  "message": "invalid place_id"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The place does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "place_not_found",
+                  "message": "place not found"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      },
       "patch": {
         "tags": ["Places"],
         "operationId": "updatePlace",
@@ -490,6 +540,203 @@
                 "example": {
                   "code": "category_exists",
                   "message": "category with this name or slug already exists"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/places/categories/{id}": {
+      "get": {
+        "tags": ["Categories"],
+        "operationId": "getCategory",
+        "summary": "Get a category",
+        "description": "Returns a category with its custom fields.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Category ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category retrieved successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CategoryDetailResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The category ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "invalid_category_id",
+                  "message": "invalid category_id"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The category does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "category_not_found",
+                  "message": "category not found"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      },
+      "patch": {
+        "tags": ["Categories"],
+        "operationId": "updateCategory",
+        "summary": "Update a category",
+        "description": "Partially updates a category's name and slug. Requires the admin role. Keys left out keep their current value. Custom fields and places are not affected.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Category ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateCategoryRequest" },
+              "example": {
+                "name": "Laundry Kiloan",
+                "slug": "laundry-kiloan"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Category updated successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CategoryDetailResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The category ID is invalid (invalid_category_id), the body is malformed or sets name or slug to null (invalid_body), or a value failed validation (validation_error).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "validation_error",
+                  "message": "name must be 1-100 characters"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The category does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "category_not_found",
+                  "message": "category not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A category with this name or slug already exists.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "category_exists",
+                  "message": "category with this name or slug already exists"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      },
+      "delete": {
+        "tags": ["Categories"],
+        "operationId": "deleteCategory",
+        "summary": "Delete a category",
+        "description": "Deletes a category together with its custom fields. Requires the admin role. Fails with 409 while places belong to it.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Category ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Category deleted successfully. No response body."
+          },
+          "400": {
+            "description": "The category ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "invalid_category_id",
+                  "message": "invalid category_id"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The category does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "category_not_found",
+                  "message": "category not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The category is referenced by places.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "category_in_use",
+                  "message": "category is referenced by places"
                 }
               }
             }
@@ -1016,6 +1263,14 @@
             "maxLength": 100,
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
           }
+        }
+      },
+      "UpdateCategoryRequest": {
+        "type": "object",
+        "description": "Partial update. Keys left out keep their current value. name and slug cannot be null.",
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "slug": { "type": "string", "maxLength": 100, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" }
         }
       },
       "CategoryDetail": {

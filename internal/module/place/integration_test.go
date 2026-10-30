@@ -904,3 +904,303 @@ func TestIntegration_DeletePlaceTwice(t *testing.T) {
 
 	assertError(t, call(t, router, http.MethodDelete, "/places/2", ""), http.StatusNotFound, "place_not_found")
 }
+
+// -----------------------------------------------------------------------------
+// Reading one place
+// -----------------------------------------------------------------------------
+
+func TestIntegration_GetPlace(t *testing.T) {
+	resetDB(t)
+	seedCatalog(t)
+	seedWarungFields(t)
+	seedPlaces(t)
+	router := integrationRouter(testDB)
+
+	t.Run("returns the place with its category", func(t *testing.T) {
+		rec := call(t, router, http.MethodGet, "/places/5", "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
+		}
+
+		var got placeRow
+		if err := json.Unmarshal(responseData(t, rec), &got); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if got.ID != 5 || got.Name != "Toko Buku" {
+			t.Errorf("got place %d %q, want 5 %q", got.ID, got.Name, "Toko Buku")
+		}
+		if got.Address == nil || *got.Address != "Jl. Kemang Selatan 2" {
+			t.Errorf("address = %v, want Jl. Kemang Selatan 2", got.Address)
+		}
+		if got.Category.ID != 2 || got.Category.Name != "Kopi" || got.Category.Slug != "kopi" {
+			t.Errorf("category = %+v, want Kopi (2)", got.Category)
+		}
+		assertJSON(t, got.Attributes, `{"note":"hidden_gem"}`)
+	})
+
+	t.Run("unknown place", func(t *testing.T) {
+		assertError(t, call(t, router, http.MethodGet, "/places/99", ""), http.StatusNotFound, "place_not_found")
+	})
+
+	t.Run("invalid id", func(t *testing.T) {
+		assertError(t, call(t, router, http.MethodGet, "/places/abc", ""), http.StatusBadRequest, "invalid_place_id")
+	})
+}
+
+// -----------------------------------------------------------------------------
+// Reading one category
+// -----------------------------------------------------------------------------
+
+func TestIntegration_GetCategory(t *testing.T) {
+	resetDB(t)
+	seedCatalog(t)
+	seedWarungFields(t)
+	router := integrationRouter(testDB)
+
+	type categoryBody struct {
+		ID     int64      `json:"id"`
+		Name   string     `json:"name"`
+		Slug   string     `json:"slug"`
+		Fields []fieldRow `json:"fields"`
+	}
+
+	tests := []struct {
+		name       string
+		target     string
+		wantStatus int
+		wantCode   string
+		wantName   string
+		wantKeys   []string
+	}{
+		{name: "category with fields in order", target: "/categories/1", wantStatus: http.StatusOK, wantName: "Warung", wantKeys: []string{"contact", "seats"}},
+		{name: "category without fields", target: "/categories/2", wantStatus: http.StatusOK, wantName: "Kopi", wantKeys: []string{}},
+		{name: "unknown category", target: "/categories/99", wantStatus: http.StatusNotFound, wantCode: "category_not_found"},
+		{name: "invalid id", target: "/categories/abc", wantStatus: http.StatusBadRequest, wantCode: "invalid_category_id"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := call(t, router, http.MethodGet, tc.target, "")
+			if tc.wantCode != "" {
+				assertError(t, rec, tc.wantStatus, tc.wantCode)
+				return
+			}
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tc.wantStatus, rec.Body)
+			}
+
+			var got categoryBody
+			if err := json.Unmarshal(responseData(t, rec), &got); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if got.Name != tc.wantName {
+				t.Errorf("name = %q, want %q", got.Name, tc.wantName)
+			}
+			if got.Fields == nil {
+				t.Error("fields is null, want an array")
+			}
+			assertKeys(t, got.Fields, tc.wantKeys)
+		})
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Updating categories
+// -----------------------------------------------------------------------------
+
+func TestIntegration_PatchCategory(t *testing.T) {
+	tests := []struct {
+		name       string
+		target     string
+		body       string
+		wantStatus int
+		wantCode   string
+		wantName   string // category 1 after the request
+		wantSlug   string
+	}{
+		{name: "renames only", target: "/categories/1", body: `{"name":"Warung Makan"}`, wantStatus: http.StatusOK, wantName: "Warung Makan", wantSlug: "warung"},
+		{name: "changes the slug only", target: "/categories/1", body: `{"slug":"warung-makan"}`, wantStatus: http.StatusOK, wantName: "Warung", wantSlug: "warung-makan"},
+		{name: "changes name and slug", target: "/categories/1", body: `{"name":"Kedai","slug":"kedai"}`, wantStatus: http.StatusOK, wantName: "Kedai", wantSlug: "kedai"},
+		{name: "empty patch changes nothing", target: "/categories/1", body: `{}`, wantStatus: http.StatusOK, wantName: "Warung", wantSlug: "warung"},
+		{name: "may change only the case of its own name", target: "/categories/1", body: `{"name":"WARUNG"}`, wantStatus: http.StatusOK, wantName: "WARUNG", wantSlug: "warung"},
+		{name: "may resend its own name and slug", target: "/categories/1", body: `{"name":"Warung","slug":"warung"}`, wantStatus: http.StatusOK, wantName: "Warung", wantSlug: "warung"},
+		{name: "name of another category", target: "/categories/1", body: `{"name":"Kopi"}`, wantStatus: http.StatusConflict, wantCode: "category_exists", wantName: "Warung", wantSlug: "warung"},
+		{name: "name of another category ignoring case", target: "/categories/1", body: `{"name":"kOpI"}`, wantStatus: http.StatusConflict, wantCode: "category_exists", wantName: "Warung", wantSlug: "warung"},
+		{name: "slug of another category", target: "/categories/1", body: `{"slug":"kopi"}`, wantStatus: http.StatusConflict, wantCode: "category_exists", wantName: "Warung", wantSlug: "warung"},
+		{name: "a conflict leaves the other field unchanged", target: "/categories/1", body: `{"name":"Kedai","slug":"kopi"}`, wantStatus: http.StatusConflict, wantCode: "category_exists", wantName: "Warung", wantSlug: "warung"},
+		{name: "blank name", target: "/categories/1", body: `{"name":"  "}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantName: "Warung", wantSlug: "warung"},
+		{name: "invalid slug", target: "/categories/1", body: `{"slug":"Not A Slug"}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantName: "Warung", wantSlug: "warung"},
+		{name: "name cannot be null", target: "/categories/1", body: `{"name":null}`, wantStatus: http.StatusBadRequest, wantCode: "invalid_body", wantName: "Warung", wantSlug: "warung"},
+		{name: "unknown category", target: "/categories/99", body: `{"name":"Kedai"}`, wantStatus: http.StatusNotFound, wantCode: "category_not_found", wantName: "Warung", wantSlug: "warung"},
+		{name: "invalid id", target: "/categories/abc", body: `{"name":"Kedai"}`, wantStatus: http.StatusBadRequest, wantCode: "invalid_category_id", wantName: "Warung", wantSlug: "warung"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resetDB(t)
+			seedCatalog(t)
+			seedWarungFields(t)
+			seedPlaces(t)
+
+			router := integrationRouter(testDB)
+			rec := call(t, router, http.MethodPatch, tc.target, tc.body)
+			if tc.wantCode != "" {
+				assertError(t, rec, tc.wantStatus, tc.wantCode)
+			} else if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tc.wantStatus, rec.Body)
+			}
+
+			var stored struct {
+				Name string `db:"name"`
+				Slug string `db:"slug"`
+			}
+			if err := testDB.Get(&stored, `SELECT name, slug FROM CATEGORIES WHERE id = 1`); err != nil {
+				t.Fatalf("read category: %v", err)
+			}
+			if stored.Name != tc.wantName || stored.Slug != tc.wantSlug {
+				t.Errorf("stored category = %q/%q, want %q/%q", stored.Name, stored.Slug, tc.wantName, tc.wantSlug)
+			}
+
+			// Updating a category never touches its fields or its places.
+			assertKeys(t, listFields(t, router, stored.Name), []string{"contact", "seats"})
+			if n := countPlaces(t); n != 5 {
+				t.Errorf("%d places, want 5", n)
+			}
+		})
+	}
+}
+
+func TestIntegration_PatchCategoryResponseAndPlaces(t *testing.T) {
+	resetDB(t)
+	seedCatalog(t)
+	seedWarungFields(t)
+	seedPlaces(t)
+	router := integrationRouter(testDB)
+
+	rec := call(t, router, http.MethodPatch, "/categories/1", `{"name":"Warung Makan","slug":"warung-makan"}`)
+	assertData(t, rec, http.StatusOK, `{
+		"id": 1,
+		"name": "Warung Makan",
+		"slug": "warung-makan",
+		"fields": [
+			{"id": 1, "category_id": 1, "key": "contact", "label": "Contact", "data_type": "text", "required": true, "options": null, "sort_order": 1},
+			{"id": 2, "category_id": 1, "key": "seats", "label": "Seats", "data_type": "number", "required": false, "options": null, "sort_order": 2}
+		]
+	}`)
+
+	// Places keep their category, which now shows the new name.
+	for _, p := range listPlaces(t, router, "/places?category_id=1") {
+		if p.Category.ID != 1 || p.Category.Name != "Warung Makan" || p.Category.Slug != "warung-makan" {
+			t.Errorf("place %d category = %+v, want Warung Makan (1)", p.ID, p.Category)
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Deleting categories
+// -----------------------------------------------------------------------------
+
+func TestIntegration_DeleteCategory(t *testing.T) {
+	tests := []struct {
+		name           string
+		places         bool // seed places, which use both categories
+		target         string
+		wantStatus     int
+		wantCode       string
+		wantCategories []string // names left, by id
+		wantWarungKeys int      // fields left on Warung
+	}{
+		{name: "deletes an unused category with its fields", target: "/categories/1", wantStatus: http.StatusNoContent, wantCategories: []string{"Kopi"}, wantWarungKeys: 0},
+		{name: "deletes an unused category without fields", target: "/categories/2", wantStatus: http.StatusNoContent, wantCategories: []string{"Warung"}, wantWarungKeys: 2},
+		{name: "refuses a category that has places", places: true, target: "/categories/1", wantStatus: http.StatusConflict, wantCode: "category_in_use", wantCategories: []string{"Warung", "Kopi"}, wantWarungKeys: 2},
+		{name: "unknown category", target: "/categories/99", wantStatus: http.StatusNotFound, wantCode: "category_not_found", wantCategories: []string{"Warung", "Kopi"}, wantWarungKeys: 2},
+		{name: "invalid id", target: "/categories/abc", wantStatus: http.StatusBadRequest, wantCode: "invalid_category_id", wantCategories: []string{"Warung", "Kopi"}, wantWarungKeys: 2},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resetDB(t)
+			seedCatalog(t)
+			seedWarungFields(t)
+			if tc.places {
+				seedPlaces(t)
+			}
+
+			router := integrationRouter(testDB)
+			rec := call(t, router, http.MethodDelete, tc.target, "")
+			if tc.wantCode != "" {
+				assertError(t, rec, tc.wantStatus, tc.wantCode)
+			} else if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tc.wantStatus, rec.Body)
+			}
+
+			var names []string
+			if err := testDB.Select(&names, `SELECT name FROM CATEGORIES ORDER BY id`); err != nil {
+				t.Fatalf("read categories: %v", err)
+			}
+			if !slices.Equal(names, tc.wantCategories) {
+				t.Errorf("categories = %v, want %v", names, tc.wantCategories)
+			}
+
+			var fields int
+			if err := testDB.Get(&fields, `SELECT COUNT(*) FROM CATEGORY_FIELDS WHERE category_id = 1`); err != nil {
+				t.Fatalf("count fields: %v", err)
+			}
+			if fields != tc.wantWarungKeys {
+				t.Errorf("Warung has %d fields, want %d", fields, tc.wantWarungKeys)
+			}
+
+			if tc.places {
+				if n := countPlaces(t); n != 5 {
+					t.Errorf("%d places, want 5", n)
+				}
+			}
+		})
+	}
+}
+
+func TestIntegration_DeleteCategoryKeepsOtherCategoriesFields(t *testing.T) {
+	resetDB(t)
+	seedCatalog(t)
+	seedWarungFields(t)
+	mustExec(t, `INSERT INTO CATEGORY_FIELDS (category_id, key, label, data_type, required, sort_order)
+		VALUES (2, 'halal', 'Halal', 'boolean', FALSE, 1)`)
+
+	router := integrationRouter(testDB)
+	if rec := call(t, router, http.MethodDelete, "/categories/2", ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204; body: %s", rec.Code, rec.Body)
+	}
+
+	assertKeys(t, listFields(t, router, "Warung"), []string{"contact", "seats"})
+}
+
+func TestIntegration_DeleteCategoryTwice(t *testing.T) {
+	resetDB(t)
+	seedCatalog(t)
+
+	router := integrationRouter(testDB)
+	if first := call(t, router, http.MethodDelete, "/categories/1", ""); first.Code != http.StatusNoContent {
+		t.Fatalf("first delete: status %d; body: %s", first.Code, first.Body)
+	}
+
+	assertError(t, call(t, router, http.MethodDelete, "/categories/1", ""), http.StatusNotFound, "category_not_found")
+}
+
+func TestIntegration_DeleteCategoryAfterItsPlacesAreDeleted(t *testing.T) {
+	resetDB(t)
+	seedCatalog(t)
+	seedPlaces(t)
+
+	router := integrationRouter(testDB)
+	assertError(t, call(t, router, http.MethodDelete, "/categories/2", ""), http.StatusConflict, "category_in_use")
+
+	for _, id := range []int{2, 5} { // the places in Kopi
+		if rec := call(t, router, http.MethodDelete, fmt.Sprintf("/places/%d", id), ""); rec.Code != http.StatusNoContent {
+			t.Fatalf("delete place %d: status %d; body: %s", id, rec.Code, rec.Body)
+		}
+	}
+
+	if rec := call(t, router, http.MethodDelete, "/categories/2", ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204; body: %s", rec.Code, rec.Body)
+	}
+}

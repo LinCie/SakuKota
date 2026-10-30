@@ -49,6 +49,20 @@ type CreateCategoryRequest struct {
 	Slug string `json:"slug"`
 }
 
+// UpdateCategoryRequest is the API payload for partially updating a Category.
+// Keys left out keep their current value.
+type UpdateCategoryRequest struct {
+	Name httpx.Optional[string] `json:"name"`
+	Slug httpx.Optional[string] `json:"slug"`
+}
+
+// clearsRequiredField reports whether the client sent null for a field that
+// cannot be cleared.
+func (r *UpdateCategoryRequest) clearsRequiredField() bool {
+	return (r.Name.Set && r.Name.Value == nil) ||
+		(r.Slug.Set && r.Slug.Value == nil)
+}
+
 // CreateCategoryFieldRequest is the API payload for adding a custom field to
 // a Category.
 type CreateCategoryFieldRequest struct {
