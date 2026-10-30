@@ -15,9 +15,9 @@ import {
 /** Loads everything the places pages need, for route loaders. */
 export async function ensurePlaceData(queryClient: QueryClient) {
   await Promise.all([
-    queryClient.ensureQueryData(categoriesQuery()),
-    queryClient.ensureQueryData(subDistrictsQuery()),
-    queryClient.ensureQueryData(placesQuery()),
+    queryClient.query({ ...categoriesQuery(), staleTime: "static" }),
+    queryClient.query({ ...subDistrictsQuery(), staleTime: "static" }),
+    queryClient.query({ ...placesQuery(), staleTime: "static" }),
   ]);
 }
 

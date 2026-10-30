@@ -1,4 +1,4 @@
-import { useStore } from "@tanstack/react-form";
+import { useSelector } from "@tanstack/react-form";
 
 import {
   SelectField,
@@ -20,7 +20,7 @@ type CategoryFieldFormProps = {
 
 /** The fields of a category's custom-field form; the drawer owns the form and its submit. */
 export function CategoryFieldForm({ form, formId }: CategoryFieldFormProps) {
-  const dataType = useStore(form.store, (state) => state.values.dataType);
+  const dataType = useSelector(form.store, (state) => state.values.dataType);
   // The key follows the label until it is edited by hand.
   const keyFollow = useSlugFollow(true);
 

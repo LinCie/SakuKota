@@ -1,4 +1,4 @@
-import { useForm, useStore } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 
 import { useCreateCategoryField } from "~/features/places/queries";
 import { FormAlert } from "~/shared/components/form-alert";
@@ -44,7 +44,7 @@ export function CategoryFieldFormDrawer({
     },
   });
 
-  const dirty = useStore(form.store, (state) => state.isDirty);
+  const dirty = useSelector(form.store, (state) => state.isDirty);
 
   return (
     <FormDrawer

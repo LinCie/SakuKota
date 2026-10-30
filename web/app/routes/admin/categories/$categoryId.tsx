@@ -7,7 +7,10 @@ import { LoadingState } from "~/shared/components/loading-state";
 
 export const Route = createFileRoute("/admin/categories/$categoryId")({
   loader: ({ context: { queryClient }, params }) =>
-    queryClient.ensureQueryData(categoryQuery(Number(params.categoryId))),
+    queryClient.query({
+      ...categoryQuery(Number(params.categoryId)),
+      staleTime: "static",
+    }),
   pendingComponent: LoadingState,
   errorComponent: AdminRouteError,
   component: CategoryDetailRoute,

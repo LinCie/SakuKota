@@ -1,4 +1,4 @@
-import { useForm, useStore } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 
 import {
   useCreateCategory,
@@ -55,7 +55,7 @@ export function CategoryFormDrawer({
     },
   });
 
-  const dirty = useStore(form.store, (state) => state.isDirty);
+  const dirty = useSelector(form.store, (state) => state.isDirty);
 
   return (
     <FormDrawer

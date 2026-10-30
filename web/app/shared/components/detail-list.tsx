@@ -22,7 +22,7 @@ export function DetailList({ items }: { items: DetailItem[] }) {
           )}
         >
           <dt className="text-ink-soft text-xs font-semibold">{item.label}</dt>
-          <dd className="text-ink text-sm text-pretty break-words">
+          <dd className="text-ink text-sm text-pretty wrap-break-word">
             {item.value}
           </dd>
         </div>

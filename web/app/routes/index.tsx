@@ -100,11 +100,11 @@ export const Route = createFileRoute("/")({
   }),
   loader: async ({ context: { queryClient }, deps }) => {
     const [categories, subDistricts] = await Promise.all([
-      queryClient.ensureQueryData(categoriesQuery()),
-      queryClient.ensureQueryData(subDistrictsQuery()),
+      queryClient.query({ ...categoriesQuery(), staleTime: "static" }),
+      queryClient.query({ ...subDistrictsQuery(), staleTime: "static" }),
     ]);
     const { params } = placesSelection(deps, categories, subDistricts);
-    await queryClient.ensureQueryData(placesQuery(params));
+    await queryClient.query({ ...placesQuery(params), staleTime: "static" });
   },
   head: () => ({
     meta: [

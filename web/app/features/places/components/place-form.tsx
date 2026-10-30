@@ -1,4 +1,4 @@
-import { useStore } from "@tanstack/react-form";
+import { useSelector } from "@tanstack/react-form";
 import { LocateFixed } from "lucide-react";
 import { useMemo } from "react";
 
@@ -37,13 +37,16 @@ export function PlaceForm({
   subDistricts,
   places,
 }: PlaceFormProps) {
-  const subDistrictId = useStore(
+  const subDistrictId = useSelector(
     form.store,
     (state) => state.values.subDistrictId,
   );
-  const categoryId = useStore(form.store, (state) => state.values.categoryId);
-  const lat = useStore(form.store, (state) => state.values.lat);
-  const lng = useStore(form.store, (state) => state.values.lng);
+  const categoryId = useSelector(
+    form.store,
+    (state) => state.values.categoryId,
+  );
+  const lat = useSelector(form.store, (state) => state.values.lat);
+  const lng = useSelector(form.store, (state) => state.values.lng);
   const position = useCurrentPosition();
 
   const category = categories.find((c) => String(c.id) === categoryId);

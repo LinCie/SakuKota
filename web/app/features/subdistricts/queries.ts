@@ -26,7 +26,7 @@ export const subDistrictKeys = {
 };
 
 // -----------------------------------------------------------------------------
-// Queries. The options are shared by route loaders (`ensureQueryData`) and the
+// Queries. The options are shared by route loaders (`query`) and the
 // hooks below, which read the data the loader put in the cache.
 // -----------------------------------------------------------------------------
 

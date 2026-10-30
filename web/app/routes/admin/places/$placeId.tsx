@@ -12,7 +12,10 @@ import { LoadingState } from "~/shared/components/loading-state";
 export const Route = createFileRoute("/admin/places/$placeId")({
   loader: ({ context: { queryClient }, params }) =>
     Promise.all([
-      queryClient.ensureQueryData(placeQuery(Number(params.placeId))),
+      queryClient.query({
+        ...placeQuery(Number(params.placeId)),
+        staleTime: "static",
+      }),
       ensurePlaceData(queryClient),
     ]),
   pendingComponent: LoadingState,

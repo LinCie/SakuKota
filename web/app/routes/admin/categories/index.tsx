@@ -7,7 +7,7 @@ import { LoadingState } from "~/shared/components/loading-state";
 
 export const Route = createFileRoute("/admin/categories/")({
   loader: ({ context: { queryClient } }) =>
-    queryClient.ensureQueryData(categoriesQuery()),
+    queryClient.query({ ...categoriesQuery(), staleTime: "static" }),
   pendingComponent: LoadingState,
   errorComponent: AdminRouteError,
   head: () => ({ meta: [{ title: "Kategori · Admin Rantau" }] }),

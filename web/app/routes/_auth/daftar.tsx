@@ -1,4 +1,4 @@
-import { useForm, useStore } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
@@ -51,7 +51,7 @@ function SignUp() {
       }
     },
   });
-  const pending = useStore(form.store, (state) => state.isSubmitting);
+  const pending = useSelector(form.store, (state) => state.isSubmitting);
 
   return (
     <form

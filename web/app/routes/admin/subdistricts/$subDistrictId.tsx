@@ -10,7 +10,10 @@ import { LoadingState } from "~/shared/components/loading-state";
 
 export const Route = createFileRoute("/admin/subdistricts/$subDistrictId")({
   loader: ({ context: { queryClient }, params }) =>
-    queryClient.ensureQueryData(subDistrictQuery(Number(params.subDistrictId))),
+    queryClient.query({
+      ...subDistrictQuery(Number(params.subDistrictId)),
+      staleTime: "static",
+    }),
   pendingComponent: LoadingState,
   errorComponent: AdminRouteError,
   component: SubDistrictDetailRoute,

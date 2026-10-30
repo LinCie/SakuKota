@@ -10,7 +10,7 @@ import { LoadingState } from "~/shared/components/loading-state";
 
 export const Route = createFileRoute("/admin/subdistricts/")({
   loader: ({ context: { queryClient } }) =>
-    queryClient.ensureQueryData(subDistrictsQuery()),
+    queryClient.query({ ...subDistrictsQuery(), staleTime: "static" }),
   pendingComponent: LoadingState,
   errorComponent: AdminRouteError,
   head: () => ({ meta: [{ title: "Kecamatan · Admin Rantau" }] }),

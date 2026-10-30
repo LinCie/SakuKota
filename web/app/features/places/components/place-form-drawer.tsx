@@ -1,4 +1,4 @@
-import { useForm, useStore } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 
 import type { SubDistrict } from "~/features/subdistricts/types";
 import { FormAlert } from "~/shared/components/form-alert";
@@ -64,7 +64,7 @@ export function PlaceFormDrawer({
     },
   });
 
-  const dirty = useStore(form.store, (state) => state.isDirty);
+  const dirty = useSelector(form.store, (state) => state.isDirty);
 
   return (
     <FormDrawer
