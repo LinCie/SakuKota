@@ -258,17 +258,17 @@ func TestIntegration_CreateReviewRules(t *testing.T) {
 		{name: "blank comment is stored as a rating only", target: "/places/1/reviews", body: `{"rating":2,"comment":"   "}`,
 			wantStatus: http.StatusCreated, wantCode: "", wantTotals: ratingTotals{Count: 1, Sum: 2}},
 		{name: "rating below one", target: "/places/1/reviews", body: `{"rating":0}`,
-			wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantTotals: ratingTotals{}},
+			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantTotals: ratingTotals{}},
 		{name: "rating above five", target: "/places/1/reviews", body: `{"rating":6}`,
-			wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantTotals: ratingTotals{}},
+			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantTotals: ratingTotals{}},
 		{name: "missing rating", target: "/places/1/reviews", body: `{"comment":"Enak"}`,
-			wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantTotals: ratingTotals{}},
+			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantTotals: ratingTotals{}},
 		{name: "comment too long", target: "/places/1/reviews", body: `{"rating":4,"comment":"` + strings.Repeat("a", 1001) + `"}`,
-			wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantTotals: ratingTotals{}},
+			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantTotals: ratingTotals{}},
 		{name: "malformed body", target: "/places/1/reviews", body: `{"rating":`,
-			wantStatus: http.StatusBadRequest, wantCode: "invalid_body", wantTotals: ratingTotals{}},
+			wantStatus: http.StatusBadRequest, wantCode: "INVALID_BODY", wantTotals: ratingTotals{}},
 		{name: "unknown place", target: "/places/99/reviews", body: `{"rating":4}`,
-			wantStatus: http.StatusNotFound, wantCode: "place_not_found", wantTotals: ratingTotals{}},
+			wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND", wantTotals: ratingTotals{}},
 	}
 
 	for _, tc := range tests {
@@ -301,7 +301,7 @@ func TestIntegration_UserReviewsAPlaceOnce(t *testing.T) {
 	mustPostReview(t, router, "/places/1/reviews", 1, `{"rating":5,"comment":"Murah"}`)
 
 	rec := postReview(t, router, "/places/1/reviews", 1, `{"rating":1,"comment":"Berubah pikiran"}`)
-	assertError(t, rec, http.StatusConflict, "already_reviewed")
+	assertError(t, rec, http.StatusConflict, "ALREADY_REVIEWED")
 
 	if got, want := placeTotals(t, 1), (ratingTotals{Count: 1, Sum: 5}); got != want {
 		t.Errorf("place 1 totals = %+v, want %+v", got, want)
@@ -389,7 +389,7 @@ func TestIntegration_ConcurrentDuplicateReviewsStoreOne(t *testing.T) {
 		case http.StatusCreated:
 			created++
 		case http.StatusConflict:
-			assertError(t, rec, http.StatusConflict, "already_reviewed")
+			assertError(t, rec, http.StatusConflict, "ALREADY_REVIEWED")
 		default:
 			t.Errorf("status %d, want 201 or 409; body: %s", rec.Code, rec.Body)
 		}
@@ -484,7 +484,7 @@ func TestIntegration_ListReviewsOfUnknownPlace(t *testing.T) {
 	seedCatalog(t)
 
 	rec := serve(t, integrationRouter(testDB), jsonRequest(http.MethodGet, "/places/99/reviews", ""))
-	assertError(t, rec, http.StatusNotFound, "place_not_found")
+	assertError(t, rec, http.StatusNotFound, "PLACE_NOT_FOUND")
 }
 
 // -----------------------------------------------------------------------------
@@ -502,7 +502,7 @@ func TestIntegration_DeletingPlaceRemovesItsReviews(t *testing.T) {
 	mustExec(t, `DELETE FROM PLACES WHERE id = 1`)
 
 	rec := serve(t, router, jsonRequest(http.MethodGet, "/places/1/reviews", ""))
-	assertError(t, rec, http.StatusNotFound, "place_not_found")
+	assertError(t, rec, http.StatusNotFound, "PLACE_NOT_FOUND")
 	if got := reviewedTotals(t, 1); got != (ratingTotals{}) {
 		t.Errorf("deleted place still has reviews adding up to %+v", got)
 	}
@@ -534,7 +534,7 @@ func TestIntegration_StorageFailureHidesDetails(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := serve(t, router, authRequest(t, tc.method, "/places/1/reviews", tc.body, 1))
-			assertError(t, rec, http.StatusInternalServerError, "internal_error")
+			assertError(t, rec, http.StatusInternalServerError, "INTERNAL_ERROR")
 			if strings.Contains(rec.Body.String(), "database is closed") {
 				t.Errorf("500 body exposes driver detail: %s", rec.Body)
 			}

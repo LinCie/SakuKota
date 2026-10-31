@@ -166,7 +166,7 @@ func TestHandler_GetReviews_RejectsInvalidPlaceID(t *testing.T) {
 			// No expectations: an invalid id must never reach the service.
 			svc := mock.NewMockService(gomock.NewController(t))
 			rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, tc.target, ""))
-			assertError(t, rec, http.StatusBadRequest, "invalid_place_id")
+			assertError(t, rec, http.StatusBadRequest, "INVALID_PLACE_ID")
 		})
 	}
 }
@@ -178,8 +178,8 @@ func TestHandler_GetReviews_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{name: "unknown place", err: review.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "place_not_found"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
+		{name: "unknown place", err: review.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 	}
 
 	for _, tc := range tests {
@@ -253,7 +253,7 @@ func TestHandler_CreateReview_RejectsInvalidPlaceID(t *testing.T) {
 			// No expectations: an invalid id must never reach the service.
 			svc := mock.NewMockService(gomock.NewController(t))
 			rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, tc.target, `{"rating":4}`, 7))
-			assertError(t, rec, http.StatusBadRequest, "invalid_place_id")
+			assertError(t, rec, http.StatusBadRequest, "INVALID_PLACE_ID")
 		})
 	}
 }
@@ -277,7 +277,7 @@ func TestHandler_CreateReview_RejectsMalformedBodies(t *testing.T) {
 			// No expectations: a malformed body must never reach the service.
 			svc := mock.NewMockService(gomock.NewController(t))
 			rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/places/3/reviews", tc.body, 7))
-			assertError(t, rec, http.StatusBadRequest, "invalid_body")
+			assertError(t, rec, http.StatusBadRequest, "INVALID_BODY")
 		})
 	}
 }
@@ -346,11 +346,11 @@ func TestHandler_CreateReview_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{name: "rating out of range", err: review.ErrInvalidRating, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "comment too long", err: review.ErrCommentTooLong, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "unknown place", err: review.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "place_not_found"},
-		{name: "already reviewed", err: review.ErrAlreadyReviewed, wantStatus: http.StatusConflict, wantCode: "already_reviewed"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
+		{name: "rating out of range", err: review.ErrInvalidRating, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "comment too long", err: review.ErrCommentTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "unknown place", err: review.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
+		{name: "already reviewed", err: review.ErrAlreadyReviewed, wantStatus: http.StatusConflict, wantCode: "ALREADY_REVIEWED"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 	}
 
 	for _, tc := range tests {

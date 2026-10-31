@@ -116,7 +116,7 @@ func TestHandler_Register_InvalidJSON(t *testing.T) {
 	h := auth.NewHandler(testConfig(), svc)
 
 	rec := do(h.Register, `{"name":`)
-	expectError(t, rec, http.StatusBadRequest, "invalid_body")
+	expectError(t, rec, http.StatusBadRequest, "INVALID_BODY")
 }
 
 func TestHandler_Register_ErrorMapping(t *testing.T) {
@@ -126,11 +126,11 @@ func TestHandler_Register_ErrorMapping(t *testing.T) {
 		status int
 		code   string
 	}{
-		{name: "invalid name", err: auth.ErrInvalidName, status: http.StatusBadRequest, code: "validation_error"},
-		{name: "invalid email", err: auth.ErrInvalidEmail, status: http.StatusBadRequest, code: "validation_error"},
-		{name: "weak password", err: auth.ErrWeakPassword, status: http.StatusBadRequest, code: "validation_error"},
-		{name: "email taken", err: users.ErrEmailTaken, status: http.StatusConflict, code: "email_taken"},
-		{name: "unexpected failure", err: errBoom, status: http.StatusInternalServerError, code: "internal_error"},
+		{name: "invalid name", err: auth.ErrInvalidName, status: http.StatusBadRequest, code: "VALIDATION_ERROR"},
+		{name: "invalid email", err: auth.ErrInvalidEmail, status: http.StatusBadRequest, code: "VALIDATION_ERROR"},
+		{name: "weak password", err: auth.ErrWeakPassword, status: http.StatusBadRequest, code: "VALIDATION_ERROR"},
+		{name: "email taken", err: users.ErrEmailTaken, status: http.StatusConflict, code: "EMAIL_TAKEN"},
+		{name: "unexpected failure", err: errBoom, status: http.StatusInternalServerError, code: "INTERNAL_ERROR"},
 	}
 
 	for _, tc := range tests {
@@ -220,7 +220,7 @@ func TestHandler_Login_InvalidCredentials(t *testing.T) {
 
 	h := auth.NewHandler(testConfig(), svc)
 	rec := do(h.Login, `{"email":"ana@example.com","password":"wrong"}`)
-	expectError(t, rec, http.StatusUnauthorized, "invalid_credentials")
+	expectError(t, rec, http.StatusUnauthorized, "INVALID_CREDENTIALS")
 	if cookieNamed(rec, refreshCookieName) != nil {
 		t.Error("refresh cookie was set on failed login")
 	}
@@ -232,7 +232,7 @@ func TestHandler_Login_UnexpectedFailure(t *testing.T) {
 
 	h := auth.NewHandler(testConfig(), svc)
 	rec := do(h.Login, `{"email":"ana@example.com","password":"password123"}`)
-	expectError(t, rec, http.StatusInternalServerError, "internal_error")
+	expectError(t, rec, http.StatusInternalServerError, "INTERNAL_ERROR")
 }
 
 // -----------------------------------------------------------------------------
@@ -245,7 +245,7 @@ func TestHandler_Refresh_MissingCookie(t *testing.T) {
 	h := auth.NewHandler(testConfig(), svc)
 
 	rec := do(h.Refresh, "")
-	expectError(t, rec, http.StatusUnauthorized, "invalid_refresh_token")
+	expectError(t, rec, http.StatusUnauthorized, "INVALID_REFRESH_TOKEN")
 }
 
 func TestHandler_Refresh_Success(t *testing.T) {
@@ -285,7 +285,7 @@ func TestHandler_Refresh_InvalidTokenClearsCookie(t *testing.T) {
 
 	h := auth.NewHandler(testConfig(), svc)
 	rec := do(h.Refresh, "", &http.Cookie{Name: refreshCookieName, Value: "stale"})
-	expectError(t, rec, http.StatusUnauthorized, "invalid_refresh_token")
+	expectError(t, rec, http.StatusUnauthorized, "INVALID_REFRESH_TOKEN")
 	expectCookieCleared(t, rec)
 }
 
@@ -295,7 +295,7 @@ func TestHandler_Refresh_UnexpectedFailure(t *testing.T) {
 
 	h := auth.NewHandler(testConfig(), svc)
 	rec := do(h.Refresh, "", &http.Cookie{Name: refreshCookieName, Value: "refresh-1"})
-	expectError(t, rec, http.StatusInternalServerError, "internal_error")
+	expectError(t, rec, http.StatusInternalServerError, "INTERNAL_ERROR")
 }
 
 // -----------------------------------------------------------------------------
@@ -332,6 +332,6 @@ func TestHandler_Logout_FailureStillClearsCookie(t *testing.T) {
 
 	h := auth.NewHandler(testConfig(), svc)
 	rec := do(h.Logout, "", &http.Cookie{Name: refreshCookieName, Value: "refresh-1"})
-	expectError(t, rec, http.StatusInternalServerError, "internal_error")
+	expectError(t, rec, http.StatusInternalServerError, "INTERNAL_ERROR")
 	expectCookieCleared(t, rec)
 }

@@ -30,14 +30,14 @@ func NewHandler(service Service) *Handler {
 func (h *Handler) GetReviews(w http.ResponseWriter, r *http.Request) {
 	placeID, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_place_id", "invalid place_id")
+		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidPlaceID, "invalid place_id")
 		return
 	}
 
 	reviews, err := h.service.GetByPlace(r.Context(), placeID)
 	if err != nil {
 		if errors.Is(err, ErrPlaceNotFound) {
-			httpx.RespondError(w, http.StatusNotFound, "place_not_found", err.Error())
+			httpx.RespondError(w, http.StatusNotFound, CodePlaceNotFound, err.Error())
 			return
 		}
 		httpx.RespondInternalError(w)
@@ -52,19 +52,19 @@ func (h *Handler) GetReviews(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
 	placeID, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_place_id", "invalid place_id")
+		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidPlaceID, "invalid place_id")
 		return
 	}
 
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		httpx.RespondError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user")
+		httpx.RespondError(w, http.StatusUnauthorized, httpx.CodeUnauthorized, "missing user")
 		return
 	}
 
 	var req CreateReviewRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
 		return
 	}
 
@@ -73,11 +73,11 @@ func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, ErrInvalidRating),
 			errors.Is(err, ErrCommentTooLong):
-			httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
+			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 		case errors.Is(err, ErrPlaceNotFound):
-			httpx.RespondError(w, http.StatusNotFound, "place_not_found", err.Error())
+			httpx.RespondError(w, http.StatusNotFound, CodePlaceNotFound, err.Error())
 		case errors.Is(err, ErrAlreadyReviewed):
-			httpx.RespondError(w, http.StatusConflict, "already_reviewed", err.Error())
+			httpx.RespondError(w, http.StatusConflict, CodeAlreadyReviewed, err.Error())
 		default:
 			httpx.RespondInternalError(w)
 		}

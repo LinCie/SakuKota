@@ -17,20 +17,20 @@ import type { SubDistrict } from "./types";
 
 export type SubDistrictErrorCode = CommonApiErrorCode;
 export type CreateSubDistrictErrorCode =
-  AdminWriteErrorCode | "validation_error" | "sub_district_exists";
+  AdminWriteErrorCode | "VALIDATION_ERROR" | "SUB_DISTRICT_EXISTS";
 export type GetSubDistrictErrorCode =
-  CommonApiErrorCode | "invalid_sub_district_id" | "sub_district_not_found";
+  CommonApiErrorCode | "INVALID_SUB_DISTRICT_ID" | "SUB_DISTRICT_NOT_FOUND";
 export type UpdateSubDistrictErrorCode =
   | AdminWriteErrorCode
-  | "invalid_sub_district_id"
-  | "validation_error"
-  | "sub_district_not_found"
-  | "sub_district_exists";
+  | "INVALID_SUB_DISTRICT_ID"
+  | "VALIDATION_ERROR"
+  | "SUB_DISTRICT_NOT_FOUND"
+  | "SUB_DISTRICT_EXISTS";
 export type DeleteSubDistrictErrorCode =
   | AdminWriteErrorCode
-  | "invalid_sub_district_id"
-  | "sub_district_not_found"
-  | "sub_district_in_use";
+  | "INVALID_SUB_DISTRICT_ID"
+  | "SUB_DISTRICT_NOT_FOUND"
+  | "SUB_DISTRICT_IN_USE";
 
 export type CreateSubDistrictRequest = {
   name: string;

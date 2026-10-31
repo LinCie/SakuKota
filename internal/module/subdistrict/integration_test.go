@@ -232,9 +232,9 @@ func TestIntegration_GetSubDistrict(t *testing.T) {
 			want: `{"id":2,"name":"Kemang","slug":"kemang","flood_history":null,"safety_crime_information":null,` +
 				`"estimated_daily_spending":null,"static_map_image_url":null}`},
 		{name: "unknown sub-district", target: "/subdistricts/99",
-			wantStatus: http.StatusNotFound, wantCode: "sub_district_not_found"},
+			wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
 		{name: "invalid id", target: "/subdistricts/abc",
-			wantStatus: http.StatusBadRequest, wantCode: "invalid_sub_district_id"},
+			wantStatus: http.StatusBadRequest, wantCode: "INVALID_SUB_DISTRICT_ID"},
 	}
 
 	for _, tc := range tests {
@@ -276,29 +276,29 @@ func TestIntegration_CreateSubDistrictRules(t *testing.T) {
 		{name: "name of 100 characters", body: `{"name":"` + strings.Repeat("a", 100) + `","slug":"tebet"}`,
 			wantStatus: http.StatusCreated, wantStored: 4},
 		{name: "name of 101 characters", body: `{"name":"` + strings.Repeat("a", 101) + `","slug":"tebet"}`,
-			wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 3},
+			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 3},
 		{name: "blank name", body: `{"name":"   ","slug":"tebet"}`,
-			wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 3},
+			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 3},
 		{name: "slug of 101 characters", body: `{"name":"Tebet","slug":"` + strings.Repeat("a", 101) + `"}`,
-			wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 3},
+			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 3},
 		{name: "blank slug", body: `{"name":"Tebet","slug":""}`,
-			wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 3},
+			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 3},
 		{name: "name already used", body: `{"name":"Menteng","slug":"tebet"}`,
-			wantStatus: http.StatusConflict, wantCode: "sub_district_exists", wantStored: 3},
+			wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_EXISTS", wantStored: 3},
 		{name: "name already used in another case", body: `{"name":"MENTENG","slug":"tebet"}`,
-			wantStatus: http.StatusConflict, wantCode: "sub_district_exists", wantStored: 3},
+			wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_EXISTS", wantStored: 3},
 		{name: "name already used in another case, with spaces around it", body: `{"name":"  kemang  ","slug":"tebet"}`,
-			wantStatus: http.StatusConflict, wantCode: "sub_district_exists", wantStored: 3},
+			wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_EXISTS", wantStored: 3},
 		{name: "slug already used", body: `{"name":"Tebet","slug":"menteng"}`,
-			wantStatus: http.StatusConflict, wantCode: "sub_district_exists", wantStored: 3},
+			wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_EXISTS", wantStored: 3},
 		{name: "slug differing only in case is allowed", body: `{"name":"Tebet","slug":"MENTENG"}`,
 			wantStatus: http.StatusCreated, wantStored: 4},
 		{name: "negative estimated daily spending", body: `{` + tebet + `,"estimated_daily_spending":-1}`,
-			wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 3},
+			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 3},
 		{name: "estimated daily spending too large for DECIMAL(10,2)", body: `{` + tebet + `,"estimated_daily_spending":100000000}`,
-			wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 3},
+			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 3},
 		{name: "static map image URL of 256 characters", body: `{` + tebet + `,"static_map_image_url":"` + urlOfLength(256) + `"}`,
-			wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 3},
+			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 3},
 	}
 
 	for _, tc := range tests {
@@ -388,7 +388,7 @@ func TestIntegration_ConcurrentCreatesWithSameNameStoreOne(t *testing.T) {
 		case http.StatusCreated:
 			created++
 		case http.StatusConflict:
-			assertError(t, rec, http.StatusConflict, "sub_district_exists")
+			assertError(t, rec, http.StatusConflict, "SUB_DISTRICT_EXISTS")
 		default:
 			t.Errorf("status %d, want 201 or 409; body: %s", rec.Code, rec.Body)
 		}
@@ -455,19 +455,19 @@ func TestIntegration_PatchSubDistrict(t *testing.T) {
 			}},
 		{name: "an empty body changes nothing", target: "/subdistricts/1", body: `{}`, wantStatus: http.StatusOK, check: nil},
 		{name: "unknown sub-district", target: "/subdistricts/99", body: `{"name":"Kemang Timur"}`,
-			wantStatus: http.StatusNotFound, wantCode: "sub_district_not_found"},
+			wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
 		{name: "invalid body", target: "/subdistricts/1", body: `{"name":5}`,
-			wantStatus: http.StatusBadRequest, wantCode: "invalid_body"},
+			wantStatus: http.StatusBadRequest, wantCode: "INVALID_BODY"},
 		{name: "null name", target: "/subdistricts/1", body: `{"name":null}`,
-			wantStatus: http.StatusBadRequest, wantCode: "invalid_body"},
+			wantStatus: http.StatusBadRequest, wantCode: "INVALID_BODY"},
 		{name: "blank name", target: "/subdistricts/1", body: `{"name":"   "}`,
-			wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "name of 101 characters", target: "/subdistricts/1", body: `{"name":"` + strings.Repeat("a", 101) + `"}`,
-			wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "name used by another sub-district", target: "/subdistricts/2", body: `{"name":"Menteng"}`,
-			wantStatus: http.StatusConflict, wantCode: "sub_district_exists"},
+			wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_EXISTS"},
 		{name: "name used by another sub-district in another case", target: "/subdistricts/2", body: `{"name":"MENTENG"}`,
-			wantStatus: http.StatusConflict, wantCode: "sub_district_exists"},
+			wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_EXISTS"},
 		{name: "changes the case of its own name", target: "/subdistricts/1", body: `{"name":"menteng"}`,
 			wantStatus: http.StatusOK,
 			check: func(t *testing.T, rows []subDistrictRow) {
@@ -476,9 +476,9 @@ func TestIntegration_PatchSubDistrict(t *testing.T) {
 				}
 			}},
 		{name: "slug used by another sub-district", target: "/subdistricts/2", body: `{"slug":"menteng"}`,
-			wantStatus: http.StatusConflict, wantCode: "sub_district_exists"},
+			wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_EXISTS"},
 		{name: "negative estimated daily spending", target: "/subdistricts/1", body: `{"estimated_daily_spending":-1}`,
-			wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
+			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 	}
 
 	for _, tc := range tests {
@@ -522,9 +522,9 @@ func TestIntegration_DeleteSubDistrict(t *testing.T) {
 		{name: "deletes an unreferenced sub-district", target: "/subdistricts/2",
 			wantStatus: http.StatusNoContent, wantIDs: []int64{1, 3}},
 		{name: "unknown sub-district leaves the sub-districts", target: "/subdistricts/99",
-			wantStatus: http.StatusNotFound, wantCode: "sub_district_not_found", wantIDs: []int64{1, 2, 3}},
+			wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND", wantIDs: []int64{1, 2, 3}},
 		{name: "invalid id leaves the sub-districts", target: "/subdistricts/abc",
-			wantStatus: http.StatusBadRequest, wantCode: "invalid_sub_district_id", wantIDs: []int64{1, 2, 3}},
+			wantStatus: http.StatusBadRequest, wantCode: "INVALID_SUB_DISTRICT_ID", wantIDs: []int64{1, 2, 3}},
 	}
 
 	for _, tc := range tests {
@@ -554,7 +554,7 @@ func TestIntegration_DeleteReferencedSubDistrict(t *testing.T) {
 	router := integrationRouter(testDB)
 
 	assertError(t, call(t, router, http.MethodDelete, "/subdistricts/1", ""),
-		http.StatusConflict, "sub_district_in_use")
+		http.StatusConflict, "SUB_DISTRICT_IN_USE")
 
 	if got := listedIDs(listSubDistricts(t, router)); !slices.Equal(got, []int64{1, 2, 3}) {
 		t.Errorf("sub-district IDs = %v, want [1 2 3]; a referenced sub-district must not be deleted", got)
@@ -571,7 +571,7 @@ func TestIntegration_DeleteSubDistrictTwice(t *testing.T) {
 	}
 
 	assertError(t, call(t, router, http.MethodDelete, "/subdistricts/2", ""),
-		http.StatusNotFound, "sub_district_not_found")
+		http.StatusNotFound, "SUB_DISTRICT_NOT_FOUND")
 }
 
 func TestIntegration_NameAndSlugAreFreeAfterDelete(t *testing.T) {
@@ -620,7 +620,7 @@ func TestIntegration_StorageFailureHidesDetails(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := call(t, router, tc.method, tc.target, tc.body)
-			assertError(t, rec, http.StatusInternalServerError, "internal_error")
+			assertError(t, rec, http.StatusInternalServerError, "INTERNAL_ERROR")
 			if strings.Contains(rec.Body.String(), "database is closed") {
 				t.Errorf("500 body exposes driver detail: %s", rec.Body)
 			}

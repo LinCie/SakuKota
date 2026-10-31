@@ -39,7 +39,7 @@ export function ReviewForm({ placeId }: { placeId: number }) {
     >
       {createReview.error ? (
         <FormAlert>
-          {hasErrorCode(createReview.error, "already_reviewed")
+          {hasErrorCode(createReview.error, "ALREADY_REVIEWED")
             ? "Kamu sudah mengulas tempat ini."
             : writeErrorMessage(createReview.error)}
         </FormAlert>

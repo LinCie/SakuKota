@@ -288,8 +288,8 @@ func TestIntegration_ListPlacesUnknownFilters(t *testing.T) {
 		target   string
 		wantCode string
 	}{
-		{name: "unknown sub-district", target: "/places?sub_district_id=99", wantCode: "sub_district_not_found"},
-		{name: "unknown category in the list", target: "/places?category_id=1,99", wantCode: "category_not_found"},
+		{name: "unknown sub-district", target: "/places?sub_district_id=99", wantCode: "SUB_DISTRICT_NOT_FOUND"},
+		{name: "unknown category in the list", target: "/places?category_id=1,99", wantCode: "CATEGORY_NOT_FOUND"},
 	}
 
 	for _, tc := range tests {
@@ -431,16 +431,16 @@ func TestIntegration_CreatePlaceRules(t *testing.T) {
 		wantStored int
 	}{
 		{name: "minimal place", body: `{` + kopi + `}`, wantStatus: http.StatusCreated, wantCode: "", wantStored: 1},
-		{name: "blank name", body: `{"name":"  ","sub_district_id":1,"category_id":2}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 0},
-		{name: "unknown sub-district", body: `{"name":"Kopi Senja","sub_district_id":99,"category_id":2}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 0},
-		{name: "unknown category", body: `{"name":"Kopi Senja","sub_district_id":1,"category_id":99}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 0},
+		{name: "blank name", body: `{"name":"  ","sub_district_id":1,"category_id":2}`, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 0},
+		{name: "unknown sub-district", body: `{"name":"Kopi Senja","sub_district_id":99,"category_id":2}`, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 0},
+		{name: "unknown category", body: `{"name":"Kopi Senja","sub_district_id":1,"category_id":99}`, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 0},
 		{name: "location in Jakarta", body: `{` + kopi + `,"location":{"type":"Point","coordinates":[106.8,-6.2]}}`, wantStatus: http.StatusCreated, wantCode: "", wantStored: 1},
-		{name: "location in Tokyo", body: `{` + kopi + `,"location":{"type":"Point","coordinates":[139.7,35.7]}}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 0},
-		{name: "location at null island", body: `{` + kopi + `,"location":{"type":"Point","coordinates":[0,0]}}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 0},
-		{name: "swapped Jakarta coordinates", body: `{` + kopi + `,"location":{"type":"Point","coordinates":[-6.2,106.8]}}`, wantStatus: http.StatusBadRequest, wantCode: "invalid_body", wantStored: 0},
-		{name: "latitude above 90", body: `{` + kopi + `,"location":{"type":"Point","coordinates":[106.8,91]}}`, wantStatus: http.StatusBadRequest, wantCode: "invalid_body", wantStored: 0},
-		{name: "missing required attribute", body: `{` + warung + `,"attributes":{"seats":2}}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 0},
-		{name: "unknown attribute key", body: `{` + warung + `,"attributes":{"contact":"0812","parking":true}}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", wantStored: 0},
+		{name: "location in Tokyo", body: `{` + kopi + `,"location":{"type":"Point","coordinates":[139.7,35.7]}}`, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 0},
+		{name: "location at null island", body: `{` + kopi + `,"location":{"type":"Point","coordinates":[0,0]}}`, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 0},
+		{name: "swapped Jakarta coordinates", body: `{` + kopi + `,"location":{"type":"Point","coordinates":[-6.2,106.8]}}`, wantStatus: http.StatusBadRequest, wantCode: "INVALID_BODY", wantStored: 0},
+		{name: "latitude above 90", body: `{` + kopi + `,"location":{"type":"Point","coordinates":[106.8,91]}}`, wantStatus: http.StatusBadRequest, wantCode: "INVALID_BODY", wantStored: 0},
+		{name: "missing required attribute", body: `{` + warung + `,"attributes":{"seats":2}}`, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 0},
+		{name: "unknown attribute key", body: `{` + warung + `,"attributes":{"contact":"0812","parking":true}}`, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 0},
 		{name: "null optional attribute is accepted", body: `{` + warung + `,"attributes":{"contact":"0812","seats":null}}`, wantStatus: http.StatusCreated, wantCode: "", wantStored: 1},
 		{name: "unknown top-level keys are ignored", body: `{` + kopi + `,"id":999,"created_at":"yesterday"}`, wantStatus: http.StatusCreated, wantCode: "", wantStored: 1},
 	}
@@ -612,7 +612,7 @@ func TestIntegration_StorageFailureHidesDetails(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := call(t, router, tc.method, tc.target, tc.body)
-			assertError(t, rec, http.StatusInternalServerError, "internal_error")
+			assertError(t, rec, http.StatusInternalServerError, "INTERNAL_ERROR")
 			if strings.Contains(rec.Body.String(), "database is closed") {
 				t.Errorf("500 body exposes driver detail: %s", rec.Body)
 			}
@@ -676,14 +676,14 @@ func TestIntegration_PatchPlace(t *testing.T) {
 				assertJSON(t, p.Attributes, `{"contact":"0812"}`)
 			}},
 		{name: "an empty body changes nothing", target: "/places/1", body: `{}`, wantStatus: http.StatusOK, wantCode: "", check: nil},
-		{name: "unknown place", target: "/places/99", body: `{"name":"Warung Baru"}`, wantStatus: http.StatusNotFound, wantCode: "place_not_found", check: nil},
-		{name: "invalid body", target: "/places/1", body: `{"name":5}`, wantStatus: http.StatusBadRequest, wantCode: "invalid_body", check: nil},
+		{name: "unknown place", target: "/places/99", body: `{"name":"Warung Baru"}`, wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND", check: nil},
+		{name: "invalid body", target: "/places/1", body: `{"name":5}`, wantStatus: http.StatusBadRequest, wantCode: "INVALID_BODY", check: nil},
 		{name: "name longer than 150 characters", target: "/places/1",
-			body: `{"name":"` + strings.Repeat("a", 151) + `"}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", check: nil},
-		{name: "unknown sub-district", target: "/places/1", body: `{"sub_district_id":99}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", check: nil},
-		{name: "unknown category", target: "/places/1", body: `{"category_id":99}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", check: nil},
+			body: `{"name":"` + strings.Repeat("a", 151) + `"}`, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", check: nil},
+		{name: "unknown sub-district", target: "/places/1", body: `{"sub_district_id":99}`, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", check: nil},
+		{name: "unknown category", target: "/places/1", body: `{"category_id":99}`, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", check: nil},
 		{name: "attributes miss the required field of the category", target: "/places/1",
-			body: `{"attributes":{"seats":3}}`, wantStatus: http.StatusBadRequest, wantCode: "validation_error", check: nil},
+			body: `{"attributes":{"seats":3}}`, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", check: nil},
 	}
 
 	for _, tc := range tests {
@@ -726,8 +726,8 @@ func TestIntegration_DeletePlace(t *testing.T) {
 		wantIDs    []int64
 	}{
 		{name: "deletes the place", target: "/places/2", wantStatus: http.StatusNoContent, wantCode: "", wantIDs: []int64{1, 3, 4, 5}},
-		{name: "unknown place leaves the places", target: "/places/99", wantStatus: http.StatusNotFound, wantCode: "place_not_found", wantIDs: all},
-		{name: "invalid id leaves the places", target: "/places/abc", wantStatus: http.StatusBadRequest, wantCode: "invalid_place_id", wantIDs: all},
+		{name: "unknown place leaves the places", target: "/places/99", wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND", wantIDs: all},
+		{name: "invalid id leaves the places", target: "/places/abc", wantStatus: http.StatusBadRequest, wantCode: "INVALID_PLACE_ID", wantIDs: all},
 	}
 
 	for _, tc := range tests {
@@ -769,7 +769,7 @@ func TestIntegration_DeletePlaceTwice(t *testing.T) {
 		t.Fatalf("first delete: status %d; body: %s", first.Code, first.Body)
 	}
 
-	assertError(t, call(t, router, http.MethodDelete, "/places/2", ""), http.StatusNotFound, "place_not_found")
+	assertError(t, call(t, router, http.MethodDelete, "/places/2", ""), http.StatusNotFound, "PLACE_NOT_FOUND")
 }
 
 // -----------------------------------------------------------------------------
@@ -806,11 +806,11 @@ func TestIntegration_GetPlace(t *testing.T) {
 	})
 
 	t.Run("unknown place", func(t *testing.T) {
-		assertError(t, call(t, router, http.MethodGet, "/places/99", ""), http.StatusNotFound, "place_not_found")
+		assertError(t, call(t, router, http.MethodGet, "/places/99", ""), http.StatusNotFound, "PLACE_NOT_FOUND")
 	})
 
 	t.Run("invalid id", func(t *testing.T) {
-		assertError(t, call(t, router, http.MethodGet, "/places/abc", ""), http.StatusBadRequest, "invalid_place_id")
+		assertError(t, call(t, router, http.MethodGet, "/places/abc", ""), http.StatusBadRequest, "INVALID_PLACE_ID")
 	})
 }
 
@@ -917,8 +917,8 @@ func TestIntegration_GetCategory(t *testing.T) {
 	}{
 		{name: "category with fields in order", target: "/categories/1", wantStatus: http.StatusOK, wantName: "Warung", wantStyle: "W Warung chili", wantKeys: []string{"contact", "seats"}},
 		{name: "category without fields", target: "/categories/2", wantStatus: http.StatusOK, wantName: "Kopi", wantStyle: "K Kopi plum", wantKeys: []string{}},
-		{name: "unknown category", target: "/categories/99", wantStatus: http.StatusNotFound, wantCode: "category_not_found"},
-		{name: "invalid id", target: "/categories/abc", wantStatus: http.StatusBadRequest, wantCode: "invalid_category_id"},
+		{name: "unknown category", target: "/categories/99", wantStatus: http.StatusNotFound, wantCode: "CATEGORY_NOT_FOUND"},
+		{name: "invalid id", target: "/categories/abc", wantStatus: http.StatusBadRequest, wantCode: "INVALID_CATEGORY_ID"},
 	}
 
 	for _, tc := range tests {

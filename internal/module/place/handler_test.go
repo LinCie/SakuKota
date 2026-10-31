@@ -123,33 +123,33 @@ func TestHandler_GetPlaces_RejectsMalformedFilters(t *testing.T) {
 		target   string
 		wantCode string
 	}{
-		{name: "sub_district_id is not a number", target: "/places?sub_district_id=abc", wantCode: "invalid_sub_district_id"},
-		{name: "sub_district_id is fractional", target: "/places?sub_district_id=1.5", wantCode: "invalid_sub_district_id"},
-		{name: "sub_district_id is zero", target: "/places?sub_district_id=0", wantCode: "invalid_sub_district_id"},
-		{name: "sub_district_id is negative", target: "/places?sub_district_id=-3", wantCode: "invalid_sub_district_id"},
-		{name: "sub_district_id overflows 64 bits", target: "/places?sub_district_id=99999999999999999999", wantCode: "invalid_sub_district_id"},
-		{name: "category_id has a non-number", target: "/places?category_id=1,x", wantCode: "invalid_category_id"},
-		{name: "category_id has an empty element", target: "/places?category_id=1,,2", wantCode: "invalid_category_id"},
-		{name: "category_id ends with a comma", target: "/places?category_id=1,", wantCode: "invalid_category_id"},
-		{name: "category_id is zero", target: "/places?category_id=0", wantCode: "invalid_category_id"},
-		{name: "category_id is negative", target: "/places?category_id=-1", wantCode: "invalid_category_id"},
-		{name: "category_id has a zero element", target: "/places?category_id=1,0", wantCode: "invalid_category_id"},
-		{name: "limit is not a number", target: "/places?limit=abc", wantCode: "invalid_limit"},
-		{name: "limit is fractional", target: "/places?limit=2.5", wantCode: "invalid_limit"},
-		{name: "limit is zero", target: "/places?limit=0", wantCode: "invalid_limit"},
-		{name: "limit is negative", target: "/places?limit=-3", wantCode: "invalid_limit"},
-		{name: "limit overflows 64 bits", target: "/places?limit=99999999999999999999", wantCode: "invalid_limit"},
-		{name: "bbox is not numbers", target: "/places?bbox=abc", wantCode: "invalid_bbox"},
-		{name: "bbox has three values", target: "/places?bbox=106.8,-6.3,106.9", wantCode: "invalid_bbox"},
-		{name: "bbox has five values", target: "/places?bbox=106.8,-6.3,106.9,-6.1,1", wantCode: "invalid_bbox"},
-		{name: "bbox has an empty element", target: "/places?bbox=106.8,,106.9,-6.1", wantCode: "invalid_bbox"},
-		{name: "bbox has a non-number", target: "/places?bbox=106.8,x,106.9,-6.1", wantCode: "invalid_bbox"},
-		{name: "bbox has NaN", target: "/places?bbox=NaN,-6.3,106.9,-6.1", wantCode: "invalid_bbox"},
-		{name: "bbox has infinity", target: "/places?bbox=106.8,-6.3,Inf,-6.1", wantCode: "invalid_bbox"},
-		{name: "bbox west is east of east", target: "/places?bbox=106.9,-6.3,106.8,-6.1", wantCode: "invalid_bbox"},
-		{name: "bbox south is north of north", target: "/places?bbox=106.8,-6.1,106.9,-6.3", wantCode: "invalid_bbox"},
-		{name: "bbox longitude out of range", target: "/places?bbox=-181,-6.3,106.9,-6.1", wantCode: "invalid_bbox"},
-		{name: "bbox latitude out of range", target: "/places?bbox=106.8,-91,106.9,-6.1", wantCode: "invalid_bbox"},
+		{name: "sub_district_id is not a number", target: "/places?sub_district_id=abc", wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "sub_district_id is fractional", target: "/places?sub_district_id=1.5", wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "sub_district_id is zero", target: "/places?sub_district_id=0", wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "sub_district_id is negative", target: "/places?sub_district_id=-3", wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "sub_district_id overflows 64 bits", target: "/places?sub_district_id=99999999999999999999", wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "category_id has a non-number", target: "/places?category_id=1,x", wantCode: "INVALID_CATEGORY_ID"},
+		{name: "category_id has an empty element", target: "/places?category_id=1,,2", wantCode: "INVALID_CATEGORY_ID"},
+		{name: "category_id ends with a comma", target: "/places?category_id=1,", wantCode: "INVALID_CATEGORY_ID"},
+		{name: "category_id is zero", target: "/places?category_id=0", wantCode: "INVALID_CATEGORY_ID"},
+		{name: "category_id is negative", target: "/places?category_id=-1", wantCode: "INVALID_CATEGORY_ID"},
+		{name: "category_id has a zero element", target: "/places?category_id=1,0", wantCode: "INVALID_CATEGORY_ID"},
+		{name: "limit is not a number", target: "/places?limit=abc", wantCode: "INVALID_LIMIT"},
+		{name: "limit is fractional", target: "/places?limit=2.5", wantCode: "INVALID_LIMIT"},
+		{name: "limit is zero", target: "/places?limit=0", wantCode: "INVALID_LIMIT"},
+		{name: "limit is negative", target: "/places?limit=-3", wantCode: "INVALID_LIMIT"},
+		{name: "limit overflows 64 bits", target: "/places?limit=99999999999999999999", wantCode: "INVALID_LIMIT"},
+		{name: "bbox is not numbers", target: "/places?bbox=abc", wantCode: "INVALID_BBOX"},
+		{name: "bbox has three values", target: "/places?bbox=106.8,-6.3,106.9", wantCode: "INVALID_BBOX"},
+		{name: "bbox has five values", target: "/places?bbox=106.8,-6.3,106.9,-6.1,1", wantCode: "INVALID_BBOX"},
+		{name: "bbox has an empty element", target: "/places?bbox=106.8,,106.9,-6.1", wantCode: "INVALID_BBOX"},
+		{name: "bbox has a non-number", target: "/places?bbox=106.8,x,106.9,-6.1", wantCode: "INVALID_BBOX"},
+		{name: "bbox has NaN", target: "/places?bbox=NaN,-6.3,106.9,-6.1", wantCode: "INVALID_BBOX"},
+		{name: "bbox has infinity", target: "/places?bbox=106.8,-6.3,Inf,-6.1", wantCode: "INVALID_BBOX"},
+		{name: "bbox west is east of east", target: "/places?bbox=106.9,-6.3,106.8,-6.1", wantCode: "INVALID_BBOX"},
+		{name: "bbox south is north of north", target: "/places?bbox=106.8,-6.1,106.9,-6.3", wantCode: "INVALID_BBOX"},
+		{name: "bbox longitude out of range", target: "/places?bbox=-181,-6.3,106.9,-6.1", wantCode: "INVALID_BBOX"},
+		{name: "bbox latitude out of range", target: "/places?bbox=106.8,-91,106.9,-6.1", wantCode: "INVALID_BBOX"},
 	}
 
 	for _, tc := range tests {
@@ -203,10 +203,10 @@ func TestHandler_GetPlaces_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{name: "unknown sub-district", err: place.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "sub_district_not_found"},
-		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusNotFound, wantCode: "category_not_found"},
-		{name: "wrapped unknown category", err: fmt.Errorf("filter: %w", place.ErrCategoryNotFound), wantStatus: http.StatusNotFound, wantCode: "category_not_found"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
+		{name: "unknown sub-district", err: place.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
+		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusNotFound, wantCode: "CATEGORY_NOT_FOUND"},
+		{name: "wrapped unknown category", err: fmt.Errorf("filter: %w", place.ErrCategoryNotFound), wantStatus: http.StatusNotFound, wantCode: "CATEGORY_NOT_FOUND"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 	}
 
 	for _, tc := range tests {
@@ -301,7 +301,7 @@ func TestHandler_CreatePlace_RejectsMalformedBodies(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := mock.NewMockService(gomock.NewController(t))
 			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/places", tc.body))
-			assertError(t, rec, http.StatusBadRequest, "invalid_body")
+			assertError(t, rec, http.StatusBadRequest, "INVALID_BODY")
 		})
 	}
 }
@@ -313,13 +313,13 @@ func TestHandler_CreatePlace_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{name: "blank name", err: place.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "name too long", err: place.ErrPlaceNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "unknown sub-district", err: place.ErrSubDistrictNotFound, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "invalid attributes", err: place.ErrInvalidAttributes, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "wrapped invalid attributes", err: fmt.Errorf("%w: %q is required", place.ErrInvalidAttributes, "contact"), wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
+		{name: "blank name", err: place.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "name too long", err: place.ErrPlaceNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "unknown sub-district", err: place.ErrSubDistrictNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "invalid attributes", err: place.ErrInvalidAttributes, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "wrapped invalid attributes", err: fmt.Errorf("%w: %q is required", place.ErrInvalidAttributes, "contact"), wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 	}
 
 	for _, tc := range tests {
@@ -498,7 +498,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			tc.fail(svc)
 
 			rec := serve(t, newRouter(svc), jsonRequest(tc.method, tc.target, tc.body))
-			assertError(t, rec, http.StatusInternalServerError, "internal_error")
+			assertError(t, rec, http.StatusInternalServerError, "INTERNAL_ERROR")
 			if strings.Contains(rec.Body.String(), "pq:") || strings.Contains(rec.Body.String(), "relation") {
 				t.Errorf("500 body exposes storage detail: %s", rec.Body)
 			}
@@ -517,23 +517,23 @@ func TestHandler_PatchPlace_RejectsInvalidRequests(t *testing.T) {
 		body     string
 		wantCode string
 	}{
-		{name: "place id is not a number", target: "/places/abc", body: `{"name":"Kopi"}`, wantCode: "invalid_place_id"},
-		{name: "place id is fractional", target: "/places/1.5", body: `{"name":"Kopi"}`, wantCode: "invalid_place_id"},
-		{name: "place id is zero", target: "/places/0", body: `{"name":"Kopi"}`, wantCode: "invalid_place_id"},
-		{name: "place id is negative", target: "/places/-1", body: `{"name":"Kopi"}`, wantCode: "invalid_place_id"},
-		{name: "empty body", target: "/places/1", body: ``, wantCode: "invalid_body"},
-		{name: "truncated JSON", target: "/places/1", body: `{"name":"Kopi"`, wantCode: "invalid_body"},
-		{name: "body is an array", target: "/places/1", body: `[]`, wantCode: "invalid_body"},
-		{name: "body is null", target: "/places/1", body: `null`, wantCode: "invalid_body"},
-		{name: "name is a number", target: "/places/1", body: `{"name":5}`, wantCode: "invalid_body"},
-		{name: "name is null", target: "/places/1", body: `{"name":null}`, wantCode: "invalid_body"},
-		{name: "sub_district_id is null", target: "/places/1", body: `{"sub_district_id":null}`, wantCode: "invalid_body"},
-		{name: "category_id is null", target: "/places/1", body: `{"category_id":null}`, wantCode: "invalid_body"},
-		{name: "sub_district_id is a string", target: "/places/1", body: `{"sub_district_id":"one"}`, wantCode: "invalid_body"},
+		{name: "place id is not a number", target: "/places/abc", body: `{"name":"Kopi"}`, wantCode: "INVALID_PLACE_ID"},
+		{name: "place id is fractional", target: "/places/1.5", body: `{"name":"Kopi"}`, wantCode: "INVALID_PLACE_ID"},
+		{name: "place id is zero", target: "/places/0", body: `{"name":"Kopi"}`, wantCode: "INVALID_PLACE_ID"},
+		{name: "place id is negative", target: "/places/-1", body: `{"name":"Kopi"}`, wantCode: "INVALID_PLACE_ID"},
+		{name: "empty body", target: "/places/1", body: ``, wantCode: "INVALID_BODY"},
+		{name: "truncated JSON", target: "/places/1", body: `{"name":"Kopi"`, wantCode: "INVALID_BODY"},
+		{name: "body is an array", target: "/places/1", body: `[]`, wantCode: "INVALID_BODY"},
+		{name: "body is null", target: "/places/1", body: `null`, wantCode: "INVALID_BODY"},
+		{name: "name is a number", target: "/places/1", body: `{"name":5}`, wantCode: "INVALID_BODY"},
+		{name: "name is null", target: "/places/1", body: `{"name":null}`, wantCode: "INVALID_BODY"},
+		{name: "sub_district_id is null", target: "/places/1", body: `{"sub_district_id":null}`, wantCode: "INVALID_BODY"},
+		{name: "category_id is null", target: "/places/1", body: `{"category_id":null}`, wantCode: "INVALID_BODY"},
+		{name: "sub_district_id is a string", target: "/places/1", body: `{"sub_district_id":"one"}`, wantCode: "INVALID_BODY"},
 		{name: "location is a line", target: "/places/1",
-			body: `{"location":{"type":"LineString","coordinates":[[106.8,-6.2],[106.9,-6.3]]}}`, wantCode: "invalid_body"},
+			body: `{"location":{"type":"LineString","coordinates":[[106.8,-6.2],[106.9,-6.3]]}}`, wantCode: "INVALID_BODY"},
 		{name: "location coordinates are swapped", target: "/places/1",
-			body: `{"location":{"type":"Point","coordinates":[-6.2,106.8]}}`, wantCode: "invalid_body"},
+			body: `{"location":{"type":"Point","coordinates":[-6.2,106.8]}}`, wantCode: "INVALID_BODY"},
 	}
 
 	for _, tc := range tests {
@@ -596,16 +596,16 @@ func TestHandler_PatchPlace_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{name: "unknown place", err: place.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "place_not_found"},
-		{name: "wrapped unknown place", err: fmt.Errorf("update: %w", place.ErrPlaceNotFound), wantStatus: http.StatusNotFound, wantCode: "place_not_found"},
-		{name: "blank name", err: place.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "name too long", err: place.ErrPlaceNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "unknown sub-district", err: place.ErrSubDistrictNotFound, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "invalid attributes", err: place.ErrInvalidAttributes, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "wrapped invalid attributes", err: fmt.Errorf("%w: %q is required", place.ErrInvalidAttributes, "contact"), wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "location outside Indonesia", err: place.ErrInvalidLocation, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
+		{name: "unknown place", err: place.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
+		{name: "wrapped unknown place", err: fmt.Errorf("update: %w", place.ErrPlaceNotFound), wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
+		{name: "blank name", err: place.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "name too long", err: place.ErrPlaceNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "unknown sub-district", err: place.ErrSubDistrictNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "invalid attributes", err: place.ErrInvalidAttributes, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "wrapped invalid attributes", err: fmt.Errorf("%w: %q is required", place.ErrInvalidAttributes, "contact"), wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "location outside Indonesia", err: place.ErrInvalidLocation, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 	}
 
 	for _, tc := range tests {
@@ -666,7 +666,7 @@ func TestHandler_DeletePlace_RejectsInvalidID(t *testing.T) {
 			// No expectations: an invalid id must never reach the service.
 			svc := mock.NewMockService(gomock.NewController(t))
 			rec := serve(t, newRouter(svc), jsonRequest(http.MethodDelete, tc.target, ""))
-			assertError(t, rec, http.StatusBadRequest, "invalid_place_id")
+			assertError(t, rec, http.StatusBadRequest, "INVALID_PLACE_ID")
 		})
 	}
 }
@@ -678,9 +678,9 @@ func TestHandler_DeletePlace_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{name: "unknown place", err: place.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "place_not_found"},
-		{name: "wrapped unknown place", err: fmt.Errorf("delete: %w", place.ErrPlaceNotFound), wantStatus: http.StatusNotFound, wantCode: "place_not_found"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
+		{name: "unknown place", err: place.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
+		{name: "wrapped unknown place", err: fmt.Errorf("delete: %w", place.ErrPlaceNotFound), wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 	}
 
 	for _, tc := range tests {
@@ -728,7 +728,7 @@ func TestHandler_GetPlace_RejectsInvalidID(t *testing.T) {
 			// No expectations: an invalid id must never reach the service.
 			svc := mock.NewMockService(gomock.NewController(t))
 			rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, tc.target, ""))
-			assertError(t, rec, http.StatusBadRequest, "invalid_place_id")
+			assertError(t, rec, http.StatusBadRequest, "INVALID_PLACE_ID")
 		})
 	}
 }
@@ -740,9 +740,9 @@ func TestHandler_GetPlace_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{name: "unknown place", err: place.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "place_not_found"},
-		{name: "wrapped unknown place", err: fmt.Errorf("get: %w", place.ErrPlaceNotFound), wantStatus: http.StatusNotFound, wantCode: "place_not_found"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
+		{name: "unknown place", err: place.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
+		{name: "wrapped unknown place", err: fmt.Errorf("get: %w", place.ErrPlaceNotFound), wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 	}
 
 	for _, tc := range tests {
@@ -850,7 +850,7 @@ func TestHandler_GetCategory_RejectsInvalidID(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := mock.NewMockService(gomock.NewController(t))
 			rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, tc.target, ""))
-			assertError(t, rec, http.StatusBadRequest, "invalid_category_id")
+			assertError(t, rec, http.StatusBadRequest, "INVALID_CATEGORY_ID")
 		})
 	}
 }
@@ -862,9 +862,9 @@ func TestHandler_GetCategory_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusNotFound, wantCode: "category_not_found"},
-		{name: "wrapped unknown category", err: fmt.Errorf("get: %w", place.ErrCategoryNotFound), wantStatus: http.StatusNotFound, wantCode: "category_not_found"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
+		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusNotFound, wantCode: "CATEGORY_NOT_FOUND"},
+		{name: "wrapped unknown category", err: fmt.Errorf("get: %w", place.ErrCategoryNotFound), wantStatus: http.StatusNotFound, wantCode: "CATEGORY_NOT_FOUND"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 	}
 
 	for _, tc := range tests {

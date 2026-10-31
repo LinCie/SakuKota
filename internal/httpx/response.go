@@ -33,5 +33,5 @@ func RespondError(w http.ResponseWriter, status int, code, message string) {
 // RespondInternalError writes a generic 500 response, so storage details stay
 // out of the body.
 func RespondInternalError(w http.ResponseWriter) {
-	RespondError(w, http.StatusInternalServerError, "internal_error", "internal server error")
+	RespondError(w, http.StatusInternalServerError, CodeInternalError, "internal server error")
 }

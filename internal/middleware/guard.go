@@ -14,12 +14,12 @@ func Guard(roles []string) httpx.Constructor {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			role, ok := RoleFromContext(r.Context())
 			if !ok {
-				httpx.RespondError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing role")
+				httpx.RespondError(w, http.StatusUnauthorized, httpx.CodeUnauthorized, "missing role")
 				return
 			}
 
 			if !slices.Contains(roles, role) {
-				httpx.RespondError(w, http.StatusForbidden, "FORBIDDEN", "insufficient role")
+				httpx.RespondError(w, http.StatusForbidden, httpx.CodeForbidden, "insufficient role")
 				return
 			}
 

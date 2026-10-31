@@ -26,13 +26,13 @@ func WithAuth(cfg config.Config) httpx.Constructor {
 			authHeader := r.Header.Get("Authorization")
 			tokenStr, found := strings.CutPrefix(authHeader, "Bearer ")
 			if !found {
-				httpx.RespondError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing bearer token")
+				httpx.RespondError(w, http.StatusUnauthorized, httpx.CodeUnauthorized, "missing bearer token")
 				return
 			}
 
 			claims, err := jwt.ValidateToken(cfg, tokenStr)
 			if err != nil {
-				httpx.RespondError(w, http.StatusUnauthorized, "UNAUTHORIZED", "invalid or expired token")
+				httpx.RespondError(w, http.StatusUnauthorized, httpx.CodeUnauthorized, "invalid or expired token")
 				return
 			}
 

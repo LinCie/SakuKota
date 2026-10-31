@@ -2,6 +2,13 @@ package subdistrict
 
 import "errors"
 
+const (
+	CodeInvalidSubDistrictID = "INVALID_SUB_DISTRICT_ID"
+	CodeSubDistrictNotFound  = "SUB_DISTRICT_NOT_FOUND"
+	CodeSubDistrictExists    = "SUB_DISTRICT_EXISTS"
+	CodeSubDistrictInUse     = "SUB_DISTRICT_IN_USE"
+)
+
 var (
 	ErrInvalidName                   = errors.New("name must be 1-100 characters")
 	ErrInvalidSlug                   = errors.New("slug must be 1-100 characters")

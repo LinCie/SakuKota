@@ -28,7 +28,7 @@ function SignIn() {
         const result = await login(value);
         if (!result.ok) {
           setFormError(
-            result.error.code === "invalid_credentials"
+            result.error.code === "INVALID_CREDENTIALS"
               ? "Email atau kata sandi salah."
               : "Terjadi kesalahan di server. Coba lagi.",
           );

@@ -17,25 +17,25 @@ import type { CategoryDetail, GeoPoint, Place, PlacePage } from "./types";
 
 export type PlaceErrorCode =
   | CommonApiErrorCode
-  | "invalid_sub_district_id"
-  | "invalid_category_id"
-  | "invalid_limit"
-  | "invalid_bbox"
-  | "sub_district_not_found"
-  | "category_not_found";
+  | "INVALID_SUB_DISTRICT_ID"
+  | "INVALID_CATEGORY_ID"
+  | "INVALID_LIMIT"
+  | "INVALID_BBOX"
+  | "SUB_DISTRICT_NOT_FOUND"
+  | "CATEGORY_NOT_FOUND";
 export type GetPlaceErrorCode =
-  CommonApiErrorCode | "invalid_place_id" | "place_not_found";
+  CommonApiErrorCode | "INVALID_PLACE_ID" | "PLACE_NOT_FOUND";
 export type CategoryErrorCode = CommonApiErrorCode;
 export type GetCategoryErrorCode =
-  CommonApiErrorCode | "invalid_category_id" | "category_not_found";
+  CommonApiErrorCode | "INVALID_CATEGORY_ID" | "CATEGORY_NOT_FOUND";
 export type UpdatePlaceErrorCode =
   | AdminWriteErrorCode
-  | "invalid_place_id"
-  | "validation_error"
-  | "place_not_found";
+  | "INVALID_PLACE_ID"
+  | "VALIDATION_ERROR"
+  | "PLACE_NOT_FOUND";
 export type DeletePlaceErrorCode =
-  AdminWriteErrorCode | "invalid_place_id" | "place_not_found";
-export type CreatePlaceErrorCode = AdminWriteErrorCode | "validation_error";
+  AdminWriteErrorCode | "INVALID_PLACE_ID" | "PLACE_NOT_FOUND";
+export type CreatePlaceErrorCode = AdminWriteErrorCode | "VALIDATION_ERROR";
 
 export type GetPlacesParams = {
   /** Filters places to one sub-district, matching the `sub_district_id` query param. */

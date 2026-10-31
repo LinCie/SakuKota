@@ -38,14 +38,14 @@ func (h *Handler) GetSubDistricts(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetSubDistrict(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_sub_district_id", "invalid sub_district_id")
+		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidSubDistrictID, "invalid sub_district_id")
 		return
 	}
 
 	sd, err := h.service.GetSubDistrict(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrSubDistrictNotFound) {
-			httpx.RespondError(w, http.StatusNotFound, "sub_district_not_found", err.Error())
+			httpx.RespondError(w, http.StatusNotFound, CodeSubDistrictNotFound, err.Error())
 			return
 		}
 		httpx.RespondInternalError(w)
@@ -58,7 +58,7 @@ func (h *Handler) GetSubDistrict(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
 	var req CreateSubDistrictRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
 		return
 	}
 
@@ -75,14 +75,14 @@ func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PatchSubDistrict(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_sub_district_id", "invalid sub_district_id")
+		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidSubDistrictID, "invalid sub_district_id")
 		return
 	}
 
 	// A body of null decodes to a nil pointer and is rejected with the others.
 	var req *UpdateSubDistrictRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil || req.clearsRequiredField() {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
 		return
 	}
 
@@ -99,16 +99,16 @@ func (h *Handler) PatchSubDistrict(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteSubDistrict(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_sub_district_id", "invalid sub_district_id")
+		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidSubDistrictID, "invalid sub_district_id")
 		return
 	}
 
 	if err := h.service.Delete(r.Context(), id); err != nil {
 		switch {
 		case errors.Is(err, ErrSubDistrictNotFound):
-			httpx.RespondError(w, http.StatusNotFound, "sub_district_not_found", err.Error())
+			httpx.RespondError(w, http.StatusNotFound, CodeSubDistrictNotFound, err.Error())
 		case errors.Is(err, ErrSubDistrictInUse):
-			httpx.RespondError(w, http.StatusConflict, "sub_district_in_use", err.Error())
+			httpx.RespondError(w, http.StatusConflict, CodeSubDistrictInUse, err.Error())
 		default:
 			httpx.RespondInternalError(w)
 		}
@@ -122,14 +122,14 @@ func (h *Handler) DeleteSubDistrict(w http.ResponseWriter, r *http.Request) {
 func respondSubDistrictError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrSubDistrictNotFound):
-		httpx.RespondError(w, http.StatusNotFound, "sub_district_not_found", err.Error())
+		httpx.RespondError(w, http.StatusNotFound, CodeSubDistrictNotFound, err.Error())
 	case errors.Is(err, ErrInvalidName),
 		errors.Is(err, ErrInvalidSlug),
 		errors.Is(err, ErrInvalidEstimatedDailySpending),
 		errors.Is(err, ErrInvalidStaticMapImageURL):
-		httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 	case errors.Is(err, ErrSubDistrictExists):
-		httpx.RespondError(w, http.StatusConflict, "sub_district_exists", err.Error())
+		httpx.RespondError(w, http.StatusConflict, CodeSubDistrictExists, err.Error())
 	default:
 		httpx.RespondInternalError(w)
 	}

@@ -38,7 +38,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	if param := query.Get("sub_district_id"); param != "" {
 		id, ok := httpx.ParseID(param)
 		if !ok {
-			httpx.RespondError(w, http.StatusBadRequest, "invalid_sub_district_id", "invalid sub_district_id")
+			httpx.RespondError(w, http.StatusBadRequest, CodeInvalidSubDistrictID, "invalid sub_district_id")
 			return
 		}
 		filter.SubDistrictID = id
@@ -48,7 +48,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 		for part := range strings.SplitSeq(param, ",") {
 			id, ok := httpx.ParseID(part)
 			if !ok {
-				httpx.RespondError(w, http.StatusBadRequest, "invalid_category_id", "invalid category_id")
+				httpx.RespondError(w, http.StatusBadRequest, CodeInvalidCategoryID, "invalid category_id")
 				return
 			}
 			filter.CategoryIDs = append(filter.CategoryIDs, id)
@@ -58,7 +58,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	if param := query.Get("limit"); param != "" {
 		limit, err := strconv.Atoi(param)
 		if err != nil || limit <= 0 {
-			httpx.RespondError(w, http.StatusBadRequest, "invalid_limit", "invalid limit")
+			httpx.RespondError(w, http.StatusBadRequest, CodeInvalidLimit, "invalid limit")
 			return
 		}
 		filter.Limit = limit
@@ -67,7 +67,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	if param := query.Get("bbox"); param != "" {
 		bounds, ok := parseBoundingBox(param)
 		if !ok {
-			httpx.RespondError(w, http.StatusBadRequest, "invalid_bbox", "invalid bbox")
+			httpx.RespondError(w, http.StatusBadRequest, CodeInvalidBBox, "invalid bbox")
 			return
 		}
 		filter.Bounds = bounds
@@ -77,9 +77,9 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrSubDistrictNotFound):
-			httpx.RespondError(w, http.StatusNotFound, "sub_district_not_found", err.Error())
+			httpx.RespondError(w, http.StatusNotFound, CodeSubDistrictNotFound, err.Error())
 		case errors.Is(err, ErrCategoryNotFound):
-			httpx.RespondError(w, http.StatusNotFound, "category_not_found", err.Error())
+			httpx.RespondError(w, http.StatusNotFound, CodeCategoryNotFound, err.Error())
 		default:
 			httpx.RespondInternalError(w)
 		}
@@ -123,14 +123,14 @@ func parseBoundingBox(param string) (*BoundingBox, bool) {
 func (h *Handler) GetPlace(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_place_id", "invalid place_id")
+		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidPlaceID, "invalid place_id")
 		return
 	}
 
 	p, err := h.service.GetPlace(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrPlaceNotFound) {
-			httpx.RespondError(w, http.StatusNotFound, "place_not_found", err.Error())
+			httpx.RespondError(w, http.StatusNotFound, CodePlaceNotFound, err.Error())
 			return
 		}
 		httpx.RespondInternalError(w)
@@ -154,14 +154,14 @@ func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_category_id", "invalid category_id")
+		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidCategoryID, "invalid category_id")
 		return
 	}
 
 	c, err := h.service.GetCategory(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrCategoryNotFound) {
-			httpx.RespondError(w, http.StatusNotFound, "category_not_found", err.Error())
+			httpx.RespondError(w, http.StatusNotFound, CodeCategoryNotFound, err.Error())
 			return
 		}
 		httpx.RespondInternalError(w)
@@ -174,7 +174,7 @@ func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 	var req CreatePlaceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
 		return
 	}
 
@@ -191,14 +191,14 @@ func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PatchPlace(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_place_id", "invalid place_id")
+		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidPlaceID, "invalid place_id")
 		return
 	}
 
 	// A body of null decodes to a nil pointer and is rejected with the others.
 	var req *UpdatePlaceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil || req.clearsRequiredField() {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
 		return
 	}
 
@@ -215,13 +215,13 @@ func (h *Handler) PatchPlace(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeletePlace(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, "invalid_place_id", "invalid place_id")
+		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidPlaceID, "invalid place_id")
 		return
 	}
 
 	if err := h.service.Delete(r.Context(), id); err != nil {
 		if errors.Is(err, ErrPlaceNotFound) {
-			httpx.RespondError(w, http.StatusNotFound, "place_not_found", err.Error())
+			httpx.RespondError(w, http.StatusNotFound, CodePlaceNotFound, err.Error())
 			return
 		}
 		httpx.RespondInternalError(w)
@@ -235,14 +235,14 @@ func (h *Handler) DeletePlace(w http.ResponseWriter, r *http.Request) {
 func respondPlaceError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrPlaceNotFound):
-		httpx.RespondError(w, http.StatusNotFound, "place_not_found", err.Error())
+		httpx.RespondError(w, http.StatusNotFound, CodePlaceNotFound, err.Error())
 	case errors.Is(err, ErrInvalidName),
 		errors.Is(err, ErrPlaceNameTooLong),
 		errors.Is(err, ErrSubDistrictNotFound),
 		errors.Is(err, ErrCategoryNotFound),
 		errors.Is(err, ErrInvalidAttributes),
 		errors.Is(err, ErrInvalidLocation):
-		httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 	default:
 		httpx.RespondInternalError(w)
 	}

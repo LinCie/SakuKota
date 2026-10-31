@@ -170,7 +170,7 @@ func TestHandler_GetSubDistrict_RejectsInvalidID(t *testing.T) {
 			// No expectations: an invalid id must never reach the service.
 			svc := mock.NewMockService(gomock.NewController(t))
 			rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, tc.target, ""))
-			assertError(t, rec, http.StatusBadRequest, "invalid_sub_district_id")
+			assertError(t, rec, http.StatusBadRequest, "INVALID_SUB_DISTRICT_ID")
 		})
 	}
 }
@@ -182,9 +182,9 @@ func TestHandler_GetSubDistrict_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{name: "unknown sub-district", err: subdistrict.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "sub_district_not_found"},
-		{name: "wrapped unknown sub-district", err: fmt.Errorf("get: %w", subdistrict.ErrSubDistrictNotFound), wantStatus: http.StatusNotFound, wantCode: "sub_district_not_found"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
+		{name: "unknown sub-district", err: subdistrict.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
+		{name: "wrapped unknown sub-district", err: fmt.Errorf("get: %w", subdistrict.ErrSubDistrictNotFound), wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 	}
 
 	for _, tc := range tests {
@@ -240,7 +240,7 @@ func TestHandler_CreateSubDistrict_RejectsMalformedBodies(t *testing.T) {
 			// No expectations: a malformed body must never reach the service.
 			svc := mock.NewMockService(gomock.NewController(t))
 			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/subdistricts", tc.body))
-			assertError(t, rec, http.StatusBadRequest, "invalid_body")
+			assertError(t, rec, http.StatusBadRequest, "INVALID_BODY")
 		})
 	}
 }
@@ -252,13 +252,13 @@ func TestHandler_CreateSubDistrict_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{name: "invalid name", err: subdistrict.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "invalid slug", err: subdistrict.ErrInvalidSlug, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "invalid estimated daily spending", err: subdistrict.ErrInvalidEstimatedDailySpending, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "invalid static map image URL", err: subdistrict.ErrInvalidStaticMapImageURL, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "duplicate name or slug", err: subdistrict.ErrSubDistrictExists, wantStatus: http.StatusConflict, wantCode: "sub_district_exists"},
-		{name: "wrapped duplicate", err: fmt.Errorf("create: %w", subdistrict.ErrSubDistrictExists), wantStatus: http.StatusConflict, wantCode: "sub_district_exists"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
+		{name: "invalid name", err: subdistrict.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "invalid slug", err: subdistrict.ErrInvalidSlug, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "invalid estimated daily spending", err: subdistrict.ErrInvalidEstimatedDailySpending, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "invalid static map image URL", err: subdistrict.ErrInvalidStaticMapImageURL, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "duplicate name or slug", err: subdistrict.ErrSubDistrictExists, wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_EXISTS"},
+		{name: "wrapped duplicate", err: fmt.Errorf("create: %w", subdistrict.ErrSubDistrictExists), wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_EXISTS"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 	}
 
 	for _, tc := range tests {
@@ -435,7 +435,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			tc.fail(svc)
 
 			rec := serve(t, newRouter(svc), jsonRequest(tc.method, tc.target, tc.body))
-			assertError(t, rec, http.StatusInternalServerError, "internal_error")
+			assertError(t, rec, http.StatusInternalServerError, "INTERNAL_ERROR")
 			if strings.Contains(rec.Body.String(), "pq:") || strings.Contains(rec.Body.String(), "relation") {
 				t.Errorf("500 body exposes storage detail: %s", rec.Body)
 			}
@@ -454,18 +454,18 @@ func TestHandler_PatchSubDistrict_RejectsInvalidRequests(t *testing.T) {
 		body     string
 		wantCode string
 	}{
-		{name: "id is not a number", target: "/subdistricts/abc", body: `{"name":"Kemang"}`, wantCode: "invalid_sub_district_id"},
-		{name: "id is fractional", target: "/subdistricts/1.5", body: `{"name":"Kemang"}`, wantCode: "invalid_sub_district_id"},
-		{name: "id is zero", target: "/subdistricts/0", body: `{"name":"Kemang"}`, wantCode: "invalid_sub_district_id"},
-		{name: "id is negative", target: "/subdistricts/-1", body: `{"name":"Kemang"}`, wantCode: "invalid_sub_district_id"},
-		{name: "empty body", target: "/subdistricts/1", body: ``, wantCode: "invalid_body"},
-		{name: "truncated JSON", target: "/subdistricts/1", body: `{"name":"Kemang"`, wantCode: "invalid_body"},
-		{name: "body is an array", target: "/subdistricts/1", body: `[]`, wantCode: "invalid_body"},
-		{name: "body is null", target: "/subdistricts/1", body: `null`, wantCode: "invalid_body"},
-		{name: "name is a number", target: "/subdistricts/1", body: `{"name":5}`, wantCode: "invalid_body"},
-		{name: "name is null", target: "/subdistricts/1", body: `{"name":null}`, wantCode: "invalid_body"},
-		{name: "slug is null", target: "/subdistricts/1", body: `{"slug":null}`, wantCode: "invalid_body"},
-		{name: "estimated daily spending is a string", target: "/subdistricts/1", body: `{"estimated_daily_spending":"1.5"}`, wantCode: "invalid_body"},
+		{name: "id is not a number", target: "/subdistricts/abc", body: `{"name":"Kemang"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "id is fractional", target: "/subdistricts/1.5", body: `{"name":"Kemang"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "id is zero", target: "/subdistricts/0", body: `{"name":"Kemang"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "id is negative", target: "/subdistricts/-1", body: `{"name":"Kemang"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "empty body", target: "/subdistricts/1", body: ``, wantCode: "INVALID_BODY"},
+		{name: "truncated JSON", target: "/subdistricts/1", body: `{"name":"Kemang"`, wantCode: "INVALID_BODY"},
+		{name: "body is an array", target: "/subdistricts/1", body: `[]`, wantCode: "INVALID_BODY"},
+		{name: "body is null", target: "/subdistricts/1", body: `null`, wantCode: "INVALID_BODY"},
+		{name: "name is a number", target: "/subdistricts/1", body: `{"name":5}`, wantCode: "INVALID_BODY"},
+		{name: "name is null", target: "/subdistricts/1", body: `{"name":null}`, wantCode: "INVALID_BODY"},
+		{name: "slug is null", target: "/subdistricts/1", body: `{"slug":null}`, wantCode: "INVALID_BODY"},
+		{name: "estimated daily spending is a string", target: "/subdistricts/1", body: `{"estimated_daily_spending":"1.5"}`, wantCode: "INVALID_BODY"},
 	}
 
 	for _, tc := range tests {
@@ -527,15 +527,15 @@ func TestHandler_PatchSubDistrict_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{name: "unknown sub-district", err: subdistrict.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "sub_district_not_found"},
-		{name: "wrapped unknown sub-district", err: fmt.Errorf("update: %w", subdistrict.ErrSubDistrictNotFound), wantStatus: http.StatusNotFound, wantCode: "sub_district_not_found"},
-		{name: "invalid name", err: subdistrict.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "invalid slug", err: subdistrict.ErrInvalidSlug, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "invalid estimated daily spending", err: subdistrict.ErrInvalidEstimatedDailySpending, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "invalid static map image URL", err: subdistrict.ErrInvalidStaticMapImageURL, wantStatus: http.StatusBadRequest, wantCode: "validation_error"},
-		{name: "duplicate name or slug", err: subdistrict.ErrSubDistrictExists, wantStatus: http.StatusConflict, wantCode: "sub_district_exists"},
-		{name: "wrapped duplicate", err: fmt.Errorf("update: %w", subdistrict.ErrSubDistrictExists), wantStatus: http.StatusConflict, wantCode: "sub_district_exists"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
+		{name: "unknown sub-district", err: subdistrict.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
+		{name: "wrapped unknown sub-district", err: fmt.Errorf("update: %w", subdistrict.ErrSubDistrictNotFound), wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
+		{name: "invalid name", err: subdistrict.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "invalid slug", err: subdistrict.ErrInvalidSlug, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "invalid estimated daily spending", err: subdistrict.ErrInvalidEstimatedDailySpending, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "invalid static map image URL", err: subdistrict.ErrInvalidStaticMapImageURL, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "duplicate name or slug", err: subdistrict.ErrSubDistrictExists, wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_EXISTS"},
+		{name: "wrapped duplicate", err: fmt.Errorf("update: %w", subdistrict.ErrSubDistrictExists), wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_EXISTS"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 	}
 
 	for _, tc := range tests {
@@ -590,7 +590,7 @@ func TestHandler_DeleteSubDistrict_RejectsInvalidID(t *testing.T) {
 			// No expectations: an invalid id must never reach the service.
 			svc := mock.NewMockService(gomock.NewController(t))
 			rec := serve(t, newRouter(svc), jsonRequest(http.MethodDelete, tc.target, ""))
-			assertError(t, rec, http.StatusBadRequest, "invalid_sub_district_id")
+			assertError(t, rec, http.StatusBadRequest, "INVALID_SUB_DISTRICT_ID")
 		})
 	}
 }
@@ -602,10 +602,10 @@ func TestHandler_DeleteSubDistrict_MapsServiceErrors(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{name: "unknown sub-district", err: subdistrict.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "sub_district_not_found"},
-		{name: "wrapped unknown sub-district", err: fmt.Errorf("delete: %w", subdistrict.ErrSubDistrictNotFound), wantStatus: http.StatusNotFound, wantCode: "sub_district_not_found"},
-		{name: "still referenced by places", err: subdistrict.ErrSubDistrictInUse, wantStatus: http.StatusConflict, wantCode: "sub_district_in_use"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "internal_error"},
+		{name: "unknown sub-district", err: subdistrict.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
+		{name: "wrapped unknown sub-district", err: fmt.Errorf("delete: %w", subdistrict.ErrSubDistrictNotFound), wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
+		{name: "still referenced by places", err: subdistrict.ErrSubDistrictInUse, wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_IN_USE"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 	}
 
 	for _, tc := range tests {

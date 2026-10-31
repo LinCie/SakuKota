@@ -44,7 +44,7 @@ export function SubDistrictDetailPage({
 
   const deleteError = !deleteSubDistrict.error
     ? null
-    : hasErrorCode(deleteSubDistrict.error, "sub_district_in_use")
+    : hasErrorCode(deleteSubDistrict.error, "SUB_DISTRICT_IN_USE")
       ? "Kecamatan ini masih punya tempat. Pindahkan atau hapus tempatnya dulu."
       : writeErrorMessage(deleteSubDistrict.error);
 

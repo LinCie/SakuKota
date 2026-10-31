@@ -28,7 +28,7 @@ function SignUp() {
         const created = await register(value);
         if (!created.ok) {
           setFormError(
-            created.error.code === "email_taken"
+            created.error.code === "EMAIL_TAKEN"
               ? "Email ini sudah terdaftar. Silakan masuk."
               : "Terjadi kesalahan di server. Coba lagi.",
           );

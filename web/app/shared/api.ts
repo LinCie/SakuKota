@@ -80,10 +80,10 @@ export type ApiErrorResponse<C extends string = string> = {
 };
 
 /** Error code shared by every backend endpoint (unhandled server-side failures). */
-export type CommonApiErrorCode = "internal_error";
+export type CommonApiErrorCode = "INTERNAL_ERROR";
 
 /** Error code for endpoints that reject an undecodable request body. */
-export type InvalidBodyErrorCode = "invalid_body";
+export type InvalidBodyErrorCode = "INVALID_BODY";
 
 /** Error codes for endpoints behind sign-in and a role check (see internal/middleware). */
 export type AuthApiErrorCode = "UNAUTHORIZED" | "FORBIDDEN";

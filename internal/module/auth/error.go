@@ -2,6 +2,11 @@ package auth
 
 import "errors"
 
+const (
+	CodeInvalidCredentials  = "INVALID_CREDENTIALS"
+	CodeInvalidRefreshToken = "INVALID_REFRESH_TOKEN"
+)
+
 var (
 	ErrInvalidName         = errors.New("name is required")
 	ErrInvalidEmail        = errors.New("invalid email")

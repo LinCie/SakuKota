@@ -13,11 +13,11 @@ import type { Session, User } from "./types";
 export type RegisterErrorCode =
   | CommonApiErrorCode
   | InvalidBodyErrorCode
-  | "validation_error"
-  | "email_taken";
+  | "VALIDATION_ERROR"
+  | "EMAIL_TAKEN";
 export type LoginErrorCode =
-  CommonApiErrorCode | InvalidBodyErrorCode | "invalid_credentials";
-export type RefreshErrorCode = CommonApiErrorCode | "invalid_refresh_token";
+  CommonApiErrorCode | InvalidBodyErrorCode | "INVALID_CREDENTIALS";
+export type RefreshErrorCode = CommonApiErrorCode | "INVALID_REFRESH_TOKEN";
 export type LogoutErrorCode = CommonApiErrorCode;
 
 export type RegisterRequest = {

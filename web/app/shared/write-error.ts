@@ -7,7 +7,7 @@ export function writeErrorMessage(error: Error): string {
   }
   if (error.status === 401) return "Sesimu berakhir. Masuk lagi, lalu ulangi.";
   if (error.status === 403) return "Akun ini tidak punya akses admin.";
-  if (error.code === "internal_error") {
+  if (error.code === "INTERNAL_ERROR") {
     return "Terjadi kesalahan di server. Coba lagi.";
   }
   return `Server menolak isian ini: ${error.message}.`;

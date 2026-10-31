@@ -76,7 +76,7 @@ export function SubDistrictFormDrawer({
     >
       {mutation.error ? (
         <FormAlert>
-          {hasErrorCode(mutation.error, "sub_district_exists")
+          {hasErrorCode(mutation.error, "SUB_DISTRICT_EXISTS")
             ? "Kecamatan dengan nama atau slug ini sudah ada."
             : writeErrorMessage(mutation.error)}
         </FormAlert>

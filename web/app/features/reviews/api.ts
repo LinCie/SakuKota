@@ -14,15 +14,15 @@ import type { Review } from "./types";
 // -----------------------------------------------------------------------------
 
 export type GetReviewsErrorCode =
-  CommonApiErrorCode | "invalid_place_id" | "place_not_found";
+  CommonApiErrorCode | "INVALID_PLACE_ID" | "PLACE_NOT_FOUND";
 export type CreateReviewErrorCode =
   | CommonApiErrorCode
   | InvalidBodyErrorCode
   | "UNAUTHORIZED"
-  | "invalid_place_id"
-  | "validation_error"
-  | "place_not_found"
-  | "already_reviewed";
+  | "INVALID_PLACE_ID"
+  | "VALIDATION_ERROR"
+  | "PLACE_NOT_FOUND"
+  | "ALREADY_REVIEWED";
 
 export type CreateReviewRequest = {
   /** Stars, from 1 to 5. */
