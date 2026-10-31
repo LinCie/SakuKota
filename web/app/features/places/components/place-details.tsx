@@ -1,8 +1,9 @@
-import { ArrowLeft, X } from "lucide-react";
+import { ArrowLeft, Star, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { cn } from "~/shared/cn";
 import { MissingSlot, orMissing } from "~/shared/components/missing-slot";
+import { formatNumber, formatRating } from "~/shared/format";
 import {
   LeaderRow,
   menuButtonClass,
@@ -88,6 +89,23 @@ export function PlaceDetails({ place, fields, onClose }: PlaceDetailsProps) {
             )}
 
             <dl className="border-ink border-t-2 pt-1">
+              <LeaderRow label="Rating">
+                {place.rating_average === null ? (
+                  <MissingSlot>Belum ada ulasan</MissingSlot>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Star
+                      aria-hidden="true"
+                      className="fill-sign text-ink size-4 shrink-0"
+                      strokeWidth={2.5}
+                    />
+                    {formatRating(place.rating_average)}
+                    <span className="text-ink-soft text-sm font-normal">
+                      ({formatNumber(place.rating_count)} ulasan)
+                    </span>
+                  </span>
+                )}
+              </LeaderRow>
               <LeaderRow label="Jam buka">
                 {orMissing(place.operating_hours, "Jam buka tidak tersedia")}
               </LeaderRow>

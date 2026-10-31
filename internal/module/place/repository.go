@@ -49,7 +49,7 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 // match the nested Place.Category fields.
 const placeColumns = `p.id, p.sub_district_id, p.category_id, p.name, p.address,
 	p.location, p.operating_hours, p.estimated_price_range, p.short_description,
-	p.attributes, c.id AS "category.id", c.name AS "category.name", c.slug AS "category.slug",
+	p.attributes, p.rating_count, p.rating_sum, c.id AS "category.id", c.name AS "category.name", c.slug AS "category.slug",
 	c.code AS "category.code", c.label AS "category.label", c.color AS "category.color"`
 
 // checkFilterTargets returns ErrSubDistrictNotFound or ErrCategoryNotFound when
@@ -232,7 +232,7 @@ func (r *postgresRepository) Create(ctx context.Context, p *Place) (*Place, erro
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			RETURNING id, sub_district_id, category_id, name, address,
 				location, operating_hours, estimated_price_range, short_description,
-				attributes
+				attributes, rating_count, rating_sum
 		)
 		SELECT `+placeColumns+`
 		FROM inserted p
@@ -292,7 +292,7 @@ func (r *postgresRepository) Update(ctx context.Context, p *Place) (*Place, erro
 			WHERE id = $1
 			RETURNING id, sub_district_id, category_id, name, address,
 				location, operating_hours, estimated_price_range, short_description,
-				attributes
+				attributes, rating_count, rating_sum
 		)
 		SELECT `+placeColumns+`
 		FROM updated p

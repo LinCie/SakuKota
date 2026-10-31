@@ -242,6 +242,8 @@ func TestHandler_GetPlaces_ResponseShape(t *testing.T) {
 		"estimated_price_range": null,
 		"short_description": null,
 		"attributes": {},
+		"rating_average": null,
+		"rating_count": 0,
 		"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 	}]}`)
 }
@@ -376,6 +378,8 @@ func TestHandler_CreatePlace_Success(t *testing.T) {
 		"estimated_price_range": null,
 		"short_description": null,
 		"attributes": {},
+		"rating_average": null,
+		"rating_count": 0,
 		"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 	}`)
 }
@@ -636,6 +640,8 @@ func TestHandler_PatchPlace_Success(t *testing.T) {
 		"estimated_price_range": null,
 		"short_description": null,
 		"attributes": {},
+		"rating_average": null,
+		"rating_count": 0,
 		"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 	}`)
 }
@@ -774,8 +780,55 @@ func TestHandler_GetPlace_Success(t *testing.T) {
 		"estimated_price_range": null,
 		"short_description": null,
 		"attributes": {"halal": true},
+		"rating_average": null,
+		"rating_count": 0,
 		"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 	}`)
+}
+
+func TestHandler_GetPlace_Rating(t *testing.T) {
+	tests := []struct {
+		name        string
+		count       int
+		sum         int
+		wantAverage string // as JSON
+	}{
+		{name: "not rated yet has no average", count: 0, sum: 0, wantAverage: `null`},
+		{name: "one rating is the average", count: 1, sum: 4, wantAverage: `4`},
+		{name: "average of several ratings", count: 4, sum: 17, wantAverage: `4.25`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := mock.NewMockService(gomock.NewController(t))
+			svc.EXPECT().GetPlace(gomock.Any(), int64(3)).Return(&place.Place{
+				ID:          3,
+				Name:        "Kopi Senja",
+				Attributes:  json.RawMessage(`{}`),
+				RatingCount: tc.count,
+				RatingSum:   tc.sum,
+			}, nil)
+
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/places/3", ""))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
+			}
+
+			var got struct {
+				RatingAverage json.RawMessage `json:"rating_average"`
+				RatingCount   int             `json:"rating_count"`
+			}
+			if err := json.Unmarshal(responseData(t, rec), &got); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if string(got.RatingAverage) != tc.wantAverage {
+				t.Errorf("rating_average = %s, want %s", got.RatingAverage, tc.wantAverage)
+			}
+			if got.RatingCount != tc.count {
+				t.Errorf("rating_count = %d, want %d", got.RatingCount, tc.count)
+			}
+		})
+	}
 }
 
 // -----------------------------------------------------------------------------

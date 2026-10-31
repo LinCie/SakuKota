@@ -319,3 +319,43 @@ VALUES (
     'admin'
 )
 ON CONFLICT (email) DO NOTHING;
+
+-- Demo reviewers. Password for each: rantau123.
+INSERT INTO USERS (name, email, password_hash)
+VALUES
+    ('Dimas Pratama', 'dimas@rantau.go', '$argon2id$v=19$m=19456,t=2,p=1$4J1vYlVEKumQ27YLztkdpg$ejdsIaD1PeuemJYoeZHUcFi0X/70iM9/NaGc5/3ymiU'),
+    ('Sari Wulandari', 'sari@rantau.go', '$argon2id$v=19$m=19456,t=2,p=1$4J1vYlVEKumQ27YLztkdpg$ejdsIaD1PeuemJYoeZHUcFi0X/70iM9/NaGc5/3ymiU'),
+    ('Budi Santoso', 'budi@rantau.go', '$argon2id$v=19$m=19456,t=2,p=1$4J1vYlVEKumQ27YLztkdpg$ejdsIaD1PeuemJYoeZHUcFi0X/70iM9/NaGc5/3ymiU')
+ON CONFLICT (email) DO NOTHING;
+
+WITH SEEDED_REVIEWS (
+    place_name,
+    sub_district_slug,
+    user_email,
+    rating,
+    comment
+) AS (
+    VALUES
+        ('Warung Nasi Sari Rasa', 'setiabudi', 'dimas@rantau.go', 5, 'Generous portions and the prices have stayed the same for months.'),
+        ('Warung Nasi Sari Rasa', 'setiabudi', 'sari@rantau.go', 4, 'Good home-style food. Go before noon, the best dishes sell out.'),
+        ('Warung Nasi Sari Rasa', 'setiabudi', 'budi@rantau.go', 4, NULL),
+        ('Kedai Pagi Karet', 'setiabudi', 'dimas@rantau.go', 3, 'Fine for a quick breakfast, but the queue gets long after 7.'),
+        ('Jarum Rapi Setiabudi', 'setiabudi', 'sari@rantau.go', 5, 'Hemmed two pairs of trousers the same day for a fair price.'),
+        ('Busa Laundry 24 Jam', 'setiabudi', 'budi@rantau.go', 4, 'Clothes come back folded and on time.'),
+        ('Busa Laundry 24 Jam', 'setiabudi', 'dimas@rantau.go', 2, 'Lost a sock twice. Cheap, though.'),
+        ('Warung Bu Narti Mampang', 'mampang-prapatan', 'sari@rantau.go', 5, 'Cheapest proper lunch around here.'),
+        ('Apotek Prapanca', 'mampang-prapatan', 'budi@rantau.go', 4, NULL)
+)
+INSERT INTO PLACE_REVIEWS (place_id, user_id, rating, comment)
+SELECT p.id, u.id, sr.rating, sr.comment
+FROM SEEDED_REVIEWS sr
+JOIN SUB_DISTRICTS sd ON sd.slug = sr.sub_district_slug
+JOIN PLACES p ON p.sub_district_id = sd.id AND p.name = sr.place_name
+JOIN USERS u ON u.email = sr.user_email
+ON CONFLICT (place_id, user_id) DO NOTHING;
+
+-- Seeded reviews skip the API, which keeps each place's rating totals, so
+-- recount them from the stored reviews.
+UPDATE PLACES p
+SET rating_count = (SELECT COUNT(*) FROM PLACE_REVIEWS r WHERE r.place_id = p.id),
+    rating_sum = (SELECT COALESCE(SUM(r.rating), 0) FROM PLACE_REVIEWS r WHERE r.place_id = p.id);

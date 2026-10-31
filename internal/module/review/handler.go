@@ -1,0 +1,88 @@
+package review
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+
+	"rantau-go/internal/httpx"
+	"rantau-go/internal/middleware"
+)
+
+type Handler struct {
+	service Service
+}
+
+func NewHandler(service Service) *Handler {
+	return &Handler{
+		service: service,
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Handler
+// -----------------------------------------------------------------------------
+
+// GetReviews lists the reviews of the place given by the `id` path parameter,
+// newest first.
+func (h *Handler) GetReviews(w http.ResponseWriter, r *http.Request) {
+	placeID, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_place_id", "invalid place_id")
+		return
+	}
+
+	reviews, err := h.service.GetByPlace(r.Context(), placeID)
+	if err != nil {
+		if errors.Is(err, ErrPlaceNotFound) {
+			httpx.RespondError(w, http.StatusNotFound, "place_not_found", err.Error())
+			return
+		}
+		httpx.RespondInternalError(w)
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusOK, toReviewResponses(reviews))
+}
+
+// CreateReview stores the authenticated user's review of the place given by
+// the `id` path parameter. It must be served behind middleware.WithAuth.
+func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
+	placeID, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_place_id", "invalid place_id")
+		return
+	}
+
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.RespondError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user")
+		return
+	}
+
+	var req CreateReviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.RespondError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+		return
+	}
+
+	created, err := h.service.Create(r.Context(), toReview(placeID, userID, req))
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidRating),
+			errors.Is(err, ErrCommentTooLong):
+			httpx.RespondError(w, http.StatusBadRequest, "validation_error", err.Error())
+		case errors.Is(err, ErrPlaceNotFound):
+			httpx.RespondError(w, http.StatusNotFound, "place_not_found", err.Error())
+		case errors.Is(err, ErrAlreadyReviewed):
+			httpx.RespondError(w, http.StatusConflict, "already_reviewed", err.Error())
+		default:
+			httpx.RespondInternalError(w)
+		}
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusCreated, toReviewResponse(*created))
+}

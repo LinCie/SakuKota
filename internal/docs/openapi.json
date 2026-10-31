@@ -3,7 +3,7 @@
   "info": {
     "title": "Rantau API",
     "version": "1.0.0",
-    "description": "API for sub-districts, places, place categories, and authentication. Successful JSON responses are wrapped in data; errors contain code and message."
+    "description": "API for sub-districts, places, place reviews, place categories, and authentication. Successful JSON responses are wrapped in data; errors contain code and message."
   },
   "servers": [
     {
@@ -19,6 +19,10 @@
     {
       "name": "Places",
       "description": "List, get, create, update, and delete places."
+    },
+    {
+      "name": "Reviews",
+      "description": "List and write star ratings and comments for places. Each user reviews a place at most once."
     },
     {
       "name": "Categories",
@@ -492,6 +496,143 @@
                 "example": {
                   "code": "place_not_found",
                   "message": "place not found"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/places/{id}/reviews": {
+      "get": {
+        "tags": ["Reviews"],
+        "operationId": "listPlaceReviews",
+        "summary": "List a place's reviews",
+        "description": "Returns the place's reviews with their authors, newest first.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Place ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reviews retrieved successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Review" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The place ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "invalid_place_id",
+                  "message": "invalid place_id"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The place does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "place_not_found",
+                  "message": "place not found"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      },
+      "post": {
+        "tags": ["Reviews"],
+        "operationId": "createPlaceReview",
+        "summary": "Review a place",
+        "description": "Stores the signed-in user's star rating and optional comment for the place, and adds the rating to the place's rating_average and rating_count. Any signed-in user may review, and each user reviews a place at most once. The comment is trimmed, a blank comment is stored as null, and it may be at most 1000 characters.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Place ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateReviewRequest" },
+              "example": {
+                "rating": 4,
+                "comment": "Murah dan porsinya besar."
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Review created successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReviewResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The place ID is invalid, the body is malformed, or a value failed validation.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "validation_error",
+                  "message": "rating must be between 1 and 5"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "The place does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "place_not_found",
+                  "message": "place not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The user has already reviewed this place.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "already_reviewed",
+                  "message": "place already reviewed by this user"
                 }
               }
             }
@@ -980,6 +1121,8 @@
           "estimated_price_range",
           "short_description",
           "attributes",
+          "rating_average",
+          "rating_count",
           "category"
         ],
         "properties": {
@@ -1000,6 +1143,14 @@
             "type": "object",
             "description": "Values for the category's custom fields, keyed by field key."
           },
+          "rating_average": {
+            "type": ["number", "null"],
+            "description": "Mean star rating of the place's reviews, from 1 to 5; null before the first review."
+          },
+          "rating_count": {
+            "type": "integer",
+            "description": "Number of reviews of the place."
+          },
           "category": { "$ref": "#/components/schemas/CategorySummary" }
         }
       },
@@ -1008,6 +1159,45 @@
         "required": ["data"],
         "properties": {
           "data": { "$ref": "#/components/schemas/Place" }
+        }
+      },
+      "CreateReviewRequest": {
+        "type": "object",
+        "required": ["rating"],
+        "properties": {
+          "rating": { "type": "integer", "minimum": 1, "maximum": 5, "description": "Number of stars." },
+          "comment": {
+            "type": ["string", "null"],
+            "maxLength": 1000,
+            "description": "Optional. Trimmed; a blank comment is stored as null."
+          }
+        }
+      },
+      "ReviewAuthor": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" }
+        }
+      },
+      "Review": {
+        "type": "object",
+        "required": ["id", "place_id", "rating", "comment", "created_at", "user"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "place_id": { "type": "integer", "format": "int64" },
+          "rating": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "comment": { "type": ["string", "null"] },
+          "created_at": { "type": "string", "format": "date-time" },
+          "user": { "$ref": "#/components/schemas/ReviewAuthor" }
+        }
+      },
+      "ReviewResponse": {
+        "type": "object",
+        "required": ["data"],
+        "properties": {
+          "data": { "$ref": "#/components/schemas/Review" }
         }
       },
       "CategoryDetail": {

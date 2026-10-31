@@ -814,6 +814,78 @@ func TestIntegration_GetPlace(t *testing.T) {
 	})
 }
 
+type ratingRow struct {
+	ID            int64    `json:"id"`
+	RatingAverage *float64 `json:"rating_average"`
+	RatingCount   int      `json:"rating_count"`
+}
+
+// ratingOf decodes the rating of the place in a successful response.
+func ratingOf(t *testing.T, rec *httptest.ResponseRecorder) ratingRow {
+	t.Helper()
+	if rec.Code != http.StatusOK && rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d; body: %s", rec.Code, rec.Body)
+	}
+	var row ratingRow
+	if err := json.Unmarshal(responseData(t, rec), &row); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	return row
+}
+
+func TestIntegration_PlaceRatings(t *testing.T) {
+	resetDB(t)
+	seedCatalog(t)
+	seedWarungFields(t)
+	seedPlaces(t)
+	// Place 2 has three ratings adding up to 11; the others have none.
+	mustExec(t, `UPDATE PLACES SET rating_count = 3, rating_sum = 11 WHERE id = 2`)
+	router := integrationRouter(testDB)
+
+	rated := ratingRow{ID: 2, RatingAverage: ptr(11.0 / 3.0), RatingCount: 3}
+
+	t.Run("listed places carry their ratings", func(t *testing.T) {
+		rec := call(t, router, http.MethodGet, "/places?sub_district_id=1", "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
+		}
+		var page struct {
+			Places []ratingRow `json:"places"`
+		}
+		if err := json.Unmarshal(responseData(t, rec), &page); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		want := []ratingRow{{ID: 1, RatingAverage: nil, RatingCount: 0}, rated}
+		if !reflect.DeepEqual(page.Places, want) {
+			t.Errorf("ratings = %+v, want %+v", page.Places, want)
+		}
+	})
+
+	t.Run("one place carries its rating", func(t *testing.T) {
+		if got := ratingOf(t, call(t, router, http.MethodGet, "/places/2", "")); !reflect.DeepEqual(got, rated) {
+			t.Errorf("rating = %+v, want %+v", got, rated)
+		}
+	})
+
+	t.Run("a new place is not rated", func(t *testing.T) {
+		rec := call(t, router, http.MethodPost, "/places", `{"name":"Kopi Baru","sub_district_id":1,"category_id":2}`)
+		got := ratingOf(t, rec)
+		if got.RatingAverage != nil || got.RatingCount != 0 {
+			t.Errorf("new place rating = %+v, want none", got)
+		}
+	})
+
+	t.Run("editing a place keeps its rating", func(t *testing.T) {
+		rec := call(t, router, http.MethodPatch, "/places/2", `{"name":"Kopi Senja Baru"}`)
+		if got := ratingOf(t, rec); !reflect.DeepEqual(got, rated) {
+			t.Errorf("edited place rating = %+v, want %+v", got, rated)
+		}
+		if got := ratingOf(t, call(t, router, http.MethodGet, "/places/2", "")); !reflect.DeepEqual(got, rated) {
+			t.Errorf("stored rating after the edit = %+v, want %+v", got, rated)
+		}
+	})
+}
+
 // -----------------------------------------------------------------------------
 // Reading one category
 // -----------------------------------------------------------------------------

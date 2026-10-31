@@ -45,16 +45,19 @@ func (r *UpdatePlaceRequest) clearsRequiredField() bool {
 
 // PlaceResponse is the API representation of a Place.
 type PlaceResponse struct {
-	ID                  int64            `json:"id"`
-	SubDistrictID       int64            `json:"sub_district_id"`
-	Name                string           `json:"name"`
-	Address             *string          `json:"address"`
-	Location            *postgis.Point   `json:"location"`
-	OperatingHours      *string          `json:"operating_hours"`
-	EstimatedPriceRange *string          `json:"estimated_price_range"`
-	ShortDescription    *string          `json:"short_description"`
-	Attributes          json.RawMessage  `json:"attributes"`
-	Category            CategoryResponse `json:"category"`
+	ID                  int64           `json:"id"`
+	SubDistrictID       int64           `json:"sub_district_id"`
+	Name                string          `json:"name"`
+	Address             *string         `json:"address"`
+	Location            *postgis.Point  `json:"location"`
+	OperatingHours      *string         `json:"operating_hours"`
+	EstimatedPriceRange *string         `json:"estimated_price_range"`
+	ShortDescription    *string         `json:"short_description"`
+	Attributes          json.RawMessage `json:"attributes"`
+	// RatingAverage is the mean star rating, or null before the first review.
+	RatingAverage *float64         `json:"rating_average"`
+	RatingCount   int              `json:"rating_count"`
+	Category      CategoryResponse `json:"category"`
 }
 
 // PlacePageResponse is the API representation of the places matching a
@@ -127,8 +130,21 @@ func toPlaceResponse(p Place) PlaceResponse {
 		EstimatedPriceRange: p.EstimatedPriceRange,
 		ShortDescription:    p.ShortDescription,
 		Attributes:          p.Attributes,
+		RatingAverage:       ratingAverage(p.RatingCount, p.RatingSum),
+		RatingCount:         p.RatingCount,
 		Category:            toCategoryResponse(p.Category),
 	}
+}
+
+// ratingAverage returns the mean of count ratings adding up to sum, or nil
+// when there are none.
+func ratingAverage(count, sum int) *float64 {
+	if count == 0 {
+		return nil
+	}
+
+	average := float64(sum) / float64(count)
+	return &average
 }
 
 func toPlaceResponses(places []Place) []PlaceResponse {

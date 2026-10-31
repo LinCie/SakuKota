@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"rantau-go/internal/config"
@@ -44,8 +45,18 @@ func WithAuth(cfg config.Config) httpx.Constructor {
 
 // UserIDFromContext returns the authenticated user ID set by WithAuth.
 func UserIDFromContext(ctx context.Context) (int64, bool) {
-	userID, ok := ctx.Value(userIDKey).(int64)
-	return userID, ok
+	// WithAuth stores the token's subject, which holds the ID as a string.
+	subject, ok := ctx.Value(userIDKey).(string)
+	if !ok {
+		return 0, false
+	}
+
+	userID, err := strconv.ParseInt(subject, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+
+	return userID, true
 }
 
 // RoleFromContext returns the authenticated user role set by WithAuth.

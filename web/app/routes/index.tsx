@@ -23,6 +23,7 @@ import {
   usePlaces,
 } from "~/features/places/queries";
 import type { CategoryDetail } from "~/features/places/types";
+import { PlaceReviews } from "~/features/reviews/components/place-reviews";
 import {
   subDistrictsQuery,
   useSubDistricts,
@@ -348,6 +349,7 @@ function Home() {
                 fields={selectedFields}
                 onClose={() => selectPlace(null)}
               />
+              <PlaceReviews key={selectedPlace.id} placeId={selectedPlace.id} />
             </div>
           ) : null}
         </aside>

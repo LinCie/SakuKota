@@ -12,6 +12,7 @@ import (
 	"rantau-go/internal/middleware"
 	"rantau-go/internal/module/auth"
 	"rantau-go/internal/module/place"
+	"rantau-go/internal/module/review"
 	"rantau-go/internal/module/subdistrict"
 	"rantau-go/internal/module/users"
 )
@@ -37,6 +38,7 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 	usersModule := users.NewModule(db)
 	authModule := auth.NewModule(cfg, usersModule.Service)
 	placeModule := place.NewModule(db)
+	reviewModule := review.NewModule(db)
 	subdisctrictModule := subdistrict.NewModule(db)
 
 	r.Route("/v1", func(r chi.Router) {
@@ -66,6 +68,18 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 
 				// DELETE /v1/places/{id}
 				r.Delete("/{id}", placeModule.Handler.DeletePlace)
+			})
+
+			r.Route("/{id}/reviews", func(r chi.Router) {
+				// GET /v1/places/{id}/reviews
+				r.Get("/", reviewModule.Handler.GetReviews)
+
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.WithAuth(cfg))
+
+					// POST /v1/places/{id}/reviews
+					r.Post("/", reviewModule.Handler.CreateReview)
+				})
 			})
 
 			r.Route("/categories", func(r chi.Router) {

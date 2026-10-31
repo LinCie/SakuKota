@@ -23,7 +23,11 @@ type Place struct {
 	// Attributes holds the values of the category's custom fields as a JSON
 	// object keyed by CategoryField.Key.
 	Attributes json.RawMessage `db:"attributes"`
-	Category   Category        `db:"category"`
+	// RatingCount and RatingSum total the ratings of the place's reviews. The
+	// review module keeps them up to date; place updates never change them.
+	RatingCount int      `db:"rating_count"`
+	RatingSum   int      `db:"rating_sum"`
+	Category    Category `db:"category"`
 }
 
 // PlaceFilter narrows the places returned by GetMany. Zero values apply no filter.

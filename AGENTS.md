@@ -18,6 +18,18 @@ Rantau ("rantaugo") is a Go REST API with a React/Vite frontend. The Go module i
 - Categories and their custom fields are defined in migrations, not created through the API. The API returns each category's `code`, `label`, and `color` (a palette key), and the frontend maps `color` to its styles.
 - Follow the existing Go and TypeScript style in the relevant area.
 
+## Backend Development (TDD)
+
+Backend changes follow test-driven development (Red → Green → Refactor). This applies to Go code under `cmd/` and `internal/`, not the `web/` frontend.
+
+1. **Red** — Before implementing, write tests that validate the business logic and confirm they fail for the expected reason.
+2. **Green** — Write the simplest code that makes the tests pass. Do not add behavior the tests do not require.
+3. **Refactor** — With the tests green, improve the code's structure and readability without changing behavior. Re-run the tests after refactoring.
+
+- Test business logic in the domain's business logic layer; keep tests independent of HTTP and the database where possible.
+- Follow the existing Go testing style in the relevant area.
+- Each phase counts as one explicit step. Do not move on to the next phase until the user asks for it.
+
 ## Task Execution
 
 - Do only what is explicitly asked in the current turn. Do not expand scope, refactor adjacent code, or make extra changes.

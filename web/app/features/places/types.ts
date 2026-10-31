@@ -20,6 +20,9 @@ export type Place = {
   short_description: string | null;
   /** Values of the category's custom fields, keyed by `CategoryField.key`. */
   attributes: Record<string, unknown>;
+  /** Mean star rating of the place's reviews; null before the first review. */
+  rating_average: number | null;
+  rating_count: number;
   category: Category;
 };
 
