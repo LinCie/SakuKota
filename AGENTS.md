@@ -15,6 +15,7 @@ Rantau ("rantaugo") is a Go REST API with a React/Vite frontend. The Go module i
 - Backend features are organized by domain, with HTTP, business logic, and data access kept in separate layers.
 - Shared backend infrastructure lives outside the domain modules.
 - The frontend is maintained as a separate app in `web/`.
+- Migrations MUST be created with `make migration name=<name>` (goose generates the timestamped file). Never create or hand-name migration files in `migrations/`.
 - Categories and their custom fields are defined in migrations, not created through the API. The API returns each category's `code`, `label`, and `color` (a palette key), and the frontend maps `color` to its styles.
 - Follow the existing Go and TypeScript style in the relevant area.
 
