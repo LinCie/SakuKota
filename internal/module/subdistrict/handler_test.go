@@ -242,6 +242,7 @@ func TestHandler_CreateSubDistrict_RejectsMalformedBodies(t *testing.T) {
 		body string
 	}{
 		{name: "empty body", body: ``},
+		{name: "body is null", body: `null`},
 		{name: "truncated JSON", body: `{"name":"Menteng"`},
 		{name: "name is a number", body: `{"name":5,"slug":"menteng"}`},
 		{name: "estimated daily spending is a string", body: `{"name":"Menteng","slug":"menteng","estimated_daily_spending":"1.5"}`},

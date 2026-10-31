@@ -786,35 +786,82 @@ func TestIntegration_RepositorySetImageKey(t *testing.T) {
 	}
 }
 
-func TestIntegration_RepositoryDeleteReturnsImageKeys(t *testing.T) {
+// clearDeletions empties the storage deletion queue.
+func clearDeletions(t *testing.T) {
+	t.Helper()
+	mustExec(t, `TRUNCATE STORAGE_DELETIONS`)
+}
+
+// queuedDeletions returns the keys in the storage deletion queue, in order.
+func queuedDeletions(t *testing.T) []string {
+	t.Helper()
+	keys := []string{}
+	if err := testDB.Select(&keys, `SELECT key FROM STORAGE_DELETIONS ORDER BY key`); err != nil {
+		t.Fatalf("select queued deletions: %v", err)
+	}
+	return keys
+}
+
+func TestIntegration_RepositoryDeleteQueuesImages(t *testing.T) {
 	resetDB(t)
+	clearDeletions(t)
 	seedSubDistricts(t)
 	mustExec(t, `UPDATE SUB_DISTRICTS SET static_map_image_key = 'subdistricts/2/static-map/a.png' WHERE id = 2`)
 	repo := subdistrict.NewPostgresRepository(testDB)
 
-	tests := []struct {
+	steps := []struct {
 		name string
 		id   int64
 		want []string
 	}{
-		{name: "both images", id: 1, want: []string{"subdistricts/1/image/a.webp", "subdistricts/1/static-map/a.png"}},
-		{name: "only the static map", id: 2, want: []string{"subdistricts/2/static-map/a.png"}},
-		{name: "no images", id: 3, want: nil},
+		{name: "both images are queued", id: 1, want: []string{"subdistricts/1/image/a.webp", "subdistricts/1/static-map/a.png"}},
+		{name: "only the static map is queued", id: 2, want: []string{"subdistricts/1/image/a.webp", "subdistricts/1/static-map/a.png", "subdistricts/2/static-map/a.png"}},
+		{name: "no images queues nothing", id: 3, want: []string{"subdistricts/1/image/a.webp", "subdistricts/1/static-map/a.png", "subdistricts/2/static-map/a.png"}},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := repo.Delete(context.Background(), tc.id)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if !slices.Equal(got, tc.want) {
-				t.Errorf("deleted image keys = %v, want %v", got, tc.want)
-			}
-		})
+	for _, step := range steps {
+		if err := repo.Delete(context.Background(), step.id); err != nil {
+			t.Fatalf("%s: unexpected error: %v", step.name, err)
+		}
+		if got := queuedDeletions(t); !slices.Equal(got, step.want) {
+			t.Fatalf("%s: queued = %v, want %v", step.name, got, step.want)
+		}
 	}
 
-	if _, err := repo.Delete(context.Background(), 99); !errors.Is(err, subdistrict.ErrSubDistrictNotFound) {
+	if err := repo.Delete(context.Background(), 99); !errors.Is(err, subdistrict.ErrSubDistrictNotFound) {
 		t.Errorf("unknown sub-district: err = %v, want ErrSubDistrictNotFound", err)
+	}
+}
+
+func TestIntegration_RepositorySetImageKeyQueuesPreviousImage(t *testing.T) {
+	resetDB(t)
+	clearDeletions(t)
+	seedSubDistricts(t)
+	repo := subdistrict.NewPostgresRepository(testDB)
+	ctx := context.Background()
+
+	steps := []struct {
+		name string
+		key  string
+		want []string
+	}{
+		{name: "replacing queues the previous image", key: "subdistricts/1/image/b.webp", want: []string{"subdistricts/1/image/a.webp"}},
+		{name: "setting the same key queues nothing", key: "subdistricts/1/image/b.webp", want: []string{"subdistricts/1/image/a.webp"}},
+	}
+
+	for _, step := range steps {
+		if _, err := repo.SetImageKey(ctx, 1, subdistrict.SlotImage, step.key); err != nil {
+			t.Fatalf("%s: unexpected error: %v", step.name, err)
+		}
+		if got := queuedDeletions(t); !slices.Equal(got, step.want) {
+			t.Fatalf("%s: queued = %v, want %v", step.name, got, step.want)
+		}
+	}
+
+	if _, err := repo.SetImageKey(ctx, 99, subdistrict.SlotImage, "subdistricts/99/image/a.webp"); !errors.Is(err, subdistrict.ErrSubDistrictNotFound) {
+		t.Errorf("unknown sub-district: err = %v, want ErrSubDistrictNotFound", err)
+	}
+	if got := queuedDeletions(t); !slices.Equal(got, []string{"subdistricts/1/image/a.webp"}) {
+		t.Errorf("queued after an unknown sub-district = %v, want the previous image only", got)
 	}
 }

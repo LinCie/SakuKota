@@ -45,8 +45,8 @@ type Author struct {
 	Name string `db:"name"`
 }
 
-// Filter narrows the suggestions returned by GetMany. The zero value applies no filter.
-type Filter struct {
+// SuggestionFilter narrows the suggestions returned by GetMany. The zero value applies no filter.
+type SuggestionFilter struct {
 	// Status keeps only the suggestions in this status. Empty keeps all of them.
 	Status Status
 }

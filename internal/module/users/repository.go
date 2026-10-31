@@ -16,14 +16,14 @@ import (
 type Repository interface {
 	Create(ctx context.Context, u *User) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
-	GetByID(ctx context.Context, id int64) (*User, error)
+	GetUser(ctx context.Context, id int64) (*User, error)
 }
 
 type postgresRepository struct {
 	db *sqlx.DB
 }
 
-func NewPostgresRepository(db *sqlx.DB) *postgresRepository {
+func NewPostgresRepository(db *sqlx.DB) Repository {
 	return &postgresRepository{
 		db: db,
 	}
@@ -33,6 +33,8 @@ func NewPostgresRepository(db *sqlx.DB) *postgresRepository {
 // postgresRepository
 // -----------------------------------------------------------------------------
 
+// Create inserts the user and returns it with its generated fields, or
+// ErrEmailTaken if the email is already registered.
 func (r *postgresRepository) Create(ctx context.Context, u *User) (*User, error) {
 	var created User
 
@@ -56,6 +58,7 @@ func (r *postgresRepository) Create(ctx context.Context, u *User) (*User, error)
 	return &created, nil
 }
 
+// GetByEmail returns the user with the email, or ErrNotFound.
 func (r *postgresRepository) GetByEmail(ctx context.Context, email string) (*User, error) {
 	var u User
 
@@ -77,7 +80,8 @@ func (r *postgresRepository) GetByEmail(ctx context.Context, email string) (*Use
 	return &u, nil
 }
 
-func (r *postgresRepository) GetByID(ctx context.Context, id int64) (*User, error) {
+// GetUser returns the user with the id, or ErrNotFound.
+func (r *postgresRepository) GetUser(ctx context.Context, id int64) (*User, error) {
 	var u User
 
 	err := r.db.GetContext(

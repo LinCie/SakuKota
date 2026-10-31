@@ -1,24 +1,19 @@
 package place
 
-import "errors"
-
-const (
-	CodeInvalidPlaceID       = "INVALID_PLACE_ID"
-	CodePlaceNotFound        = "PLACE_NOT_FOUND"
-	CodeInvalidSubDistrictID = "INVALID_SUB_DISTRICT_ID"
-	CodeSubDistrictNotFound  = "SUB_DISTRICT_NOT_FOUND"
-	CodeInvalidCategoryID    = "INVALID_CATEGORY_ID"
-	CodeCategoryNotFound     = "CATEGORY_NOT_FOUND"
-	CodeInvalidLimit         = "INVALID_LIMIT"
-	CodeInvalidBBox          = "INVALID_BBOX"
+import (
+	"errors"
+	"fmt"
 )
 
 var (
-	ErrInvalidName         = errors.New("name is required")
-	ErrPlaceNameTooLong    = errors.New("name must be 150 characters or fewer")
-	ErrPlaceNotFound       = errors.New("place not found")
-	ErrSubDistrictNotFound = errors.New("sub-district not found")
-	ErrCategoryNotFound    = errors.New("category not found")
-	ErrInvalidAttributes   = errors.New("invalid attributes")
-	ErrInvalidLocation     = errors.New("location must be within Indonesia")
+	ErrInvalidName                = errors.New("name is required")
+	ErrNameTooLong                = fmt.Errorf("name must be %d characters or fewer", MaxNameLength)
+	ErrPlaceNotFound              = errors.New("place not found")
+	ErrSubDistrictNotFound        = errors.New("sub-district not found")
+	ErrCategoryNotFound           = errors.New("category not found")
+	ErrInvalidAttributes          = errors.New("invalid attributes")
+	ErrInvalidLocation            = errors.New("location must be within Indonesia")
+	ErrAddressTooLong             = fmt.Errorf("address must be %d characters or fewer", MaxAddressLength)
+	ErrOperatingHoursTooLong      = fmt.Errorf("operating_hours must be %d characters or fewer", MaxOperatingHoursLength)
+	ErrEstimatedPriceRangeTooLong = fmt.Errorf("estimated_price_range must be %d characters or fewer", MaxEstimatedPriceRangeLength)
 )

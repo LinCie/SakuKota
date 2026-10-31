@@ -15,14 +15,14 @@ type Service interface {
 }
 
 type service struct {
-	repo    Repository
-	objects ObjectStorage
+	repo   Repository
+	images ImageStorage
 }
 
-func NewService(repo Repository, objects ObjectStorage) *service {
+func NewService(repo Repository, images ImageStorage) Service {
 	return &service{
-		repo:    repo,
-		objects: objects,
+		repo:   repo,
+		images: images,
 	}
 }
 
@@ -51,7 +51,7 @@ func (s *service) Run(ctx context.Context) error {
 // if the object cannot be deleted. Only a failure to update the queue is
 // returned.
 func (s *service) delete(ctx context.Context, d Deletion) error {
-	if err := s.objects.Delete(ctx, d.Key); err != nil {
+	if err := s.images.Delete(ctx, d.Key); err != nil {
 		slog.ErrorContext(ctx, "delete storage object", "key", d.Key, "attempt", d.Attempts+1, "err", err)
 		return s.repo.Reschedule(ctx, d.Key, retryDelay(d.Attempts), err.Error())
 	}

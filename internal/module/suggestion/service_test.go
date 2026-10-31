@@ -91,7 +91,7 @@ func createSuggestion(t *testing.T, s *suggestion.Suggestion) (*suggestion.Sugge
 // Pending limit
 // -----------------------------------------------------------------------------
 
-func TestMaxPendingPerUser(t *testing.T) {
+func TestService_Create_MaxPendingPerUser(t *testing.T) {
 	if suggestion.MaxPendingPerUser != 5 {
 		t.Errorf("MaxPendingPerUser = %d, want 5", suggestion.MaxPendingPerUser)
 	}
@@ -101,7 +101,7 @@ func TestMaxPendingPerUser(t *testing.T) {
 // Submitting suggestions
 // -----------------------------------------------------------------------------
 
-func TestService_CreateSuggestion_Name(t *testing.T) {
+func TestService_Create_Name(t *testing.T) {
 	long := strings.Repeat("a", 150)
 
 	tests := []struct {
@@ -148,7 +148,7 @@ func TestService_CreateSuggestion_Name(t *testing.T) {
 	}
 }
 
-func TestService_CreateSuggestion_Location(t *testing.T) {
+func TestService_Create_Location(t *testing.T) {
 	tests := []struct {
 		name     string
 		lon, lat float64
@@ -203,7 +203,7 @@ func TestService_CreateSuggestion_Location(t *testing.T) {
 	}
 }
 
-func TestService_CreateSuggestion_OptionalText(t *testing.T) {
+func TestService_Create_OptionalText(t *testing.T) {
 	fields := []struct {
 		name string
 		set  func(*suggestion.Suggestion, *string)
@@ -263,7 +263,52 @@ func TestService_CreateSuggestion_OptionalText(t *testing.T) {
 	}
 }
 
-func TestService_CreateSuggestion_NoteLength(t *testing.T) {
+func TestService_Create_OptionalTextLimits(t *testing.T) {
+	fields := []struct {
+		name    string
+		limit   int
+		tooLong error
+		set     func(*suggestion.Suggestion, *string)
+	}{
+		{name: "address", limit: place.MaxAddressLength, tooLong: suggestion.ErrAddressTooLong,
+			set: func(s *suggestion.Suggestion, v *string) { s.Address = v }},
+		{name: "operating hours", limit: place.MaxOperatingHoursLength, tooLong: suggestion.ErrOperatingHoursTooLong,
+			set: func(s *suggestion.Suggestion, v *string) { s.OperatingHours = v }},
+		{name: "estimated price range", limit: place.MaxEstimatedPriceRangeLength, tooLong: suggestion.ErrEstimatedPriceRangeTooLong,
+			set: func(s *suggestion.Suggestion, v *string) { s.EstimatedPriceRange = v }},
+	}
+
+	for _, f := range fields {
+		tests := []struct {
+			name    string
+			input   string
+			wantErr error // nil means the text is accepted
+		}{
+			{name: "at the limit", input: strings.Repeat("a", f.limit)},
+			{name: "multibyte characters count once each", input: strings.Repeat("é", f.limit)},
+			{name: "length is counted after trimming", input: "  " + strings.Repeat("a", f.limit) + "  "},
+			{name: "one character over the limit", input: strings.Repeat("a", f.limit+1), wantErr: f.tooLong},
+		}
+
+		for _, tc := range tests {
+			t.Run(f.name+"/"+tc.name, func(t *testing.T) {
+				s := submitted()
+				input := tc.input
+				f.set(s, &input)
+
+				stored, err := createSuggestion(t, s)
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("err = %v, want %v", err, tc.wantErr)
+				}
+				if tc.wantErr != nil && stored != nil {
+					t.Fatal("refused suggestion reached storage")
+				}
+			})
+		}
+	}
+}
+
+func TestService_Create_NoteLength(t *testing.T) {
 	thousand := strings.Repeat("a", 1000)
 
 	tests := []struct {
@@ -294,7 +339,7 @@ func TestService_CreateSuggestion_NoteLength(t *testing.T) {
 	}
 }
 
-func TestService_CreateSuggestion_Attributes(t *testing.T) {
+func TestService_Create_Attributes(t *testing.T) {
 	// Attributes are only checked to be an object here. They are checked
 	// against the category's fields when an admin approves the suggestion.
 	tests := []struct {
@@ -337,7 +382,7 @@ func TestService_CreateSuggestion_Attributes(t *testing.T) {
 	}
 }
 
-func TestService_CreateSuggestion_StartsPending(t *testing.T) {
+func TestService_Create_StartsPending(t *testing.T) {
 	// A user cannot submit a suggestion that is already reviewed.
 	s := submitted()
 	s.Status = suggestion.StatusApproved
@@ -359,7 +404,7 @@ func TestService_CreateSuggestion_StartsPending(t *testing.T) {
 	}
 }
 
-func TestService_CreateSuggestion_KeepsAuthorAndCatalog(t *testing.T) {
+func TestService_Create_KeepsAuthorAndCatalog(t *testing.T) {
 	stored, err := createSuggestion(t, submitted())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -370,7 +415,7 @@ func TestService_CreateSuggestion_KeepsAuthorAndCatalog(t *testing.T) {
 	}
 }
 
-func TestService_CreateSuggestion_Storage(t *testing.T) {
+func TestService_Create_Storage(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
@@ -420,9 +465,9 @@ func TestService_GetSuggestion(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
-			repo.EXPECT().GetByID(gomock.Any(), int64(3)).Return(pending(), tc.repoErr)
+			repo.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(pending(), tc.repoErr)
 
-			got, err := suggestion.NewService(repo, noPlaces(t)).Get(context.Background(), 3)
+			got, err := suggestion.NewService(repo, noPlaces(t)).GetSuggestion(context.Background(), 3)
 			if !errors.Is(err, tc.repoErr) {
 				t.Fatalf("err = %v, want %v", err, tc.repoErr)
 			}
@@ -433,7 +478,7 @@ func TestService_GetSuggestion(t *testing.T) {
 	}
 }
 
-func TestService_GetMine(t *testing.T) {
+func TestService_GetByUser(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
@@ -452,7 +497,7 @@ func TestService_GetMine(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().GetByUser(gomock.Any(), int64(7)).Return(tc.suggestions, tc.repoErr)
 
-			got, err := suggestion.NewService(repo, noPlaces(t)).GetMine(context.Background(), 7)
+			got, err := suggestion.NewService(repo, noPlaces(t)).GetByUser(context.Background(), 7)
 			if !errors.Is(err, tc.repoErr) {
 				t.Fatalf("err = %v, want %v", err, tc.repoErr)
 			}
@@ -471,7 +516,7 @@ func TestService_GetMine(t *testing.T) {
 	}
 }
 
-func TestService_GetSuggestions_Status(t *testing.T) {
+func TestService_GetMany_Status(t *testing.T) {
 	tests := []struct {
 		name    string
 		status  suggestion.Status
@@ -487,7 +532,7 @@ func TestService_GetSuggestions_Status(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			filter := suggestion.Filter{Status: tc.status}
+			filter := suggestion.SuggestionFilter{Status: tc.status}
 
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			if tc.wantErr == nil {
@@ -502,14 +547,14 @@ func TestService_GetSuggestions_Status(t *testing.T) {
 	}
 }
 
-func TestService_GetSuggestions_Storage(t *testing.T) {
+func TestService_GetMany_Storage(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	repo := mock.NewMockRepository(gomock.NewController(t))
 	repo.EXPECT().GetMany(gomock.Any(), gomock.Any()).Return(nil, boom)
 
 	_, err := suggestion.NewService(repo, noPlaces(t)).GetMany(context.Background(),
-		suggestion.Filter{Status: suggestion.StatusPending})
+		suggestion.SuggestionFilter{Status: suggestion.StatusPending})
 	if !errors.Is(err, boom) {
 		t.Fatalf("err = %v, want %v", err, boom)
 	}
@@ -569,7 +614,7 @@ func TestService_Approve(t *testing.T) {
 	want := approved()
 
 	gomock.InOrder(
-		repo.EXPECT().GetByID(gomock.Any(), int64(3)).Return(pending(), nil),
+		repo.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(pending(), nil),
 		places.EXPECT().Create(gomock.Any(), finalPlace()).Return(&place.Place{ID: 42}, nil),
 		repo.EXPECT().MarkApproved(gomock.Any(), int64(3), int64(42), adminID).Return(want, nil),
 	)
@@ -611,7 +656,7 @@ func TestService_Approve_LookupFailure(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// No place may be created for a suggestion that cannot be read.
 			repo, places := newMocks(t)
-			repo.EXPECT().GetByID(gomock.Any(), int64(3)).Return(nil, tc.getErr)
+			repo.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(nil, tc.getErr)
 
 			_, err := suggestion.NewService(repo, places).Approve(context.Background(), 3, adminID, finalPlace())
 			if !errors.Is(err, tc.getErr) {
@@ -634,7 +679,7 @@ func TestService_Approve_AlreadyReviewed(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// No place may be created for a reviewed suggestion.
 			repo, places := newMocks(t)
-			repo.EXPECT().GetByID(gomock.Any(), int64(3)).Return(tc.existing, nil)
+			repo.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(tc.existing, nil)
 
 			_, err := suggestion.NewService(repo, places).Approve(context.Background(), 3, adminID, finalPlace())
 			if !errors.Is(err, suggestion.ErrAlreadyReviewed) {
@@ -663,7 +708,7 @@ func TestService_Approve_PlaceRejected(t *testing.T) {
 			// The suggestion stays pending: it may not be marked approved.
 			repo, places := newMocks(t)
 			gomock.InOrder(
-				repo.EXPECT().GetByID(gomock.Any(), int64(3)).Return(pending(), nil),
+				repo.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(pending(), nil),
 				places.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, tc.createErr),
 			)
 
@@ -695,7 +740,7 @@ func TestService_Approve_MarkFailure(t *testing.T) {
 			// approved suggestion.
 			repo, places := newMocks(t)
 			gomock.InOrder(
-				repo.EXPECT().GetByID(gomock.Any(), int64(3)).Return(pending(), nil),
+				repo.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(pending(), nil),
 				places.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&place.Place{ID: 42}, nil),
 				repo.EXPECT().MarkApproved(gomock.Any(), int64(3), int64(42), adminID).Return(nil, tc.markErr),
 				places.EXPECT().Delete(gomock.Any(), int64(42)).Return(tc.deleteErr),

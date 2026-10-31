@@ -4,8 +4,8 @@
 > backend is *specified to do*. Update it only after a VERIFICATION phase
 > completes (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-01. First draft, written from the design docs and the full `*_test.go` suite.
-> - Status: no VERIFICATION phase has updated this file yet.
+> - Last updated: 2026-11-01. Updated after a verification pass of the validation, normalization, and image-cleanup changes (see the change log).
+> - Status: verified. The unit and integration tests pass, including with `-race`, and the changed rules were checked by reintroducing the old behavior.
 
 ## Contents
 
@@ -114,7 +114,9 @@ These rules apply to every HTTP module unless §6 says otherwise.
   that is not an object (array or `null`), wrong JSON types, a non-Point
   GeoJSON, or coordinates outside WGS84 (lat > 90, lon > 180). A body that
   decodes but breaks a business rule returns `400 VALIDATION_ERROR`. Requests
-  with invalid bodies never reach the service.
+  with invalid bodies never reach the service. The rule applies to every JSON
+  endpoint, including register, login, create, approve, reject, and review, and
+  a `null` body counts as an invalid body.
 - **Client-controlled fields are ignored.** The server ignores `id`,
   `created_at`, `user_id`, `status`, review fields, and any unknown keys sent
   by the client. The author always comes from the access token, and the
@@ -127,8 +129,17 @@ These rules apply to every HTTP module unless §6 says otherwise.
 - **Text normalization.** Names and free-text inputs are trimmed of surrounding
   whitespace, including tabs and newlines. Inner whitespace and line breaks are
   kept. Length limits count Unicode **code points after trimming**, so `é`
-  counts as 1 and a ZWJ family emoji counts as 5. Where noted below, empty or
-  blank optional text is stored as absent (`null`).
+  counts as 1 and a ZWJ family emoji counts as 5. Optional text on places,
+  sub-districts, and suggestions is trimmed the same way. Empty or blank optional
+  text is stored as absent (`null`).
+- **Length limits.** Every text field with a column limit is checked against it
+  using the same count: user name 100, user email 255, sub-district name and slug
+  100, place name 150, place address 255, operating hours 255, estimated price
+  range 100, suggestion name 150 (with the same address, hours, and price limits
+  as places), suggestion note and rejection reason 1000, and review comment 1000.
+  A value over its limit returns `400 VALIDATION_ERROR` and never reaches storage.
+  Free text without a column limit (place short description, sub-district flood
+  history and safety information) has no length check.
 - **Locations.** A location is a GeoJSON `{"type":"Point","coordinates":[lon, lat]}`.
   A domain location must fall inside the **Indonesia box**: lon 95–141 and lat
   −11–6, edges included. `[0,0]` is rejected. Locations come back exactly as
@@ -155,8 +166,10 @@ The test router posts to `/v1/auth`, and the refresh cookie path is
 `RefreshTokenExpiry`, `CookieSecure`.
 
 - **Register.** `name`, `email`, and `password` are required. The name is
-  trimmed and must not be blank. The email is trimmed, lower-cased, and must be
-  well-formed. The password needs at least 8 characters. The password is stored
+  trimmed, must not be blank, and has at most 100 code points. The email is
+  trimmed, lower-cased, has at most 255 code points, and must be a bare address
+  such as `ana@example.com`; a display-name form such as `Ana <ana@example.com>`
+  is rejected. The password needs at least 8 characters. The password is stored
   as an argon2id hash. Invalid input returns `400 VALIDATION_ERROR` and never
   reaches storage. A duplicate email returns `409 EMAIL_TAKEN`. Success returns
   `201` with the user, never the password.
@@ -168,7 +181,8 @@ The test router posts to `/v1/auth`, and the refresh cookie path is
   `Path=/v1/auth`, `SameSite=Strict`, `Secure=CookieSecure`,
   `MaxAge=RefreshTokenExpiry`).
 - **Refresh.** Reads the cookie. Without a cookie it returns `401
-  INVALID_REFRESH_TOKEN` and does not call the service. Refresh tokens
+  INVALID_REFRESH_TOKEN`, clears the cookie, and does not call the service.
+  Refresh tokens
   **rotate**: the old token is consumed, and reusing it fails. An unknown token
   or a deleted user returns `INVALID_REFRESH_TOKEN` and clears the cookie.
   Storage failures return 500 and are not reported as an invalid token.
@@ -179,7 +193,7 @@ The test router posts to `/v1/auth`, and the refresh cookie path is
 ### 6.2 Users (`internal/module/users`)
 
 This is a service only, with no HTTP handler. It offers `Create`, `GetByEmail`,
-and `GetByID`, which pass repository results and errors (`ErrEmailTaken`,
+and `GetUser`, which pass repository results and errors (`ErrEmailTaken`,
 `ErrNotFound`) through unchanged. Stored users carry a `Role`, which defaults
 to `"user"`.
 
@@ -193,10 +207,15 @@ Missing optional values are `null` and attributes default to `{}`.
 no ratings. `image_url` is the storage public URL of the image key, or `null`.
 
 - **Name.** Required, trimmed, at most 150 code points (`ErrInvalidName`,
-  `ErrPlaceNameTooLong`). Names may repeat, even in the same district and
+  `ErrNameTooLong`). Names may repeat, even in the same district and
   regardless of case.
 - **Location.** Optional for places. When given, it must lie in the Indonesia
   box (`ErrInvalidLocation`).
+- **Optional text.** `address` (at most 255 code points), `operating_hours`
+  (255), and `estimated_price_range` (100) are trimmed and checked with
+  `ErrAddressTooLong`, `ErrOperatingHoursTooLong`, and
+  `ErrEstimatedPriceRangeTooLong`. `short_description` is trimmed. Blank values
+  are stored as `null`. Patches follow the same rules.
 - **Attributes** are validated against the category's fields:
   - Field types are `text`, `number`, `boolean`, `select` (one of `options`),
     `range` (exactly `{min, max}`, both numbers, `min ≤ max`), and `date`
@@ -295,6 +314,8 @@ server ignores it in create and patch bodies.
   slug is trimmed and must have 1–100 code points (`ErrInvalidSlug`).
   `estimated_daily_spending` must be between 0 and 99,999,999.99, the range of
   `DECIMAL(10,2)` (`ErrInvalidEstimatedDailySpending`).
+  `flood_history` and `safety_crime_information` are trimmed, and blank values
+  are stored as `null`.
 - **Uniqueness.** Names are unique **case-insensitively**, compared after
   trimming. Slugs are unique **case-sensitively**, so `MENTENG` is allowed next
   to `menteng`. A conflict returns `409 SUB_DISTRICT_EXISTS`, and the check
@@ -309,15 +330,16 @@ server ignores it in create and patch bodies.
     SUB_DISTRICT_IN_USE` and is not deleted.
   - Suggestions do **not** block deletion; they are deleted with the
     sub-district.
-  - The repository returns the deleted image keys, and the **service deletes
-    each object directly, best effort** (failures ignored). These deletes do
-    not go through the cleanup queue.
+  - The repository **queues the deleted images in `STORAGE_DELETIONS`** in the
+    same statement, and the service deletes nothing directly. The cleanup worker
+    removes the objects.
 - **Images.** There are two slots: `image` (stored under
   `subdistricts/{id}/image`) and `static-map` (stored under
   `subdistricts/{id}/static-map`). Each slot has
   `POST /subdistricts/{id}/<slot>/upload-url` and `PUT /subdistricts/{id}/<slot>`.
-  Setting an image promotes the upload, stores the key, and then deletes the
-  previous key directly, best effort. The other slot is never touched. If
+  Setting an image promotes the upload and stores the key in the same statement
+  that queues the previous key in `STORAGE_DELETIONS`; setting the same key again
+  queues nothing. The other slot is never touched. If
   storing the key fails, the promoted object is deleted.
 
 ### 6.6 Suggestions (`internal/module/suggestion`)
@@ -331,7 +353,8 @@ read, approve, and reject them. The admin role check happens in the API router.
   - The name is trimmed and limited to 150 code points.
   - The optional texts (`address`, `operating_hours`, `estimated_price_range`,
     `short_description`, `note`) are trimmed, and blank values are stored as
-    absent. The note is limited to 1000 code points.
+    absent. The note is limited to 1000 code points. `address` is limited to 255,
+    `operating_hours` to 255, and `estimated_price_range` to 100.
   - Attributes must be a JSON object (absent or `null` become `{}`). They are
     **not** checked against the category until approval, so unknown keys and
     missing required fields are accepted at submit time.
@@ -411,7 +434,9 @@ read, approve, and reject them. The admin role check happens in the API router.
 ### 6.8 Storage cleanup queue (`internal/module/storagecleanup`)
 
 The `STORAGE_DELETIONS` table has columns `key`, `attempts`, `next_attempt_at`,
-and `last_error`.
+and `last_error`. Images enter the queue when a place's or a sub-district's image
+is deleted or replaced, and when a place or sub-district is deleted. `cmd/cleanup`
+runs one batch and exits, so it must be scheduled.
 
 - **`Run`** claims up to 100 due rows and deletes each object.
   - When a delete succeeds, the row is removed from the queue.
@@ -490,16 +515,11 @@ them.
   `config`, `httpx`, `jwt`, `postgis`, `database`, `cmd/*` (API, migrate,
   seed), and seed data.
 - **Admin enforcement** is said to live in the router, but no test verifies it.
-- **Image cleanup is inconsistent.** Places use the durable
-  `STORAGE_DELETIONS` queue for delete and replace. Sub-districts delete
-  objects directly with best effort, so failures can leave orphaned objects.
-  The rollback after a failed `SetImage` deletes directly in both modules.
 - **Refresh-token storage.** Tests use `auth.NewMemoryRefreshStore()`. Whether
   production sessions survive a restart is not specified.
 - **Unspecified values:** `UploadTTL`, `MaxImageSize`, how and when the
   cleanup worker runs, and how long access tokens last in production.
-- **Unspecified behaviors:** whether optional sub-district texts are trimmed;
-  review editing or deletion; a "current user" endpoint; listing users.
+- **Unspecified behaviors:** review editing or deletion; a "current user" endpoint; listing users.
 - **Frontend (`web/`)** is outside the backend test workflow. US-01
   clustering, placeholders, and filter/viewport sync are untested there.
 
@@ -518,3 +538,4 @@ them.
 | Date | Phase / change | Summary |
 | ---- | -------------- | ------- |
 | 2026-11-01 | Initial draft | Written from the planning docs and all 19 `*_test.go` files |
+| 2026-11-01 | Verification update | Null bodies on JSON endpoints return `INVALID_BODY`; length limits and bare-address email are validated; optional place and sub-district text is trimmed and blank is stored as absent; sub-district image deletes and replacements are queued in `STORAGE_DELETIONS`; a missing refresh cookie clears the cookie; §6.3 error name corrected; resolved §10 items removed |

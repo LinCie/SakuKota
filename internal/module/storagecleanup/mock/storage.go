@@ -16,32 +16,32 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockObjectStorage is a mock of ObjectStorage interface.
-type MockObjectStorage struct {
+// MockImageStorage is a mock of ImageStorage interface.
+type MockImageStorage struct {
 	ctrl     *gomock.Controller
-	recorder *MockObjectStorageMockRecorder
+	recorder *MockImageStorageMockRecorder
 	isgomock struct{}
 }
 
-// MockObjectStorageMockRecorder is the mock recorder for MockObjectStorage.
-type MockObjectStorageMockRecorder struct {
-	mock *MockObjectStorage
+// MockImageStorageMockRecorder is the mock recorder for MockImageStorage.
+type MockImageStorageMockRecorder struct {
+	mock *MockImageStorage
 }
 
-// NewMockObjectStorage creates a new mock instance.
-func NewMockObjectStorage(ctrl *gomock.Controller) *MockObjectStorage {
-	mock := &MockObjectStorage{ctrl: ctrl}
-	mock.recorder = &MockObjectStorageMockRecorder{mock}
+// NewMockImageStorage creates a new mock instance.
+func NewMockImageStorage(ctrl *gomock.Controller) *MockImageStorage {
+	mock := &MockImageStorage{ctrl: ctrl}
+	mock.recorder = &MockImageStorageMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockObjectStorage) EXPECT() *MockObjectStorageMockRecorder {
+func (m *MockImageStorage) EXPECT() *MockImageStorageMockRecorder {
 	return m.recorder
 }
 
 // Delete mocks base method.
-func (m *MockObjectStorage) Delete(ctx context.Context, key string) error {
+func (m *MockImageStorage) Delete(ctx context.Context, key string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Delete", ctx, key)
 	ret0, _ := ret[0].(error)
@@ -49,7 +49,7 @@ func (m *MockObjectStorage) Delete(ctx context.Context, key string) error {
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockObjectStorageMockRecorder) Delete(ctx, key any) *gomock.Call {
+func (mr *MockImageStorageMockRecorder) Delete(ctx, key any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockObjectStorage)(nil).Delete), ctx, key)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockImageStorage)(nil).Delete), ctx, key)
 }

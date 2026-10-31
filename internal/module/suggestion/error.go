@@ -1,26 +1,26 @@
 package suggestion
 
-import "errors"
+import (
+	"errors"
+	"fmt"
 
-const (
-	CodeInvalidSuggestionID       = "INVALID_SUGGESTION_ID"
-	CodeSuggestionNotFound        = "SUGGESTION_NOT_FOUND"
-	CodeAlreadyReviewed           = "ALREADY_REVIEWED"
-	CodeTooManyPendingSuggestions = "TOO_MANY_PENDING_SUGGESTIONS"
-	CodeInvalidStatus             = "INVALID_STATUS"
+	"rantau-go/internal/module/place"
 )
 
 var (
-	ErrInvalidName         = errors.New("name is required")
-	ErrNameTooLong         = errors.New("name must be 150 characters or fewer")
-	ErrInvalidLocation     = errors.New("location is required and must be within Indonesia")
-	ErrNoteTooLong         = errors.New("note must be 1000 characters or fewer")
-	ErrInvalidAttributes   = errors.New("attributes must be a JSON object")
-	ErrReasonTooLong       = errors.New("reason must be 1000 characters or fewer")
-	ErrTooManyPending      = errors.New("too many pending suggestions")
-	ErrSubDistrictNotFound = errors.New("sub-district not found")
-	ErrCategoryNotFound    = errors.New("category not found")
-	ErrSuggestionNotFound  = errors.New("suggestion not found")
-	ErrAlreadyReviewed     = errors.New("suggestion already reviewed")
-	ErrInvalidStatus       = errors.New("status must be pending, approved, or rejected")
+	ErrInvalidName                = errors.New("name is required")
+	ErrNameTooLong                = fmt.Errorf("name must be %d characters or fewer", place.MaxNameLength)
+	ErrAddressTooLong             = fmt.Errorf("address must be %d characters or fewer", place.MaxAddressLength)
+	ErrOperatingHoursTooLong      = fmt.Errorf("operating_hours must be %d characters or fewer", place.MaxOperatingHoursLength)
+	ErrEstimatedPriceRangeTooLong = fmt.Errorf("estimated_price_range must be %d characters or fewer", place.MaxEstimatedPriceRangeLength)
+	ErrInvalidLocation            = errors.New("location is required and must be within Indonesia")
+	ErrNoteTooLong                = fmt.Errorf("note must be %d characters or fewer", maxNoteLength)
+	ErrInvalidAttributes          = errors.New("attributes must be a JSON object")
+	ErrReasonTooLong              = fmt.Errorf("reason must be %d characters or fewer", maxReasonLength)
+	ErrTooManyPending             = errors.New("too many pending suggestions")
+	ErrSubDistrictNotFound        = errors.New("sub-district not found")
+	ErrCategoryNotFound           = errors.New("category not found")
+	ErrSuggestionNotFound         = errors.New("suggestion not found")
+	ErrAlreadyReviewed            = errors.New("suggestion already reviewed")
+	ErrInvalidStatus              = errors.New("status must be pending, approved, or rejected")
 )

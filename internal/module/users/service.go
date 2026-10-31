@@ -10,7 +10,7 @@ import (
 type Service interface {
 	Create(ctx context.Context, u *User) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
-	GetByID(ctx context.Context, id int64) (*User, error)
+	GetUser(ctx context.Context, id int64) (*User, error)
 }
 
 type service struct {
@@ -35,6 +35,6 @@ func (s *service) GetByEmail(ctx context.Context, email string) (*User, error) {
 	return s.repo.GetByEmail(ctx, email)
 }
 
-func (s *service) GetByID(ctx context.Context, id int64) (*User, error) {
-	return s.repo.GetByID(ctx, id)
+func (s *service) GetUser(ctx context.Context, id int64) (*User, error) {
+	return s.repo.GetUser(ctx, id)
 }

@@ -43,7 +43,7 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 	authModule := auth.NewModule(cfg, usersModule.Service)
 	placeModule := place.NewModule(db, images)
 	reviewModule := review.NewModule(db)
-	subdisctrictModule := subdistrict.NewModule(db, images)
+	subdistrictModule := subdistrict.NewModule(db, images)
 	suggestionModule := suggestion.NewModule(db, placeModule.Service)
 
 	r.Route("/v1", func(r chi.Router) {
@@ -134,35 +134,35 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Route("/subdistricts", func(r chi.Router) {
 				// GET /v1/subdistricts
-				r.Get("/", subdisctrictModule.Handler.GetSubDistricts)
+				r.Get("/", subdistrictModule.Handler.GetSubDistricts)
 
 				// GET /v1/subdistricts/{id}
-				r.Get("/{id}", subdisctrictModule.Handler.GetSubDistrict)
+				r.Get("/{id}", subdistrictModule.Handler.GetSubDistrict)
 
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.WithAuth(cfg))
 					r.Use(middleware.Guard([]string{"admin"}))
 
 					// POST /v1/subdistricts
-					r.Post("/", subdisctrictModule.Handler.CreateSubDistrict)
+					r.Post("/", subdistrictModule.Handler.CreateSubDistrict)
 
 					// PATCH /v1/subdistricts/{id}
-					r.Patch("/{id}", subdisctrictModule.Handler.PatchSubDistrict)
+					r.Patch("/{id}", subdistrictModule.Handler.PatchSubDistrict)
 
 					// DELETE /v1/subdistricts/{id}
-					r.Delete("/{id}", subdisctrictModule.Handler.DeleteSubDistrict)
+					r.Delete("/{id}", subdistrictModule.Handler.DeleteSubDistrict)
 
 					// POST /v1/subdistricts/{id}/image/upload-url
-					r.Post("/{id}/image/upload-url", subdisctrictModule.Handler.CreateImageUpload(subdistrict.SlotImage))
+					r.Post("/{id}/image/upload-url", subdistrictModule.Handler.CreateImageUpload(subdistrict.SlotImage))
 
 					// PUT /v1/subdistricts/{id}/image
-					r.Put("/{id}/image", subdisctrictModule.Handler.SetImage(subdistrict.SlotImage))
+					r.Put("/{id}/image", subdistrictModule.Handler.SetImage(subdistrict.SlotImage))
 
 					// POST /v1/subdistricts/{id}/static-map/upload-url
-					r.Post("/{id}/static-map/upload-url", subdisctrictModule.Handler.CreateImageUpload(subdistrict.SlotStaticMap))
+					r.Post("/{id}/static-map/upload-url", subdistrictModule.Handler.CreateImageUpload(subdistrict.SlotStaticMap))
 
 					// PUT /v1/subdistricts/{id}/static-map
-					r.Put("/{id}/static-map", subdisctrictModule.Handler.SetImage(subdistrict.SlotStaticMap))
+					r.Put("/{id}/static-map", subdistrictModule.Handler.SetImage(subdistrict.SlotStaticMap))
 				})
 			})
 		})

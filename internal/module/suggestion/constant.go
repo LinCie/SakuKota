@@ -11,17 +11,10 @@ const (
 	StatusRejected Status = "rejected"
 )
 
-// Lengths in characters, counted after trimming spaces.
+// Lengths in characters, counted after trimming spaces. The name and optional
+// place fields share the limits of place, so an approved suggestion always
+// fits the place it becomes.
 const (
-	maxNameLength   = 150
 	maxNoteLength   = 1000
 	maxReasonLength = 1000
-)
-
-// Indonesia's bounding box in degrees: west and east longitude, south and north latitude.
-const (
-	indonesiaMinLongitude = 95
-	indonesiaMaxLongitude = 141
-	indonesiaMinLatitude  = -11
-	indonesiaMaxLatitude  = 6
 )

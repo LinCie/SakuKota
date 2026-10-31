@@ -34,15 +34,3 @@ const (
 	SlotImage     ImageSlot = "image"
 	SlotStaticMap ImageSlot = "static-map"
 )
-
-// imageKey returns the key of the sub-district's image in slot, or nil.
-func (sd *SubDistrict) imageKey(slot ImageSlot) *string {
-	switch slot {
-	case SlotImage:
-		return sd.ImageKey
-	case SlotStaticMap:
-		return sd.StaticMapImageKey
-	}
-
-	return nil
-}

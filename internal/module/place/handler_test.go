@@ -298,6 +298,7 @@ func TestHandler_CreatePlace_RejectsMalformedBodies(t *testing.T) {
 		body string
 	}{
 		{name: "empty body", body: ``},
+		{name: "body is null", body: `null`},
 		{name: "truncated JSON", body: `{"name":"Kopi"`},
 		{name: "sub_district_id is a string", body: `{"name":"Kopi","sub_district_id":"one","category_id":2}`},
 		{name: "location is a line", body: prefix + `{"type":"LineString","coordinates":[[106.8,-6.2],[106.9,-6.3]]}}`},
@@ -323,7 +324,10 @@ func TestHandler_CreatePlace_MapsServiceErrors(t *testing.T) {
 		wantCode   string
 	}{
 		{name: "blank name", err: place.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-		{name: "name too long", err: place.ErrPlaceNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "name too long", err: place.ErrNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "address too long", err: place.ErrAddressTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "operating hours too long", err: place.ErrOperatingHoursTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "estimated price range too long", err: place.ErrEstimatedPriceRangeTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "unknown sub-district", err: place.ErrSubDistrictNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "invalid attributes", err: place.ErrInvalidAttributes, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
@@ -609,7 +613,10 @@ func TestHandler_PatchPlace_MapsServiceErrors(t *testing.T) {
 		{name: "unknown place", err: place.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
 		{name: "wrapped unknown place", err: fmt.Errorf("update: %w", place.ErrPlaceNotFound), wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
 		{name: "blank name", err: place.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-		{name: "name too long", err: place.ErrPlaceNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "name too long", err: place.ErrNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "address too long", err: place.ErrAddressTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "operating hours too long", err: place.ErrOperatingHoursTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "estimated price range too long", err: place.ErrEstimatedPriceRangeTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "unknown sub-district", err: place.ErrSubDistrictNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "unknown category", err: place.ErrCategoryNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "invalid attributes", err: place.ErrInvalidAttributes, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},

@@ -56,21 +56,6 @@ func (mr *MockRepositoryMockRecorder) Create(ctx, s any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockRepository)(nil).Create), ctx, s)
 }
 
-// GetByID mocks base method.
-func (m *MockRepository) GetByID(ctx context.Context, id int64) (*suggestion.Suggestion, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetByID", ctx, id)
-	ret0, _ := ret[0].(*suggestion.Suggestion)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetByID indicates an expected call of GetByID.
-func (mr *MockRepositoryMockRecorder) GetByID(ctx, id any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByID", reflect.TypeOf((*MockRepository)(nil).GetByID), ctx, id)
-}
-
 // GetByUser mocks base method.
 func (m *MockRepository) GetByUser(ctx context.Context, userID int64) ([]suggestion.Suggestion, error) {
 	m.ctrl.T.Helper()
@@ -87,7 +72,7 @@ func (mr *MockRepositoryMockRecorder) GetByUser(ctx, userID any) *gomock.Call {
 }
 
 // GetMany mocks base method.
-func (m *MockRepository) GetMany(ctx context.Context, filter suggestion.Filter) ([]suggestion.Suggestion, error) {
+func (m *MockRepository) GetMany(ctx context.Context, filter suggestion.SuggestionFilter) ([]suggestion.Suggestion, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMany", ctx, filter)
 	ret0, _ := ret[0].([]suggestion.Suggestion)
@@ -101,32 +86,47 @@ func (mr *MockRepositoryMockRecorder) GetMany(ctx, filter any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMany", reflect.TypeOf((*MockRepository)(nil).GetMany), ctx, filter)
 }
 
-// MarkApproved mocks base method.
-func (m *MockRepository) MarkApproved(ctx context.Context, id, placeID, reviewerID int64) (*suggestion.Suggestion, error) {
+// GetSuggestion mocks base method.
+func (m *MockRepository) GetSuggestion(ctx context.Context, id int64) (*suggestion.Suggestion, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MarkApproved", ctx, id, placeID, reviewerID)
+	ret := m.ctrl.Call(m, "GetSuggestion", ctx, id)
+	ret0, _ := ret[0].(*suggestion.Suggestion)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSuggestion indicates an expected call of GetSuggestion.
+func (mr *MockRepositoryMockRecorder) GetSuggestion(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSuggestion", reflect.TypeOf((*MockRepository)(nil).GetSuggestion), ctx, id)
+}
+
+// MarkApproved mocks base method.
+func (m *MockRepository) MarkApproved(ctx context.Context, id, placeID, adminID int64) (*suggestion.Suggestion, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkApproved", ctx, id, placeID, adminID)
 	ret0, _ := ret[0].(*suggestion.Suggestion)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // MarkApproved indicates an expected call of MarkApproved.
-func (mr *MockRepositoryMockRecorder) MarkApproved(ctx, id, placeID, reviewerID any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) MarkApproved(ctx, id, placeID, adminID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkApproved", reflect.TypeOf((*MockRepository)(nil).MarkApproved), ctx, id, placeID, reviewerID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkApproved", reflect.TypeOf((*MockRepository)(nil).MarkApproved), ctx, id, placeID, adminID)
 }
 
 // Reject mocks base method.
-func (m *MockRepository) Reject(ctx context.Context, id, reviewerID int64, reason *string) (*suggestion.Suggestion, error) {
+func (m *MockRepository) Reject(ctx context.Context, id, adminID int64, reason *string) (*suggestion.Suggestion, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Reject", ctx, id, reviewerID, reason)
+	ret := m.ctrl.Call(m, "Reject", ctx, id, adminID, reason)
 	ret0, _ := ret[0].(*suggestion.Suggestion)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Reject indicates an expected call of Reject.
-func (mr *MockRepositoryMockRecorder) Reject(ctx, id, reviewerID, reason any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) Reject(ctx, id, adminID, reason any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reject", reflect.TypeOf((*MockRepository)(nil).Reject), ctx, id, reviewerID, reason)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reject", reflect.TypeOf((*MockRepository)(nil).Reject), ctx, id, adminID, reason)
 }

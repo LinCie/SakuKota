@@ -17,3 +17,14 @@ func IsCode(err error, code string) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == code
 }
+
+// ConstraintName returns the name of the constraint that caused err, or "" if
+// err was not raised by a constraint.
+func ConstraintName(err error) string {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.ConstraintName
+	}
+
+	return ""
+}

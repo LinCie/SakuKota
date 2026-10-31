@@ -22,8 +22,10 @@ type Repository interface {
 	// SetImageKey stores key as the sub-district's image in slot and returns
 	// the sub-district.
 	SetImageKey(ctx context.Context, id int64, slot ImageSlot, key string) (*SubDistrict, error)
-	// Delete removes the sub-district and returns the keys of its images.
-	Delete(ctx context.Context, id int64) ([]string, error)
+	// Delete removes the sub-district and queues its images for deletion. It
+	// returns ErrSubDistrictNotFound, or ErrSubDistrictInUse if places still
+	// reference it.
+	Delete(ctx context.Context, id int64) error
 }
 
 type postgresRepository struct {
@@ -50,6 +52,7 @@ var imageKeyColumns = map[ImageSlot]string{
 	SlotStaticMap: "static_map_image_key",
 }
 
+// GetMany returns every sub-district in id order.
 func (r *postgresRepository) GetMany(ctx context.Context) ([]SubDistrict, error) {
 	subDistricts := make([]SubDistrict, 0)
 
@@ -65,6 +68,7 @@ func (r *postgresRepository) GetMany(ctx context.Context) ([]SubDistrict, error)
 	return subDistricts, nil
 }
 
+// GetSubDistrict returns the sub-district with the id, or ErrSubDistrictNotFound.
 func (r *postgresRepository) GetSubDistrict(ctx context.Context, id int64) (*SubDistrict, error) {
 	var sd SubDistrict
 
@@ -84,6 +88,8 @@ func (r *postgresRepository) GetSubDistrict(ctx context.Context, id int64) (*Sub
 	return &sd, nil
 }
 
+// Create inserts the sub-district and returns it, or ErrSubDistrictExists if the
+// name or slug is taken.
 func (r *postgresRepository) Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error) {
 	var created SubDistrict
 
@@ -110,6 +116,8 @@ func (r *postgresRepository) Create(ctx context.Context, sd *SubDistrict) (*SubD
 	return &created, nil
 }
 
+// Update stores the sub-district's fields and returns it, or
+// ErrSubDistrictNotFound or ErrSubDistrictExists.
 func (r *postgresRepository) Update(ctx context.Context, sd *SubDistrict) (*SubDistrict, error) {
 	var updated SubDistrict
 
@@ -141,6 +149,10 @@ func (r *postgresRepository) Update(ctx context.Context, sd *SubDistrict) (*SubD
 	return &updated, nil
 }
 
+// SetImageKey stores key as the sub-district's image in slot and returns the
+// sub-district. The previous image in that slot is queued for deletion. The row
+// is locked while its previous key is read, so a concurrent replace cannot
+// leave an image unqueued.
 func (r *postgresRepository) SetImageKey(ctx context.Context, id int64, slot ImageSlot, key string) (*SubDistrict, error) {
 	column, ok := imageKeyColumns[slot]
 	if !ok {
@@ -152,7 +164,24 @@ func (r *postgresRepository) SetImageKey(ctx context.Context, id int64, slot Ima
 	err := r.db.GetContext(
 		ctx,
 		&updated,
-		`UPDATE SUB_DISTRICTS SET `+column+` = $2 WHERE id = $1 RETURNING `+subDistrictColumns,
+		`WITH previous AS (
+			SELECT id AS sub_district_id, `+column+` AS previous_key
+			FROM SUB_DISTRICTS
+			WHERE id = $1
+			FOR UPDATE
+		), updated AS (
+			UPDATE SUB_DISTRICTS
+			SET `+column+` = $2
+			FROM previous
+			WHERE SUB_DISTRICTS.id = previous.sub_district_id
+			RETURNING `+subDistrictColumns+`
+		), queued AS (
+			INSERT INTO STORAGE_DELETIONS (key)
+			SELECT previous_key FROM previous
+			WHERE previous_key IS NOT NULL AND previous_key <> $2
+			ON CONFLICT (key) DO NOTHING
+		)
+		SELECT `+subDistrictColumns+` FROM updated`,
 		id,
 		key,
 	)
@@ -166,33 +195,36 @@ func (r *postgresRepository) SetImageKey(ctx context.Context, id int64, slot Ima
 	return &updated, nil
 }
 
-// Delete removes the sub-district and returns the keys of its images: the
-// image first, then the static map.
-func (r *postgresRepository) Delete(ctx context.Context, id int64) ([]string, error) {
-	var deleted SubDistrict
+// Delete removes the sub-district and queues its images for deletion, or
+// returns ErrSubDistrictNotFound. A sub-district that places reference is not
+// deleted: ErrSubDistrictInUse is returned instead.
+func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
+	var deleted int
 
 	err := r.db.GetContext(
 		ctx,
 		&deleted,
-		`DELETE FROM SUB_DISTRICTS WHERE id = $1 RETURNING image_key, static_map_image_key`,
+		`WITH deleted AS (
+			DELETE FROM SUB_DISTRICTS WHERE id = $1 RETURNING image_key, static_map_image_key
+		), queued AS (
+			INSERT INTO STORAGE_DELETIONS (key)
+			SELECT image_key FROM deleted WHERE image_key IS NOT NULL
+			UNION
+			SELECT static_map_image_key FROM deleted WHERE static_map_image_key IS NOT NULL
+			ON CONFLICT (key) DO NOTHING
+		)
+		SELECT COUNT(*) FROM deleted`,
 		id,
 	)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrSubDistrictNotFound
-		}
 		if database.IsCode(err, database.ForeignKeyViolation) {
-			return nil, ErrSubDistrictInUse
+			return ErrSubDistrictInUse
 		}
-		return nil, err
+		return err
+	}
+	if deleted == 0 {
+		return ErrSubDistrictNotFound
 	}
 
-	var imageKeys []string
-	for _, key := range []*string{deleted.ImageKey, deleted.StaticMapImageKey} {
-		if key != nil {
-			imageKeys = append(imageKeys, *key)
-		}
-	}
-
-	return imageKeys, nil
+	return nil
 }

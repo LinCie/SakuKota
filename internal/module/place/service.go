@@ -13,6 +13,7 @@ import (
 
 	"rantau-go/internal/postgis"
 	"rantau-go/internal/storage"
+	"rantau-go/internal/text"
 )
 
 // Service defines the operations required by the handler.
@@ -38,7 +39,7 @@ type service struct {
 	images ImageStorage
 }
 
-func NewService(repo Repository, images ImageStorage) *service {
+func NewService(repo Repository, images ImageStorage) Service {
 	return &service{
 		repo:   repo,
 		images: images,
@@ -72,6 +73,10 @@ func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
 	}
 	p.Name = name
 
+	if err := normalizeOptionalFields(p); err != nil {
+		return nil, err
+	}
+
 	if err := validateLocation(p.Location); err != nil {
 		return nil, err
 	}
@@ -91,7 +96,8 @@ func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
 }
 
 // Update applies the patch to the stored place. Attributes are checked against
-// the place's category whenever either of them changes.
+// the place's category whenever the patch sets either the category or the
+// attributes.
 func (s *service) Update(ctx context.Context, id int64, patch PlacePatch) (*Place, error) {
 	p, err := s.repo.GetPlace(ctx, id)
 	if err != nil {
@@ -137,6 +143,10 @@ func (s *service) Update(ctx context.Context, id int64, patch PlacePatch) (*Plac
 		p.ShortDescription = patch.ShortDescription.Value
 	}
 
+	if err := normalizeOptionalFields(p); err != nil {
+		return nil, err
+	}
+
 	if patch.CategoryID.Set || patch.Attributes.Set {
 		category, err := s.repo.GetCategory(ctx, p.CategoryID)
 		if err != nil {
@@ -163,10 +173,10 @@ func (s *service) Update(ctx context.Context, id int64, patch PlacePatch) (*Plac
 
 // Delete removes the place. The repository queues its image for deletion.
 func (s *service) Delete(ctx context.Context, id int64) error {
-	_, err := s.repo.Delete(ctx, id)
-	return err
+	return s.repo.Delete(ctx, id)
 }
 
+// ImageUploadURL returns an upload for a new image of the place.
 func (s *service) ImageUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error) {
 	if _, err := s.repo.GetPlace(ctx, id); err != nil {
 		return storage.Upload{}, err
@@ -209,18 +219,39 @@ func normalizePlaceName(name string) (string, error) {
 	switch {
 	case name == "":
 		return "", ErrInvalidName
-	case utf8.RuneCountInString(name) > maxPlaceNameLength:
-		return "", ErrPlaceNameTooLong
+	case utf8.RuneCountInString(name) > MaxNameLength:
+		return "", ErrNameTooLong
 	}
 
 	return name, nil
 }
 
+// normalizeOptionalFields trims the optional text fields of p, stores blank
+// ones as absent, and checks them against the lengths of their columns.
+func normalizeOptionalFields(p *Place) error {
+	var ok bool
+
+	if p.Address, ok = text.TrimOptionalMax(p.Address, MaxAddressLength); !ok {
+		return ErrAddressTooLong
+	}
+
+	if p.OperatingHours, ok = text.TrimOptionalMax(p.OperatingHours, MaxOperatingHoursLength); !ok {
+		return ErrOperatingHoursTooLong
+	}
+
+	if p.EstimatedPriceRange, ok = text.TrimOptionalMax(p.EstimatedPriceRange, MaxEstimatedPriceRangeLength); !ok {
+		return ErrEstimatedPriceRangeTooLong
+	}
+
+	p.ShortDescription = text.TrimOptional(p.ShortDescription)
+
+	return nil
+}
+
 // validateLocation reports ErrInvalidLocation when loc lies outside Indonesia.
 // A nil location is allowed.
 func validateLocation(loc *postgis.Point) error {
-	if loc != nil && (loc.X() < indonesiaMinLongitude || loc.X() > indonesiaMaxLongitude ||
-		loc.Y() < indonesiaMinLatitude || loc.Y() > indonesiaMaxLatitude) {
+	if loc != nil && !postgis.InIndonesia(loc) {
 		return ErrInvalidLocation
 	}
 

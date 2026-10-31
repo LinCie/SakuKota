@@ -2,9 +2,7 @@ package review
 
 import (
 	"context"
-	"errors"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
 
 	"rantau-go/internal/database"
@@ -27,7 +25,7 @@ type postgresRepository struct {
 	db *sqlx.DB
 }
 
-func NewPostgresRepository(db *sqlx.DB) *postgresRepository {
+func NewPostgresRepository(db *sqlx.DB) Repository {
 	return &postgresRepository{
 		db: db,
 	}
@@ -121,9 +119,8 @@ func mapCreateError(err error) error {
 		return ErrAlreadyReviewed
 	}
 
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == database.ForeignKeyViolation &&
-		pgErr.ConstraintName == "place_reviews_place_id_fkey" {
+	if database.IsCode(err, database.ForeignKeyViolation) &&
+		database.ConstraintName(err) == "place_reviews_place_id_fkey" {
 		return ErrPlaceNotFound
 	}
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -120,7 +121,7 @@ func newMocks(t *testing.T) (*mock.MockRepository, *mock.MockImageStorage) {
 // Creating places
 // -----------------------------------------------------------------------------
 
-func TestService_CreatePlace_Name(t *testing.T) {
+func TestService_Create_Name(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -159,16 +160,16 @@ func TestService_CreatePlace_Name(t *testing.T) {
 	}
 }
 
-func TestService_CreatePlace_NameTooLong(t *testing.T) {
+func TestService_Create_NameTooLong(t *testing.T) {
 	_, err := createPlace(t, openCategory(), &place.Place{
 		Name: strings.Repeat("a", 151), SubDistrictID: 1, CategoryID: 2,
 	})
-	if !errors.Is(err, place.ErrPlaceNameTooLong) {
-		t.Fatalf("err = %v, want ErrPlaceNameTooLong", err)
+	if !errors.Is(err, place.ErrNameTooLong) {
+		t.Fatalf("err = %v, want ErrNameTooLong", err)
 	}
 }
 
-func TestService_CreatePlace_Attributes(t *testing.T) {
+func TestService_Create_Attributes(t *testing.T) {
 	tests := []struct {
 		name       string
 		attributes string
@@ -243,7 +244,7 @@ func TestService_CreatePlace_Attributes(t *testing.T) {
 	}
 }
 
-func TestService_CreatePlace_AttributesWithoutRequiredFields(t *testing.T) {
+func TestService_Create_AttributesWithoutRequiredFields(t *testing.T) {
 	tests := []struct {
 		name       string
 		attributes string
@@ -270,7 +271,7 @@ func TestService_CreatePlace_AttributesWithoutRequiredFields(t *testing.T) {
 	}
 }
 
-func TestService_CreatePlace_BlankOptionalText(t *testing.T) {
+func TestService_Create_BlankOptionalText(t *testing.T) {
 	tests := []struct {
 		name       string
 		attributes string
@@ -307,7 +308,7 @@ func TestService_CreatePlace_BlankOptionalText(t *testing.T) {
 	}
 }
 
-func TestService_CreatePlace_BlankAttributeRejected(t *testing.T) {
+func TestService_Create_BlankAttributeRejected(t *testing.T) {
 	// Required text may not be blank, and blank is not absent for number,
 	// boolean, select, range, or date fields.
 	tests := []struct {
@@ -340,7 +341,7 @@ func TestService_CreatePlace_BlankAttributeRejected(t *testing.T) {
 	}
 }
 
-func TestService_CreatePlace_Location(t *testing.T) {
+func TestService_Create_Location(t *testing.T) {
 	tests := []struct {
 		name     string
 		lon, lat float64
@@ -401,7 +402,7 @@ func TestService_CreatePlace_Location(t *testing.T) {
 	}
 }
 
-func TestService_CreatePlace_Storage(t *testing.T) {
+func TestService_Create_Storage(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
@@ -511,7 +512,7 @@ func updatePlace(t *testing.T, existing *place.Place, id int64, patch place.Plac
 	return stored, err
 }
 
-func TestService_UpdatePlace_LookupFailure(t *testing.T) {
+func TestService_Update_LookupFailure(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
@@ -538,7 +539,7 @@ func TestService_UpdatePlace_LookupFailure(t *testing.T) {
 	}
 }
 
-func TestService_UpdatePlace_Fields(t *testing.T) {
+func TestService_Update_Fields(t *testing.T) {
 	tests := []struct {
 		name   string
 		patch  place.PlacePatch
@@ -581,7 +582,7 @@ func TestService_UpdatePlace_Fields(t *testing.T) {
 	}
 }
 
-func TestService_UpdatePlace_Name(t *testing.T) {
+func TestService_Update_Name(t *testing.T) {
 	long := strings.Repeat("a", 150)
 
 	tests := []struct {
@@ -594,9 +595,9 @@ func TestService_UpdatePlace_Name(t *testing.T) {
 		{name: "empty", input: "", wantName: "", wantErr: place.ErrInvalidName},
 		{name: "spaces only", input: "   ", wantName: "", wantErr: place.ErrInvalidName},
 		{name: "150 characters is allowed", input: long, wantName: long, wantErr: nil},
-		{name: "151 characters is too long", input: long + "a", wantName: "", wantErr: place.ErrPlaceNameTooLong},
+		{name: "151 characters is too long", input: long + "a", wantName: "", wantErr: place.ErrNameTooLong},
 		{name: "150 multibyte characters is allowed", input: strings.Repeat("é", 150), wantName: strings.Repeat("é", 150), wantErr: nil},
-		{name: "151 multibyte characters is too long", input: strings.Repeat("é", 151), wantName: "", wantErr: place.ErrPlaceNameTooLong},
+		{name: "151 multibyte characters is too long", input: strings.Repeat("é", 151), wantName: "", wantErr: place.ErrNameTooLong},
 		{name: "length is counted after trimming", input: "  " + long + "  ", wantName: long, wantErr: nil},
 	}
 
@@ -622,7 +623,7 @@ func TestService_UpdatePlace_Name(t *testing.T) {
 	}
 }
 
-func TestService_UpdatePlace_Location(t *testing.T) {
+func TestService_Update_Location(t *testing.T) {
 	tests := []struct {
 		name    string
 		lon     float64
@@ -658,7 +659,7 @@ func TestService_UpdatePlace_Location(t *testing.T) {
 	}
 }
 
-func TestService_UpdatePlace_Attributes(t *testing.T) {
+func TestService_Update_Attributes(t *testing.T) {
 	// The place is a Kopi, which has no required fields.
 	tests := []struct {
 		name      string
@@ -693,7 +694,7 @@ func TestService_UpdatePlace_Attributes(t *testing.T) {
 	}
 }
 
-func TestService_UpdatePlace_BlankOptionalText(t *testing.T) {
+func TestService_Update_BlankOptionalText(t *testing.T) {
 	tests := []struct {
 		name      string
 		stored    string // attributes of the place before the update
@@ -734,7 +735,7 @@ func TestService_UpdatePlace_BlankOptionalText(t *testing.T) {
 	}
 }
 
-func TestService_UpdatePlace_BlankRequiredText(t *testing.T) {
+func TestService_Update_BlankRequiredText(t *testing.T) {
 	for _, patch := range []string{`{"contact":""}`, `{"contact":"   "}`, `{"contact":"\t\n"}`} {
 		t.Run(patch, func(t *testing.T) {
 			// The place is a Warung, which requires "contact". No Update
@@ -757,7 +758,7 @@ func TestService_UpdatePlace_BlankRequiredText(t *testing.T) {
 	}
 }
 
-func TestService_UpdatePlace_Category(t *testing.T) {
+func TestService_Update_Category(t *testing.T) {
 	tests := []struct {
 		name           string
 		attrs          string // the place's attributes before the update
@@ -842,7 +843,7 @@ func TestService_UpdatePlace_Category(t *testing.T) {
 	}
 }
 
-func TestService_UpdatePlace_Storage(t *testing.T) {
+func TestService_Update_Storage(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
@@ -874,7 +875,7 @@ func TestService_UpdatePlace_Storage(t *testing.T) {
 	}
 }
 
-func TestService_DeletePlace(t *testing.T) {
+func TestService_Delete(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
@@ -891,7 +892,7 @@ func TestService_DeletePlace(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// The place has no image, so no image may be deleted.
 			repo := mock.NewMockRepository(gomock.NewController(t))
-			repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(nil, tc.repoErr)
+			repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(tc.repoErr)
 
 			err := place.NewService(repo, noImages(t)).Delete(context.Background(), 7)
 			if !errors.Is(err, tc.wantErr) {
@@ -901,16 +902,175 @@ func TestService_DeletePlace(t *testing.T) {
 	}
 }
 
-func TestService_DeletePlace_Image(t *testing.T) {
+func TestService_Delete_Image(t *testing.T) {
 	// The repository queues the image for deletion, so the service leaves it
 	// to the cleanup worker and must not delete it itself.
 	repo := mock.NewMockRepository(gomock.NewController(t))
-	repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(ptr(imageKey), nil)
+	repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(nil)
 
 	err := place.NewService(repo, noImages(t)).Delete(context.Background(), 7)
 	if err != nil {
 		t.Fatalf("err = %v, want nil: the place was deleted", err)
 	}
+}
+
+// -----------------------------------------------------------------------------
+// Optional text fields
+// -----------------------------------------------------------------------------
+
+// placeTextField is an optional text field of a place. limit is the length its
+// column allows in characters, or 0 when the field has no limit.
+type placeTextField struct {
+	name     string
+	limit    int
+	tooLong  error
+	set      func(p *place.Place, v *string)
+	setPatch func(p *place.PlacePatch, v string)
+	get      func(p *place.Place) *string
+}
+
+var placeTextFields = []placeTextField{
+	{name: "address", limit: place.MaxAddressLength, tooLong: place.ErrAddressTooLong,
+		set:      func(p *place.Place, v *string) { p.Address = v },
+		setPatch: func(p *place.PlacePatch, v string) { p.Address = present(v) },
+		get:      func(p *place.Place) *string { return p.Address }},
+	{name: "operating hours", limit: place.MaxOperatingHoursLength, tooLong: place.ErrOperatingHoursTooLong,
+		set:      func(p *place.Place, v *string) { p.OperatingHours = v },
+		setPatch: func(p *place.PlacePatch, v string) { p.OperatingHours = present(v) },
+		get:      func(p *place.Place) *string { return p.OperatingHours }},
+	{name: "estimated price range", limit: place.MaxEstimatedPriceRangeLength, tooLong: place.ErrEstimatedPriceRangeTooLong,
+		set:      func(p *place.Place, v *string) { p.EstimatedPriceRange = v },
+		setPatch: func(p *place.PlacePatch, v string) { p.EstimatedPriceRange = present(v) },
+		get:      func(p *place.Place) *string { return p.EstimatedPriceRange }},
+	{name: "short description",
+		set:      func(p *place.Place, v *string) { p.ShortDescription = v },
+		setPatch: func(p *place.PlacePatch, v string) { p.ShortDescription = present(v) },
+		get:      func(p *place.Place) *string { return p.ShortDescription }},
+}
+
+func TestService_Create_OptionalText(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  *string
+	}{
+		{name: "surrounding whitespace is removed", input: "  Jl. Sudirman  ", want: ptr("Jl. Sudirman")},
+		{name: "blank is stored as absent", input: " \t\n ", want: nil},
+	}
+
+	for _, f := range placeTextFields {
+		for _, tc := range tests {
+			t.Run(f.name+"/"+tc.name, func(t *testing.T) {
+				p := &place.Place{Name: "Kopi Senja", SubDistrictID: 1, CategoryID: 2}
+				input := tc.input
+				f.set(p, &input)
+
+				stored, err := createPlace(t, openCategory(), p)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := f.get(stored); !reflect.DeepEqual(got, tc.want) {
+					t.Errorf("stored %s = %v, want %v", f.name, ptrString(got), ptrString(tc.want))
+				}
+			})
+		}
+	}
+}
+
+func TestService_Create_OptionalTextLimits(t *testing.T) {
+	for _, f := range placeTextFields {
+		if f.limit == 0 {
+			continue
+		}
+
+		tests := []struct {
+			name    string
+			input   string
+			wantErr error // nil means the text is accepted
+		}{
+			{name: "at the limit", input: strings.Repeat("a", f.limit)},
+			{name: "multibyte characters count once each", input: strings.Repeat("é", f.limit)},
+			{name: "length is counted after trimming", input: "  " + strings.Repeat("a", f.limit) + "  "},
+			{name: "one character over the limit", input: strings.Repeat("a", f.limit+1), wantErr: f.tooLong},
+		}
+
+		for _, tc := range tests {
+			t.Run(f.name+"/"+tc.name, func(t *testing.T) {
+				p := &place.Place{Name: "Kopi Senja", SubDistrictID: 1, CategoryID: 2}
+				input := tc.input
+				f.set(p, &input)
+
+				stored, err := createPlace(t, openCategory(), p)
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("err = %v, want %v", err, tc.wantErr)
+				}
+				if tc.wantErr != nil && stored != nil {
+					t.Fatal("refused place reached storage")
+				}
+			})
+		}
+	}
+}
+
+func TestService_Update_OptionalText(t *testing.T) {
+	for _, f := range placeTextFields {
+		tests := []struct {
+			name    string
+			input   string
+			want    *string
+			wantErr error
+		}{
+			{name: "surrounding whitespace is removed", input: "  Jl. Sudirman  ", want: ptr("Jl. Sudirman")},
+			{name: "blank is stored as absent", input: " \t\n ", want: nil},
+		}
+		if f.limit > 0 {
+			tests = append(tests, struct {
+				name    string
+				input   string
+				want    *string
+				wantErr error
+			}{name: "one character over the limit is refused", input: strings.Repeat("a", f.limit+1), wantErr: f.tooLong})
+		}
+
+		for _, tc := range tests {
+			t.Run(f.name+"/"+tc.name, func(t *testing.T) {
+				repo := mock.NewMockRepository(gomock.NewController(t))
+				repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), nil)
+
+				var stored *place.Place
+				repo.EXPECT().Update(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, got *place.Place) (*place.Place, error) {
+						stored = got
+						return got, nil
+					}).AnyTimes()
+
+				var patch place.PlacePatch
+				f.setPatch(&patch, tc.input)
+
+				_, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7, patch)
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("err = %v, want %v", err, tc.wantErr)
+				}
+				if tc.wantErr != nil {
+					if stored != nil {
+						t.Fatal("refused update reached storage")
+					}
+					return
+				}
+				if got := f.get(stored); !reflect.DeepEqual(got, tc.want) {
+					t.Errorf("stored %s = %v, want %v", f.name, ptrString(got), ptrString(tc.want))
+				}
+			})
+		}
+	}
+}
+
+// ptrString describes an optional string for failure messages.
+func ptrString(s *string) string {
+	if s == nil {
+		return "<absent>"
+	}
+	return fmt.Sprintf("%q", *s)
 }
 
 // -----------------------------------------------------------------------------

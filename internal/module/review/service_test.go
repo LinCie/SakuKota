@@ -39,7 +39,7 @@ func createReview(t *testing.T, r *review.Review) (*review.Review, error) {
 // Creating reviews
 // -----------------------------------------------------------------------------
 
-func TestService_CreateReview_Rating(t *testing.T) {
+func TestService_Create_Rating(t *testing.T) {
 	tests := []struct {
 		name    string
 		rating  int
@@ -78,7 +78,7 @@ func TestService_CreateReview_Rating(t *testing.T) {
 	}
 }
 
-func TestService_CreateReview_Comment(t *testing.T) {
+func TestService_Create_Comment(t *testing.T) {
 	thousand := strings.Repeat("a", 1000)
 	thousandMultiByte := strings.Repeat("é", 1000)
 
@@ -119,7 +119,7 @@ func TestService_CreateReview_Comment(t *testing.T) {
 	}
 }
 
-func TestService_CreateReview_CommentTooLong(t *testing.T) {
+func TestService_Create_CommentTooLong(t *testing.T) {
 	tests := []struct {
 		name    string
 		comment string
@@ -141,7 +141,7 @@ func TestService_CreateReview_CommentTooLong(t *testing.T) {
 	}
 }
 
-func TestService_CreateReview_KeepsPlaceAndAuthor(t *testing.T) {
+func TestService_Create_KeepsPlaceAndAuthor(t *testing.T) {
 	stored, err := createReview(t, &review.Review{PlaceID: 3, UserID: 7, Rating: 4})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -154,7 +154,7 @@ func TestService_CreateReview_KeepsPlaceAndAuthor(t *testing.T) {
 	}
 }
 
-func TestService_CreateReview_Storage(t *testing.T) {
+func TestService_Create_Storage(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
@@ -190,7 +190,7 @@ func TestService_CreateReview_Storage(t *testing.T) {
 // Listing reviews
 // -----------------------------------------------------------------------------
 
-func TestService_GetReviewsByPlace(t *testing.T) {
+func TestService_GetByPlace(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {

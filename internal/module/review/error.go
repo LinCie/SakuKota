@@ -1,16 +1,13 @@
 package review
 
-import "errors"
-
-const (
-	CodeInvalidPlaceID  = "INVALID_PLACE_ID"
-	CodePlaceNotFound   = "PLACE_NOT_FOUND"
-	CodeAlreadyReviewed = "ALREADY_REVIEWED"
+import (
+	"errors"
+	"fmt"
 )
 
 var (
-	ErrInvalidRating   = errors.New("rating must be between 1 and 5")
-	ErrCommentTooLong  = errors.New("comment must be 1000 characters or fewer")
+	ErrInvalidRating   = fmt.Errorf("rating must be between %d and %d", minRating, maxRating)
+	ErrCommentTooLong  = fmt.Errorf("comment must be %d characters or fewer", maxCommentLength)
 	ErrPlaceNotFound   = errors.New("place not found")
 	ErrAlreadyReviewed = errors.New("place already reviewed by this user")
 )

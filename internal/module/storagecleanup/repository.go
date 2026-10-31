@@ -25,7 +25,7 @@ type postgresRepository struct {
 	db *sqlx.DB
 }
 
-func NewPostgresRepository(db *sqlx.DB) *postgresRepository {
+func NewPostgresRepository(db *sqlx.DB) Repository {
 	return &postgresRepository{
 		db: db,
 	}
@@ -39,7 +39,7 @@ func NewPostgresRepository(db *sqlx.DB) *postgresRepository {
 // them back by moving their next attempt claimLease ahead. Rows claimed by a
 // concurrent worker are skipped.
 func (r *postgresRepository) ClaimDue(ctx context.Context, limit int) ([]Deletion, error) {
-	deletions := []Deletion{}
+	deletions := make([]Deletion, 0)
 
 	err := r.db.SelectContext(
 		ctx,
@@ -76,6 +76,8 @@ func (r *postgresRepository) Remove(ctx context.Context, key string) error {
 	return err
 }
 
+// Reschedule records a failed attempt to delete key and makes it due again
+// after retryIn. The error message is stored in last_error.
 func (r *postgresRepository) Reschedule(ctx context.Context, key string, retryIn time.Duration, lastErr string) error {
 	_, err := r.db.ExecContext(
 		ctx,

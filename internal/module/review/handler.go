@@ -30,14 +30,14 @@ func NewHandler(service Service) *Handler {
 func (h *Handler) GetReviews(w http.ResponseWriter, r *http.Request) {
 	placeID, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidPlaceID, "invalid place_id")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
 		return
 	}
 
 	reviews, err := h.service.GetByPlace(r.Context(), placeID)
 	if err != nil {
 		if errors.Is(err, ErrPlaceNotFound) {
-			httpx.RespondError(w, http.StatusNotFound, CodePlaceNotFound, err.Error())
+			httpx.RespondError(w, http.StatusNotFound, httpx.CodePlaceNotFound, err.Error())
 			return
 		}
 		httpx.RespondInternalError(w)
@@ -52,7 +52,7 @@ func (h *Handler) GetReviews(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
 	placeID, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidPlaceID, "invalid place_id")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
 		return
 	}
 
@@ -62,22 +62,22 @@ func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req CreateReviewRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var req *CreateReviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
 		return
 	}
 
-	created, err := h.service.Create(r.Context(), toReview(placeID, userID, req))
+	created, err := h.service.Create(r.Context(), toReview(placeID, userID, *req))
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidRating),
 			errors.Is(err, ErrCommentTooLong):
 			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 		case errors.Is(err, ErrPlaceNotFound):
-			httpx.RespondError(w, http.StatusNotFound, CodePlaceNotFound, err.Error())
+			httpx.RespondError(w, http.StatusNotFound, httpx.CodePlaceNotFound, err.Error())
 		case errors.Is(err, ErrAlreadyReviewed):
-			httpx.RespondError(w, http.StatusConflict, CodeAlreadyReviewed, err.Error())
+			httpx.RespondError(w, http.StatusConflict, httpx.CodeAlreadyReviewed, err.Error())
 		default:
 			httpx.RespondInternalError(w)
 		}

@@ -28,6 +28,7 @@ func NewHandler(service Service, imageURL func(key string) string) *Handler {
 // Handler
 // -----------------------------------------------------------------------------
 
+// GetSubDistricts lists every sub-district in id order.
 func (h *Handler) GetSubDistricts(w http.ResponseWriter, r *http.Request) {
 	subDistricts, err := h.service.GetMany(r.Context())
 	if err != nil {
@@ -42,14 +43,14 @@ func (h *Handler) GetSubDistricts(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetSubDistrict(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidSubDistrictID, "invalid sub_district_id")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidSubDistrictID, "invalid sub_district_id")
 		return
 	}
 
 	sd, err := h.service.GetSubDistrict(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrSubDistrictNotFound) {
-			httpx.RespondError(w, http.StatusNotFound, CodeSubDistrictNotFound, err.Error())
+			httpx.RespondError(w, http.StatusNotFound, httpx.CodeSubDistrictNotFound, err.Error())
 			return
 		}
 		httpx.RespondInternalError(w)
@@ -59,14 +60,15 @@ func (h *Handler) GetSubDistrict(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponse(*sd, h.imageURL))
 }
 
+// CreateSubDistrict stores the sub-district given in the body.
 func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
-	var req CreateSubDistrictRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var req *CreateSubDistrictRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
 		return
 	}
 
-	sd, err := h.service.Create(r.Context(), toSubDistrict(req))
+	sd, err := h.service.Create(r.Context(), toSubDistrict(*req))
 	if err != nil {
 		respondSubDistrictError(w, err)
 		return
@@ -79,7 +81,7 @@ func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PatchSubDistrict(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidSubDistrictID, "invalid sub_district_id")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidSubDistrictID, "invalid sub_district_id")
 		return
 	}
 
@@ -103,16 +105,16 @@ func (h *Handler) PatchSubDistrict(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteSubDistrict(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidSubDistrictID, "invalid sub_district_id")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidSubDistrictID, "invalid sub_district_id")
 		return
 	}
 
 	if err := h.service.Delete(r.Context(), id); err != nil {
 		switch {
 		case errors.Is(err, ErrSubDistrictNotFound):
-			httpx.RespondError(w, http.StatusNotFound, CodeSubDistrictNotFound, err.Error())
+			httpx.RespondError(w, http.StatusNotFound, httpx.CodeSubDistrictNotFound, err.Error())
 		case errors.Is(err, ErrSubDistrictInUse):
-			httpx.RespondError(w, http.StatusConflict, CodeSubDistrictInUse, err.Error())
+			httpx.RespondError(w, http.StatusConflict, httpx.CodeSubDistrictInUse, err.Error())
 		default:
 			httpx.RespondInternalError(w)
 		}
@@ -128,7 +130,7 @@ func (h *Handler) CreateImageUpload(slot ImageSlot) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 		if !ok {
-			httpx.RespondError(w, http.StatusBadRequest, CodeInvalidSubDistrictID, "invalid sub_district_id")
+			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidSubDistrictID, "invalid sub_district_id")
 			return
 		}
 
@@ -154,7 +156,7 @@ func (h *Handler) SetImage(slot ImageSlot) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 		if !ok {
-			httpx.RespondError(w, http.StatusBadRequest, CodeInvalidSubDistrictID, "invalid sub_district_id")
+			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidSubDistrictID, "invalid sub_district_id")
 			return
 		}
 
@@ -178,7 +180,7 @@ func (h *Handler) SetImage(slot ImageSlot) http.HandlerFunc {
 func respondImageError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrSubDistrictNotFound):
-		httpx.RespondError(w, http.StatusNotFound, CodeSubDistrictNotFound, err.Error())
+		httpx.RespondError(w, http.StatusNotFound, httpx.CodeSubDistrictNotFound, err.Error())
 	case errors.Is(err, storage.ErrInvalidImageType),
 		errors.Is(err, storage.ErrImageTooLarge),
 		errors.Is(err, storage.ErrImageNotUploaded),
@@ -193,13 +195,13 @@ func respondImageError(w http.ResponseWriter, err error) {
 func respondSubDistrictError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrSubDistrictNotFound):
-		httpx.RespondError(w, http.StatusNotFound, CodeSubDistrictNotFound, err.Error())
+		httpx.RespondError(w, http.StatusNotFound, httpx.CodeSubDistrictNotFound, err.Error())
 	case errors.Is(err, ErrInvalidName),
 		errors.Is(err, ErrInvalidSlug),
 		errors.Is(err, ErrInvalidEstimatedDailySpending):
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 	case errors.Is(err, ErrSubDistrictExists):
-		httpx.RespondError(w, http.StatusConflict, CodeSubDistrictExists, err.Error())
+		httpx.RespondError(w, http.StatusConflict, httpx.CodeSubDistrictExists, err.Error())
 	default:
 		httpx.RespondInternalError(w)
 	}

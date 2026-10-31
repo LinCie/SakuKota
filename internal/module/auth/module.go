@@ -2,6 +2,7 @@ package auth
 
 import (
 	"rantau-go/internal/config"
+	"rantau-go/internal/module/users"
 )
 
 // Module wires up the auth module's service and handler.
@@ -10,9 +11,9 @@ type Module struct {
 	Handler *Handler
 }
 
-func NewModule(cfg config.Config, users UserService) *Module {
+func NewModule(cfg config.Config, userService users.Service) *Module {
 	store := NewMemoryRefreshStore()
-	service := NewService(cfg, users, store)
+	service := NewService(cfg, userService, store)
 	handler := NewHandler(cfg, service)
 
 	return &Module{

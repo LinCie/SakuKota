@@ -1,6 +1,7 @@
 package review_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -264,6 +265,7 @@ func TestHandler_CreateReview_RejectsMalformedBodies(t *testing.T) {
 		body string
 	}{
 		{name: "empty body", body: ``},
+		{name: "body is null", body: `null`},
 		{name: "malformed JSON", body: `{"rating":`},
 		{name: "not JSON", body: `four stars`},
 		{name: "array instead of object", body: `[4]`},
@@ -371,4 +373,73 @@ func TestHandler_CreateReview_Success(t *testing.T) {
 	rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/places/3/reviews",
 		`{"rating":4,"comment":"Murah, porsi besar"}`, 7))
 	assertData(t, rec, http.StatusCreated, linReviewJSON)
+}
+
+// -----------------------------------------------------------------------------
+// Context and failures shared by the endpoints
+// -----------------------------------------------------------------------------
+
+func TestHandler_CreateReview_ContextReachesService(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	svc := mock.NewMockService(gomock.NewController(t))
+	svc.EXPECT().Create(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(got context.Context, _ *review.Review) (*review.Review, error) {
+			if got.Err() == nil {
+				t.Error("service was not given the request's context")
+			}
+			return nil, got.Err()
+		})
+
+	req := authRequest(t, http.MethodPost, "/places/3/reviews", `{"rating":4}`, 7).WithContext(ctx)
+	rec := serve(t, newRouter(svc), req)
+	if rec.Code == http.StatusCreated {
+		t.Error("status 201 for a request whose context had ended")
+	}
+}
+
+func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
+	dbErr := errors.New(`pq: relation "place_reviews" does not exist`)
+
+	tests := []struct {
+		name   string
+		method string
+		target string
+		body   string
+		fail   func(svc *mock.MockService)
+	}{
+		{
+			name:   "list reviews",
+			method: http.MethodGet,
+			target: "/places/3/reviews",
+			fail: func(s *mock.MockService) {
+				s.EXPECT().GetByPlace(gomock.Any(), int64(3)).Return(nil, dbErr)
+			},
+		},
+		{
+			name:   "create review",
+			method: http.MethodPost,
+			target: "/places/3/reviews",
+			body:   `{"rating":4}`,
+			fail: func(s *mock.MockService) {
+				s.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, dbErr)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := mock.NewMockService(gomock.NewController(t))
+			tc.fail(svc)
+
+			rec := serve(t, newRouter(svc), authRequest(t, tc.method, tc.target, tc.body, 7))
+			if rec.Code != http.StatusInternalServerError {
+				t.Fatalf("status = %d, want 500; body: %s", rec.Code, rec.Body)
+			}
+			if strings.Contains(rec.Body.String(), "pq:") || strings.Contains(rec.Body.String(), "relation") {
+				t.Errorf("500 body exposes storage detail: %s", rec.Body)
+			}
+		})
+	}
 }

@@ -19,10 +19,10 @@ const (
 
 // newMocks returns a repository and object storage that fail the test on any
 // call they do not expect.
-func newMocks(t *testing.T) (*mock.MockRepository, *mock.MockObjectStorage) {
+func newMocks(t *testing.T) (*mock.MockRepository, *mock.MockImageStorage) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
-	return mock.NewMockRepository(ctrl), mock.NewMockObjectStorage(ctrl)
+	return mock.NewMockRepository(ctrl), mock.NewMockImageStorage(ctrl)
 }
 
 func TestService_Run_DeletesDueObjects(t *testing.T) {
@@ -122,18 +122,18 @@ func TestService_Run_QueueUpdateFailure(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		expect func(repo *mock.MockRepository, objects *mock.MockObjectStorage)
+		expect func(repo *mock.MockRepository, objects *mock.MockImageStorage)
 	}{
 		{
 			name: "remove failure is returned",
-			expect: func(repo *mock.MockRepository, objects *mock.MockObjectStorage) {
+			expect: func(repo *mock.MockRepository, objects *mock.MockImageStorage) {
 				objects.EXPECT().Delete(gomock.Any(), keyA).Return(nil)
 				repo.EXPECT().Remove(gomock.Any(), keyA).Return(boom)
 			},
 		},
 		{
 			name: "reschedule failure is returned",
-			expect: func(repo *mock.MockRepository, objects *mock.MockObjectStorage) {
+			expect: func(repo *mock.MockRepository, objects *mock.MockImageStorage) {
 				objects.EXPECT().Delete(gomock.Any(), keyA).Return(errors.New("timeout"))
 				repo.EXPECT().Reschedule(gomock.Any(), keyA, 15*time.Minute, "timeout").Return(boom)
 			},

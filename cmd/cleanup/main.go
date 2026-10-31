@@ -26,11 +26,8 @@ func main() {
 	}
 	defer db.Close()
 
-	service := storagecleanup.NewService(
-		storagecleanup.NewPostgresRepository(db),
-		storage.NewS3(cfg.Storage),
-	)
-	if err := service.Run(ctx); err != nil {
+	module := storagecleanup.NewModule(db, storage.NewS3(cfg.Storage))
+	if err := module.Service.Run(ctx); err != nil {
 		log.Fatalf("clean up storage: %v", err)
 	}
 }

@@ -13,13 +13,11 @@ const (
 	FieldTypeDate = "date"
 )
 
-// Indonesia's bounding box in degrees: west and east longitude, south and north latitude.
+// Lengths in characters, counted after trimming spaces. They match the VARCHAR
+// columns of PLACES.
 const (
-	indonesiaMinLongitude = 95
-	indonesiaMaxLongitude = 141
-	indonesiaMinLatitude  = -11
-	indonesiaMaxLatitude  = 6
+	MaxNameLength                = 150
+	MaxAddressLength             = 255
+	MaxOperatingHoursLength      = 255
+	MaxEstimatedPriceRangeLength = 100
 )
-
-// maxPlaceNameLength is the size of the VARCHAR(150) column holding place names.
-const maxPlaceNameLength = 150

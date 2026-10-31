@@ -1,6 +1,7 @@
 package auth_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -246,6 +247,7 @@ func TestHandler_Refresh_MissingCookie(t *testing.T) {
 
 	rec := do(h.Refresh, "")
 	expectError(t, rec, http.StatusUnauthorized, "INVALID_REFRESH_TOKEN")
+	expectCookieCleared(t, rec)
 }
 
 func TestHandler_Refresh_Success(t *testing.T) {
@@ -334,4 +336,108 @@ func TestHandler_Logout_FailureStillClearsCookie(t *testing.T) {
 	rec := do(h.Logout, "", &http.Cookie{Name: refreshCookieName, Value: "refresh-1"})
 	expectError(t, rec, http.StatusInternalServerError, "INTERNAL_ERROR")
 	expectCookieCleared(t, rec)
+}
+
+// -----------------------------------------------------------------------------
+// Request bodies and failures shared by the endpoints
+// -----------------------------------------------------------------------------
+
+func TestHandler_NullBody_IsInvalidBody(t *testing.T) {
+	// No expectations: a body that is not an object must never reach the service.
+	svc := mock.NewMockService(gomock.NewController(t))
+	h := auth.NewHandler(testConfig(), svc)
+
+	expectError(t, do(h.Register, `null`), http.StatusBadRequest, "INVALID_BODY")
+	expectError(t, do(h.Login, `null`), http.StatusBadRequest, "INVALID_BODY")
+}
+
+func TestHandler_ContextReachesService(t *testing.T) {
+	cancelled := func() (context.Context, context.CancelFunc) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		return ctx, cancel
+	}
+
+	// The service must see the request's context: it is cancelled here, so a
+	// service that ignores it would succeed.
+	svc := mock.NewMockService(gomock.NewController(t))
+	svc.EXPECT().Login(gomock.Any(), testEmail, "password123").DoAndReturn(
+		func(got context.Context, _, _ string) (*users.User, *auth.Tokens, error) {
+			if got.Err() == nil {
+				t.Error("service was not given the request's context")
+			}
+			return nil, nil, got.Err()
+		})
+
+	ctx, cancel := cancelled()
+	defer cancel()
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login",
+		strings.NewReader(`{"email":"`+testEmail+`","password":"password123"}`)).WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h := auth.NewHandler(testConfig(), svc)
+	h.Login(rec, req)
+
+	if rec.Code == http.StatusOK {
+		t.Error("status 200 for a request whose context had ended")
+	}
+}
+
+func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
+	dbErr := errors.New(`pq: relation "users" does not exist`)
+	cookie := &http.Cookie{Name: refreshCookieName, Value: "refresh-1"}
+
+	tests := []struct {
+		name    string
+		handler func(*auth.Handler) http.HandlerFunc
+		body    string
+		cookies []*http.Cookie
+		fail    func(svc *mock.MockService)
+	}{
+		{
+			name:    "register",
+			handler: func(h *auth.Handler) http.HandlerFunc { return h.Register },
+			body:    `{"name":"Ana","email":"` + testEmail + `","password":"password123"}`,
+			fail: func(s *mock.MockService) {
+				s.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, dbErr)
+			},
+		},
+		{
+			name:    "login",
+			handler: func(h *auth.Handler) http.HandlerFunc { return h.Login },
+			body:    `{"email":"` + testEmail + `","password":"password123"}`,
+			fail: func(s *mock.MockService) {
+				s.EXPECT().Login(gomock.Any(), testEmail, "password123").Return(nil, nil, dbErr)
+			},
+		},
+		{
+			name:    "refresh",
+			handler: func(h *auth.Handler) http.HandlerFunc { return h.Refresh },
+			cookies: []*http.Cookie{cookie},
+			fail: func(s *mock.MockService) {
+				s.EXPECT().Refresh(gomock.Any(), "refresh-1").Return(nil, nil, dbErr)
+			},
+		},
+		{
+			name:    "logout",
+			handler: func(h *auth.Handler) http.HandlerFunc { return h.Logout },
+			cookies: []*http.Cookie{cookie},
+			fail: func(s *mock.MockService) {
+				s.EXPECT().Logout(gomock.Any(), "refresh-1").Return(dbErr)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := mock.NewMockService(gomock.NewController(t))
+			tc.fail(svc)
+
+			rec := do(tc.handler(auth.NewHandler(testConfig(), svc)), tc.body, tc.cookies...)
+			expectError(t, rec, http.StatusInternalServerError, "INTERNAL_ERROR")
+			if strings.Contains(rec.Body.String(), "pq:") || strings.Contains(rec.Body.String(), "relation") {
+				t.Errorf("500 body exposes storage detail: %s", rec.Body)
+			}
+		})
+	}
 }

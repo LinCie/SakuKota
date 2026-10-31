@@ -8,6 +8,13 @@ const (
 	refreshCookiePath = "/v1/auth"
 )
 
+// Lengths in characters, counted after trimming spaces. They match the
+// VARCHAR columns of USERS.
+const (
+	maxNameLength  = 100
+	maxEmailLength = 255
+)
+
 const minPasswordLength = 8
 
 const refreshTokenBytes = 32

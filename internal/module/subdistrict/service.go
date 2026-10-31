@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"rantau-go/internal/storage"
+	"rantau-go/internal/text"
 )
 
 // Service defines the operations required by the handler.
@@ -92,21 +93,13 @@ func (s *service) Update(ctx context.Context, id int64, patch SubDistrictPatch) 
 	return s.repo.Update(ctx, sd)
 }
 
-// Delete removes the sub-district, then its images. Failed image deletes are
-// ignored because the sub-district is already gone.
+// Delete removes the sub-district. The repository queues its images for
+// deletion.
 func (s *service) Delete(ctx context.Context, id int64) error {
-	imageKeys, err := s.repo.Delete(ctx, id)
-	if err != nil {
-		return err
-	}
-
-	for _, key := range imageKeys {
-		_ = s.images.Delete(ctx, key)
-	}
-
-	return nil
+	return s.repo.Delete(ctx, id)
 }
 
+// ImageUploadURL returns an upload for a new image in slot of the sub-district.
 func (s *service) ImageUploadURL(ctx context.Context, id int64, slot ImageSlot, contentType string) (storage.Upload, error) {
 	if _, err := s.repo.GetSubDistrict(ctx, id); err != nil {
 		return storage.Upload{}, err
@@ -116,11 +109,11 @@ func (s *service) ImageUploadURL(ctx context.Context, id int64, slot ImageSlot, 
 }
 
 // SetImage promotes the upload and stores it as the sub-district's image in
-// slot. Image deletes that fail are ignored: they only leave an unused object
-// behind.
+// slot. The repository queues the previous image for deletion. If the promoted
+// image cannot be stored, its delete is attempted once and a failure is
+// ignored: it only leaves an unused object behind.
 func (s *service) SetImage(ctx context.Context, id int64, slot ImageSlot, uploadKey string) (*SubDistrict, error) {
-	sd, err := s.repo.GetSubDistrict(ctx, id)
-	if err != nil {
+	if _, err := s.repo.GetSubDistrict(ctx, id); err != nil {
 		return nil, err
 	}
 
@@ -135,10 +128,6 @@ func (s *service) SetImage(ctx context.Context, id int64, slot ImageSlot, upload
 		return nil, err
 	}
 
-	if old := sd.imageKey(slot); old != nil {
-		_ = s.images.Delete(ctx, *old)
-	}
-
 	return updated, nil
 }
 
@@ -151,7 +140,8 @@ func imagePrefix(id int64, slot ImageSlot) string {
 // validation
 // -----------------------------------------------------------------------------
 
-// validate trims the name and slug, then checks every field against its limits.
+// validate trims the text fields, then checks every field against its limits.
+// Blank optional text is stored as absent.
 func validate(sd *SubDistrict) error {
 	sd.Name = strings.TrimSpace(sd.Name)
 	if n := utf8.RuneCountInString(sd.Name); n == 0 || n > maxNameLength {
@@ -162,6 +152,9 @@ func validate(sd *SubDistrict) error {
 	if n := utf8.RuneCountInString(sd.Slug); n == 0 || n > maxNameLength {
 		return ErrInvalidSlug
 	}
+
+	sd.FloodHistory = text.TrimOptional(sd.FloodHistory)
+	sd.SafetyCrimeInformation = text.TrimOptional(sd.SafetyCrimeInformation)
 
 	if v := sd.EstimatedDailySpending; v != nil && (*v < 0 || *v > maxEstimatedDailySpending) {
 		return ErrInvalidEstimatedDailySpending

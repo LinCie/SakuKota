@@ -88,15 +88,15 @@ func TestService_GetByEmail_PropagatesErrors(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// GetByID
+// GetUser
 // -----------------------------------------------------------------------------
 
-func TestService_GetByID_ReturnsUser(t *testing.T) {
+func TestService_GetUser_ReturnsUser(t *testing.T) {
 	svc, repo := newService(t)
 	want := &users.User{ID: 7, Email: testEmail}
-	repo.EXPECT().GetByID(gomock.Any(), int64(7)).Return(want, nil)
+	repo.EXPECT().GetUser(gomock.Any(), int64(7)).Return(want, nil)
 
-	got, err := svc.GetByID(context.Background(), 7)
+	got, err := svc.GetUser(context.Background(), 7)
 	if err != nil {
 		t.Fatalf("get by id: %v", err)
 	}
@@ -105,13 +105,13 @@ func TestService_GetByID_ReturnsUser(t *testing.T) {
 	}
 }
 
-func TestService_GetByID_PropagatesErrors(t *testing.T) {
+func TestService_GetUser_PropagatesErrors(t *testing.T) {
 	for _, want := range []error{users.ErrNotFound, errBoom} {
 		t.Run(want.Error(), func(t *testing.T) {
 			svc, repo := newService(t)
-			repo.EXPECT().GetByID(gomock.Any(), int64(7)).Return(nil, want)
+			repo.EXPECT().GetUser(gomock.Any(), int64(7)).Return(nil, want)
 
-			_, err := svc.GetByID(context.Background(), 7)
+			_, err := svc.GetUser(context.Background(), 7)
 			if !errors.Is(err, want) {
 				t.Errorf("error = %v, want %v", err, want)
 			}

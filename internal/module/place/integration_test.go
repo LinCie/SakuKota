@@ -1077,34 +1077,6 @@ func TestIntegration_RepositorySetImageKey(t *testing.T) {
 	}
 }
 
-func TestIntegration_RepositoryDeleteReturnsImageKey(t *testing.T) {
-	resetDB(t)
-	seedCatalog(t)
-	seedPlaces(t)
-	mustExec(t, `UPDATE PLACES SET image_key = 'places/2/a.webp' WHERE id = 2`)
-	repo := place.NewPostgresRepository(testDB)
-
-	key, err := repo.Delete(context.Background(), 2)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if key == nil || *key != "places/2/a.webp" {
-		t.Errorf("deleted image key = %v, want places/2/a.webp", key)
-	}
-
-	key, err = repo.Delete(context.Background(), 1)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if key != nil {
-		t.Errorf("place without an image: key = %q, want nil", *key)
-	}
-
-	if _, err := repo.Delete(context.Background(), 99); !errors.Is(err, place.ErrPlaceNotFound) {
-		t.Errorf("unknown place: err = %v, want ErrPlaceNotFound", err)
-	}
-}
-
 // clearDeletions empties the storage deletion queue.
 func clearDeletions(t *testing.T) {
 	t.Helper()
@@ -1129,17 +1101,17 @@ func TestIntegration_RepositoryDeleteQueuesImage(t *testing.T) {
 	mustExec(t, `UPDATE PLACES SET image_key = 'places/2/a.webp' WHERE id = 2`)
 	repo := place.NewPostgresRepository(testDB)
 
-	if _, err := repo.Delete(context.Background(), 2); err != nil {
+	if err := repo.Delete(context.Background(), 2); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if got, want := queuedDeletions(t), []string{"places/2/a.webp"}; !slices.Equal(got, want) {
 		t.Fatalf("queued after deleting a place with an image = %v, want %v", got, want)
 	}
 
-	if _, err := repo.Delete(context.Background(), 1); err != nil {
+	if err := repo.Delete(context.Background(), 1); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if _, err := repo.Delete(context.Background(), 99); !errors.Is(err, place.ErrPlaceNotFound) {
+	if err := repo.Delete(context.Background(), 99); !errors.Is(err, place.ErrPlaceNotFound) {
 		t.Fatalf("unknown place: err = %v, want ErrPlaceNotFound", err)
 	}
 	if got, want := queuedDeletions(t), []string{"places/2/a.webp"}; !slices.Equal(got, want) {

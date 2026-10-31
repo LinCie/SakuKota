@@ -42,7 +42,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	if param := query.Get("sub_district_id"); param != "" {
 		id, ok := httpx.ParseID(param)
 		if !ok {
-			httpx.RespondError(w, http.StatusBadRequest, CodeInvalidSubDistrictID, "invalid sub_district_id")
+			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidSubDistrictID, "invalid sub_district_id")
 			return
 		}
 		filter.SubDistrictID = id
@@ -52,7 +52,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 		for part := range strings.SplitSeq(param, ",") {
 			id, ok := httpx.ParseID(part)
 			if !ok {
-				httpx.RespondError(w, http.StatusBadRequest, CodeInvalidCategoryID, "invalid category_id")
+				httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidCategoryID, "invalid category_id")
 				return
 			}
 			filter.CategoryIDs = append(filter.CategoryIDs, id)
@@ -62,7 +62,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	if param := query.Get("limit"); param != "" {
 		limit, err := strconv.Atoi(param)
 		if err != nil || limit <= 0 {
-			httpx.RespondError(w, http.StatusBadRequest, CodeInvalidLimit, "invalid limit")
+			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidLimit, "invalid limit")
 			return
 		}
 		filter.Limit = limit
@@ -71,7 +71,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	if param := query.Get("bbox"); param != "" {
 		bounds, ok := parseBoundingBox(param)
 		if !ok {
-			httpx.RespondError(w, http.StatusBadRequest, CodeInvalidBBox, "invalid bbox")
+			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBBox, "invalid bbox")
 			return
 		}
 		filter.Bounds = bounds
@@ -81,9 +81,9 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrSubDistrictNotFound):
-			httpx.RespondError(w, http.StatusNotFound, CodeSubDistrictNotFound, err.Error())
+			httpx.RespondError(w, http.StatusNotFound, httpx.CodeSubDistrictNotFound, err.Error())
 		case errors.Is(err, ErrCategoryNotFound):
-			httpx.RespondError(w, http.StatusNotFound, CodeCategoryNotFound, err.Error())
+			httpx.RespondError(w, http.StatusNotFound, httpx.CodeCategoryNotFound, err.Error())
 		default:
 			httpx.RespondInternalError(w)
 		}
@@ -127,14 +127,14 @@ func parseBoundingBox(param string) (*BoundingBox, bool) {
 func (h *Handler) GetPlace(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidPlaceID, "invalid place_id")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
 		return
 	}
 
 	p, err := h.service.GetPlace(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrPlaceNotFound) {
-			httpx.RespondError(w, http.StatusNotFound, CodePlaceNotFound, err.Error())
+			httpx.RespondError(w, http.StatusNotFound, httpx.CodePlaceNotFound, err.Error())
 			return
 		}
 		httpx.RespondInternalError(w)
@@ -144,6 +144,7 @@ func (h *Handler) GetPlace(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.imageURL))
 }
 
+// GetCategories lists every category with its fields.
 func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
 	categories, err := h.service.GetCategories(r.Context())
 	if err != nil {
@@ -158,14 +159,14 @@ func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidCategoryID, "invalid category_id")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidCategoryID, "invalid category_id")
 		return
 	}
 
 	c, err := h.service.GetCategory(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrCategoryNotFound) {
-			httpx.RespondError(w, http.StatusNotFound, CodeCategoryNotFound, err.Error())
+			httpx.RespondError(w, http.StatusNotFound, httpx.CodeCategoryNotFound, err.Error())
 			return
 		}
 		httpx.RespondInternalError(w)
@@ -176,13 +177,13 @@ func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
-	var req CreatePlaceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var req *CreatePlaceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
 		return
 	}
 
-	p, err := h.service.Create(r.Context(), toPlace(req))
+	p, err := h.service.Create(r.Context(), toPlace(*req))
 	if err != nil {
 		respondPlaceError(w, err)
 		return
@@ -195,7 +196,7 @@ func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PatchPlace(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidPlaceID, "invalid place_id")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
 		return
 	}
 
@@ -219,13 +220,13 @@ func (h *Handler) PatchPlace(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeletePlace(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidPlaceID, "invalid place_id")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
 		return
 	}
 
 	if err := h.service.Delete(r.Context(), id); err != nil {
 		if errors.Is(err, ErrPlaceNotFound) {
-			httpx.RespondError(w, http.StatusNotFound, CodePlaceNotFound, err.Error())
+			httpx.RespondError(w, http.StatusNotFound, httpx.CodePlaceNotFound, err.Error())
 			return
 		}
 		httpx.RespondInternalError(w)
@@ -240,7 +241,7 @@ func (h *Handler) DeletePlace(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateImageUpload(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidPlaceID, "invalid place_id")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
 		return
 	}
 
@@ -264,7 +265,7 @@ func (h *Handler) CreateImageUpload(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SetImage(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidPlaceID, "invalid place_id")
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
 		return
 	}
 
@@ -287,7 +288,7 @@ func (h *Handler) SetImage(w http.ResponseWriter, r *http.Request) {
 func respondImageError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrPlaceNotFound):
-		httpx.RespondError(w, http.StatusNotFound, CodePlaceNotFound, err.Error())
+		httpx.RespondError(w, http.StatusNotFound, httpx.CodePlaceNotFound, err.Error())
 	case errors.Is(err, storage.ErrInvalidImageType),
 		errors.Is(err, storage.ErrImageTooLarge),
 		errors.Is(err, storage.ErrImageNotUploaded),
@@ -302,9 +303,12 @@ func respondImageError(w http.ResponseWriter, err error) {
 func respondPlaceError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrPlaceNotFound):
-		httpx.RespondError(w, http.StatusNotFound, CodePlaceNotFound, err.Error())
+		httpx.RespondError(w, http.StatusNotFound, httpx.CodePlaceNotFound, err.Error())
 	case errors.Is(err, ErrInvalidName),
-		errors.Is(err, ErrPlaceNameTooLong),
+		errors.Is(err, ErrNameTooLong),
+		errors.Is(err, ErrAddressTooLong),
+		errors.Is(err, ErrOperatingHoursTooLong),
+		errors.Is(err, ErrEstimatedPriceRangeTooLong),
 		errors.Is(err, ErrSubDistrictNotFound),
 		errors.Is(err, ErrCategoryNotFound),
 		errors.Is(err, ErrInvalidAttributes),

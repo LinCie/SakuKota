@@ -3,6 +3,7 @@ package subdistrict_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -67,7 +68,7 @@ func newMocks(t *testing.T) (*mock.MockRepository, *mock.MockImageStorage) {
 // Creating sub-districts
 // -----------------------------------------------------------------------------
 
-func TestService_CreateSubDistrict_Name(t *testing.T) {
+func TestService_Create_Name(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -113,7 +114,7 @@ func TestService_CreateSubDistrict_Name(t *testing.T) {
 	}
 }
 
-func TestService_CreateSubDistrict_Slug(t *testing.T) {
+func TestService_Create_Slug(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -152,7 +153,7 @@ func TestService_CreateSubDistrict_Slug(t *testing.T) {
 	}
 }
 
-func TestService_CreateSubDistrict_OptionalFieldLimits(t *testing.T) {
+func TestService_Create_OptionalFieldLimits(t *testing.T) {
 	tests := []struct {
 		name    string
 		in      subdistrict.SubDistrict
@@ -192,7 +193,74 @@ func TestService_CreateSubDistrict_OptionalFieldLimits(t *testing.T) {
 	}
 }
 
-func TestService_CreateSubDistrict_StoresFieldsAsSent(t *testing.T) {
+func TestService_OptionalText(t *testing.T) {
+	fields := []struct {
+		name     string
+		set      func(*subdistrict.SubDistrict, *string)
+		setPatch func(*subdistrict.SubDistrictPatch, string)
+		get      func(*subdistrict.SubDistrict) *string
+	}{
+		{name: "flood history",
+			set:      func(sd *subdistrict.SubDistrict, v *string) { sd.FloodHistory = v },
+			setPatch: func(p *subdistrict.SubDistrictPatch, v string) { p.FloodHistory = present(v) },
+			get:      func(sd *subdistrict.SubDistrict) *string { return sd.FloodHistory }},
+		{name: "safety and crime information",
+			set:      func(sd *subdistrict.SubDistrict, v *string) { sd.SafetyCrimeInformation = v },
+			setPatch: func(p *subdistrict.SubDistrictPatch, v string) { p.SafetyCrimeInformation = present(v) },
+			get:      func(sd *subdistrict.SubDistrict) *string { return sd.SafetyCrimeInformation }},
+	}
+
+	tests := []struct {
+		name  string
+		input string
+		want  *string
+	}{
+		{name: "surrounding whitespace is removed", input: "  Banjir 2020\n", want: ptr("Banjir 2020")},
+		{name: "inner spacing is kept", input: "Banjir  2020", want: ptr("Banjir  2020")},
+		{name: "blank is stored as absent", input: " \t\n ", want: nil},
+	}
+
+	for _, f := range fields {
+		for _, tc := range tests {
+			t.Run("create/"+f.name+"/"+tc.name, func(t *testing.T) {
+				sd := &subdistrict.SubDistrict{Name: "Menteng", Slug: "menteng"}
+				input := tc.input
+				f.set(sd, &input)
+
+				stored, err := createSubDistrict(t, sd)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := f.get(stored); !reflect.DeepEqual(got, tc.want) {
+					t.Errorf("stored %s = %v, want %v", f.name, ptrString(got), ptrString(tc.want))
+				}
+			})
+
+			t.Run("update/"+f.name+"/"+tc.name, func(t *testing.T) {
+				var patch subdistrict.SubDistrictPatch
+				f.setPatch(&patch, tc.input)
+
+				stored, err := updateSubDistrict(t, savedMenteng(), 7, patch)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := f.get(stored); !reflect.DeepEqual(got, tc.want) {
+					t.Errorf("stored %s = %v, want %v", f.name, ptrString(got), ptrString(tc.want))
+				}
+			})
+		}
+	}
+}
+
+// ptrString describes an optional string for failure messages.
+func ptrString(s *string) string {
+	if s == nil {
+		return "<absent>"
+	}
+	return fmt.Sprintf("%q", *s)
+}
+
+func TestService_Create_StoresFieldsAsSent(t *testing.T) {
 	tests := []struct {
 		name string
 		in   subdistrict.SubDistrict
@@ -224,7 +292,7 @@ func TestService_CreateSubDistrict_StoresFieldsAsSent(t *testing.T) {
 	}
 }
 
-func TestService_CreateSubDistrict_Storage(t *testing.T) {
+func TestService_Create_Storage(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
@@ -328,7 +396,7 @@ func TestService_GetSubDistrict(t *testing.T) {
 	}
 }
 
-func TestService_UpdateSubDistrict_LookupFailure(t *testing.T) {
+func TestService_Update_LookupFailure(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
@@ -355,7 +423,7 @@ func TestService_UpdateSubDistrict_LookupFailure(t *testing.T) {
 	}
 }
 
-func TestService_UpdateSubDistrict_Fields(t *testing.T) {
+func TestService_Update_Fields(t *testing.T) {
 	tests := []struct {
 		name   string
 		patch  subdistrict.SubDistrictPatch
@@ -401,7 +469,7 @@ func TestService_UpdateSubDistrict_Fields(t *testing.T) {
 	}
 }
 
-func TestService_UpdateSubDistrict_Rejected(t *testing.T) {
+func TestService_Update_Rejected(t *testing.T) {
 	tests := []struct {
 		name    string
 		patch   subdistrict.SubDistrictPatch
@@ -430,7 +498,7 @@ func TestService_UpdateSubDistrict_Rejected(t *testing.T) {
 	}
 }
 
-func TestService_UpdateSubDistrict_Storage(t *testing.T) {
+func TestService_Update_Storage(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
@@ -462,7 +530,7 @@ func TestService_UpdateSubDistrict_Storage(t *testing.T) {
 	}
 }
 
-func TestService_DeleteSubDistrict(t *testing.T) {
+func TestService_Delete(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
@@ -479,8 +547,8 @@ func TestService_DeleteSubDistrict(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
-			// The sub-district has no images, so no image may be deleted.
-			repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(nil, tc.repoErr)
+			// The repository queues the images, so the service deletes none.
+			repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(tc.repoErr)
 
 			err := subdistrict.NewService(repo, noImages(t)).Delete(context.Background(), 7)
 			if !errors.Is(err, tc.wantErr) {
@@ -490,29 +558,15 @@ func TestService_DeleteSubDistrict(t *testing.T) {
 	}
 }
 
-func TestService_DeleteSubDistrict_Images(t *testing.T) {
-	tests := []struct {
-		name      string
-		deleteErr error
-	}{
-		{name: "deletes every image", deleteErr: nil},
-		{name: "image delete failure is ignored", deleteErr: errors.New("connection reset")},
-	}
+func TestService_Delete_QueuesImages(t *testing.T) {
+	// The repository queues every image for deletion, so the service must not
+	// delete any of them itself.
+	repo, images := newMocks(t)
+	repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(nil)
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			repo, images := newMocks(t)
-			gomock.InOrder(
-				repo.EXPECT().Delete(gomock.Any(), int64(7)).Return([]string{oldImageKey, oldStaticMapKey}, nil),
-				images.EXPECT().Delete(gomock.Any(), oldImageKey).Return(tc.deleteErr),
-				images.EXPECT().Delete(gomock.Any(), oldStaticMapKey).Return(nil),
-			)
-
-			err := subdistrict.NewService(repo, images).Delete(context.Background(), 7)
-			if err != nil {
-				t.Fatalf("err = %v, want nil: the sub-district was deleted", err)
-			}
-		})
+	err := subdistrict.NewService(repo, images).Delete(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("err = %v, want nil: the sub-district was deleted", err)
 	}
 }
 
@@ -633,19 +687,18 @@ func TestService_ImageUploadURL_PresignFailure(t *testing.T) {
 
 func TestService_SetImage(t *testing.T) {
 	tests := []struct {
-		name      string
-		hasOld    bool
-		deleteErr error
+		name   string
+		hasOld bool
 	}{
 		{name: "first image", hasOld: false},
 		{name: "replaces the previous image", hasOld: true},
-		{name: "previous image delete failure is ignored", hasOld: true, deleteErr: errors.New("connection reset")},
 	}
 
 	for _, sc := range slotCases {
 		for _, tc := range tests {
 			t.Run(string(sc.slot)+"/"+tc.name, func(t *testing.T) {
-				// The image in the other slot is never deleted.
+				// The repository queues the previous image, and the image in the
+				// other slot is never touched, so the service deletes nothing.
 				repo, images := newMocks(t)
 				existing := savedMenteng()
 				if !tc.hasOld {
@@ -654,15 +707,11 @@ func TestService_SetImage(t *testing.T) {
 				updated := savedMenteng()
 				sc.setKey(updated, ptr(sc.newKey))
 
-				calls := []any{
+				gomock.InOrder(
 					repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(existing, nil),
 					images.EXPECT().Promote(gomock.Any(), sc.prefix, sc.uploadKey).Return(sc.newKey, nil),
 					repo.EXPECT().SetImageKey(gomock.Any(), int64(7), sc.slot, sc.newKey).Return(updated, nil),
-				}
-				if tc.hasOld {
-					calls = append(calls, images.EXPECT().Delete(gomock.Any(), sc.oldKey).Return(tc.deleteErr))
-				}
-				gomock.InOrder(calls...)
+				)
 
 				got, err := subdistrict.NewService(repo, images).SetImage(context.Background(), 7, sc.slot, sc.uploadKey)
 				if err != nil {

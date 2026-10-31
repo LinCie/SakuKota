@@ -27,21 +27,23 @@ func NewHandler(cfg config.Config, service Service) *Handler {
 // -----------------------------------------------------------------------------
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
-	var req RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var req *RegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
 		return
 	}
 
-	u, err := h.service.Register(r.Context(), toUser(req), req.Password)
+	u, err := h.service.Register(r.Context(), toUser(*req), req.Password)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidName),
+			errors.Is(err, ErrNameTooLong),
 			errors.Is(err, ErrInvalidEmail),
+			errors.Is(err, ErrEmailTooLong),
 			errors.Is(err, ErrWeakPassword):
 			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 		case errors.Is(err, users.ErrEmailTaken):
-			httpx.RespondError(w, http.StatusConflict, users.CodeEmailTaken, err.Error())
+			httpx.RespondError(w, http.StatusConflict, httpx.CodeEmailTaken, err.Error())
 		default:
 			httpx.RespondInternalError(w)
 		}
@@ -52,8 +54,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var req *LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
 		return
 	}
@@ -61,7 +63,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	u, tokens, err := h.service.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, ErrInvalidCredentials) {
-			httpx.RespondError(w, http.StatusUnauthorized, CodeInvalidCredentials, err.Error())
+			httpx.RespondError(w, http.StatusUnauthorized, httpx.CodeInvalidCredentials, err.Error())
 			return
 		}
 		httpx.RespondInternalError(w)
@@ -75,7 +77,8 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(refreshCookieName)
 	if err != nil {
-		httpx.RespondError(w, http.StatusUnauthorized, CodeInvalidRefreshToken, ErrInvalidRefreshToken.Error())
+		h.clearRefreshCookie(w)
+		httpx.RespondError(w, http.StatusUnauthorized, httpx.CodeInvalidRefreshToken, ErrInvalidRefreshToken.Error())
 		return
 	}
 
@@ -83,7 +86,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, ErrInvalidRefreshToken) {
 			h.clearRefreshCookie(w)
-			httpx.RespondError(w, http.StatusUnauthorized, CodeInvalidRefreshToken, err.Error())
+			httpx.RespondError(w, http.StatusUnauthorized, httpx.CodeInvalidRefreshToken, err.Error())
 			return
 		}
 		httpx.RespondInternalError(w)

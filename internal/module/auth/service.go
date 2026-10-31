@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/mail"
 	"strings"
+	"unicode/utf8"
 
 	"rantau-go/internal/config"
 	"rantau-go/internal/jwt"
@@ -25,23 +26,16 @@ type Service interface {
 	Logout(ctx context.Context, refreshToken string) error
 }
 
-// UserService defines the user operations required by the auth service.
-type UserService interface {
-	Create(ctx context.Context, u *users.User) (*users.User, error)
-	GetByEmail(ctx context.Context, email string) (*users.User, error)
-	GetByID(ctx context.Context, id int64) (*users.User, error)
-}
-
 type service struct {
 	cfg   config.Config
-	users UserService
-	store *memoryRefreshStore
+	users users.Service
+	store RefreshStore
 }
 
-func NewService(cfg config.Config, users UserService, store *memoryRefreshStore) Service {
+func NewService(cfg config.Config, userService users.Service, store RefreshStore) Service {
 	return &service{
 		cfg:   cfg,
-		users: users,
+		users: userService,
 		store: store,
 	}
 }
@@ -52,12 +46,20 @@ func NewService(cfg config.Config, users UserService, store *memoryRefreshStore)
 
 func (s *service) Register(ctx context.Context, u *users.User, password string) (*users.User, error) {
 	u.Name = strings.TrimSpace(u.Name)
-	if u.Name == "" {
+	switch {
+	case u.Name == "":
 		return nil, ErrInvalidName
+	case utf8.RuneCountInString(u.Name) > maxNameLength:
+		return nil, ErrNameTooLong
 	}
 
 	u.Email = normalizeEmail(u.Email)
-	if _, err := mail.ParseAddress(u.Email); err != nil {
+	if utf8.RuneCountInString(u.Email) > maxEmailLength {
+		return nil, ErrEmailTooLong
+	}
+	// The address must be the bare address: a form such as "Ana <ana@x.com>"
+	// parses too, but is not an email address.
+	if addr, err := mail.ParseAddress(u.Email); err != nil || addr.Address != u.Email {
 		return nil, ErrInvalidEmail
 	}
 
@@ -109,7 +111,7 @@ func (s *service) Refresh(ctx context.Context, refreshToken string) (*users.User
 	}
 
 	// Reload the user so the new access token reflects their current role.
-	u, err := s.users.GetByID(ctx, userID)
+	u, err := s.users.GetUser(ctx, userID)
 	if err != nil {
 		if errors.Is(err, users.ErrNotFound) {
 			return nil, nil, ErrInvalidRefreshToken

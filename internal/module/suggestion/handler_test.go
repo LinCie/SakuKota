@@ -270,6 +270,7 @@ func TestHandler_CreateSuggestion_RejectsMalformedBodies(t *testing.T) {
 		body string
 	}{
 		{name: "empty body", body: ``},
+		{name: "body is null", body: `null`},
 		{name: "truncated JSON", body: `{"name":"Warung"`},
 		{name: "not JSON", body: `warung enak`},
 		{name: "array instead of object", body: `[]`},
@@ -414,6 +415,9 @@ func TestHandler_CreateSuggestion_MapsServiceErrors(t *testing.T) {
 		{name: "name too long", err: suggestion.ErrNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "missing or outside location", err: suggestion.ErrInvalidLocation, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "note too long", err: suggestion.ErrNoteTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "address too long", err: suggestion.ErrAddressTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "operating hours too long", err: suggestion.ErrOperatingHoursTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "estimated price range too long", err: suggestion.ErrEstimatedPriceRangeTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "attributes not an object", err: suggestion.ErrInvalidAttributes, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "unknown sub-district", err: suggestion.ErrSubDistrictNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "unknown category", err: suggestion.ErrCategoryNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
@@ -457,7 +461,7 @@ func TestHandler_GetMySuggestions_WithoutUser(t *testing.T) {
 
 func TestHandler_GetMySuggestions_MapsServiceErrors(t *testing.T) {
 	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().GetMine(gomock.Any(), int64(7)).Return(nil, errors.New("storage failure"))
+	svc.EXPECT().GetByUser(gomock.Any(), int64(7)).Return(nil, errors.New("storage failure"))
 
 	rec := serve(t, newRouter(svc), authRequest(t, http.MethodGet, "/suggestions/mine", "", 7))
 	assertError(t, rec, http.StatusInternalServerError, "INTERNAL_ERROR")
@@ -481,7 +485,7 @@ func TestHandler_GetMySuggestions_Success(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// The user to list for comes from the token.
 			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().GetMine(gomock.Any(), int64(7)).Return(tc.suggestions, nil)
+			svc.EXPECT().GetByUser(gomock.Any(), int64(7)).Return(tc.suggestions, nil)
 
 			rec := serve(t, newRouter(svc), authRequest(t, http.MethodGet, "/suggestions/mine", "", 7))
 			assertData(t, rec, http.StatusOK, tc.want)
@@ -497,14 +501,14 @@ func TestHandler_GetSuggestions_PassesFilterToService(t *testing.T) {
 	tests := []struct {
 		name   string
 		target string
-		want   suggestion.Filter
+		want   suggestion.SuggestionFilter
 	}{
-		{name: "no filter", target: "/suggestions", want: suggestion.Filter{}},
-		{name: "empty status is absent", target: "/suggestions?status=", want: suggestion.Filter{}},
-		{name: "pending", target: "/suggestions?status=pending", want: suggestion.Filter{Status: suggestion.StatusPending}},
-		{name: "approved", target: "/suggestions?status=approved", want: suggestion.Filter{Status: suggestion.StatusApproved}},
-		{name: "rejected", target: "/suggestions?status=rejected", want: suggestion.Filter{Status: suggestion.StatusRejected}},
-		{name: "unknown status is left for the service to reject", target: "/suggestions?status=deleted", want: suggestion.Filter{Status: "deleted"}},
+		{name: "no filter", target: "/suggestions", want: suggestion.SuggestionFilter{}},
+		{name: "empty status is absent", target: "/suggestions?status=", want: suggestion.SuggestionFilter{}},
+		{name: "pending", target: "/suggestions?status=pending", want: suggestion.SuggestionFilter{Status: suggestion.StatusPending}},
+		{name: "approved", target: "/suggestions?status=approved", want: suggestion.SuggestionFilter{Status: suggestion.StatusApproved}},
+		{name: "rejected", target: "/suggestions?status=rejected", want: suggestion.SuggestionFilter{Status: suggestion.StatusRejected}},
+		{name: "unknown status is left for the service to reject", target: "/suggestions?status=deleted", want: suggestion.SuggestionFilter{Status: "deleted"}},
 	}
 
 	for _, tc := range tests {
@@ -609,7 +613,7 @@ func TestHandler_GetSuggestion_MapsServiceErrors(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().Get(gomock.Any(), int64(3)).Return(nil, tc.err)
+			svc.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(nil, tc.err)
 
 			rec := serve(t, newRouter(svc), adminRequest(t, http.MethodGet, "/suggestions/3", "", 99))
 			assertError(t, rec, tc.wantStatus, tc.wantCode)
@@ -619,7 +623,7 @@ func TestHandler_GetSuggestion_MapsServiceErrors(t *testing.T) {
 
 func TestHandler_GetSuggestion_Success(t *testing.T) {
 	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().Get(gomock.Any(), int64(3)).Return(ptr(linSuggestion()), nil)
+	svc.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(ptr(linSuggestion()), nil)
 
 	rec := serve(t, newRouter(svc), adminRequest(t, http.MethodGet, "/suggestions/3", "", 99))
 	assertData(t, rec, http.StatusOK, linSuggestionJSON)
@@ -653,6 +657,7 @@ func TestHandler_ApproveSuggestion_RejectsMalformedBodies(t *testing.T) {
 		body string
 	}{
 		{name: "empty body", body: ``},
+		{name: "body is null", body: `null`},
 		{name: "truncated JSON", body: `{"name":"Warung"`},
 		{name: "array instead of object", body: `[]`},
 		{name: "sub_district_id is a string", body: `{"name":"Warung","sub_district_id":"one","category_id":2}`},
@@ -753,7 +758,10 @@ func TestHandler_ApproveSuggestion_MapsServiceErrors(t *testing.T) {
 		{name: "wrapped already reviewed", err: fmt.Errorf("approve: %w", suggestion.ErrAlreadyReviewed), wantStatus: http.StatusConflict, wantCode: "ALREADY_REVIEWED"},
 		{name: "place without location", err: suggestion.ErrInvalidLocation, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "blank place name", err: place.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-		{name: "place name too long", err: place.ErrPlaceNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "place name too long", err: place.ErrNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "place address too long", err: place.ErrAddressTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "place operating hours too long", err: place.ErrOperatingHoursTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "place estimated price range too long", err: place.ErrEstimatedPriceRangeTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "place outside Indonesia", err: place.ErrInvalidLocation, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "place attributes invalid", err: place.ErrInvalidAttributes, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "wrapped place attributes invalid", err: fmt.Errorf("%w: %q is required", place.ErrInvalidAttributes, "contact"), wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
@@ -802,6 +810,7 @@ func TestHandler_RejectSuggestion_RejectsMalformedBodies(t *testing.T) {
 		body string
 	}{
 		{name: "empty body", body: ``},
+		{name: "body is null", body: `null`},
 		{name: "truncated JSON", body: `{"reason":`},
 		{name: "array instead of object", body: `[]`},
 		{name: "reason is a number", body: `{"reason":5}`},
@@ -960,7 +969,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 				return authRequest(t, http.MethodGet, "/suggestions/mine", "", 7)
 			},
 			fail: func(s *mock.MockService) {
-				s.EXPECT().GetMine(gomock.Any(), gomock.Any()).Return(nil, dbErr)
+				s.EXPECT().GetByUser(gomock.Any(), gomock.Any()).Return(nil, dbErr)
 			},
 		},
 		{
@@ -978,7 +987,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 				return adminRequest(t, http.MethodGet, "/suggestions/3", "", 99)
 			},
 			fail: func(s *mock.MockService) {
-				s.EXPECT().Get(gomock.Any(), gomock.Any()).Return(nil, dbErr)
+				s.EXPECT().GetSuggestion(gomock.Any(), gomock.Any()).Return(nil, dbErr)
 			},
 		},
 		{

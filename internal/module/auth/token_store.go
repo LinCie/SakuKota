@@ -6,6 +6,17 @@ import (
 	"time"
 )
 
+// RefreshStore keeps refresh tokens by their hash.
+type RefreshStore interface {
+	// Save stores the token for the user until ttl has passed.
+	Save(ctx context.Context, tokenHash string, userID int64, ttl time.Duration) error
+	// Consume removes the token and returns its user. It returns
+	// ErrInvalidRefreshToken if the token is unknown or expired.
+	Consume(ctx context.Context, tokenHash string) (int64, error)
+	// Delete removes the token if it is stored.
+	Delete(ctx context.Context, tokenHash string) error
+}
+
 type memoryRefreshEntry struct {
 	userID    int64
 	expiresAt time.Time
@@ -18,7 +29,7 @@ type memoryRefreshStore struct {
 	tokens map[string]memoryRefreshEntry
 }
 
-func NewMemoryRefreshStore() *memoryRefreshStore {
+func NewMemoryRefreshStore() RefreshStore {
 	return &memoryRefreshStore{
 		tokens: make(map[string]memoryRefreshEntry),
 	}

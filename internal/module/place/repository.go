@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
 
 	"rantau-go/internal/database"
@@ -27,15 +26,16 @@ type Repository interface {
 	Update(ctx context.Context, p *Place) (*Place, error)
 	// SetImageKey stores key as the place's image and returns the place.
 	SetImageKey(ctx context.Context, id int64, key string) (*Place, error)
-	// Delete removes the place and returns the key of its image, if any.
-	Delete(ctx context.Context, id int64) (*string, error)
+	// Delete removes the place and queues its image, if any, for deletion. It
+	// returns ErrPlaceNotFound if there is no such place.
+	Delete(ctx context.Context, id int64) error
 }
 
 type postgresRepository struct {
 	db *sqlx.DB
 }
 
-func NewPostgresRepository(db *sqlx.DB) *postgresRepository {
+func NewPostgresRepository(db *sqlx.DB) Repository {
 	return &postgresRepository{
 		db: db,
 	}
@@ -52,7 +52,8 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 // match the nested Place.Category fields.
 const placeColumns = `p.id, p.sub_district_id, p.category_id, p.name, p.address,
 	p.location, p.operating_hours, p.estimated_price_range, p.short_description,
-	p.attributes, p.rating_count, p.rating_sum, p.image_key, c.id AS "category.id", c.name AS "category.name", c.slug AS "category.slug",
+	p.attributes, p.rating_count, p.rating_sum, p.image_key,
+	c.id AS "category.id", c.name AS "category.name", c.slug AS "category.slug",
 	c.code AS "category.code", c.label AS "category.label", c.color AS "category.color"`
 
 // placeRowColumns are the PLACES columns that placeColumns reads from `p`. The
@@ -184,6 +185,7 @@ func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([
 	return places, total, nil
 }
 
+// GetCategories returns every category with its fields.
 func (r *postgresRepository) GetCategories(ctx context.Context) ([]Category, error) {
 	categories := make([]Category, 0)
 
@@ -256,7 +258,7 @@ func (r *postgresRepository) Create(ctx context.Context, p *Place) (*Place, erro
 		p.Attributes,
 	)
 	if err != nil {
-		return nil, mapPlaceForeignKeyError(err)
+		return nil, mapForeignKeyError(err)
 	}
 
 	return &created, nil
@@ -318,7 +320,7 @@ func (r *postgresRepository) Update(ctx context.Context, p *Place) (*Place, erro
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrPlaceNotFound
 		}
-		return nil, mapPlaceForeignKeyError(err)
+		return nil, mapForeignKeyError(err)
 	}
 
 	return &updated, nil
@@ -367,14 +369,14 @@ func (r *postgresRepository) SetImageKey(ctx context.Context, id int64, key stri
 	return &updated, nil
 }
 
-// Delete removes the place, queues its image for deletion, and returns its
-// image key, or returns ErrPlaceNotFound if there is no such place.
-func (r *postgresRepository) Delete(ctx context.Context, id int64) (*string, error) {
-	var imageKey *string
+// Delete removes the place and queues its image for deletion, or returns
+// ErrPlaceNotFound if there is no such place.
+func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
+	var deleted int
 
 	err := r.db.GetContext(
 		ctx,
-		&imageKey,
+		&deleted,
 		`WITH deleted AS (
 			DELETE FROM PLACES WHERE id = $1 RETURNING image_key
 		), queued AS (
@@ -383,25 +385,24 @@ func (r *postgresRepository) Delete(ctx context.Context, id int64) (*string, err
 			WHERE image_key IS NOT NULL
 			ON CONFLICT (key) DO NOTHING
 		)
-		SELECT image_key FROM deleted`,
+		SELECT COUNT(*) FROM deleted`,
 		id,
 	)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrPlaceNotFound
-		}
-		return nil, err
+		return err
+	}
+	if deleted == 0 {
+		return ErrPlaceNotFound
 	}
 
-	return imageKey, nil
+	return nil
 }
 
-// mapPlaceForeignKeyError translates a foreign key violation on PLACES into the
+// mapForeignKeyError translates a foreign key violation on PLACES into the
 // sub-district or category it refers to. Other errors are returned unchanged.
-func mapPlaceForeignKeyError(err error) error {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == database.ForeignKeyViolation {
-		switch pgErr.ConstraintName {
+func mapForeignKeyError(err error) error {
+	if database.IsCode(err, database.ForeignKeyViolation) {
+		switch database.ConstraintName(err) {
 		case "places_sub_district_id_fkey":
 			return ErrSubDistrictNotFound
 		case "places_category_id_fkey":
