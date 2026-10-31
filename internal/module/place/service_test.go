@@ -49,6 +49,20 @@ func openCategory() *place.Category {
 	}
 }
 
+// cafeCategory has no required fields. Its optional text field "website" is
+// the text attribute the blank-as-absent rule applies to.
+func cafeCategory() *place.Category {
+	return &place.Category{
+		ID:   3,
+		Name: "Cafe",
+		Slug: "cafe",
+		Fields: []place.CategoryField{
+			{Key: "website", Label: "Website", DataType: place.FieldTypeText},
+			{Key: "seats", Label: "Seats", DataType: place.FieldTypeNumber},
+		},
+	}
+}
+
 // createPlace runs Service.Create for p in category c. It returns the place the
 // repository was asked to store, or nil if storage was never reached.
 func createPlace(t *testing.T, c *place.Category, p *place.Place) (*place.Place, error) {
@@ -256,6 +270,76 @@ func TestService_CreatePlace_AttributesWithoutRequiredFields(t *testing.T) {
 	}
 }
 
+func TestService_CreatePlace_BlankOptionalText(t *testing.T) {
+	tests := []struct {
+		name       string
+		attributes string
+		wantStored string
+	}{
+		{name: "empty string is dropped", attributes: `{"website":""}`, wantStored: `{}`},
+		{name: "spaces only is dropped", attributes: `{"website":"   "}`, wantStored: `{}`},
+		{name: "tabs and newlines only is dropped", attributes: `{"website":"\t\n"}`, wantStored: `{}`},
+		{name: "blank key is removed and other keys are kept", attributes: `{"website":"","seats":5}`, wantStored: `{"seats":5}`},
+		{name: "non-blank text is kept verbatim", attributes: `{"website":"  Halal  "}`, wantStored: `{"website":"  Halal  "}`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().GetCategory(gomock.Any(), gomock.Any()).Return(cafeCategory(), nil).AnyTimes()
+
+			var stored *place.Place
+			repo.EXPECT().Create(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, got *place.Place) (*place.Place, error) {
+					stored = got
+					return got, nil
+				})
+
+			_, err := place.NewService(repo, noImages(t)).Create(context.Background(), &place.Place{
+				Name: "Kafe Senja", SubDistrictID: 1, CategoryID: 3,
+				Attributes: json.RawMessage(tc.attributes),
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			assertJSON(t, stored.Attributes, tc.wantStored)
+		})
+	}
+}
+
+func TestService_CreatePlace_BlankAttributeRejected(t *testing.T) {
+	// Required text may not be blank, and blank is not absent for number,
+	// boolean, select, range, or date fields.
+	tests := []struct {
+		name       string
+		attributes string
+	}{
+		{name: "required text is empty", attributes: `{"contact":""}`},
+		{name: "required text is only whitespace", attributes: `{"contact":" \t\n "}`},
+		{name: "number is empty", attributes: `{"contact":"x","seats":""}`},
+		{name: "boolean is empty", attributes: `{"contact":"x","halal":""}`},
+		{name: "select is empty", attributes: `{"contact":"x","payment":""}`},
+		{name: "range is empty", attributes: `{"contact":"x","price_range":""}`},
+		{name: "date is empty", attributes: `{"contact":"x","opened_on":""}`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// No Create expectation: nothing may be stored.
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().GetCategory(gomock.Any(), gomock.Any()).Return(warungCategory(), nil).AnyTimes()
+
+			_, err := place.NewService(repo, noImages(t)).Create(context.Background(), &place.Place{
+				Name: "Warung Bu Ani", SubDistrictID: 1, CategoryID: 1,
+				Attributes: json.RawMessage(tc.attributes),
+			})
+			if !errors.Is(err, place.ErrInvalidAttributes) {
+				t.Fatalf("err = %v, want ErrInvalidAttributes", err)
+			}
+		})
+	}
+}
+
 func TestService_CreatePlace_Location(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -393,13 +477,15 @@ func savedKopi() *place.Place {
 }
 
 // lookupCategory answers category lookups for the update tests. Category 1 is
-// Warung, which requires "contact". Category 2 is Kopi.
+// Warung, which requires "contact". Category 2 is Kopi. Category 3 is Cafe.
 func lookupCategory(_ context.Context, id int64) (*place.Category, error) {
 	switch id {
 	case 1:
 		return warungCategory(), nil
 	case 2:
 		return openCategory(), nil
+	case 3:
+		return cafeCategory(), nil
 	}
 	return nil, place.ErrCategoryNotFound
 }
@@ -603,6 +689,70 @@ func TestService_UpdatePlace_Attributes(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			assertJSON(t, stored.Attributes, tc.wantAttrs)
+		})
+	}
+}
+
+func TestService_UpdatePlace_BlankOptionalText(t *testing.T) {
+	tests := []struct {
+		name      string
+		stored    string // attributes of the place before the update
+		patch     string // attributes sent in the update
+		wantAttrs string
+	}{
+		{name: "empty string is dropped", stored: `{"seats":12}`, patch: `{"website":"","seats":12}`, wantAttrs: `{"seats":12}`},
+		{name: "spaces only is dropped", stored: `{"seats":12}`, patch: `{"website":"   ","seats":12}`, wantAttrs: `{"seats":12}`},
+		{name: "tabs and newlines only is dropped", stored: `{"seats":12}`, patch: `{"website":"\t\n"}`, wantAttrs: `{}`},
+		{name: "stored text is removed when the patch blanks it", stored: `{"website":"https://a.example","seats":12}`, patch: `{"website":"","seats":12}`, wantAttrs: `{"seats":12}`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			existing := savedKopi()
+			existing.CategoryID = 3
+			existing.Category = place.Category{ID: 3, Name: "Cafe", Slug: "cafe"}
+			existing.Attributes = json.RawMessage(tc.stored)
+
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(existing, nil).AnyTimes()
+			repo.EXPECT().GetCategory(gomock.Any(), gomock.Any()).DoAndReturn(lookupCategory).AnyTimes()
+
+			var stored *place.Place
+			repo.EXPECT().Update(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, got *place.Place) (*place.Place, error) {
+					stored = got
+					return got, nil
+				})
+
+			_, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7,
+				place.PlacePatch{Attributes: present(json.RawMessage(tc.patch))})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			assertJSON(t, stored.Attributes, tc.wantAttrs)
+		})
+	}
+}
+
+func TestService_UpdatePlace_BlankRequiredText(t *testing.T) {
+	for _, patch := range []string{`{"contact":""}`, `{"contact":"   "}`, `{"contact":"\t\n"}`} {
+		t.Run(patch, func(t *testing.T) {
+			// The place is a Warung, which requires "contact". No Update
+			// expectation: nothing may be stored.
+			existing := savedKopi()
+			existing.CategoryID = 1
+			existing.Category = place.Category{ID: 1, Name: "Warung", Slug: "warung"}
+			existing.Attributes = json.RawMessage(`{"contact":"0812"}`)
+
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(existing, nil).AnyTimes()
+			repo.EXPECT().GetCategory(gomock.Any(), gomock.Any()).DoAndReturn(lookupCategory).AnyTimes()
+
+			_, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7,
+				place.PlacePatch{Attributes: present(json.RawMessage(patch))})
+			if !errors.Is(err, place.ErrInvalidAttributes) {
+				t.Fatalf("err = %v, want ErrInvalidAttributes", err)
+			}
 		})
 	}
 }

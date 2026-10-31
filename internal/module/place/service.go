@@ -234,7 +234,8 @@ func validateLocation(loc *postgis.Point) error {
 // validateAttributes checks raw attribute values against the category's
 // fields and returns them re-encoded as a JSON object. Required fields must be
 // present, and keys that are not fields of the category are rejected. A
-// missing or null raw value is treated as an empty object.
+// missing or null raw value is treated as an empty object. A blank optional
+// text value is dropped like a null one.
 func validateAttributes(fields []CategoryField, raw json.RawMessage) (json.RawMessage, error) {
 	var values map[string]any
 	if len(raw) > 0 {
@@ -251,7 +252,7 @@ func validateAttributes(fields []CategoryField, raw json.RawMessage) (json.RawMe
 
 	for _, f := range fields {
 		value, ok := values[f.Key]
-		if !ok || value == nil {
+		if !ok || value == nil || isBlankOptionalText(f, value) {
 			if f.Required {
 				return nil, fmt.Errorf("%w: %q is required", ErrInvalidAttributes, f.Key)
 			}
@@ -274,6 +275,13 @@ func validateAttributes(fields []CategoryField, raw json.RawMessage) (json.RawMe
 	}
 
 	return json.Marshal(values)
+}
+
+// isBlankOptionalText reports whether value is empty or whitespace-only text for
+// an optional text field. Such a value is treated as absent.
+func isBlankOptionalText(f CategoryField, value any) bool {
+	text, ok := value.(string)
+	return f.DataType == FieldTypeText && !f.Required && ok && strings.TrimSpace(text) == ""
 }
 
 // validateAttribute checks a single value against its field's data type.
