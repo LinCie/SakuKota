@@ -1104,3 +1104,81 @@ func TestIntegration_RepositoryDeleteReturnsImageKey(t *testing.T) {
 		t.Errorf("unknown place: err = %v, want ErrPlaceNotFound", err)
 	}
 }
+
+// clearDeletions empties the storage deletion queue.
+func clearDeletions(t *testing.T) {
+	t.Helper()
+	mustExec(t, `TRUNCATE STORAGE_DELETIONS`)
+}
+
+// queuedDeletions returns the keys in the storage deletion queue, in order.
+func queuedDeletions(t *testing.T) []string {
+	t.Helper()
+	keys := []string{}
+	if err := testDB.Select(&keys, `SELECT key FROM STORAGE_DELETIONS ORDER BY key`); err != nil {
+		t.Fatalf("select queued deletions: %v", err)
+	}
+	return keys
+}
+
+func TestIntegration_RepositoryDeleteQueuesImage(t *testing.T) {
+	resetDB(t)
+	clearDeletions(t)
+	seedCatalog(t)
+	seedPlaces(t)
+	mustExec(t, `UPDATE PLACES SET image_key = 'places/2/a.webp' WHERE id = 2`)
+	repo := place.NewPostgresRepository(testDB)
+
+	if _, err := repo.Delete(context.Background(), 2); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := queuedDeletions(t), []string{"places/2/a.webp"}; !slices.Equal(got, want) {
+		t.Fatalf("queued after deleting a place with an image = %v, want %v", got, want)
+	}
+
+	if _, err := repo.Delete(context.Background(), 1); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, err := repo.Delete(context.Background(), 99); !errors.Is(err, place.ErrPlaceNotFound) {
+		t.Fatalf("unknown place: err = %v, want ErrPlaceNotFound", err)
+	}
+	if got, want := queuedDeletions(t), []string{"places/2/a.webp"}; !slices.Equal(got, want) {
+		t.Errorf("queued after deleting a place without an image and an unknown place = %v, want %v", got, want)
+	}
+}
+
+func TestIntegration_RepositorySetImageKeyQueuesPreviousImage(t *testing.T) {
+	resetDB(t)
+	clearDeletions(t)
+	seedCatalog(t)
+	seedPlaces(t)
+	repo := place.NewPostgresRepository(testDB)
+	ctx := context.Background()
+
+	steps := []struct {
+		name string
+		id   int64
+		key  string
+		want []string
+	}{
+		{name: "first image queues nothing", id: 2, key: "places/2/a.webp", want: []string{}},
+		{name: "replacing queues the previous image", id: 2, key: "places/2/b.webp", want: []string{"places/2/a.webp"}},
+		{name: "setting the same key queues nothing", id: 2, key: "places/2/b.webp", want: []string{"places/2/a.webp"}},
+		{name: "unknown place queues nothing", id: 99, key: "places/99/a.webp", want: []string{"places/2/a.webp"}},
+	}
+
+	for _, step := range steps {
+		_, err := repo.SetImageKey(ctx, step.id, step.key)
+		if step.id == 99 {
+			if !errors.Is(err, place.ErrPlaceNotFound) {
+				t.Fatalf("%s: err = %v, want ErrPlaceNotFound", step.name, err)
+			}
+		} else if err != nil {
+			t.Fatalf("%s: unexpected error: %v", step.name, err)
+		}
+
+		if got := queuedDeletions(t); !slices.Equal(got, step.want) {
+			t.Fatalf("%s: queued = %v, want %v", step.name, got, step.want)
+		}
+	}
+}

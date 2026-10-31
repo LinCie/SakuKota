@@ -161,19 +161,10 @@ func (s *service) Update(ctx context.Context, id int64, patch PlacePatch) (*Plac
 	return s.repo.Update(ctx, p)
 }
 
-// Delete removes the place, then its image. A failed image delete is ignored
-// because the place is already gone.
+// Delete removes the place. The repository queues its image for deletion.
 func (s *service) Delete(ctx context.Context, id int64) error {
-	imageKey, err := s.repo.Delete(ctx, id)
-	if err != nil {
-		return err
-	}
-
-	if imageKey != nil {
-		_ = s.images.Delete(ctx, *imageKey)
-	}
-
-	return nil
+	_, err := s.repo.Delete(ctx, id)
+	return err
 }
 
 func (s *service) ImageUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error) {
@@ -184,11 +175,12 @@ func (s *service) ImageUploadURL(ctx context.Context, id int64, contentType stri
 	return s.images.PresignUpload(ctx, imagePrefix(id), contentType)
 }
 
-// SetImage promotes the upload and stores it as the place's image. Image
-// deletes that fail are ignored: they only leave an unused object behind.
+// SetImage promotes the upload and stores it as the place's image. The
+// repository queues the previous image for deletion. If the promoted image
+// cannot be stored, its delete is attempted once and a failure is ignored: it
+// only leaves an unused object behind.
 func (s *service) SetImage(ctx context.Context, id int64, uploadKey string) (*Place, error) {
-	p, err := s.repo.GetPlace(ctx, id)
-	if err != nil {
+	if _, err := s.repo.GetPlace(ctx, id); err != nil {
 		return nil, err
 	}
 
@@ -201,10 +193,6 @@ func (s *service) SetImage(ctx context.Context, id int64, uploadKey string) (*Pl
 	if err != nil {
 		_ = s.images.Delete(ctx, key)
 		return nil, err
-	}
-
-	if p.ImageKey != nil {
-		_ = s.images.Delete(ctx, *p.ImageKey)
 	}
 
 	return updated, nil

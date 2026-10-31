@@ -752,27 +752,14 @@ func TestService_DeletePlace(t *testing.T) {
 }
 
 func TestService_DeletePlace_Image(t *testing.T) {
-	tests := []struct {
-		name      string
-		deleteErr error
-	}{
-		{name: "deletes the image", deleteErr: nil},
-		{name: "image delete failure is ignored", deleteErr: errors.New("connection reset")},
-	}
+	// The repository queues the image for deletion, so the service leaves it
+	// to the cleanup worker and must not delete it itself.
+	repo := mock.NewMockRepository(gomock.NewController(t))
+	repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(ptr(imageKey), nil)
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			repo, images := newMocks(t)
-			gomock.InOrder(
-				repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(ptr(imageKey), nil),
-				images.EXPECT().Delete(gomock.Any(), imageKey).Return(tc.deleteErr),
-			)
-
-			err := place.NewService(repo, images).Delete(context.Background(), 7)
-			if err != nil {
-				t.Fatalf("err = %v, want nil: the place was deleted", err)
-			}
-		})
+	err := place.NewService(repo, noImages(t)).Delete(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("err = %v, want nil: the place was deleted", err)
 	}
 }
 
@@ -867,29 +854,25 @@ func withImage(key *string) *place.Place {
 
 func TestService_SetImage(t *testing.T) {
 	tests := []struct {
-		name      string
-		oldKey    *string
-		deleteErr error
+		name   string
+		oldKey *string
 	}{
 		{name: "first image", oldKey: nil},
 		{name: "replaces the previous image", oldKey: ptr(oldKey)},
-		{name: "previous image delete failure is ignored", oldKey: ptr(oldKey), deleteErr: errors.New("connection reset")},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			// The repository queues the previous image for deletion, so the
+			// service must not delete it itself.
 			repo, images := newMocks(t)
 			updated := withImage(ptr(imageKey))
 
-			calls := []any{
+			gomock.InOrder(
 				repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(withImage(tc.oldKey), nil),
 				images.EXPECT().Promote(gomock.Any(), "places/7", uploadKey).Return(imageKey, nil),
 				repo.EXPECT().SetImageKey(gomock.Any(), int64(7), imageKey).Return(updated, nil),
-			}
-			if tc.oldKey != nil {
-				calls = append(calls, images.EXPECT().Delete(gomock.Any(), *tc.oldKey).Return(tc.deleteErr))
-			}
-			gomock.InOrder(calls...)
+			)
 
 			got, err := place.NewService(repo, images).SetImage(context.Background(), 7, uploadKey)
 			if err != nil {

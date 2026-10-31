@@ -1,4 +1,4 @@
-.PHONY: dev dev-backend dev-frontend start build postgres-up postgres-down storage-up storage-init migrate-up migrate-down migrate-status migrate-version migrate-reset migration seed
+.PHONY: dev dev-backend dev-frontend start build postgres-up postgres-down storage-up storage-init cleanup migrate-up migrate-down migrate-status migrate-version migrate-reset migration seed
 
 -include .env
 
@@ -43,6 +43,10 @@ storage-up:
 
 storage-init:
 	bash docker/garage/init.sh
+
+# Delete one batch of storage objects queued for deletion.
+cleanup:
+	go run ./cmd/cleanup
 
 migrate-up:
 	DATABASE_URL="$(DATABASE_URL)" go run ./cmd/migrate up

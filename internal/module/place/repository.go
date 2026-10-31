@@ -325,18 +325,31 @@ func (r *postgresRepository) Update(ctx context.Context, p *Place) (*Place, erro
 }
 
 // SetImageKey stores key as the place's image and returns the place joined
-// with its category, or ErrPlaceNotFound.
+// with its category, or ErrPlaceNotFound. A previous image with another key is
+// queued for deletion. The row is locked while its previous key is read, so a
+// concurrent replace cannot leave an image unqueued.
 func (r *postgresRepository) SetImageKey(ctx context.Context, id int64, key string) (*Place, error) {
 	var updated Place
 
 	err := r.db.GetContext(
 		ctx,
 		&updated,
-		`WITH updated AS (
+		`WITH previous AS (
+			SELECT id AS place_id, image_key AS previous_key
+			FROM PLACES
+			WHERE id = $1
+			FOR UPDATE
+		), updated AS (
 			UPDATE PLACES
 			SET image_key = $2
-			WHERE id = $1
+			FROM previous
+			WHERE id = previous.place_id
 			RETURNING `+placeRowColumns+`
+		), queued AS (
+			INSERT INTO STORAGE_DELETIONS (key)
+			SELECT previous_key FROM previous
+			WHERE previous_key IS NOT NULL AND previous_key <> $2
+			ON CONFLICT (key) DO NOTHING
 		)
 		SELECT `+placeColumns+`
 		FROM updated p
@@ -354,12 +367,25 @@ func (r *postgresRepository) SetImageKey(ctx context.Context, id int64, key stri
 	return &updated, nil
 }
 
-// Delete removes the place and returns its image key, or returns
-// ErrPlaceNotFound if there is no such place.
+// Delete removes the place, queues its image for deletion, and returns its
+// image key, or returns ErrPlaceNotFound if there is no such place.
 func (r *postgresRepository) Delete(ctx context.Context, id int64) (*string, error) {
 	var imageKey *string
 
-	err := r.db.GetContext(ctx, &imageKey, `DELETE FROM PLACES WHERE id = $1 RETURNING image_key`, id)
+	err := r.db.GetContext(
+		ctx,
+		&imageKey,
+		`WITH deleted AS (
+			DELETE FROM PLACES WHERE id = $1 RETURNING image_key
+		), queued AS (
+			INSERT INTO STORAGE_DELETIONS (key)
+			SELECT image_key FROM deleted
+			WHERE image_key IS NOT NULL
+			ON CONFLICT (key) DO NOTHING
+		)
+		SELECT image_key FROM deleted`,
+		id,
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrPlaceNotFound
