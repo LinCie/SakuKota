@@ -1,1 +1,4 @@
 app/routeTree.gen.ts
+.agents/
+.impeccable/surfaces/
+pnpm-lock.yaml

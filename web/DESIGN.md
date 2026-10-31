@@ -237,6 +237,7 @@ Density is working-app density, not marketing density. A green header board carr
 The world explicitly refuses the super-app default of white cards, pill chips, and blue droplet pins. Tailwind CSS v4 utilities are the only styling mechanism in `web/`; tokens live in `app/app.css` `@theme` and no raw CSS or inline styles are written.
 
 **Key Characteristics:**
+
 - Flat painted colour fields; no gradients anywhere.
 - Bungee for every painted letter (wordmark, plate codes, sign headings, prices and counts); Figtree for all reading text.
 - Tight, near-square corners (2–6px); plates, not pills.
@@ -250,25 +251,30 @@ The world explicitly refuses the super-app default of white cards, pill chips, a
 A signwriter's tin set: a few saturated, flat enamel colours over warm paint white, with ink for lettering and outlines.
 
 ### Primary
+
 - **Warung Board Green** (board): the header board, notice-board header, the Apotek category plate, and info-section icons. The ground colour of the whole world.
 - **Deep Board Green** (board-deep): recessed areas on the board: the wordmark frame, the kecamatan select field, hover on board-coloured buttons.
 
 ### Secondary
+
 - **Sign Yellow** (sign): the lettering colour on green (wordmark, notice-board title, header inset borders), the primary action plate ("Lihat info", empty-state actions, "Coba lagi"), the Laundry category plate, the code on a selected pin, and focus borders on the header's fields. Also the text-selection colour.
 - **Faded Sign Yellow** (sign-soft): the hover/focus fill for sign-yellow plates, quiet buttons, zoom buttons, and list rows (list rows at 60% strength).
 
 ### Tertiary
+
 - **Chili Red** (chili): the Warung category, the 6px stripe under every green board, the daily-spending figure, and the text caret.
 - **Painted Blue** (cat): the Klinik category, focus outlines on paint-white surfaces, and links in the map attribution.
 - **Tailor Plum** (plum): the Penjahit category only.
 
 ### Neutral
+
 - **Paint White** (paint): page, strips, list column, menu board, dialog body, search field. Text on every saturated plate except yellow.
 - **Deep Paint** (paint-deep): the map's backing colour before tiles load, image backgrounds, and hover on the search clear button.
 - **Ink** (ink): all primary text, every 2px outline, pin posts, the active "Semua" plate, the selected-pin inversion, and text on yellow.
 - **Soft Ink** (ink-soft): secondary text (addresses, count sentence, leader labels, placeholder text), the missing-slot text, and the scrollbar thumb. Ink at reduced opacity (20–60%) supplies dashed dividers, inactive outlines, and the modal backdrop (60%).
 
 ### Named Rules
+
 **The One Hue Per Category Rule.** Each category owns exactly one paint: Warung chili (W), Penjahit plum (J), Klinik blue (K), Laundry yellow (L), Apotek green (A). The same hue marks its filter plate, map sign, list code plate, and badge; each category's code, label, and hue come from the API (`code`, `label`, `color`), and the app maps the `color` key to its paints.
 
 **The Yellow Takes Ink Rule.** Sign yellow is never lettered in paint white. Yellow plates carry ink text and an ink border; the inactive Laundry plate is outlined in ink at 60%, not yellow, because yellow on paint white is illegible.
@@ -283,6 +289,7 @@ A signwriter's tin set: a few saturated, flat enamel colours over warm paint whi
 **Character:** Bungee is the signwriter's brush: blocky, all-caps by design, used only where a sign would be painted. Figtree is the handwritten price list's clear, friendly counterpart for anything read at length.
 
 ### Hierarchy
+
 - **Display** (Bungee 400, 1.5rem, line-height 1, tracking 0.025em): the RANTAU wordmark, yellow inside its inset frame.
 - **Figure** (Bungee 400, 2.25rem, line-height 1, tabular numerals): the daily-spending amount on the notice board, in chili.
 - **Headline** (Bungee 400, 1.5rem, line-height 1.25, balanced wrapping): the place name on the menu board; the notice-board title (1.25rem on phones, 1.5rem from 640px).
@@ -293,6 +300,7 @@ A signwriter's tin set: a few saturated, flat enamel colours over warm paint whi
 - **Label** (Figtree 600–700, 0.875rem): filter-plate labels, info-section headings, leader labels, addresses, prices in the list, the count sentence.
 
 ### Named Rules
+
 **The Painted Letter Rule.** Bungee appears only where a sign painter would letter: wordmark, codes, sign headings, action plates, and money/count figures. Body copy, labels, and form values are always Figtree.
 
 **The Tabular Money Rule.** Prices, counts, and the daily spending figure use tabular numerals so columns of Rupiah line up.
@@ -314,6 +322,7 @@ Spacing runs on a 4px grid with 8px and 12px as the working gaps: 12px side padd
 The world is flat: panels sit on the page with borders, not shadows. Depth appears only for elements that physically float above the map or the page (pins, the zoom plate, the empty-state card, the mobile sheet, the notice-board dialog), and there it is soft, ambient, ink-tinted shadow, never a hard offset.
 
 ### Shadow Vocabulary
+
 - **Sign cast** (`box-shadow: 0 3px 6px rgb(26 26 23 / 0.35)`): under each map sign plate.
 - **Control cast** (`box-shadow: 0 3px 8px rgb(26 26 23 / 0.25)`): the map zoom plate.
 - **Card lift** (`box-shadow: 0 8px 24px rgb(26 26 23 / 0.2)`): the empty-state card over the map.
@@ -323,6 +332,7 @@ The world is flat: panels sit on the page with borders, not shadows. Depth appea
 The auth board lies flat on its green wall and casts no shadow.
 
 ### Named Rules
+
 **The Only-Floaters-Cast Rule.** Boards, strips, lists, and the desktop menu board have no shadow. A shadow means "this is lifted above the map"; on desktop the details panel drops its sheet shadow because it no longer floats.
 
 ## Shapes
@@ -332,7 +342,9 @@ Signboards are rectangles with barely softened corners: 3px for every plate, fie
 ## Components
 
 ### Buttons
+
 Painted plates, confident and flat.
+
 - **Shape:** squared plate (3px), 2px ink border.
 - **Primary (sign plate):** sign yellow with ink Bungee lettering, 44px tall in the header (40px in overlays), 16px side padding.
 - **Hover / Focus:** fill fades to faded sign yellow (colour transition); focus is a 2px outline offset 2px, yellow on the green board, painted blue on paint white. Disabled drops to 50% opacity.
@@ -341,16 +353,19 @@ Painted plates, confident and flat.
 - **Submit plate (forms):** a full-width sign plate, 44px, ink Bungee at 0.875rem, blue focus outline offset 2px (it sits on paint white). Hover fades to faded sign yellow. While pending it is disabled, holds the faded sign-yellow fill, and reads "Memproses…".
 
 ### Chips (category filter plates)
+
 - **Style:** 40px plate with a small code square on the left and a Figtree bold label.
 - **Inactive:** paint-white fill, dashed 2px outline in the category hue (ink at 60% for Laundry and "Semua"); the code square is a solid category plate. Hover turns the dashed outline solid.
 - **Active:** the whole plate fills solid with the category paint and paint-white (or ink, for yellow) lettering; the code square becomes a 20% paint-white tint. "Semua" active is a solid ink plate. Plates toggle independently, and "Semua" is active when no category is filtered.
 
 ### Cards / Containers
+
 - **Menu board (place details):** a 5px paint-white frame with 2px ink border and 4px padding, holding a 3px inner panel ringed in 1px ink at 40%. Inside: the category badge, Bungee headline, Figtree description, a 2px ink rule, then leader rows (label, 2px dotted leader in ink at 25%, right-aligned value) and a dashed-divided address block. The category's custom fields follow the price row in the category's field order, rendered by data type: short values (numbers, yes/no led by a 16px check or cross icon, choices, ranges as "12–24", dates as "2 Maret 2015") as leader rows, then free text as dashed-divided blocks like the address, and a missing value as a missing slot reading "Data tidak tersedia".
 - **Notice board (kecamatan info):** a native modal dialog (6px, 2px ink border) with a sticky green header whose yellow-inset plate carries the Bungee title and close button, a 6px chili stripe, then dashed-divided sections each headed by a green icon and a bold label.
 - **Empty-state card:** 5px paint-white card with 2px ink border and card lift, centred over a 70% paint scrim on the map, with one message and one yellow action plate.
 
 ### Inputs / Fields
+
 - **Search:** paint-white field, 2px ink border, 3px corners, 44px tall, leading search icon in soft ink, trailing quiet clear button when filled; the native cancel control is hidden.
 - **Kecamatan select:** deep-board-green field with a 2px paint-at-35% border (60% on hover) and a yellow chevron; options render on paint white.
 - **Focus:** fields swap their border to sign yellow instead of drawing an outline.
@@ -359,12 +374,14 @@ Painted plates, confident and flat.
 - **Form alert:** a form-level message plate with a 2px border and 3px corners (10px × 12px padding), no fill, and ink semibold text at 0.875rem. It carries errors only: a chili border and chili alert icon (an assertive alert). It sits at the top of the form, above the fields.
 
 ### Navigation
+
 - **Header board:** full-width warung green with the wordmark plate (deep green frame, yellow inset border, yellow Bungee), a paint-at-85% tagline, and the controls; closed by a 6px chili stripe.
 - **Category strip:** paint white with a 2px ink bottom rule; the count sentence is a polite live region with the number in Bungee.
 - **Account plate (header):** a 44px plate on the green board with a 2px paint-at-35% outline, no fill, and a paint-white Figtree bold label (0.875rem) led by a 16px user icon. Hover raises the border to paint at 60% and fills deep board green. Focus is a 2px yellow outline offset 2px. It is never a yellow plate, because yellow is reserved for the action plate. Signed out it reads "Masuk" and links to the sign-in page, carrying the current map address. Signed in, the first name (paint-white bold, truncated at 10ch) sits beside the same plate reading "Keluar" with a log-out icon.
 - **Place list:** rows divided by 1px dashed ink at 20%; each row is a code plate, name (Figtree semibold), truncated address (soft ink), and right-aligned tabular price; hover and focus fill with faded sign yellow at 60%.
 
 ### Map Sign (signature)
+
 A place is a 36px category plate (2px border, Bungee code, sign cast) on a 3px × 10px ink post, anchored at the post's foot. Hover lifts the plate 2px. Selected inverts it: ink fill, yellow border and code, scaled to 115%, raised above other signs. Keyboard focus draws a blue outline around the sign.
 
 **Planting motion:** when signs appear, each rises from its post (vertical scale from 0 at the base) over 500ms with `cubic-bezier(0.16, 1, 0.3, 1)`, staggered west to east in 40ms steps up to 360ms. Changing kecamatan flies the map to the new bounds over 0.9s; reduced motion jumps instead and skips the rise.
@@ -372,7 +389,9 @@ A place is a 36px category plate (2px border, Bungee code, sign cast) on a 3px �
 **Map canvas:** Esri Light Gray base and reference tiles (streets and labels, no POI icons) warmed with a 30% sepia filter over a deep-paint backing; the default Leaflet zoom control is replaced by a paint-white zoom plate (2px ink border, ink divider, control cast) at the top left; attribution sits on paint at 90% in 10px soft ink with blue links.
 
 ### Auth Wall (Masuk / Daftar)
+
 The header board grown to fill the viewport: full-bleed warung green with paint-white text. It has no chili stripe, because it never meets a paint-white strip, so there is no seam to close. The wordmark plate and paint-at-85% tagline are the map header's own (one shared component; the tagline hides below 640px on both), and the wordmark links back to the map.
+
 - **Board:** a menu-board-framed paint-white board (5px frame, 2px ink border, 4px padding, inner 3px panel ringed in 1px ink at 40%, 16px inner padding, 20px from 640px). It is flat and casts no shadow. The plate pair and lede sit 12px apart, and the form follows 20px below.
 - **Plate pair:** a two-column row of equal 48px plates with an 8px gap, lettered in ink Bungee at 1.125rem. The current page's plate is a solid sign-yellow plate with a 2px ink border and is the page's `<h1>`. The other plate is a paint-white link with a dashed 2px ink-at-60% outline that turns solid ink on hover, with a blue focus outline offset 2px. Switching plates swaps only the form; the board and plates stay put.
 - **Lede:** one soft-ink line at 0.875rem under the plates.
@@ -380,14 +399,17 @@ The header board grown to fill the viewport: full-bleed warung green with paint-
 - **Return link:** "Kembali ke peta" under the board, a 40px quiet link on the green: paint-white semibold 0.875rem with a 16px back arrow, deep board green on hover and focus, and a 2px yellow focus outline. It and the wordmark return to the exact map address the visitor came from.
 
 ### Missing Slot
+
 A drawn empty slot: inline dashed 2px border in ink at 30%, 3px corners, soft-ink label-size text such as "Jam buka tidak tersedia" or "Data tidak tersedia". A missing area image becomes a dashed 8:5 frame holding the slot.
 
 ### Motion
+
 The mobile sheet slides up from off-screen over 300ms ease-out; the notice board fades in and rises 16px over 300ms ease-out; hovers transition colour at the default 150ms. The auth board settles into place on entry by translating up 12px over 500ms with the planting ease `cubic-bezier(0.16, 1, 0.3, 1)`, with no fade. All motion is gated on `prefers-reduced-motion: no-preference`.
 
 ## Do's and Don'ts
 
 ### Do:
+
 - **Do** style only with Tailwind v4 utilities and the `@theme` tokens in `app/app.css`; never write raw CSS rules or inline styles.
 - **Do** letter every sign-like element (wordmark, codes, sign headings, action plates, money and counts) in Bungee and everything read at length in Figtree.
 - **Do** show state by the mark: solid plate for on, dashed outline for off, ink inversion with a yellow code for selected.
@@ -398,6 +420,7 @@ The mobile sheet slides up from off-screen over 300ms ease-out; the notice board
 - **Do** gate every animation on reduced-motion preference.
 
 ### Don't:
+
 - **Don't** use gradients, glossy fills, or glass effects; panels are flat enamel.
 - **Don't** use white floating cards, pill-shaped chips, or blue droplet pins; plates are rectangles and pins are signs on posts.
 - **Don't** letter paint-white text on sign yellow or use yellow as an outline on paint white.
