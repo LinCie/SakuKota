@@ -2,6 +2,10 @@
 
 Rantau ("rantaugo") is a Go REST API with a React/Vite frontend. The Go module is `rantau-go`; the backend uses PostgreSQL with PostGIS.
 
+## Project context
+
+Read `docs/CONTEXT.md` before planning or changing behavior. It covers the product's purpose, the current tested backend contract, where the design docs and the tests disagree, and open questions. It is a living document: update it only after a VERIFICATION phase passes. Tests remain the source of truth when they disagree with it. CONTEXT.md is not a `*_test.go` file, so the RED agent must not read it; PLANNING includes whatever RED needs in the handoff.
+
 ## What the repository contains
 
 - `cmd/` — API, database migration, and seed entry points
