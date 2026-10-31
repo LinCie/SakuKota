@@ -3,7 +3,7 @@
   "info": {
     "title": "Rantau API",
     "version": "1.0.0",
-    "description": "API for sub-districts, places, place reviews, place categories, and authentication. Successful JSON responses are wrapped in data; errors contain code and message."
+    "description": "API for sub-districts, places, place reviews, place suggestions, place categories, and authentication. Successful JSON responses are wrapped in data; errors contain code and message."
   },
   "servers": [
     {
@@ -31,6 +31,10 @@
     {
       "name": "Sub-districts",
       "description": "List, read, create, update, and delete sub-districts."
+    },
+    {
+      "name": "Suggestions",
+      "description": "Suggest places for review, list suggestions, and approve or reject them. Users see their own suggestions; admins review all of them."
     }
   ],
   "paths": {
@@ -857,6 +861,395 @@
                 "example": {
                   "code": "CATEGORY_NOT_FOUND",
                   "message": "category not found"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/suggestions": {
+      "get": {
+        "tags": ["Suggestions"],
+        "operationId": "listSuggestions",
+        "summary": "List suggestions",
+        "description": "Returns suggestions, oldest first, optionally filtered by status. Requires the admin role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Only return suggestions in this status. Omit to return all of them.",
+            "schema": { "$ref": "#/components/schemas/SuggestionStatus" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Suggestions retrieved successfully. An empty result returns an empty data array.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Suggestion" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The status is not pending, approved, or rejected.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "INVALID_STATUS",
+                  "message": "status must be pending, approved, or rejected"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      },
+      "post": {
+        "tags": ["Suggestions"],
+        "operationId": "createSuggestion",
+        "summary": "Suggest a place",
+        "description": "Stores the signed-in user's suggestion of a place as pending review. Any signed-in user may suggest a place, and the author is the user in the access token. Each user may have at most 5 pending suggestions at a time.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateSuggestionRequest" },
+              "example": {
+                "sub_district_id": 1,
+                "category_id": 1,
+                "name": "Kedai Kopi Pojok",
+                "address": "Jl. Melati No. 9",
+                "location": {
+                  "type": "Point",
+                  "coordinates": [106.8461, -6.2083]
+                },
+                "operating_hours": "08:00-17:00",
+                "estimated_price_range": "Rp 15.000-30.000",
+                "short_description": "Kopi susu dan roti bakar.",
+                "attributes": {
+                  "halal": true,
+                  "serving_style": "Dimasak saat dipesan"
+                },
+                "note": "Baru buka bulan lalu."
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Suggestion created successfully and pending review.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuggestionResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The request body is malformed, a value failed validation, or the sub-district or category does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "VALIDATION_ERROR",
+                  "message": "name is required"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": {
+            "description": "The user already has 5 pending suggestions.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "TOO_MANY_PENDING_SUGGESTIONS",
+                  "message": "too many pending suggestions"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/suggestions/mine": {
+      "get": {
+        "tags": ["Suggestions"],
+        "operationId": "listMySuggestions",
+        "summary": "List my suggestions",
+        "description": "Returns the signed-in user's suggestions with their statuses, newest first.",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Suggestions retrieved successfully. An empty result returns an empty data array.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Suggestion" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/suggestions/{id}": {
+      "get": {
+        "tags": ["Suggestions"],
+        "operationId": "getSuggestion",
+        "summary": "Get a suggestion",
+        "description": "Returns a suggestion with its author. Requires the admin role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Suggestion ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Suggestion retrieved successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuggestionResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The suggestion ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "INVALID_SUGGESTION_ID",
+                  "message": "invalid suggestion_id"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The suggestion does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "SUGGESTION_NOT_FOUND",
+                  "message": "suggestion not found"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/suggestions/{id}/approve": {
+      "post": {
+        "tags": ["Suggestions"],
+        "operationId": "approveSuggestion",
+        "summary": "Approve a suggestion",
+        "description": "Creates the place given in the body from a pending suggestion and marks the suggestion approved as that place. Requires the admin role. If the suggestion cannot be marked approved, the created place is deleted again.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Suggestion ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ApproveSuggestionRequest" },
+              "example": {
+                "sub_district_id": 1,
+                "category_id": 1,
+                "name": "Kedai Kopi Pojok",
+                "address": "Jl. Melati No. 9",
+                "location": {
+                  "type": "Point",
+                  "coordinates": [106.8461, -6.2083]
+                },
+                "operating_hours": "08:00-17:00",
+                "estimated_price_range": "Rp 15.000-30.000",
+                "short_description": "Kopi susu dan roti bakar.",
+                "attributes": {
+                  "halal": true,
+                  "serving_style": "Dimasak saat dipesan"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Suggestion approved successfully. place_id is the ID of the created place.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuggestionResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The suggestion ID is invalid, the body is malformed, or a place value failed validation. A missing location, an unknown sub-district or category, and a place name or attributes that are not valid are all reported here.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidSuggestionId": {
+                    "value": { "code": "INVALID_SUGGESTION_ID", "message": "invalid suggestion_id" }
+                  },
+                  "invalidBody": {
+                    "value": { "code": "INVALID_BODY", "message": "invalid request body" }
+                  },
+                  "validation": {
+                    "value": { "code": "VALIDATION_ERROR", "message": "location is required and must be within Indonesia" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The suggestion does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "SUGGESTION_NOT_FOUND",
+                  "message": "suggestion not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The suggestion has already been approved or rejected.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "ALREADY_REVIEWED",
+                  "message": "suggestion already reviewed"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/suggestions/{id}/reject": {
+      "post": {
+        "tags": ["Suggestions"],
+        "operationId": "rejectSuggestion",
+        "summary": "Reject a suggestion",
+        "description": "Marks a pending suggestion rejected, storing the optional reason with it. Requires the admin role. The body is a JSON object; reason may be left out or null.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Suggestion ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RejectSuggestionRequest" },
+              "example": {
+                "reason": "Lokasi sudah tutup permanen."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Suggestion rejected successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuggestionResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The suggestion ID is invalid, the body is malformed, or the reason is longer than 1000 characters.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidSuggestionId": {
+                    "value": { "code": "INVALID_SUGGESTION_ID", "message": "invalid suggestion_id" }
+                  },
+                  "invalidBody": {
+                    "value": { "code": "INVALID_BODY", "message": "invalid request body" }
+                  },
+                  "validation": {
+                    "value": { "code": "VALIDATION_ERROR", "message": "reason must be 1000 characters or fewer" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The suggestion does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "SUGGESTION_NOT_FOUND",
+                  "message": "suggestion not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The suggestion has already been approved or rejected.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "ALREADY_REVIEWED",
+                  "message": "suggestion already reviewed"
                 }
               }
             }
@@ -1799,6 +2192,138 @@
         "required": ["data"],
         "properties": {
           "data": { "$ref": "#/components/schemas/SubDistrict" }
+        }
+      },
+      "SuggestionStatus": {
+        "type": "string",
+        "enum": ["pending", "approved", "rejected"],
+        "description": "A suggestion is pending until an admin approves or rejects it. It is reviewed once and does not change after that."
+      },
+      "CreateSuggestionRequest": {
+        "type": "object",
+        "required": ["sub_district_id", "category_id", "name", "location"],
+        "properties": {
+          "sub_district_id": { "type": "integer", "format": "int64" },
+          "category_id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 150, "description": "Trimmed before it is checked." },
+          "address": { "type": ["string", "null"], "description": "Trimmed; blank is stored as null." },
+          "location": { "$ref": "#/components/schemas/Point" },
+          "operating_hours": { "type": ["string", "null"], "description": "Trimmed; blank is stored as null." },
+          "estimated_price_range": { "type": ["string", "null"], "description": "Trimmed; blank is stored as null." },
+          "short_description": { "type": ["string", "null"], "description": "Trimmed; blank is stored as null." },
+          "attributes": {
+            "type": ["object", "null"],
+            "description": "Values for the chosen category's custom fields, keyed by field key. Stored as sent and checked against the category when the suggestion is approved. A missing or null value is stored as an empty object."
+          },
+          "note": {
+            "type": ["string", "null"],
+            "maxLength": 1000,
+            "description": "Message to the reviewer. Trimmed; blank is stored as null."
+          }
+        }
+      },
+      "ApproveSuggestionRequest": {
+        "type": "object",
+        "description": "The place to create from the suggestion, in the shape of a place. The location is required.",
+        "required": ["sub_district_id", "category_id", "name", "location"],
+        "properties": {
+          "sub_district_id": { "type": "integer", "format": "int64" },
+          "category_id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 150 },
+          "address": { "type": ["string", "null"], "maxLength": 255 },
+          "location": { "$ref": "#/components/schemas/Point" },
+          "operating_hours": { "type": ["string", "null"], "maxLength": 255 },
+          "estimated_price_range": { "type": ["string", "null"], "maxLength": 100 },
+          "short_description": { "type": ["string", "null"] },
+          "attributes": {
+            "type": ["object", "null"],
+            "description": "Values for the chosen category's custom fields, keyed by field key. Required fields must be present."
+          }
+        }
+      },
+      "RejectSuggestionRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": ["string", "null"],
+            "maxLength": 1000,
+            "description": "Why the suggestion was rejected. Trimmed; blank is stored as null."
+          }
+        }
+      },
+      "SuggestionAuthor": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" }
+        }
+      },
+      "Suggestion": {
+        "type": "object",
+        "required": [
+          "id",
+          "sub_district_id",
+          "category_id",
+          "name",
+          "address",
+          "location",
+          "operating_hours",
+          "estimated_price_range",
+          "short_description",
+          "attributes",
+          "note",
+          "status",
+          "rejection_reason",
+          "place_id",
+          "reviewed_at",
+          "created_at",
+          "user"
+        ],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "sub_district_id": { "type": "integer", "format": "int64" },
+          "category_id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" },
+          "address": { "type": ["string", "null"] },
+          "location": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/Point" },
+              { "type": "null" }
+            ]
+          },
+          "operating_hours": { "type": ["string", "null"] },
+          "estimated_price_range": { "type": ["string", "null"] },
+          "short_description": { "type": ["string", "null"] },
+          "attributes": {
+            "type": "object",
+            "description": "Values for the chosen category's custom fields, keyed by field key."
+          },
+          "note": { "type": ["string", "null"] },
+          "status": { "$ref": "#/components/schemas/SuggestionStatus" },
+          "rejection_reason": {
+            "type": ["string", "null"],
+            "description": "Reason the suggestion was rejected; null unless it was rejected with a reason."
+          },
+          "place_id": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "ID of the place the suggestion was approved as; null unless it was approved."
+          },
+          "reviewed_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the suggestion was approved or rejected; null while it is pending."
+          },
+          "created_at": { "type": "string", "format": "date-time" },
+          "user": { "$ref": "#/components/schemas/SuggestionAuthor" }
+        }
+      },
+      "SuggestionResponse": {
+        "type": "object",
+        "required": ["data"],
+        "properties": {
+          "data": { "$ref": "#/components/schemas/Suggestion" }
         }
       },
       "Error": {

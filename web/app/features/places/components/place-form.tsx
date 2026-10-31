@@ -1,6 +1,6 @@
 import { useSelector } from "@tanstack/react-form";
 import { LocateFixed } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import type { SubDistrict } from "~/features/subdistricts/types";
 import { Button } from "~/shared/components/button";
@@ -27,6 +27,8 @@ type PlaceFormProps = {
   subDistricts: SubDistrict[];
   /** Every place, so the map can show what the chosen kecamatan already has. */
   places: Place[];
+  /** Extra sections after the place's own, inside the same form. */
+  children?: ReactNode;
 };
 
 /** The fields of the place form; the drawer owns the form and its submit. */
@@ -36,6 +38,7 @@ export function PlaceForm({
   categories,
   subDistricts,
   places,
+  children,
 }: PlaceFormProps) {
   const subDistrictId = useSelector(
     form.store,
@@ -249,6 +252,8 @@ export function PlaceForm({
           </form.Field>
         </FormSection>
       ) : null}
+
+      {children}
     </form>
   );
 }

@@ -61,7 +61,8 @@ export function placeToValues(
   };
 }
 
-function attributesToValues(
+/** Custom field values as form values, read by each field's data type. */
+export function attributesToValues(
   fields: CategoryField[],
   attributes: Record<string, unknown>,
 ): AttributeValues {

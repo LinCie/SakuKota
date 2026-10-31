@@ -14,6 +14,7 @@ import (
 	"rantau-go/internal/module/place"
 	"rantau-go/internal/module/review"
 	"rantau-go/internal/module/subdistrict"
+	"rantau-go/internal/module/suggestion"
 	"rantau-go/internal/module/users"
 	"rantau-go/internal/storage"
 )
@@ -43,6 +44,7 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 	placeModule := place.NewModule(db, images)
 	reviewModule := review.NewModule(db)
 	subdisctrictModule := subdistrict.NewModule(db, images)
+	suggestionModule := suggestion.NewModule(db, placeModule.Service)
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
@@ -97,6 +99,35 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 
 				// GET /v1/places/categories/{id}
 				r.Get("/{id}", placeModule.Handler.GetCategory)
+			})
+		})
+
+		r.Route("/suggestions", func(r chi.Router) {
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.WithAuth(cfg))
+
+				// POST /v1/suggestions
+				r.Post("/", suggestionModule.Handler.CreateSuggestion)
+
+				// GET /v1/suggestions/mine
+				r.Get("/mine", suggestionModule.Handler.GetMySuggestions)
+			})
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.WithAuth(cfg))
+				r.Use(middleware.Guard([]string{"admin"}))
+
+				// GET /v1/suggestions
+				r.Get("/", suggestionModule.Handler.GetSuggestions)
+
+				// GET /v1/suggestions/{id}
+				r.Get("/{id}", suggestionModule.Handler.GetSuggestion)
+
+				// POST /v1/suggestions/{id}/approve
+				r.Post("/{id}/approve", suggestionModule.Handler.ApproveSuggestion)
+
+				// POST /v1/suggestions/{id}/reject
+				r.Post("/{id}/reject", suggestionModule.Handler.RejectSuggestion)
 			})
 		})
 

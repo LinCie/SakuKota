@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { LogOut, ShieldCheck, UserRound } from "lucide-react";
+import { LogOut, MapPinPlus, ShieldCheck, UserRound } from "lucide-react";
 
 import { cn } from "~/shared/cn";
 import { logout } from "../api";
@@ -11,8 +11,8 @@ const plateClass =
 
 /**
  * The header's account corner: a "Masuk" plate when signed out (returning to
- * the current page afterwards), the user's first name and "Keluar" when
- * signed in.
+ * the current page afterwards), a "Usulkan" plate, the user's first name, and
+ * "Keluar" when signed in.
  */
 export function AccountControl({ className }: { className?: string }) {
   const session = useSession();
@@ -42,9 +42,17 @@ export function AccountControl({ className }: { className?: string }) {
   // The admin plate is icon-only on phones, where it replaces the name.
   const admin = isAdmin(session);
   const adminLink = admin && !pathname.startsWith("/admin");
+  // Like the admin plate, the suggest plate is icon-only on phones.
+  const suggestLink = pathname !== "/usulan" && !pathname.startsWith("/admin");
 
   return (
     <div className={cn("flex items-center gap-3", className)}>
+      {suggestLink ? (
+        <Link to="/usulan" className={plateClass}>
+          <MapPinPlus aria-hidden="true" className="size-4" strokeWidth={2.5} />
+          <span className="sr-only sm:not-sr-only">Usulkan</span>
+        </Link>
+      ) : null}
       {adminLink ? (
         <Link to="/admin" className={plateClass}>
           <ShieldCheck

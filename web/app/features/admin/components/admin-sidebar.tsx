@@ -1,10 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { Landmark, MapPin, Tags } from "lucide-react";
+import { Inbox, Landmark, MapPin, Tags } from "lucide-react";
 
 import { Wordmark } from "~/shared/components/wordmark";
 
 const sections = [
   { to: "/admin/places", label: "Tempat", icon: MapPin },
+  { to: "/admin/suggestions", label: "Usulan", icon: Inbox },
   { to: "/admin/subdistricts", label: "Kecamatan", icon: Landmark },
   { to: "/admin/categories", label: "Kategori", icon: Tags },
 ] as const;
