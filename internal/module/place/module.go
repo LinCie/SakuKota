@@ -10,10 +10,10 @@ type Module struct {
 	Handler *Handler
 }
 
-func NewModule(db *sqlx.DB) *Module {
+func NewModule(db *sqlx.DB, images ImageStorage) *Module {
 	repo := NewPostgresRepository(db)
-	service := NewService(repo)
-	handler := NewHandler(service)
+	service := NewService(repo, images)
+	handler := NewHandler(service, images.PublicURL)
 
 	return &Module{
 		Service: service,

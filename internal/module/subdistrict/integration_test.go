@@ -5,6 +5,7 @@ package subdistrict_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +22,7 @@ import (
 
 	"rantau-go/internal/database"
 	"rantau-go/internal/module/subdistrict"
+	"rantau-go/internal/storage"
 )
 
 // testDSN and testDB point at the PostGIS container started by TestMain.
@@ -89,17 +91,17 @@ func mustExec(t *testing.T, query string, args ...any) {
 
 // seedSubDistricts inserts three sub-districts with IDs 1 to 3:
 //
-//	1 Menteng           every optional field set
-//	2 Kemang            every optional field null
-//	3 Kebayoran Baru    every optional field null
+//	1 Menteng           every optional field and both images set
+//	2 Kemang            every optional field null, no images
+//	3 Kebayoran Baru    every optional field null, no images
 func seedSubDistricts(t *testing.T) {
 	t.Helper()
 	mustExec(t, `INSERT INTO SUB_DISTRICTS (name, slug, flood_history,
-			safety_crime_information, estimated_daily_spending, static_map_image_url)
+			safety_crime_information, estimated_daily_spending, image_key, static_map_image_key)
 		VALUES ('Menteng', 'menteng', 'Banjir 2020', 'Aman di siang hari', 1500000.50,
-			'https://example.com/menteng.png'),
-			('Kemang', 'kemang', NULL, NULL, NULL, NULL),
-			('Kebayoran Baru', 'kebayoran-baru', NULL, NULL, NULL, NULL)`)
+			'subdistricts/1/image/a.webp', 'subdistricts/1/static-map/a.png'),
+			('Kemang', 'kemang', NULL, NULL, NULL, NULL, NULL),
+			('Kebayoran Baru', 'kebayoran-baru', NULL, NULL, NULL, NULL, NULL)`)
 }
 
 // seedPlaceIn adds a category and a place in the sub-district, so that the
@@ -113,8 +115,24 @@ func seedPlaceIn(t *testing.T, subDistrictID int64) {
 
 // integrationRouter wires the real service and repository behind the HTTP handlers.
 func integrationRouter(db *sqlx.DB) http.Handler {
-	return newRouter(subdistrict.NewService(subdistrict.NewPostgresRepository(db)))
+	return newRouter(subdistrict.NewService(subdistrict.NewPostgresRepository(db), fakeImages{}))
 }
+
+// fakeImages stands in for object storage: every upload is presigned as and
+// promoted to new.png under the image's prefix, and deletes succeed.
+type fakeImages struct{}
+
+func (fakeImages) PresignUpload(_ context.Context, prefix, _ string) (storage.Upload, error) {
+	return storage.Upload{Key: "uploads/" + prefix + "/new.png"}, nil
+}
+
+func (fakeImages) Promote(_ context.Context, prefix, _ string) (string, error) {
+	return prefix + "/new.png", nil
+}
+
+func (fakeImages) Delete(context.Context, string) error { return nil }
+
+func (fakeImages) PublicURL(key string) string { return testImageURL(key) }
 
 // call sends one request through router.
 func call(t *testing.T, router http.Handler, method, target, body string) *httptest.ResponseRecorder {
@@ -138,6 +156,7 @@ type subDistrictRow struct {
 	FloodHistory           *string  `json:"flood_history"`
 	SafetyCrimeInformation *string  `json:"safety_crime_information"`
 	EstimatedDailySpending *float64 `json:"estimated_daily_spending"`
+	ImageURL               *string  `json:"image_url"`
 	StaticMapImageURL      *string  `json:"static_map_image_url"`
 }
 
@@ -205,7 +224,8 @@ func TestIntegration_ListSubDistrictsInIDOrder(t *testing.T) {
 		FloodHistory:           ptr("Banjir 2020"),
 		SafetyCrimeInformation: ptr("Aman di siang hari"),
 		EstimatedDailySpending: ptr(1500000.5),
-		StaticMapImageURL:      ptr("https://example.com/menteng.png"),
+		ImageURL:               ptr("https://img.test/subdistricts/1/image/a.webp"),
+		StaticMapImageURL:      ptr("https://img.test/subdistricts/1/static-map/a.png"),
 	}
 	if !reflect.DeepEqual(rows[0], want) {
 		t.Errorf("first sub-district = %+v, want %+v", rows[0], want)
@@ -227,10 +247,11 @@ func TestIntegration_GetSubDistrict(t *testing.T) {
 		{name: "returns every field", target: "/subdistricts/1", wantStatus: http.StatusOK,
 			want: `{"id":1,"name":"Menteng","slug":"menteng","flood_history":"Banjir 2020",` +
 				`"safety_crime_information":"Aman di siang hari","estimated_daily_spending":1500000.5,` +
-				`"static_map_image_url":"https://example.com/menteng.png"}`},
+				`"image_url":"https://img.test/subdistricts/1/image/a.webp",` +
+				`"static_map_image_url":"https://img.test/subdistricts/1/static-map/a.png"}`},
 		{name: "unset fields come back as null", target: "/subdistricts/2", wantStatus: http.StatusOK,
 			want: `{"id":2,"name":"Kemang","slug":"kemang","flood_history":null,"safety_crime_information":null,` +
-				`"estimated_daily_spending":null,"static_map_image_url":null}`},
+				`"estimated_daily_spending":null,"image_url":null,"static_map_image_url":null}`},
 		{name: "unknown sub-district", target: "/subdistricts/99",
 			wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
 		{name: "invalid id", target: "/subdistricts/abc",
@@ -258,9 +279,6 @@ func TestIntegration_GetSubDistrict(t *testing.T) {
 
 func TestIntegration_CreateSubDistrictRules(t *testing.T) {
 	const tebet = `"name":"Tebet","slug":"tebet"`
-	urlOfLength := func(n int) string {
-		return "https://example.com/" + strings.Repeat("a", n-len("https://example.com/"))
-	}
 
 	tests := []struct {
 		name       string
@@ -272,7 +290,7 @@ func TestIntegration_CreateSubDistrictRules(t *testing.T) {
 		{name: "name and slug only", body: `{` + tebet + `}`, wantStatus: http.StatusCreated, wantStored: 4},
 		{name: "every optional field at its limit", wantStatus: http.StatusCreated, wantStored: 4,
 			body: `{` + tebet + `,"flood_history":"Banjir","safety_crime_information":"Aman",` +
-				`"estimated_daily_spending":99999999.99,"static_map_image_url":"` + urlOfLength(255) + `"}`},
+				`"estimated_daily_spending":99999999.99}`},
 		{name: "name of 100 characters", body: `{"name":"` + strings.Repeat("a", 100) + `","slug":"tebet"}`,
 			wantStatus: http.StatusCreated, wantStored: 4},
 		{name: "name of 101 characters", body: `{"name":"` + strings.Repeat("a", 101) + `","slug":"tebet"}`,
@@ -296,8 +314,6 @@ func TestIntegration_CreateSubDistrictRules(t *testing.T) {
 		{name: "negative estimated daily spending", body: `{` + tebet + `,"estimated_daily_spending":-1}`,
 			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 3},
 		{name: "estimated daily spending too large for DECIMAL(10,2)", body: `{` + tebet + `,"estimated_daily_spending":100000000}`,
-			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 3},
-		{name: "static map image URL of 256 characters", body: `{` + tebet + `,"static_map_image_url":"` + urlOfLength(256) + `"}`,
 			wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR", wantStored: 3},
 	}
 
@@ -325,6 +341,7 @@ func TestIntegration_CreatedSubDistrictIsListedAsSent(t *testing.T) {
 	seedSubDistricts(t)
 	router := integrationRouter(testDB)
 
+	// The map image URL is no longer a field, so it is ignored like the id.
 	body := `{"id":999,"name":"Tebet","slug":"tebet",` +
 		`"flood_history":"🌊 \"Banjir\" '; DROP TABLE sub_districts; --","safety_crime_information":null,` +
 		`"estimated_daily_spending":1500000.50,"static_map_image_url":"https://example.com/tebet.png"}`
@@ -348,7 +365,6 @@ func TestIntegration_CreatedSubDistrictIsListedAsSent(t *testing.T) {
 		Slug:                   "tebet",
 		FloodHistory:           ptr("🌊 \"Banjir\" '; DROP TABLE sub_districts; --"),
 		EstimatedDailySpending: ptr(1500000.5),
-		StaticMapImageURL:      ptr("https://example.com/tebet.png"),
 	}
 	if !reflect.DeepEqual(listed, want) {
 		t.Errorf("listed = %+v, want %+v", listed, want)
@@ -431,11 +447,14 @@ func TestIntegration_PatchSubDistrict(t *testing.T) {
 			body: `{"flood_history":null,"static_map_image_url":null}`, wantStatus: http.StatusOK,
 			check: func(t *testing.T, rows []subDistrictRow) {
 				sd := findSubDistrict(t, rows, 1)
-				if sd.FloodHistory != nil || sd.StaticMapImageURL != nil {
-					t.Errorf("sub-district 1 = %+v, want flood history and map URL cleared", sd)
+				if sd.FloodHistory != nil {
+					t.Errorf("flood history = %q, want it cleared", *sd.FloodHistory)
 				}
 				if sd.SafetyCrimeInformation == nil {
 					t.Errorf("safety information was cleared, want it kept")
+				}
+				if sd.ImageURL == nil || sd.StaticMapImageURL == nil {
+					t.Errorf("sub-district 1 = %+v, want both images kept", sd)
 				}
 			}},
 		{name: "sets estimated daily spending", target: "/subdistricts/2", body: `{"estimated_daily_spending":750000.25}`,
@@ -625,5 +644,177 @@ func TestIntegration_StorageFailureHidesDetails(t *testing.T) {
 				t.Errorf("500 body exposes driver detail: %s", rec.Body)
 			}
 		})
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Sub-district images
+// -----------------------------------------------------------------------------
+
+func TestIntegration_ImageUploadURL(t *testing.T) {
+	resetDB(t)
+	seedSubDistricts(t)
+	router := integrationRouter(testDB)
+
+	for _, path := range []string{"image", "static-map"} {
+		t.Run(path, func(t *testing.T) {
+			rec := call(t, router, http.MethodPost, "/subdistricts/2/"+path+"/upload-url", `{"content_type":"image/png"}`)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
+			}
+			var got struct {
+				UploadKey string `json:"upload_key"`
+			}
+			if err := json.Unmarshal(responseData(t, rec), &got); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if want := "uploads/subdistricts/2/" + path + "/new.png"; got.UploadKey != want {
+				t.Errorf("upload_key = %q, want %q", got.UploadKey, want)
+			}
+
+			rec = call(t, router, http.MethodPost, "/subdistricts/99/"+path+"/upload-url", `{"content_type":"image/png"}`)
+			assertError(t, rec, http.StatusNotFound, "SUB_DISTRICT_NOT_FOUND")
+		})
+	}
+}
+
+func TestIntegration_SetImage(t *testing.T) {
+	tests := []struct {
+		path string
+		// url and other return the image URL of the slot and of the other slot.
+		url   func(subDistrictRow) *string
+		other func(subDistrictRow) *string
+	}{
+		{path: "image",
+			url:   func(r subDistrictRow) *string { return r.ImageURL },
+			other: func(r subDistrictRow) *string { return r.StaticMapImageURL }},
+		{path: "static-map",
+			url:   func(r subDistrictRow) *string { return r.StaticMapImageURL },
+			other: func(r subDistrictRow) *string { return r.ImageURL }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.path, func(t *testing.T) {
+			resetDB(t)
+			seedSubDistricts(t)
+			router := integrationRouter(testDB)
+			want := testImageURL("subdistricts/2/" + tc.path + "/new.png")
+
+			rec := call(t, router, http.MethodPut, "/subdistricts/2/"+tc.path,
+				`{"upload_key":"uploads/subdistricts/2/`+tc.path+`/new.png"}`)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
+			}
+			returned := subDistrictOf(t, rec)
+			if got := tc.url(returned); got == nil || *got != want {
+				t.Errorf("returned URL = %v, want %q", got, want)
+			}
+			if got := tc.other(returned); got != nil {
+				t.Errorf("other image URL = %q, want null", *got)
+			}
+
+			listed := findSubDistrict(t, listSubDistricts(t, router), 2)
+			if got := tc.url(listed); got == nil || *got != want {
+				t.Errorf("listed URL = %v, want %q", got, want)
+			}
+
+			edited := subDistrictOf(t, call(t, router, http.MethodPatch, "/subdistricts/2", `{"name":"Kemang Raya"}`))
+			if got := tc.url(edited); got == nil || *got != want {
+				t.Errorf("URL after an edit = %v, want %q", got, want)
+			}
+
+			rec = call(t, router, http.MethodPut, "/subdistricts/99/"+tc.path,
+				`{"upload_key":"uploads/subdistricts/99/`+tc.path+`/new.png"}`)
+			assertError(t, rec, http.StatusNotFound, "SUB_DISTRICT_NOT_FOUND")
+		})
+	}
+}
+
+// subDistrictOf returns the sub-district in a successful response.
+func subDistrictOf(t *testing.T, rec *httptest.ResponseRecorder) subDistrictRow {
+	t.Helper()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
+	}
+	var sd subDistrictRow
+	if err := json.Unmarshal(responseData(t, rec), &sd); err != nil {
+		t.Fatalf("decode sub-district: %v; body: %s", err, rec.Body)
+	}
+	return sd
+}
+
+func TestIntegration_RepositorySetImageKey(t *testing.T) {
+	tests := []struct {
+		slot subdistrict.ImageSlot
+		key  string
+		// stored returns the key of the slot and of the other slot.
+		stored func(*subdistrict.SubDistrict) (key, other *string)
+	}{
+		{slot: subdistrict.SlotImage, key: "subdistricts/2/image/b.webp",
+			stored: func(sd *subdistrict.SubDistrict) (*string, *string) { return sd.ImageKey, sd.StaticMapImageKey }},
+		{slot: subdistrict.SlotStaticMap, key: "subdistricts/2/static-map/b.png",
+			stored: func(sd *subdistrict.SubDistrict) (*string, *string) { return sd.StaticMapImageKey, sd.ImageKey }},
+	}
+
+	for _, tc := range tests {
+		t.Run(string(tc.slot), func(t *testing.T) {
+			resetDB(t)
+			seedSubDistricts(t)
+			repo := subdistrict.NewPostgresRepository(testDB)
+
+			got, err := repo.SetImageKey(context.Background(), 2, tc.slot, tc.key)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			key, other := tc.stored(got)
+			if got.ID != 2 || got.Name != "Kemang" || key == nil || *key != tc.key || other != nil {
+				t.Errorf("returned sub-district = %+v, want Kemang with only the new key", got)
+			}
+
+			stored, err := repo.GetSubDistrict(context.Background(), 2)
+			if err != nil {
+				t.Fatalf("get: %v", err)
+			}
+			if key, _ := tc.stored(stored); key == nil || *key != tc.key {
+				t.Errorf("stored key = %v, want %q", key, tc.key)
+			}
+
+			if _, err := repo.SetImageKey(context.Background(), 99, tc.slot, tc.key); !errors.Is(err, subdistrict.ErrSubDistrictNotFound) {
+				t.Errorf("unknown sub-district: err = %v, want ErrSubDistrictNotFound", err)
+			}
+		})
+	}
+}
+
+func TestIntegration_RepositoryDeleteReturnsImageKeys(t *testing.T) {
+	resetDB(t)
+	seedSubDistricts(t)
+	mustExec(t, `UPDATE SUB_DISTRICTS SET static_map_image_key = 'subdistricts/2/static-map/a.png' WHERE id = 2`)
+	repo := subdistrict.NewPostgresRepository(testDB)
+
+	tests := []struct {
+		name string
+		id   int64
+		want []string
+	}{
+		{name: "both images", id: 1, want: []string{"subdistricts/1/image/a.webp", "subdistricts/1/static-map/a.png"}},
+		{name: "only the static map", id: 2, want: []string{"subdistricts/2/static-map/a.png"}},
+		{name: "no images", id: 3, want: nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := repo.Delete(context.Background(), tc.id)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("deleted image keys = %v, want %v", got, tc.want)
+			}
+		})
+	}
+
+	if _, err := repo.Delete(context.Background(), 99); !errors.Is(err, subdistrict.ErrSubDistrictNotFound) {
+		t.Errorf("unknown sub-district: err = %v, want ErrSubDistrictNotFound", err)
 	}
 }

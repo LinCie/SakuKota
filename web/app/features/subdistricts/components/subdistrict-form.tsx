@@ -94,21 +94,6 @@ export function SubDistrictForm({
             />
           )}
         </form.Field>
-        <form.Field name="mapImageUrl">
-          {(field) => (
-            <TextField
-              field={field}
-              label="Alamat gambar peta"
-              optional
-              type="url"
-              inputMode="url"
-              autoComplete="off"
-              autoCapitalize="none"
-              spellCheck={false}
-              placeholder="https://"
-            />
-          )}
-        </form.Field>
       </FormSection>
     </form>
   );

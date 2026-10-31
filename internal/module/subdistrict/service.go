@@ -2,8 +2,11 @@ package subdistrict
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"rantau-go/internal/storage"
 )
 
 // Service defines the operations required by the handler.
@@ -15,15 +18,22 @@ type Service interface {
 	Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error)
 	Update(ctx context.Context, id int64, patch SubDistrictPatch) (*SubDistrict, error)
 	Delete(ctx context.Context, id int64) error
+	// ImageUploadURL returns an upload for a new image in the sub-district's slot.
+	ImageUploadURL(ctx context.Context, id int64, slot ImageSlot, contentType string) (storage.Upload, error)
+	// SetImage makes the uploaded image the sub-district's image in slot,
+	// replacing any previous one.
+	SetImage(ctx context.Context, id int64, slot ImageSlot, uploadKey string) (*SubDistrict, error)
 }
 
 type service struct {
-	repo Repository
+	repo   Repository
+	images ImageStorage
 }
 
-func NewService(repo Repository) Service {
+func NewService(repo Repository, images ImageStorage) Service {
 	return &service{
-		repo: repo,
+		repo:   repo,
+		images: images,
 	}
 }
 
@@ -75,10 +85,6 @@ func (s *service) Update(ctx context.Context, id int64, patch SubDistrictPatch) 
 		sd.EstimatedDailySpending = patch.EstimatedDailySpending.Value
 	}
 
-	if patch.StaticMapImageURL.Set {
-		sd.StaticMapImageURL = patch.StaticMapImageURL.Value
-	}
-
 	if err := validate(sd); err != nil {
 		return nil, err
 	}
@@ -86,8 +92,59 @@ func (s *service) Update(ctx context.Context, id int64, patch SubDistrictPatch) 
 	return s.repo.Update(ctx, sd)
 }
 
+// Delete removes the sub-district, then its images. Failed image deletes are
+// ignored because the sub-district is already gone.
 func (s *service) Delete(ctx context.Context, id int64) error {
-	return s.repo.Delete(ctx, id)
+	imageKeys, err := s.repo.Delete(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	for _, key := range imageKeys {
+		_ = s.images.Delete(ctx, key)
+	}
+
+	return nil
+}
+
+func (s *service) ImageUploadURL(ctx context.Context, id int64, slot ImageSlot, contentType string) (storage.Upload, error) {
+	if _, err := s.repo.GetSubDistrict(ctx, id); err != nil {
+		return storage.Upload{}, err
+	}
+
+	return s.images.PresignUpload(ctx, imagePrefix(id, slot), contentType)
+}
+
+// SetImage promotes the upload and stores it as the sub-district's image in
+// slot. Image deletes that fail are ignored: they only leave an unused object
+// behind.
+func (s *service) SetImage(ctx context.Context, id int64, slot ImageSlot, uploadKey string) (*SubDistrict, error) {
+	sd, err := s.repo.GetSubDistrict(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := s.images.Promote(ctx, imagePrefix(id, slot), uploadKey)
+	if err != nil {
+		return nil, err
+	}
+
+	updated, err := s.repo.SetImageKey(ctx, id, slot, key)
+	if err != nil {
+		_ = s.images.Delete(ctx, key)
+		return nil, err
+	}
+
+	if old := sd.imageKey(slot); old != nil {
+		_ = s.images.Delete(ctx, *old)
+	}
+
+	return updated, nil
+}
+
+// imagePrefix is the storage prefix of the images in slot of sub-district id.
+func imagePrefix(id int64, slot ImageSlot) string {
+	return "subdistricts/" + strconv.FormatInt(id, 10) + "/" + string(slot)
 }
 
 // -----------------------------------------------------------------------------
@@ -108,10 +165,6 @@ func validate(sd *SubDistrict) error {
 
 	if v := sd.EstimatedDailySpending; v != nil && (*v < 0 || *v > maxEstimatedDailySpending) {
 		return ErrInvalidEstimatedDailySpending
-	}
-
-	if u := sd.StaticMapImageURL; u != nil && utf8.RuneCountInString(*u) > maxStaticMapImageURLLength {
-		return ErrInvalidStaticMapImageURL
 	}
 
 	return nil

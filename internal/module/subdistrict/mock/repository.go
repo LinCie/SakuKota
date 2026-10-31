@@ -57,11 +57,12 @@ func (mr *MockRepositoryMockRecorder) Create(ctx, sd any) *gomock.Call {
 }
 
 // Delete mocks base method.
-func (m *MockRepository) Delete(ctx context.Context, id int64) error {
+func (m *MockRepository) Delete(ctx context.Context, id int64) ([]string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Delete", ctx, id)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Delete indicates an expected call of Delete.
@@ -98,6 +99,21 @@ func (m *MockRepository) GetSubDistrict(ctx context.Context, id int64) (*subdist
 func (mr *MockRepositoryMockRecorder) GetSubDistrict(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubDistrict", reflect.TypeOf((*MockRepository)(nil).GetSubDistrict), ctx, id)
+}
+
+// SetImageKey mocks base method.
+func (m *MockRepository) SetImageKey(ctx context.Context, id int64, slot subdistrict.ImageSlot, key string) (*subdistrict.SubDistrict, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetImageKey", ctx, id, slot, key)
+	ret0, _ := ret[0].(*subdistrict.SubDistrict)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetImageKey indicates an expected call of SetImageKey.
+func (mr *MockRepositoryMockRecorder) SetImageKey(ctx, id, slot, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetImageKey", reflect.TypeOf((*MockRepository)(nil).SetImageKey), ctx, id, slot, key)
 }
 
 // Update mocks base method.

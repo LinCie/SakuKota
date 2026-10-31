@@ -16,5 +16,4 @@ var (
 	ErrSubDistrictNotFound           = errors.New("sub-district not found")
 	ErrSubDistrictInUse              = errors.New("sub-district is referenced by places")
 	ErrInvalidEstimatedDailySpending = errors.New("estimated_daily_spending must be between 0 and 99999999.99")
-	ErrInvalidStaticMapImageURL      = errors.New("static_map_image_url must be 255 characters or fewer")
 )

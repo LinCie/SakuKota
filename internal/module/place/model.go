@@ -25,9 +25,11 @@ type Place struct {
 	Attributes json.RawMessage `db:"attributes"`
 	// RatingCount and RatingSum total the ratings of the place's reviews. The
 	// review module keeps them up to date; place updates never change them.
-	RatingCount int      `db:"rating_count"`
-	RatingSum   int      `db:"rating_sum"`
-	Category    Category `db:"category"`
+	RatingCount int `db:"rating_count"`
+	RatingSum   int `db:"rating_sum"`
+	// ImageKey is the storage key of the place's image, or nil if it has none.
+	ImageKey *string  `db:"image_key"`
+	Category Category `db:"category"`
 }
 
 // PlaceFilter narrows the places returned by GetMany. Zero values apply no filter.

@@ -17,19 +17,29 @@ import (
 
 	"rantau-go/internal/module/subdistrict"
 	"rantau-go/internal/module/subdistrict/mock"
+	"rantau-go/internal/storage"
 )
 
 // newRouter serves the sub-district handlers on the paths the API uses for
 // them, so URL parameters resolve as they do in production.
 func newRouter(svc subdistrict.Service) http.Handler {
-	h := subdistrict.NewHandler(svc)
+	h := subdistrict.NewHandler(svc, testImageURL)
 	r := chi.NewRouter()
 	r.Get("/subdistricts", h.GetSubDistricts)
 	r.Get("/subdistricts/{id}", h.GetSubDistrict)
 	r.Post("/subdistricts", h.CreateSubDistrict)
 	r.Patch("/subdistricts/{id}", h.PatchSubDistrict)
 	r.Delete("/subdistricts/{id}", h.DeleteSubDistrict)
+	r.Post("/subdistricts/{id}/image/upload-url", h.CreateImageUpload(subdistrict.SlotImage))
+	r.Put("/subdistricts/{id}/image", h.SetImage(subdistrict.SlotImage))
+	r.Post("/subdistricts/{id}/static-map/upload-url", h.CreateImageUpload(subdistrict.SlotStaticMap))
+	r.Put("/subdistricts/{id}/static-map", h.SetImage(subdistrict.SlotStaticMap))
 	return r
+}
+
+// testImageURL stands in for the storage's public URLs.
+func testImageURL(key string) string {
+	return "https://img.test/" + key
 }
 
 // serve runs req through h. A panic fails the test instead of the whole binary.
@@ -125,16 +135,18 @@ func TestHandler_GetSubDistricts_ResponseShape(t *testing.T) {
 			name: "every field is listed, unset ones as null",
 			subDistricts: []subdistrict.SubDistrict{
 				{ID: 1, Name: "Menteng", Slug: "menteng", FloodHistory: ptr("Banjir 2020"),
-					EstimatedDailySpending: ptr(1500000.5), StaticMapImageURL: ptr("https://example.com/menteng.png")},
+					EstimatedDailySpending: ptr(1500000.5), ImageKey: ptr("subdistricts/1/image/a.webp"),
+					StaticMapImageKey: ptr("subdistricts/1/static-map/a.png")},
 				{ID: 2, Name: "Kemang", Slug: "kemang"},
 			},
 			want: `[
 				{"id": 1, "name": "Menteng", "slug": "menteng", "flood_history": "Banjir 2020",
 				 "safety_crime_information": null, "estimated_daily_spending": 1500000.5,
-				 "static_map_image_url": "https://example.com/menteng.png"},
+				 "image_url": "https://img.test/subdistricts/1/image/a.webp",
+				 "static_map_image_url": "https://img.test/subdistricts/1/static-map/a.png"},
 				{"id": 2, "name": "Kemang", "slug": "kemang", "flood_history": null,
 				 "safety_crime_information": null, "estimated_daily_spending": null,
-				 "static_map_image_url": null}
+				 "image_url": null, "static_map_image_url": null}
 			]`,
 		},
 	}
@@ -215,6 +227,7 @@ func TestHandler_GetSubDistrict_Success(t *testing.T) {
 		"flood_history": "Banjir 2020",
 		"safety_crime_information": null,
 		"estimated_daily_spending": null,
+		"image_url": null,
 		"static_map_image_url": null
 	}`)
 }
@@ -255,7 +268,6 @@ func TestHandler_CreateSubDistrict_MapsServiceErrors(t *testing.T) {
 		{name: "invalid name", err: subdistrict.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "invalid slug", err: subdistrict.ErrInvalidSlug, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "invalid estimated daily spending", err: subdistrict.ErrInvalidEstimatedDailySpending, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-		{name: "invalid static map image URL", err: subdistrict.ErrInvalidStaticMapImageURL, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "duplicate name or slug", err: subdistrict.ErrSubDistrictExists, wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_EXISTS"},
 		{name: "wrapped duplicate", err: fmt.Errorf("create: %w", subdistrict.ErrSubDistrictExists), wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_EXISTS"},
 		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
@@ -287,7 +299,6 @@ func TestHandler_CreateSubDistrict_Success(t *testing.T) {
 				FloodHistory:           sd.FloodHistory,
 				SafetyCrimeInformation: sd.SafetyCrimeInformation,
 				EstimatedDailySpending: sd.EstimatedDailySpending,
-				StaticMapImageURL:      sd.StaticMapImageURL,
 			}, nil
 		})
 
@@ -304,7 +315,6 @@ func TestHandler_CreateSubDistrict_Success(t *testing.T) {
 		Slug:                   "menteng",
 		FloodHistory:           ptr("Banjir 2020"),
 		EstimatedDailySpending: ptr(1500000.5),
-		StaticMapImageURL:      ptr("https://example.com/menteng.png"),
 	}
 	if !reflect.DeepEqual(*got, want) {
 		t.Errorf("service got %+v, want %+v; a client-sent id or unknown key reached the service", *got, want)
@@ -317,7 +327,8 @@ func TestHandler_CreateSubDistrict_Success(t *testing.T) {
 		"flood_history": "Banjir 2020",
 		"safety_crime_information": null,
 		"estimated_daily_spending": 1500000.5,
-		"static_map_image_url": "https://example.com/menteng.png"
+		"image_url": null,
+		"static_map_image_url": null
 	}`)
 }
 
@@ -500,8 +511,8 @@ func TestHandler_PatchSubDistrict_PassesPatchToService(t *testing.T) {
 			want: subdistrict.SubDistrictPatch{EstimatedDailySpending: present(750000.25)}},
 		{name: "null clears the number", target: "/subdistricts/9", body: `{"estimated_daily_spending":null}`, wantID: 9,
 			want: subdistrict.SubDistrictPatch{EstimatedDailySpending: null[float64]()}},
-		{name: "null clears the map image URL", target: "/subdistricts/9", body: `{"static_map_image_url":null}`, wantID: 9,
-			want: subdistrict.SubDistrictPatch{StaticMapImageURL: null[string]()}},
+		{name: "map image URL can no longer be patched", target: "/subdistricts/9", body: `{"static_map_image_url":null}`, wantID: 9,
+			want: subdistrict.SubDistrictPatch{}},
 		{name: "client id and unknown keys are ignored", target: "/subdistricts/9",
 			body: `{"id":99,"created_at":"yesterday","slug":"menteng-atas"}`, wantID: 9,
 			want: subdistrict.SubDistrictPatch{Slug: present("menteng-atas")}},
@@ -532,7 +543,6 @@ func TestHandler_PatchSubDistrict_MapsServiceErrors(t *testing.T) {
 		{name: "invalid name", err: subdistrict.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "invalid slug", err: subdistrict.ErrInvalidSlug, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "invalid estimated daily spending", err: subdistrict.ErrInvalidEstimatedDailySpending, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-		{name: "invalid static map image URL", err: subdistrict.ErrInvalidStaticMapImageURL, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 		{name: "duplicate name or slug", err: subdistrict.ErrSubDistrictExists, wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_EXISTS"},
 		{name: "wrapped duplicate", err: fmt.Errorf("update: %w", subdistrict.ErrSubDistrictExists), wantStatus: http.StatusConflict, wantCode: "SUB_DISTRICT_EXISTS"},
 		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
@@ -555,7 +565,7 @@ func TestHandler_PatchSubDistrict_Success(t *testing.T) {
 		ID:                3,
 		Name:              "Menteng Atas",
 		Slug:              "menteng",
-		StaticMapImageURL: ptr("https://example.com/menteng.png"),
+		StaticMapImageKey: ptr("subdistricts/3/static-map/a.png"),
 	}, nil)
 
 	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, "/subdistricts/3", `{"name":"Menteng Atas"}`))
@@ -566,7 +576,8 @@ func TestHandler_PatchSubDistrict_Success(t *testing.T) {
 		"flood_history": null,
 		"safety_crime_information": null,
 		"estimated_daily_spending": null,
-		"static_map_image_url": "https://example.com/menteng.png"
+		"image_url": null,
+		"static_map_image_url": "https://img.test/subdistricts/3/static-map/a.png"
 	}`)
 }
 
@@ -629,5 +640,176 @@ func TestHandler_DeleteSubDistrict_Success(t *testing.T) {
 	}
 	if rec.Body.Len() != 0 {
 		t.Errorf("body = %q, want empty", rec.Body)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Sub-district images
+// -----------------------------------------------------------------------------
+
+// handlerSlots are the image slots with their path segment.
+var handlerSlots = []struct {
+	slot subdistrict.ImageSlot
+	path string
+}{
+	{slot: subdistrict.SlotImage, path: "image"},
+	{slot: subdistrict.SlotStaticMap, path: "static-map"},
+}
+
+func TestHandler_CreateImageUpload_RejectsInvalidRequests(t *testing.T) {
+	tests := []struct {
+		name     string
+		id       string
+		body     string
+		wantCode string
+	}{
+		{name: "sub-district id is not a number", id: "abc", body: `{"content_type":"image/png"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "sub-district id is zero", id: "0", body: `{"content_type":"image/png"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "body is not JSON", id: "3", body: `content_type=image/png`, wantCode: "INVALID_BODY"},
+		{name: "body is null", id: "3", body: `null`, wantCode: "INVALID_BODY"},
+		{name: "body is an array", id: "3", body: `[]`, wantCode: "INVALID_BODY"},
+	}
+
+	for _, hs := range handlerSlots {
+		for _, tc := range tests {
+			t.Run(hs.path+"/"+tc.name, func(t *testing.T) {
+				// No expectations: an invalid request must never reach the service.
+				svc := mock.NewMockService(gomock.NewController(t))
+				target := "/subdistricts/" + tc.id + "/" + hs.path + "/upload-url"
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, target, tc.body))
+				assertError(t, rec, http.StatusBadRequest, tc.wantCode)
+			})
+		}
+	}
+}
+
+func TestHandler_CreateImageUpload_MapsServiceErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantCode   string
+	}{
+		{name: "unknown sub-district", err: subdistrict.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
+		{name: "image type not allowed", err: storage.ErrInvalidImageType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := mock.NewMockService(gomock.NewController(t))
+			svc.EXPECT().ImageUploadURL(gomock.Any(), int64(3), subdistrict.SlotImage, "image/gif").Return(storage.Upload{}, tc.err)
+
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/subdistricts/3/image/upload-url", `{"content_type":"image/gif"}`))
+			assertError(t, rec, tc.wantStatus, tc.wantCode)
+		})
+	}
+}
+
+func TestHandler_CreateImageUpload_Success(t *testing.T) {
+	for _, hs := range handlerSlots {
+		t.Run(hs.path, func(t *testing.T) {
+			svc := mock.NewMockService(gomock.NewController(t))
+			svc.EXPECT().ImageUploadURL(gomock.Any(), int64(3), hs.slot, "image/png").Return(storage.Upload{
+				Key: "uploads/subdistricts/3/" + hs.path + "/a.png",
+				PresignedUpload: storage.PresignedUpload{
+					URL:       "http://localhost:3900/rantau-images/uploads/subdistricts/3/" + hs.path + "/a.png?X-Amz-Signature=abc",
+					Method:    "PUT",
+					Headers:   map[string]string{"Content-Type": "image/png"},
+					ExpiresAt: time.Date(2026, 10, 31, 12, 5, 0, 0, time.UTC),
+				},
+			}, nil)
+
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/subdistricts/3/"+hs.path+"/upload-url", `{"content_type":"image/png"}`))
+			assertData(t, rec, http.StatusOK, `{
+				"upload_key": "uploads/subdistricts/3/`+hs.path+`/a.png",
+				"upload_url": "http://localhost:3900/rantau-images/uploads/subdistricts/3/`+hs.path+`/a.png?X-Amz-Signature=abc",
+				"method": "PUT",
+				"headers": {"Content-Type": "image/png"},
+				"expires_at": "2026-10-31T12:05:00Z"
+			}`)
+		})
+	}
+}
+
+func TestHandler_SetImage_RejectsInvalidRequests(t *testing.T) {
+	tests := []struct {
+		name     string
+		id       string
+		body     string
+		wantCode string
+	}{
+		{name: "sub-district id is not a number", id: "abc", body: `{"upload_key":"k"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "sub-district id is negative", id: "-1", body: `{"upload_key":"k"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "body is not JSON", id: "3", body: `upload_key=k`, wantCode: "INVALID_BODY"},
+		{name: "body is null", id: "3", body: `null`, wantCode: "INVALID_BODY"},
+		{name: "body is an array", id: "3", body: `[]`, wantCode: "INVALID_BODY"},
+	}
+
+	for _, hs := range handlerSlots {
+		for _, tc := range tests {
+			t.Run(hs.path+"/"+tc.name, func(t *testing.T) {
+				// No expectations: an invalid request must never reach the service.
+				svc := mock.NewMockService(gomock.NewController(t))
+				target := "/subdistricts/" + tc.id + "/" + hs.path
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, target, tc.body))
+				assertError(t, rec, http.StatusBadRequest, tc.wantCode)
+			})
+		}
+	}
+}
+
+func TestHandler_SetImage_MapsServiceErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantCode   string
+	}{
+		{name: "unknown sub-district", err: subdistrict.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
+		{name: "invalid upload key", err: storage.ErrInvalidImageKey, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "image not uploaded", err: storage.ErrImageNotUploaded, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "image type not allowed", err: storage.ErrInvalidImageType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "image too large", err: storage.ErrImageTooLarge, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := mock.NewMockService(gomock.NewController(t))
+			svc.EXPECT().SetImage(gomock.Any(), int64(3), subdistrict.SlotStaticMap, "uploads/subdistricts/3/static-map/a.png").Return(nil, tc.err)
+
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/3/static-map",
+				`{"upload_key":"uploads/subdistricts/3/static-map/a.png"}`))
+			assertError(t, rec, tc.wantStatus, tc.wantCode)
+		})
+	}
+}
+
+func TestHandler_SetImage_Success(t *testing.T) {
+	for _, hs := range handlerSlots {
+		t.Run(hs.path, func(t *testing.T) {
+			svc := mock.NewMockService(gomock.NewController(t))
+			svc.EXPECT().SetImage(gomock.Any(), int64(3), hs.slot, "uploads/subdistricts/3/"+hs.path+"/a.png").Return(&subdistrict.SubDistrict{
+				ID:                3,
+				Name:              "Menteng",
+				Slug:              "menteng",
+				ImageKey:          ptr("subdistricts/3/image/a.png"),
+				StaticMapImageKey: ptr("subdistricts/3/static-map/a.png"),
+			}, nil)
+
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/3/"+hs.path,
+				`{"upload_key":"uploads/subdistricts/3/`+hs.path+`/a.png"}`))
+			assertData(t, rec, http.StatusOK, `{
+				"id": 3,
+				"name": "Menteng",
+				"slug": "menteng",
+				"flood_history": null,
+				"safety_crime_information": null,
+				"estimated_daily_spending": null,
+				"image_url": "https://img.test/subdistricts/3/image/a.png",
+				"static_map_image_url": "https://img.test/subdistricts/3/static-map/a.png"
+			}`)
+		})
 	}
 }

@@ -504,6 +504,150 @@
         }
       }
     },
+    "/v1/places/{id}/image/upload-url": {
+      "post": {
+        "tags": ["Places"],
+        "operationId": "createPlaceImageUpload",
+        "summary": "Request a place image upload",
+        "description": "Returns a presigned URL for uploading a new image of the place straight to storage. Requires the admin role. Send the image as the body of a request with the returned method and headers before expires_at (5 minutes), then confirm it with PUT /v1/places/{id}/image. Unconfirmed uploads are deleted after a day.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Place ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ImageUploadRequest" },
+              "example": { "content_type": "image/webp" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload presigned successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ImageUploadResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The place ID is invalid, the body is malformed, or the content type is not JPEG, PNG, or WebP.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidPlaceId": {
+                    "value": { "code": "INVALID_PLACE_ID", "message": "invalid place_id" }
+                  },
+                  "invalidBody": {
+                    "value": { "code": "INVALID_BODY", "message": "invalid request body" }
+                  },
+                  "validation": {
+                    "value": { "code": "VALIDATION_ERROR", "message": "image must be JPEG, PNG, or WebP" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The place does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "PLACE_NOT_FOUND",
+                  "message": "place not found"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/places/{id}/image": {
+      "put": {
+        "tags": ["Places"],
+        "operationId": "setPlaceImage",
+        "summary": "Set a place's image",
+        "description": "Confirms an uploaded image and makes it the place's image, replacing the previous one. Requires the admin role. The upload must have been requested for this place, and the image must be a JPEG, PNG, or WebP of at most 5 MB whose type matches the one it was requested for.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Place ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetImageRequest" },
+              "example": {
+                "upload_key": "uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Image set successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PlaceResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The place ID is invalid, the body is malformed, the upload key is not one requested for this place, nothing was uploaded under it, or the image is too large or of the wrong type.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidPlaceId": {
+                    "value": { "code": "INVALID_PLACE_ID", "message": "invalid place_id" }
+                  },
+                  "invalidBody": {
+                    "value": { "code": "INVALID_BODY", "message": "invalid request body" }
+                  },
+                  "validation": {
+                    "value": { "code": "VALIDATION_ERROR", "message": "image has not been uploaded" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The place does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "PLACE_NOT_FOUND",
+                  "message": "place not found"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
     "/v1/places/{id}/reviews": {
       "get": {
         "tags": ["Reviews"],
@@ -980,6 +1124,294 @@
           "500": { "$ref": "#/components/responses/InternalServerError" }
         }
       }
+    },
+    "/v1/subdistricts/{id}/image/upload-url": {
+      "post": {
+        "tags": ["Sub-districts"],
+        "operationId": "createSubDistrictImageUpload",
+        "summary": "Request a sub-district image upload",
+        "description": "Returns a presigned URL for uploading a new image of the sub-district straight to storage. Requires the admin role. Send the image as the body of a request with the returned method and headers before expires_at (5 minutes), then confirm it with PUT /v1/subdistricts/{id}/image. Unconfirmed uploads are deleted after a day.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Sub-district ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ImageUploadRequest" },
+              "example": { "content_type": "image/png" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload presigned successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ImageUploadResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The sub-district ID is invalid, the body is malformed, or the content type is not JPEG, PNG, or WebP.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidSubDistrictId": {
+                    "value": { "code": "INVALID_SUB_DISTRICT_ID", "message": "invalid sub_district_id" }
+                  },
+                  "invalidBody": {
+                    "value": { "code": "INVALID_BODY", "message": "invalid request body" }
+                  },
+                  "validation": {
+                    "value": { "code": "VALIDATION_ERROR", "message": "image must be JPEG, PNG, or WebP" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The sub-district does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "SUB_DISTRICT_NOT_FOUND",
+                  "message": "sub-district not found"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/subdistricts/{id}/image": {
+      "put": {
+        "tags": ["Sub-districts"],
+        "operationId": "setSubDistrictImage",
+        "summary": "Set a sub-district's image",
+        "description": "Confirms an uploaded image and makes it the sub-district's image, replacing the previous one. Requires the admin role. The upload must have been requested for this sub-district's image, and the image must be a JPEG, PNG, or WebP of at most 5 MB whose type matches the one it was requested for.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Sub-district ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetImageRequest" },
+              "example": {
+                "upload_key": "uploads/subdistricts/1/image/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.png"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Image set successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SubDistrictResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The sub-district ID is invalid, the body is malformed, the upload key is not one requested for this image, nothing was uploaded under it, or the image is too large or of the wrong type.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidSubDistrictId": {
+                    "value": { "code": "INVALID_SUB_DISTRICT_ID", "message": "invalid sub_district_id" }
+                  },
+                  "invalidBody": {
+                    "value": { "code": "INVALID_BODY", "message": "invalid request body" }
+                  },
+                  "validation": {
+                    "value": { "code": "VALIDATION_ERROR", "message": "image has not been uploaded" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The sub-district does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "SUB_DISTRICT_NOT_FOUND",
+                  "message": "sub-district not found"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/subdistricts/{id}/static-map/upload-url": {
+      "post": {
+        "tags": ["Sub-districts"],
+        "operationId": "createSubDistrictStaticMapUpload",
+        "summary": "Request a sub-district static map image upload",
+        "description": "Returns a presigned URL for uploading a new static map image of the sub-district straight to storage. Requires the admin role. Send the image as the body of a request with the returned method and headers before expires_at (5 minutes), then confirm it with PUT /v1/subdistricts/{id}/static-map. Unconfirmed uploads are deleted after a day.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Sub-district ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ImageUploadRequest" },
+              "example": { "content_type": "image/png" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload presigned successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ImageUploadResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The sub-district ID is invalid, the body is malformed, or the content type is not JPEG, PNG, or WebP.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidSubDistrictId": {
+                    "value": { "code": "INVALID_SUB_DISTRICT_ID", "message": "invalid sub_district_id" }
+                  },
+                  "invalidBody": {
+                    "value": { "code": "INVALID_BODY", "message": "invalid request body" }
+                  },
+                  "validation": {
+                    "value": { "code": "VALIDATION_ERROR", "message": "image must be JPEG, PNG, or WebP" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The sub-district does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "SUB_DISTRICT_NOT_FOUND",
+                  "message": "sub-district not found"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/subdistricts/{id}/static-map": {
+      "put": {
+        "tags": ["Sub-districts"],
+        "operationId": "setSubDistrictStaticMap",
+        "summary": "Set a sub-district's static map image",
+        "description": "Confirms an uploaded image and makes it the sub-district's static map image, replacing the previous one. Requires the admin role. The upload must have been requested for this sub-district's static map image, and the image must be a JPEG, PNG, or WebP of at most 5 MB whose type matches the one it was requested for.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Sub-district ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetImageRequest" },
+              "example": {
+                "upload_key": "uploads/subdistricts/1/static-map/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.png"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Image set successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SubDistrictResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The sub-district ID is invalid, the body is malformed, the upload key is not one requested for this image, nothing was uploaded under it, or the image is too large or of the wrong type.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidSubDistrictId": {
+                    "value": { "code": "INVALID_SUB_DISTRICT_ID", "message": "invalid sub_district_id" }
+                  },
+                  "invalidBody": {
+                    "value": { "code": "INVALID_BODY", "message": "invalid request body" }
+                  },
+                  "validation": {
+                    "value": { "code": "VALIDATION_ERROR", "message": "image has not been uploaded" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The sub-district does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "SUB_DISTRICT_NOT_FOUND",
+                  "message": "sub-district not found"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
     }
   },
   "components": {
@@ -1123,6 +1555,7 @@
           "attributes",
           "rating_average",
           "rating_count",
+          "image_url",
           "category"
         ],
         "properties": {
@@ -1151,6 +1584,11 @@
             "type": "integer",
             "description": "Number of reviews of the place."
           },
+          "image_url": {
+            "type": ["string", "null"],
+            "format": "uri",
+            "description": "Public URL of the place's image; null if it has none."
+          },
           "category": { "$ref": "#/components/schemas/CategorySummary" }
         }
       },
@@ -1159,6 +1597,60 @@
         "required": ["data"],
         "properties": {
           "data": { "$ref": "#/components/schemas/Place" }
+        }
+      },
+      "ImageUploadRequest": {
+        "type": "object",
+        "required": ["content_type"],
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "enum": ["image/jpeg", "image/png", "image/webp"],
+            "description": "Content type of the image that will be uploaded."
+          }
+        }
+      },
+      "ImageUpload": {
+        "type": "object",
+        "required": ["upload_key", "upload_url", "method", "headers", "expires_at"],
+        "properties": {
+          "upload_key": {
+            "type": "string",
+            "description": "Key the image is uploaded under. Send it to confirm the upload."
+          },
+          "upload_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Presigned URL to send the image to, as the raw request body."
+          },
+          "method": { "type": "string", "enum": ["PUT"] },
+          "headers": {
+            "type": "object",
+            "additionalProperties": { "type": "string" },
+            "description": "Headers to send with the upload exactly as given, including Content-Type."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time after which the upload URL is rejected."
+          }
+        }
+      },
+      "ImageUploadResponse": {
+        "type": "object",
+        "required": ["data"],
+        "properties": {
+          "data": { "$ref": "#/components/schemas/ImageUpload" }
+        }
+      },
+      "SetImageRequest": {
+        "type": "object",
+        "required": ["upload_key"],
+        "properties": {
+          "upload_key": {
+            "type": "string",
+            "description": "upload_key returned when the upload was requested."
+          }
         }
       },
       "CreateReviewRequest": {
@@ -1257,8 +1749,7 @@
           "slug": { "type": "string", "minLength": 1, "maxLength": 100 },
           "flood_history": { "type": ["string", "null"] },
           "safety_crime_information": { "type": ["string", "null"] },
-          "estimated_daily_spending": { "type": ["number", "null"], "minimum": 0, "maximum": 99999999.99 },
-          "static_map_image_url": { "type": ["string", "null"], "maxLength": 255 }
+          "estimated_daily_spending": { "type": ["number", "null"], "minimum": 0, "maximum": 99999999.99 }
         }
       },
       "UpdateSubDistrictRequest": {
@@ -1269,8 +1760,7 @@
           "slug": { "type": "string", "minLength": 1, "maxLength": 100 },
           "flood_history": { "type": ["string", "null"] },
           "safety_crime_information": { "type": ["string", "null"] },
-          "estimated_daily_spending": { "type": ["number", "null"], "minimum": 0, "maximum": 99999999.99 },
-          "static_map_image_url": { "type": ["string", "null"], "maxLength": 255 }
+          "estimated_daily_spending": { "type": ["number", "null"], "minimum": 0, "maximum": 99999999.99 }
         }
       },
       "SubDistrict": {
@@ -1282,6 +1772,7 @@
           "flood_history",
           "safety_crime_information",
           "estimated_daily_spending",
+          "image_url",
           "static_map_image_url"
         ],
         "properties": {
@@ -1291,7 +1782,16 @@
           "flood_history": { "type": ["string", "null"] },
           "safety_crime_information": { "type": ["string", "null"] },
           "estimated_daily_spending": { "type": ["number", "null"] },
-          "static_map_image_url": { "type": ["string", "null"] }
+          "image_url": {
+            "type": ["string", "null"],
+            "format": "uri",
+            "description": "Public URL of the sub-district's image; null if it has none."
+          },
+          "static_map_image_url": {
+            "type": ["string", "null"],
+            "format": "uri",
+            "description": "Public URL of the sub-district's static map image; null if it has none."
+          }
         }
       },
       "SubDistrictResponse": {

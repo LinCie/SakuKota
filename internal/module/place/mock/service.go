@@ -12,6 +12,7 @@ package mock
 import (
 	context "context"
 	place "rantau-go/internal/module/place"
+	storage "rantau-go/internal/storage"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -129,6 +130,36 @@ func (m *MockService) GetPlace(ctx context.Context, id int64) (*place.Place, err
 func (mr *MockServiceMockRecorder) GetPlace(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlace", reflect.TypeOf((*MockService)(nil).GetPlace), ctx, id)
+}
+
+// ImageUploadURL mocks base method.
+func (m *MockService) ImageUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ImageUploadURL", ctx, id, contentType)
+	ret0, _ := ret[0].(storage.Upload)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ImageUploadURL indicates an expected call of ImageUploadURL.
+func (mr *MockServiceMockRecorder) ImageUploadURL(ctx, id, contentType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ImageUploadURL", reflect.TypeOf((*MockService)(nil).ImageUploadURL), ctx, id, contentType)
+}
+
+// SetImage mocks base method.
+func (m *MockService) SetImage(ctx context.Context, id int64, uploadKey string) (*place.Place, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetImage", ctx, id, uploadKey)
+	ret0, _ := ret[0].(*place.Place)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetImage indicates an expected call of SetImage.
+func (mr *MockServiceMockRecorder) SetImage(ctx, id, uploadKey any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetImage", reflect.TypeOf((*MockService)(nil).SetImage), ctx, id, uploadKey)
 }
 
 // Update mocks base method.

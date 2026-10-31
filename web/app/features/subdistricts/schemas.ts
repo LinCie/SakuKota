@@ -28,12 +28,4 @@ export const subDistrictSchema = z.object({
       (v) => !(Number(v.replace(/[.\s]/g, "")) > 99_999_999),
       "Maksimal Rp99.999.999.",
     ),
-  mapImageUrl: z
-    .string()
-    .trim()
-    .max(255, "Alamat gambar maksimal 255 karakter.")
-    .refine(
-      (v) => v === "" || /^https?:\/\/\S+$/.test(v),
-      "Isi alamat gambar yang diawali http:// atau https://.",
-    ),
 });

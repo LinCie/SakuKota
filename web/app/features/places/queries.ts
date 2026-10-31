@@ -12,10 +12,14 @@ import {
   getCategory,
   getPlace,
   getPlaces,
+  requestPlaceImageUpload,
+  setPlaceImage,
   updatePlace,
   type GetPlacesParams,
   type UpdatePlaceRequest,
 } from "./api";
+import { uploadImage } from "~/shared/image-upload";
+
 import type { PlacePage } from "./types";
 
 // -----------------------------------------------------------------------------
@@ -92,6 +96,20 @@ export function useCreatePlace() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createPlace,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: placeKeys.all }),
+  });
+}
+
+/** Uploads `file` and makes it the place's image. */
+export function useUploadPlaceImage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, file }: { id: number; file: File }) => {
+      const uploadKey = await uploadImage(file, (contentType) =>
+        requestPlaceImageUpload(id, contentType),
+      );
+      return setPlaceImage(id, uploadKey);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: placeKeys.all }),
   });
 }

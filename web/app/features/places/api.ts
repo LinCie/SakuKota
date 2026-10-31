@@ -3,10 +3,12 @@ import {
   apiGet,
   apiPatch,
   apiPost,
+  apiPut,
   type AdminWriteErrorCode,
   type CommonApiErrorCode,
   unwrap,
 } from "~/shared/api";
+import type { ImageErrorCode, ImageUpload } from "~/shared/image-upload";
 import type { CategoryDetail, GeoPoint, Place, PlacePage } from "./types";
 
 // -----------------------------------------------------------------------------
@@ -36,6 +38,8 @@ export type UpdatePlaceErrorCode =
 export type DeletePlaceErrorCode =
   AdminWriteErrorCode | "INVALID_PLACE_ID" | "PLACE_NOT_FOUND";
 export type CreatePlaceErrorCode = AdminWriteErrorCode | "VALIDATION_ERROR";
+export type PlaceImageErrorCode =
+  ImageErrorCode | "INVALID_PLACE_ID" | "PLACE_NOT_FOUND";
 
 export type GetPlacesParams = {
   /** Filters places to one sub-district, matching the `sub_district_id` query param. */
@@ -139,4 +143,29 @@ export async function updatePlace(
 /** Admin only. */
 export async function deletePlace(id: number): Promise<void> {
   unwrap(await apiDelete<void, DeletePlaceErrorCode>(`places/${id}`));
+}
+
+/** Admin only. Presigns an upload of a new image of the place. */
+export async function requestPlaceImageUpload(
+  id: number,
+  contentType: string,
+): Promise<ImageUpload> {
+  return unwrap(
+    await apiPost<ImageUpload, PlaceImageErrorCode>(
+      `places/${id}/image/upload-url`,
+      { json: { content_type: contentType } },
+    ),
+  );
+}
+
+/** Admin only. Makes the uploaded image the place's image. */
+export async function setPlaceImage(
+  id: number,
+  uploadKey: string,
+): Promise<Place> {
+  return unwrap(
+    await apiPut<Place, PlaceImageErrorCode>(`places/${id}/image`, {
+      json: { upload_key: uploadKey },
+    }),
+  );
 }

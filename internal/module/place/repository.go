@@ -25,7 +25,10 @@ type Repository interface {
 	GetCategory(ctx context.Context, id int64) (*Category, error)
 	GetPlace(ctx context.Context, id int64) (*Place, error)
 	Update(ctx context.Context, p *Place) (*Place, error)
-	Delete(ctx context.Context, id int64) error
+	// SetImageKey stores key as the place's image and returns the place.
+	SetImageKey(ctx context.Context, id int64, key string) (*Place, error)
+	// Delete removes the place and returns the key of its image, if any.
+	Delete(ctx context.Context, id int64) (*string, error)
 }
 
 type postgresRepository struct {
@@ -49,8 +52,15 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 // match the nested Place.Category fields.
 const placeColumns = `p.id, p.sub_district_id, p.category_id, p.name, p.address,
 	p.location, p.operating_hours, p.estimated_price_range, p.short_description,
-	p.attributes, p.rating_count, p.rating_sum, c.id AS "category.id", c.name AS "category.name", c.slug AS "category.slug",
+	p.attributes, p.rating_count, p.rating_sum, p.image_key, c.id AS "category.id", c.name AS "category.name", c.slug AS "category.slug",
 	c.code AS "category.code", c.label AS "category.label", c.color AS "category.color"`
+
+// placeRowColumns are the PLACES columns that placeColumns reads from `p`. The
+// RETURNING clause of a write lists them so its row can be joined with its
+// category and selected with placeColumns.
+const placeRowColumns = `id, sub_district_id, category_id, name, address,
+	location, operating_hours, estimated_price_range, short_description,
+	attributes, rating_count, rating_sum, image_key`
 
 // checkFilterTargets returns ErrSubDistrictNotFound or ErrCategoryNotFound when
 // the filter names a sub-district or category that does not exist.
@@ -230,9 +240,7 @@ func (r *postgresRepository) Create(ctx context.Context, p *Place) (*Place, erro
 				location, operating_hours, estimated_price_range, short_description,
 				attributes)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			RETURNING id, sub_district_id, category_id, name, address,
-				location, operating_hours, estimated_price_range, short_description,
-				attributes, rating_count, rating_sum
+			RETURNING `+placeRowColumns+`
 		)
 		SELECT `+placeColumns+`
 		FROM inserted p
@@ -290,9 +298,7 @@ func (r *postgresRepository) Update(ctx context.Context, p *Place) (*Place, erro
 				location = $6, operating_hours = $7, estimated_price_range = $8,
 				short_description = $9, attributes = $10
 			WHERE id = $1
-			RETURNING id, sub_district_id, category_id, name, address,
-				location, operating_hours, estimated_price_range, short_description,
-				attributes, rating_count, rating_sum
+			RETURNING `+placeRowColumns+`
 		)
 		SELECT `+placeColumns+`
 		FROM updated p
@@ -318,22 +324,50 @@ func (r *postgresRepository) Update(ctx context.Context, p *Place) (*Place, erro
 	return &updated, nil
 }
 
-// Delete removes the place, or returns ErrPlaceNotFound if there is none.
-func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
-	result, err := r.db.ExecContext(ctx, `DELETE FROM PLACES WHERE id = $1`, id)
+// SetImageKey stores key as the place's image and returns the place joined
+// with its category, or ErrPlaceNotFound.
+func (r *postgresRepository) SetImageKey(ctx context.Context, id int64, key string) (*Place, error) {
+	var updated Place
+
+	err := r.db.GetContext(
+		ctx,
+		&updated,
+		`WITH updated AS (
+			UPDATE PLACES
+			SET image_key = $2
+			WHERE id = $1
+			RETURNING `+placeRowColumns+`
+		)
+		SELECT `+placeColumns+`
+		FROM updated p
+		JOIN CATEGORIES c ON c.id = p.category_id`,
+		id,
+		key,
+	)
 	if err != nil {
-		return err
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPlaceNotFound
+		}
+		return nil, err
 	}
 
-	rows, err := result.RowsAffected()
+	return &updated, nil
+}
+
+// Delete removes the place and returns its image key, or returns
+// ErrPlaceNotFound if there is no such place.
+func (r *postgresRepository) Delete(ctx context.Context, id int64) (*string, error) {
+	var imageKey *string
+
+	err := r.db.GetContext(ctx, &imageKey, `DELETE FROM PLACES WHERE id = $1 RETURNING image_key`, id)
 	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return ErrPlaceNotFound
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPlaceNotFound
+		}
+		return nil, err
 	}
 
-	return nil
+	return imageKey, nil
 }
 
 // mapPlaceForeignKeyError translates a foreign key violation on PLACES into the

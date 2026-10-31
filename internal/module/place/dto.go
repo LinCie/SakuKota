@@ -2,9 +2,11 @@ package place
 
 import (
 	"encoding/json"
+	"time"
 
 	"rantau-go/internal/httpx"
 	"rantau-go/internal/postgis"
+	"rantau-go/internal/storage"
 )
 
 // CreatePlaceRequest is the API payload for creating a Place.
@@ -55,9 +57,31 @@ type PlaceResponse struct {
 	ShortDescription    *string         `json:"short_description"`
 	Attributes          json.RawMessage `json:"attributes"`
 	// RatingAverage is the mean star rating, or null before the first review.
-	RatingAverage *float64         `json:"rating_average"`
-	RatingCount   int              `json:"rating_count"`
-	Category      CategoryResponse `json:"category"`
+	RatingAverage *float64 `json:"rating_average"`
+	RatingCount   int      `json:"rating_count"`
+	// ImageURL is where the place's image is served, or null if it has none.
+	ImageURL *string          `json:"image_url"`
+	Category CategoryResponse `json:"category"`
+}
+
+// ImageUploadRequest is the API payload for requesting an image upload.
+type ImageUploadRequest struct {
+	ContentType string `json:"content_type"`
+}
+
+// ImageUploadResponse is a presigned upload the client sends the image with.
+// The client then confirms it by sending UploadKey to SetImage.
+type ImageUploadResponse struct {
+	UploadKey string            `json:"upload_key"`
+	UploadURL string            `json:"upload_url"`
+	Method    string            `json:"method"`
+	Headers   map[string]string `json:"headers"`
+	ExpiresAt time.Time         `json:"expires_at"`
+}
+
+// SetImageRequest is the API payload for confirming an uploaded image.
+type SetImageRequest struct {
+	UploadKey string `json:"upload_key"`
 }
 
 // PlacePageResponse is the API representation of the places matching a
@@ -119,7 +143,14 @@ func toPlace(req CreatePlaceRequest) *Place {
 	}
 }
 
-func toPlaceResponse(p Place) PlaceResponse {
+// toPlaceResponse converts p, turning its image key into a URL with imageURL.
+func toPlaceResponse(p Place, imageURL func(key string) string) PlaceResponse {
+	var image *string
+	if p.ImageKey != nil {
+		url := imageURL(*p.ImageKey)
+		image = &url
+	}
+
 	return PlaceResponse{
 		ID:                  p.ID,
 		SubDistrictID:       p.SubDistrictID,
@@ -132,6 +163,7 @@ func toPlaceResponse(p Place) PlaceResponse {
 		Attributes:          p.Attributes,
 		RatingAverage:       ratingAverage(p.RatingCount, p.RatingSum),
 		RatingCount:         p.RatingCount,
+		ImageURL:            image,
 		Category:            toCategoryResponse(p.Category),
 	}
 }
@@ -147,14 +179,24 @@ func ratingAverage(count, sum int) *float64 {
 	return &average
 }
 
-func toPlaceResponses(places []Place) []PlaceResponse {
+func toPlaceResponses(places []Place, imageURL func(key string) string) []PlaceResponse {
 	responses := make([]PlaceResponse, 0, len(places))
 
 	for _, p := range places {
-		responses = append(responses, toPlaceResponse(p))
+		responses = append(responses, toPlaceResponse(p, imageURL))
 	}
 
 	return responses
+}
+
+func toImageUploadResponse(u storage.Upload) ImageUploadResponse {
+	return ImageUploadResponse{
+		UploadKey: u.Key,
+		UploadURL: u.URL,
+		Method:    u.Method,
+		Headers:   u.Headers,
+		ExpiresAt: u.ExpiresAt,
+	}
 }
 
 func toCategoryResponse(c Category) CategoryResponse {

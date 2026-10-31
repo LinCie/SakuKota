@@ -11,15 +11,19 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"rantau-go/internal/httpx"
+	"rantau-go/internal/storage"
 )
 
 type Handler struct {
 	service Service
+	// imageURL returns the public URL of the image stored under a key.
+	imageURL func(key string) string
 }
 
-func NewHandler(service Service) *Handler {
+func NewHandler(service Service, imageURL func(key string) string) *Handler {
 	return &Handler{
-		service: service,
+		service:  service,
+		imageURL: imageURL,
 	}
 }
 
@@ -87,7 +91,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.RespondJSON(w, http.StatusOK, PlacePageResponse{
-		Places: toPlaceResponses(places),
+		Places: toPlaceResponses(places, h.imageURL),
 		Total:  total,
 	})
 }
@@ -137,7 +141,7 @@ func (h *Handler) GetPlace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p))
+	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.imageURL))
 }
 
 func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
@@ -184,7 +188,7 @@ func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusCreated, toPlaceResponse(*p))
+	httpx.RespondJSON(w, http.StatusCreated, toPlaceResponse(*p, h.imageURL))
 }
 
 // PatchPlace partially updates the place given by the `id` path parameter.
@@ -208,7 +212,7 @@ func (h *Handler) PatchPlace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p))
+	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.imageURL))
 }
 
 // DeletePlace deletes the place given by the `id` path parameter.
@@ -229,6 +233,69 @@ func (h *Handler) DeletePlace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// CreateImageUpload returns a presigned upload for a new image of the place
+// given by the `id` path parameter.
+func (h *Handler) CreateImageUpload(w http.ResponseWriter, r *http.Request) {
+	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidPlaceID, "invalid place_id")
+		return
+	}
+
+	var req *ImageUploadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+		return
+	}
+
+	upload, err := h.service.ImageUploadURL(r.Context(), id, req.ContentType)
+	if err != nil {
+		respondImageError(w, err)
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusOK, toImageUploadResponse(upload))
+}
+
+// SetImage makes the uploaded image the image of the place given by the `id`
+// path parameter.
+func (h *Handler) SetImage(w http.ResponseWriter, r *http.Request) {
+	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.RespondError(w, http.StatusBadRequest, CodeInvalidPlaceID, "invalid place_id")
+		return
+	}
+
+	var req *SetImageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+		return
+	}
+
+	p, err := h.service.SetImage(r.Context(), id, req.UploadKey)
+	if err != nil {
+		respondImageError(w, err)
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.imageURL))
+}
+
+// respondImageError writes the response for an error from uploading a place's image.
+func respondImageError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, ErrPlaceNotFound):
+		httpx.RespondError(w, http.StatusNotFound, CodePlaceNotFound, err.Error())
+	case errors.Is(err, storage.ErrInvalidImageType),
+		errors.Is(err, storage.ErrImageTooLarge),
+		errors.Is(err, storage.ErrImageNotUploaded),
+		errors.Is(err, storage.ErrInvalidImageKey):
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
+	default:
+		httpx.RespondInternalError(w)
+	}
 }
 
 // respondPlaceError writes the response for an error from creating or updating a place.

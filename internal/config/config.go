@@ -15,6 +15,22 @@ type Config struct {
 	RefreshTokenExpiry time.Duration
 	CookieSecure       bool
 	CORSAllowedOrigin  string
+	Storage            StorageConfig
+}
+
+// StorageConfig locates the S3-compatible bucket that holds uploaded images.
+type StorageConfig struct {
+	// Endpoint is the S3 API the server calls.
+	Endpoint string
+	// PublicEndpoint is the S3 API that clients upload to. Presigned URLs are
+	// signed for this host.
+	PublicEndpoint string
+	// PublicURL is the base URL that objects are served from.
+	PublicURL       string
+	Region          string
+	Bucket          string
+	AccessKeyID     string
+	SecretAccessKey string
 }
 
 func NewConfig() (Config, error) {
@@ -66,6 +82,11 @@ func NewConfig() (Config, error) {
 		corsAllowedOrigin = "http://localhost:5173"
 	}
 
+	storage, err := newStorageConfig()
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		DatabaseURL:        databaseURL,
 		Port:               port,
@@ -74,5 +95,40 @@ func NewConfig() (Config, error) {
 		RefreshTokenExpiry: refreshTokenExpiry,
 		CookieSecure:       cookieSecure,
 		CORSAllowedOrigin:  corsAllowedOrigin,
+		Storage:            storage,
 	}, nil
+}
+
+func newStorageConfig() (StorageConfig, error) {
+	storage := StorageConfig{
+		Endpoint:        os.Getenv("STORAGE_ENDPOINT"),
+		PublicEndpoint:  os.Getenv("STORAGE_PUBLIC_ENDPOINT"),
+		PublicURL:       os.Getenv("STORAGE_PUBLIC_URL"),
+		Region:          os.Getenv("STORAGE_REGION"),
+		Bucket:          os.Getenv("STORAGE_BUCKET"),
+		AccessKeyID:     os.Getenv("STORAGE_ACCESS_KEY_ID"),
+		SecretAccessKey: os.Getenv("STORAGE_SECRET_ACCESS_KEY"),
+	}
+
+	if storage.PublicEndpoint == "" {
+		storage.PublicEndpoint = storage.Endpoint
+	}
+	if storage.Region == "" {
+		storage.Region = "garage"
+	}
+
+	required := []struct{ name, value string }{
+		{"STORAGE_ENDPOINT", storage.Endpoint},
+		{"STORAGE_PUBLIC_URL", storage.PublicURL},
+		{"STORAGE_BUCKET", storage.Bucket},
+		{"STORAGE_ACCESS_KEY_ID", storage.AccessKeyID},
+		{"STORAGE_SECRET_ACCESS_KEY", storage.SecretAccessKey},
+	}
+	for _, v := range required {
+		if v.value == "" {
+			return StorageConfig{}, errors.New(v.name + " is required")
+		}
+	}
+
+	return storage, nil
 }

@@ -10,9 +10,14 @@ import {
   deleteSubDistrict,
   getSubDistrict,
   getSubDistricts,
+  requestSubDistrictImageUpload,
+  setSubDistrictImage,
   updateSubDistrict,
+  type SubDistrictImageSlot,
   type UpdateSubDistrictRequest,
 } from "./api";
+import { uploadImage } from "~/shared/image-upload";
+
 import type { SubDistrict } from "./types";
 
 // -----------------------------------------------------------------------------
@@ -75,6 +80,21 @@ export function useUpdateSubDistrict() {
       id: number;
       body: UpdateSubDistrictRequest;
     }) => updateSubDistrict(id, body),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: subDistrictKeys.all }),
+  });
+}
+
+/** Uploads `file` and makes it the sub-district's image in `slot`. */
+export function useUploadSubDistrictImage(slot: SubDistrictImageSlot) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, file }: { id: number; file: File }) => {
+      const uploadKey = await uploadImage(file, (contentType) =>
+        requestSubDistrictImageUpload(id, slot, contentType),
+      );
+      return setSubDistrictImage(id, slot, uploadKey);
+    },
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: subDistrictKeys.all }),
   });

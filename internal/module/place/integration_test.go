@@ -5,6 +5,7 @@ package place_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 
 	"rantau-go/internal/database"
 	"rantau-go/internal/module/place"
+	"rantau-go/internal/storage"
 )
 
 // testDSN and testDB point at the PostGIS container started by TestMain.
@@ -137,8 +139,24 @@ func seedLocations(t *testing.T) {
 
 // integrationRouter wires the real service and repository behind the HTTP handlers.
 func integrationRouter(db *sqlx.DB) http.Handler {
-	return newRouter(place.NewService(place.NewPostgresRepository(db)))
+	return newRouter(place.NewService(place.NewPostgresRepository(db), fakeImages{}))
 }
+
+// fakeImages stands in for object storage: every upload is presigned as and
+// promoted to new.webp under the place's prefix, and deletes succeed.
+type fakeImages struct{}
+
+func (fakeImages) PresignUpload(_ context.Context, prefix, _ string) (storage.Upload, error) {
+	return storage.Upload{Key: "uploads/" + prefix + "/new.webp"}, nil
+}
+
+func (fakeImages) Promote(_ context.Context, prefix, _ string) (string, error) {
+	return prefix + "/new.webp", nil
+}
+
+func (fakeImages) Delete(context.Context, string) error { return nil }
+
+func (fakeImages) PublicURL(key string) string { return testImageURL(key) }
 
 // call sends one request through router.
 func call(t *testing.T, router http.Handler, method, target, body string) *httptest.ResponseRecorder {
@@ -173,6 +191,7 @@ type placeRow struct {
 	Address    *string         `json:"address"`
 	Location   json.RawMessage `json:"location"`
 	Attributes json.RawMessage `json:"attributes"`
+	ImageURL   *string         `json:"image_url"`
 	Category   struct {
 		ID   int64  `json:"id"`
 		Name string `json:"name"`
@@ -947,5 +966,141 @@ func TestIntegration_GetCategory(t *testing.T) {
 			}
 			assertKeys(t, got.Fields, tc.wantKeys)
 		})
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Place images
+// -----------------------------------------------------------------------------
+
+func TestIntegration_ImageUploadURL(t *testing.T) {
+	resetDB(t)
+	seedCatalog(t)
+	seedPlaces(t)
+	router := integrationRouter(testDB)
+
+	rec := call(t, router, http.MethodPost, "/places/2/image/upload-url", `{"content_type":"image/webp"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
+	}
+	var got struct {
+		UploadKey string `json:"upload_key"`
+	}
+	if err := json.Unmarshal(responseData(t, rec), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.UploadKey != "uploads/places/2/new.webp" {
+		t.Errorf("upload_key = %q, want the key for place 2", got.UploadKey)
+	}
+
+	rec = call(t, router, http.MethodPost, "/places/99/image/upload-url", `{"content_type":"image/webp"}`)
+	assertError(t, rec, http.StatusNotFound, "PLACE_NOT_FOUND")
+}
+
+func TestIntegration_SetImage(t *testing.T) {
+	resetDB(t)
+	seedCatalog(t)
+	seedPlaces(t)
+	router := integrationRouter(testDB)
+	want := testImageURL("places/2/new.webp")
+
+	rec := call(t, router, http.MethodPut, "/places/2/image", `{"upload_key":"uploads/places/2/new.webp"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
+	}
+	if got := imageURLOf(t, rec); got == nil || *got != want {
+		t.Errorf("returned image_url = %v, want %q", got, want)
+	}
+
+	if got := imageURLOf(t, call(t, router, http.MethodGet, "/places/2", "")); got == nil || *got != want {
+		t.Errorf("stored image_url = %v, want %q", got, want)
+	}
+
+	for _, row := range listPlaces(t, router, "/places") {
+		if row.ID == 2 && (row.ImageURL == nil || *row.ImageURL != want) {
+			t.Errorf("listed image_url of place 2 = %v, want %q", row.ImageURL, want)
+		}
+		if row.ID != 2 && row.ImageURL != nil {
+			t.Errorf("listed image_url of place %d = %q, want null", row.ID, *row.ImageURL)
+		}
+	}
+
+	rec = call(t, router, http.MethodPatch, "/places/2", `{"name":"Kopi Senja Baru"}`)
+	if got := imageURLOf(t, rec); got == nil || *got != want {
+		t.Errorf("image_url after an edit = %v, want %q", got, want)
+	}
+
+	rec = call(t, router, http.MethodPut, "/places/99/image", `{"upload_key":"uploads/places/99/new.webp"}`)
+	assertError(t, rec, http.StatusNotFound, "PLACE_NOT_FOUND")
+}
+
+func TestIntegration_NewPlaceHasNoImage(t *testing.T) {
+	resetDB(t)
+	seedCatalog(t)
+
+	rec := call(t, integrationRouter(testDB), http.MethodPost, "/places", `{"name":"Kopi Baru","sub_district_id":1,"category_id":2}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body: %s", rec.Code, rec.Body)
+	}
+	if got := imageURLOf(t, rec); got != nil {
+		t.Errorf("image_url = %q, want null", *got)
+	}
+}
+
+// imageURLOf returns the image_url of the place in a successful response.
+func imageURLOf(t *testing.T, rec *httptest.ResponseRecorder) *string {
+	t.Helper()
+	var p placeRow
+	if err := json.Unmarshal(responseData(t, rec), &p); err != nil {
+		t.Fatalf("decode place: %v; body: %s", err, rec.Body)
+	}
+	return p.ImageURL
+}
+
+func TestIntegration_RepositorySetImageKey(t *testing.T) {
+	resetDB(t)
+	seedCatalog(t)
+	seedPlaces(t)
+	repo := place.NewPostgresRepository(testDB)
+
+	got, err := repo.SetImageKey(context.Background(), 2, "places/2/a.webp")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.ID != 2 || got.Name != "Kopi Senja" || got.Category.Slug != "kopi" ||
+		got.ImageKey == nil || *got.ImageKey != "places/2/a.webp" {
+		t.Errorf("returned place = %+v, want Kopi Senja with its category and the new key", got)
+	}
+
+	if _, err := repo.SetImageKey(context.Background(), 99, "places/99/a.webp"); !errors.Is(err, place.ErrPlaceNotFound) {
+		t.Errorf("unknown place: err = %v, want ErrPlaceNotFound", err)
+	}
+}
+
+func TestIntegration_RepositoryDeleteReturnsImageKey(t *testing.T) {
+	resetDB(t)
+	seedCatalog(t)
+	seedPlaces(t)
+	mustExec(t, `UPDATE PLACES SET image_key = 'places/2/a.webp' WHERE id = 2`)
+	repo := place.NewPostgresRepository(testDB)
+
+	key, err := repo.Delete(context.Background(), 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if key == nil || *key != "places/2/a.webp" {
+		t.Errorf("deleted image key = %v, want places/2/a.webp", key)
+	}
+
+	key, err = repo.Delete(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if key != nil {
+		t.Errorf("place without an image: key = %q, want nil", *key)
+	}
+
+	if _, err := repo.Delete(context.Background(), 99); !errors.Is(err, place.ErrPlaceNotFound) {
+		t.Errorf("unknown place: err = %v, want ErrPlaceNotFound", err)
 	}
 }

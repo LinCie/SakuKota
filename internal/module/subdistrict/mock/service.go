@@ -12,6 +12,7 @@ package mock
 import (
 	context "context"
 	subdistrict "rantau-go/internal/module/subdistrict"
+	storage "rantau-go/internal/storage"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -98,6 +99,36 @@ func (m *MockService) GetSubDistrict(ctx context.Context, id int64) (*subdistric
 func (mr *MockServiceMockRecorder) GetSubDistrict(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubDistrict", reflect.TypeOf((*MockService)(nil).GetSubDistrict), ctx, id)
+}
+
+// ImageUploadURL mocks base method.
+func (m *MockService) ImageUploadURL(ctx context.Context, id int64, slot subdistrict.ImageSlot, contentType string) (storage.Upload, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ImageUploadURL", ctx, id, slot, contentType)
+	ret0, _ := ret[0].(storage.Upload)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ImageUploadURL indicates an expected call of ImageUploadURL.
+func (mr *MockServiceMockRecorder) ImageUploadURL(ctx, id, slot, contentType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ImageUploadURL", reflect.TypeOf((*MockService)(nil).ImageUploadURL), ctx, id, slot, contentType)
+}
+
+// SetImage mocks base method.
+func (m *MockService) SetImage(ctx context.Context, id int64, slot subdistrict.ImageSlot, uploadKey string) (*subdistrict.SubDistrict, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetImage", ctx, id, slot, uploadKey)
+	ret0, _ := ret[0].(*subdistrict.SubDistrict)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetImage indicates an expected call of SetImage.
+func (mr *MockServiceMockRecorder) SetImage(ctx, id, slot, uploadKey any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetImage", reflect.TypeOf((*MockService)(nil).SetImage), ctx, id, slot, uploadKey)
 }
 
 // Update mocks base method.

@@ -10,7 +10,6 @@ export type SubDistrictValues = {
   floodHistory: string;
   safetyInfo: string;
   dailySpending: string;
-  mapImageUrl: string;
 };
 
 export const emptySubDistrictValues: SubDistrictValues = {
@@ -19,7 +18,6 @@ export const emptySubDistrictValues: SubDistrictValues = {
   floodHistory: "",
   safetyInfo: "",
   dailySpending: "",
-  mapImageUrl: "",
 };
 
 export function subDistrictToValues(
@@ -34,7 +32,6 @@ export function subDistrictToValues(
       subDistrict.estimated_daily_spending === null
         ? ""
         : String(subDistrict.estimated_daily_spending),
-    mapImageUrl: subDistrict.static_map_image_url ?? "",
   };
 }
 
@@ -54,6 +51,5 @@ export function toSubDistrictRequest(
     flood_history: orNull(values.floodHistory),
     safety_crime_information: orNull(values.safetyInfo),
     estimated_daily_spending: parseRupiah(values.dailySpending),
-    static_map_image_url: orNull(values.mapImageUrl),
   };
 }

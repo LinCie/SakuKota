@@ -5,6 +5,7 @@ import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { Button } from "~/shared/components/button";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { DetailList, type DetailItem } from "~/shared/components/detail-list";
+import { ImageUploadCard } from "~/shared/components/image-upload-card";
 import { orMissing } from "~/shared/components/missing-slot";
 import { PageHeader } from "~/shared/components/page-header";
 import { SectionCard } from "~/shared/components/section-card";
@@ -14,7 +15,11 @@ import { toastManager } from "~/shared/toast-manager";
 import { hasErrorCode, writeErrorMessage } from "~/shared/write-error";
 
 import { SubDistrictFormDrawer } from "../components/subdistrict-form-drawer";
-import { subDistrictKeys, useDeleteSubDistrict } from "../queries";
+import {
+  subDistrictKeys,
+  useDeleteSubDistrict,
+  useUploadSubDistrictImage,
+} from "../queries";
 import type { SubDistrict } from "../types";
 
 /** One kecamatan: its area info, with edit and delete. */
@@ -28,6 +33,8 @@ export function SubDistrictDetailPage({
   const drawer = useDisclosure();
   const confirm = useDisclosure();
   const deleteSubDistrict = useDeleteSubDistrict();
+  const uploadImage = useUploadSubDistrictImage("image");
+  const uploadMap = useUploadSubDistrictImage("static-map");
 
   function confirmDelete() {
     deleteSubDistrict.mutate(subDistrict.id, {
@@ -55,21 +62,6 @@ export function SubDistrictDetailPage({
         subDistrict.estimated_daily_spending !== null
           ? `${formatRupiah(subDistrict.estimated_daily_spending)} per hari`
           : orMissing(null),
-    },
-    {
-      label: "Alamat gambar peta",
-      value: subDistrict.static_map_image_url ? (
-        <a
-          href={subDistrict.static_map_image_url}
-          target="_blank"
-          rel="noreferrer"
-          className="text-cat underline underline-offset-2"
-        >
-          {subDistrict.static_map_image_url}
-        </a>
-      ) : (
-        orMissing(null)
-      ),
     },
     {
       label: "Riwayat banjir",
@@ -117,6 +109,45 @@ export function SubDistrictDetailPage({
       <SectionCard title="Info area">
         <DetailList items={items} />
       </SectionCard>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <ImageUploadCard
+          title="Foto kecamatan"
+          imageUrl={subDistrict.image_url}
+          alt={`Foto Kecamatan ${subDistrict.name}`}
+          missing="Foto tidak tersedia"
+          aspect="aspect-8/5"
+          pending={uploadImage.isPending}
+          error={uploadImage.error}
+          onUpload={(file) =>
+            uploadImage.mutate(
+              { id: subDistrict.id, file },
+              {
+                onSuccess: () =>
+                  toastManager.add({ title: "Foto kecamatan disimpan" }),
+              },
+            )
+          }
+        />
+        <ImageUploadCard
+          title="Peta area"
+          imageUrl={subDistrict.static_map_image_url}
+          alt={`Peta area Kecamatan ${subDistrict.name}`}
+          missing="Peta area tidak tersedia"
+          aspect="aspect-8/5"
+          pending={uploadMap.isPending}
+          error={uploadMap.error}
+          onUpload={(file) =>
+            uploadMap.mutate(
+              { id: subDistrict.id, file },
+              {
+                onSuccess: () =>
+                  toastManager.add({ title: "Peta area disimpan" }),
+              },
+            )
+          }
+        />
+      </div>
 
       <SubDistrictFormDrawer
         key={subDistrict.id}

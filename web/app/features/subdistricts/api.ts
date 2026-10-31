@@ -3,10 +3,12 @@ import {
   apiGet,
   apiPatch,
   apiPost,
+  apiPut,
   type AdminWriteErrorCode,
   type CommonApiErrorCode,
   unwrap,
 } from "~/shared/api";
+import type { ImageErrorCode, ImageUpload } from "~/shared/image-upload";
 import type { SubDistrict } from "./types";
 
 // -----------------------------------------------------------------------------
@@ -31,6 +33,11 @@ export type DeleteSubDistrictErrorCode =
   | "INVALID_SUB_DISTRICT_ID"
   | "SUB_DISTRICT_NOT_FOUND"
   | "SUB_DISTRICT_IN_USE";
+export type SubDistrictImageErrorCode =
+  ImageErrorCode | "INVALID_SUB_DISTRICT_ID" | "SUB_DISTRICT_NOT_FOUND";
+
+/** One of a sub-district's images, named by its path segment. */
+export type SubDistrictImageSlot = "image" | "static-map";
 
 export type CreateSubDistrictRequest = {
   name: string;
@@ -38,7 +45,6 @@ export type CreateSubDistrictRequest = {
   flood_history?: string | null;
   safety_crime_information?: string | null;
   estimated_daily_spending?: number | null;
-  static_map_image_url?: string | null;
 };
 
 export type UpdateSubDistrictRequest = Partial<CreateSubDistrictRequest>;
@@ -87,5 +93,33 @@ export async function updateSubDistrict(
 export async function deleteSubDistrict(id: number): Promise<void> {
   unwrap(
     await apiDelete<void, DeleteSubDistrictErrorCode>(`subdistricts/${id}`),
+  );
+}
+
+/** Admin only. Presigns an upload of a new image in the sub-district's `slot`. */
+export async function requestSubDistrictImageUpload(
+  id: number,
+  slot: SubDistrictImageSlot,
+  contentType: string,
+): Promise<ImageUpload> {
+  return unwrap(
+    await apiPost<ImageUpload, SubDistrictImageErrorCode>(
+      `subdistricts/${id}/${slot}/upload-url`,
+      { json: { content_type: contentType } },
+    ),
+  );
+}
+
+/** Admin only. Makes the uploaded image the sub-district's image in `slot`. */
+export async function setSubDistrictImage(
+  id: number,
+  slot: SubDistrictImageSlot,
+  uploadKey: string,
+): Promise<SubDistrict> {
+  return unwrap(
+    await apiPut<SubDistrict, SubDistrictImageErrorCode>(
+      `subdistricts/${id}/${slot}`,
+      { json: { upload_key: uploadKey } },
+    ),
   );
 }

@@ -18,21 +18,29 @@ import (
 	"rantau-go/internal/module/place"
 	"rantau-go/internal/module/place/mock"
 	"rantau-go/internal/postgis"
+	"rantau-go/internal/storage"
 )
 
 // newRouter serves the place handlers on the paths the API uses for them, so
 // URL parameters resolve as they do in production.
 func newRouter(svc place.Service) http.Handler {
-	h := place.NewHandler(svc)
+	h := place.NewHandler(svc, testImageURL)
 	r := chi.NewRouter()
 	r.Get("/places", h.GetPlaces)
 	r.Post("/places", h.CreatePlace)
 	r.Get("/places/{id}", h.GetPlace)
 	r.Patch("/places/{id}", h.PatchPlace)
 	r.Delete("/places/{id}", h.DeletePlace)
+	r.Post("/places/{id}/image/upload-url", h.CreateImageUpload)
+	r.Put("/places/{id}/image", h.SetImage)
 	r.Get("/categories", h.GetCategories)
 	r.Get("/categories/{id}", h.GetCategory)
 	return r
+}
+
+// testImageURL stands in for the storage's public URLs.
+func testImageURL(key string) string {
+	return "https://img.test/" + key
 }
 
 // serve runs req through h. A panic fails the test instead of the whole binary.
@@ -244,6 +252,7 @@ func TestHandler_GetPlaces_ResponseShape(t *testing.T) {
 		"attributes": {},
 		"rating_average": null,
 		"rating_count": 0,
+		"image_url": null,
 		"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 	}]}`)
 }
@@ -380,6 +389,7 @@ func TestHandler_CreatePlace_Success(t *testing.T) {
 		"attributes": {},
 		"rating_average": null,
 		"rating_count": 0,
+		"image_url": null,
 		"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 	}`)
 }
@@ -642,6 +652,7 @@ func TestHandler_PatchPlace_Success(t *testing.T) {
 		"attributes": {},
 		"rating_average": null,
 		"rating_count": 0,
+		"image_url": null,
 		"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 	}`)
 }
@@ -782,6 +793,7 @@ func TestHandler_GetPlace_Success(t *testing.T) {
 		"attributes": {"halal": true},
 		"rating_average": null,
 		"rating_count": 0,
+		"image_url": null,
 		"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 	}`)
 }
@@ -909,4 +921,187 @@ func TestHandler_GetCategory_Success(t *testing.T) {
 			assertData(t, rec, http.StatusOK, tc.want)
 		})
 	}
+}
+
+func TestHandler_GetPlace_ImageURL(t *testing.T) {
+	svc := mock.NewMockService(gomock.NewController(t))
+	svc.EXPECT().GetPlace(gomock.Any(), int64(3)).Return(&place.Place{
+		ID:         3,
+		Name:       "Kopi Senja",
+		Attributes: json.RawMessage(`{}`),
+		ImageKey:   ptr("places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"),
+	}, nil)
+
+	rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/places/3", ""))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
+	}
+
+	var got struct {
+		ImageURL *string `json:"image_url"`
+	}
+	if err := json.Unmarshal(responseData(t, rec), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := "https://img.test/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"
+	if got.ImageURL == nil || *got.ImageURL != want {
+		t.Errorf("image_url = %v, want %q", got.ImageURL, want)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// POST /places/{id}/image/upload-url
+// -----------------------------------------------------------------------------
+
+func TestHandler_CreateImageUpload_RejectsInvalidRequests(t *testing.T) {
+	tests := []struct {
+		name     string
+		target   string
+		body     string
+		wantCode string
+	}{
+		{name: "place id is not a number", target: "/places/abc/image/upload-url", body: `{"content_type":"image/png"}`, wantCode: "INVALID_PLACE_ID"},
+		{name: "place id is zero", target: "/places/0/image/upload-url", body: `{"content_type":"image/png"}`, wantCode: "INVALID_PLACE_ID"},
+		{name: "body is not JSON", target: "/places/3/image/upload-url", body: `content_type=image/png`, wantCode: "INVALID_BODY"},
+		{name: "body is null", target: "/places/3/image/upload-url", body: `null`, wantCode: "INVALID_BODY"},
+		{name: "body is an array", target: "/places/3/image/upload-url", body: `[]`, wantCode: "INVALID_BODY"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// No expectations: an invalid request must never reach the service.
+			svc := mock.NewMockService(gomock.NewController(t))
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, tc.target, tc.body))
+			assertError(t, rec, http.StatusBadRequest, tc.wantCode)
+		})
+	}
+}
+
+func TestHandler_CreateImageUpload_MapsServiceErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantCode   string
+	}{
+		{name: "unknown place", err: place.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
+		{name: "image type not allowed", err: storage.ErrInvalidImageType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := mock.NewMockService(gomock.NewController(t))
+			svc.EXPECT().ImageUploadURL(gomock.Any(), int64(3), "image/gif").Return(storage.Upload{}, tc.err)
+
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/places/3/image/upload-url", `{"content_type":"image/gif"}`))
+			assertError(t, rec, tc.wantStatus, tc.wantCode)
+		})
+	}
+}
+
+func TestHandler_CreateImageUpload_Success(t *testing.T) {
+	svc := mock.NewMockService(gomock.NewController(t))
+	svc.EXPECT().ImageUploadURL(gomock.Any(), int64(3), "image/webp").Return(storage.Upload{
+		Key: "uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp",
+		PresignedUpload: storage.PresignedUpload{
+			URL:       "http://localhost:3900/rantau-images/uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp?X-Amz-Signature=abc",
+			Method:    "PUT",
+			Headers:   map[string]string{"Content-Type": "image/webp"},
+			ExpiresAt: time.Date(2026, 10, 31, 12, 5, 0, 0, time.UTC),
+		},
+	}, nil)
+
+	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/places/3/image/upload-url", `{"content_type":"image/webp"}`))
+	assertData(t, rec, http.StatusOK, `{
+		"upload_key": "uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp",
+		"upload_url": "http://localhost:3900/rantau-images/uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp?X-Amz-Signature=abc",
+		"method": "PUT",
+		"headers": {"Content-Type": "image/webp"},
+		"expires_at": "2026-10-31T12:05:00Z"
+	}`)
+}
+
+// -----------------------------------------------------------------------------
+// PUT /places/{id}/image
+// -----------------------------------------------------------------------------
+
+func TestHandler_SetImage_RejectsInvalidRequests(t *testing.T) {
+	tests := []struct {
+		name     string
+		target   string
+		body     string
+		wantCode string
+	}{
+		{name: "place id is not a number", target: "/places/abc/image", body: `{"upload_key":"k"}`, wantCode: "INVALID_PLACE_ID"},
+		{name: "place id is negative", target: "/places/-1/image", body: `{"upload_key":"k"}`, wantCode: "INVALID_PLACE_ID"},
+		{name: "body is not JSON", target: "/places/3/image", body: `upload_key=k`, wantCode: "INVALID_BODY"},
+		{name: "body is null", target: "/places/3/image", body: `null`, wantCode: "INVALID_BODY"},
+		{name: "body is an array", target: "/places/3/image", body: `[]`, wantCode: "INVALID_BODY"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// No expectations: an invalid request must never reach the service.
+			svc := mock.NewMockService(gomock.NewController(t))
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, tc.target, tc.body))
+			assertError(t, rec, http.StatusBadRequest, tc.wantCode)
+		})
+	}
+}
+
+func TestHandler_SetImage_MapsServiceErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantCode   string
+	}{
+		{name: "unknown place", err: place.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
+		{name: "invalid upload key", err: storage.ErrInvalidImageKey, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "image not uploaded", err: storage.ErrImageNotUploaded, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "image type not allowed", err: storage.ErrInvalidImageType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "image too large", err: storage.ErrImageTooLarge, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := mock.NewMockService(gomock.NewController(t))
+			svc.EXPECT().SetImage(gomock.Any(), int64(3), "uploads/places/3/x.webp").Return(nil, tc.err)
+
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/places/3/image", `{"upload_key":"uploads/places/3/x.webp"}`))
+			assertError(t, rec, tc.wantStatus, tc.wantCode)
+		})
+	}
+}
+
+func TestHandler_SetImage_Success(t *testing.T) {
+	svc := mock.NewMockService(gomock.NewController(t))
+	svc.EXPECT().SetImage(gomock.Any(), int64(3), "uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp").Return(&place.Place{
+		ID:            3,
+		SubDistrictID: 1,
+		Name:          "Kopi Senja",
+		Attributes:    json.RawMessage(`{}`),
+		ImageKey:      ptr("places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"),
+		Category:      place.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
+	}, nil)
+
+	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/places/3/image",
+		`{"upload_key":"uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"}`))
+	assertData(t, rec, http.StatusOK, `{
+		"id": 3,
+		"sub_district_id": 1,
+		"name": "Kopi Senja",
+		"address": null,
+		"location": null,
+		"operating_hours": null,
+		"estimated_price_range": null,
+		"short_description": null,
+		"attributes": {},
+		"rating_average": null,
+		"rating_count": 0,
+		"image_url": "https://img.test/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp",
+		"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
+	}`)
 }

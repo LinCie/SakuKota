@@ -1,4 +1,4 @@
-.PHONY: dev dev-backend dev-frontend start build postgres-up postgres-down migrate-up migrate-down migrate-status migrate-version migrate-reset migration seed
+.PHONY: dev dev-backend dev-frontend start build postgres-up postgres-down storage-up storage-init migrate-up migrate-down migrate-status migrate-version migrate-reset migration seed
 
 -include .env
 
@@ -37,6 +37,12 @@ postgres-up:
 
 postgres-down:
 	docker compose down
+
+storage-up:
+	docker compose up -d garage
+
+storage-init:
+	bash docker/garage/init.sh
 
 migrate-up:
 	DATABASE_URL="$(DATABASE_URL)" go run ./cmd/migrate up

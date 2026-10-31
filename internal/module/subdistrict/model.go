@@ -10,7 +10,10 @@ type SubDistrict struct {
 	FloodHistory           *string  `db:"flood_history"`
 	SafetyCrimeInformation *string  `db:"safety_crime_information"`
 	EstimatedDailySpending *float64 `db:"estimated_daily_spending"`
-	StaticMapImageURL      *string  `db:"static_map_image_url"`
+	// ImageKey and StaticMapImageKey are the storage keys of the sub-district's
+	// images, or nil for an image it does not have.
+	ImageKey          *string `db:"image_key"`
+	StaticMapImageKey *string `db:"static_map_image_key"`
 }
 
 // SubDistrictPatch holds the fields a client may change on a sub-district. A
@@ -21,5 +24,25 @@ type SubDistrictPatch struct {
 	FloodHistory           httpx.Optional[string]
 	SafetyCrimeInformation httpx.Optional[string]
 	EstimatedDailySpending httpx.Optional[float64]
-	StaticMapImageURL      httpx.Optional[string]
+}
+
+// ImageSlot names one of a sub-district's images. It is also the image's path
+// segment in the API and in storage.
+type ImageSlot string
+
+const (
+	SlotImage     ImageSlot = "image"
+	SlotStaticMap ImageSlot = "static-map"
+)
+
+// imageKey returns the key of the sub-district's image in slot, or nil.
+func (sd *SubDistrict) imageKey(slot ImageSlot) *string {
+	switch slot {
+	case SlotImage:
+		return sd.ImageKey
+	case SlotStaticMap:
+		return sd.StaticMapImageKey
+	}
+
+	return nil
 }

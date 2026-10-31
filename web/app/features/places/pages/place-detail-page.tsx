@@ -6,6 +6,7 @@ import type { SubDistrict } from "~/features/subdistricts/types";
 import { Button } from "~/shared/components/button";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { DetailList, type DetailItem } from "~/shared/components/detail-list";
+import { ImageUploadCard } from "~/shared/components/image-upload-card";
 import { MissingSlot, orMissing } from "~/shared/components/missing-slot";
 import { PageHeader } from "~/shared/components/page-header";
 import { SectionCard } from "~/shared/components/section-card";
@@ -17,7 +18,7 @@ import { attributeValue } from "../attribute-format";
 import type { CategoryDetail, Place } from "../types";
 import { CategoryBadge } from "../components/category-sign";
 import { PlaceFormDrawer } from "../components/place-form-drawer";
-import { placeKeys, useDeletePlace } from "../queries";
+import { placeKeys, useDeletePlace, useUploadPlaceImage } from "../queries";
 
 type PlaceDetailPageProps = {
   place: Place;
@@ -38,6 +39,7 @@ export function PlaceDetailPage({
   const drawer = useDisclosure();
   const confirm = useDisclosure();
   const deletePlace = useDeletePlace();
+  const uploadImage = useUploadPlaceImage();
 
   function confirmDelete() {
     deletePlace.mutate(place.id, {
@@ -146,6 +148,24 @@ export function PlaceDetailPage({
             <DetailList items={attributes} />
           </SectionCard>
         ) : null}
+        <ImageUploadCard
+          title="Foto tempat"
+          imageUrl={place.image_url}
+          alt={`Foto ${place.name}`}
+          missing="Foto tidak tersedia"
+          aspect="aspect-4/3"
+          pending={uploadImage.isPending}
+          error={uploadImage.error}
+          onUpload={(file) =>
+            uploadImage.mutate(
+              { id: place.id, file },
+              {
+                onSuccess: () =>
+                  toastManager.add({ title: "Foto tempat disimpan" }),
+              },
+            )
+          }
+        />
       </div>
 
       <PlaceFormDrawer

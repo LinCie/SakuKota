@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"rantau-go/internal/postgis"
+	"rantau-go/internal/storage"
 )
 
 // Service defines the operations required by the handler.
@@ -24,15 +26,22 @@ type Service interface {
 	GetCategory(ctx context.Context, id int64) (*Category, error)
 	Update(ctx context.Context, id int64, patch PlacePatch) (*Place, error)
 	Delete(ctx context.Context, id int64) error
+	// ImageUploadURL returns an upload for a new image of the place.
+	ImageUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error)
+	// SetImage makes the uploaded image the place's image, replacing any
+	// previous one.
+	SetImage(ctx context.Context, id int64, uploadKey string) (*Place, error)
 }
 
 type service struct {
-	repo Repository
+	repo   Repository
+	images ImageStorage
 }
 
-func NewService(repo Repository) *service {
+func NewService(repo Repository, images ImageStorage) *service {
 	return &service{
-		repo: repo,
+		repo:   repo,
+		images: images,
 	}
 }
 
@@ -152,8 +161,58 @@ func (s *service) Update(ctx context.Context, id int64, patch PlacePatch) (*Plac
 	return s.repo.Update(ctx, p)
 }
 
+// Delete removes the place, then its image. A failed image delete is ignored
+// because the place is already gone.
 func (s *service) Delete(ctx context.Context, id int64) error {
-	return s.repo.Delete(ctx, id)
+	imageKey, err := s.repo.Delete(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if imageKey != nil {
+		_ = s.images.Delete(ctx, *imageKey)
+	}
+
+	return nil
+}
+
+func (s *service) ImageUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error) {
+	if _, err := s.repo.GetPlace(ctx, id); err != nil {
+		return storage.Upload{}, err
+	}
+
+	return s.images.PresignUpload(ctx, imagePrefix(id), contentType)
+}
+
+// SetImage promotes the upload and stores it as the place's image. Image
+// deletes that fail are ignored: they only leave an unused object behind.
+func (s *service) SetImage(ctx context.Context, id int64, uploadKey string) (*Place, error) {
+	p, err := s.repo.GetPlace(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := s.images.Promote(ctx, imagePrefix(id), uploadKey)
+	if err != nil {
+		return nil, err
+	}
+
+	updated, err := s.repo.SetImageKey(ctx, id, key)
+	if err != nil {
+		_ = s.images.Delete(ctx, key)
+		return nil, err
+	}
+
+	if p.ImageKey != nil {
+		_ = s.images.Delete(ctx, *p.ImageKey)
+	}
+
+	return updated, nil
+}
+
+// imagePrefix is the storage prefix of the images of place id.
+func imagePrefix(id int64) string {
+	return "places/" + strconv.FormatInt(id, 10)
 }
 
 // normalizePlaceName trims name and checks it against the length of PLACES.name.

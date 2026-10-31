@@ -3,8 +3,7 @@ INSERT INTO SUB_DISTRICTS (
     slug,
     flood_history,
     safety_crime_information,
-    estimated_daily_spending,
-    static_map_image_url
+    estimated_daily_spending
 )
 VALUES
     (
@@ -12,16 +11,14 @@ VALUES
         'setiabudi',
         'Some streets near the Cideng and Karet drainage channels can pool after intense rain. Main roads usually clear quickly, but low-lying alleys may be difficult to cross during a storm.',
         'Busy commuter corridors are generally well lit. Use normal late-night precautions around quiet alleys and keep belongings secure in crowded areas.',
-        150000.00,
-        'https://placehold.co/800x500/png?text=Setiabudi+Map'
+        150000.00
     ),
     (
         'Mampang Prapatan',
         'mampang-prapatan',
         'Short-lived flooding can occur around drainage bottlenecks near Tegal Parang and Mampang. Check local conditions during heavy rain before taking smaller roads.',
         'Commercial streets are active into the evening. Residential lanes are quieter, so use established routes and app-based transport when returning late.',
-        135000.00,
-        'https://placehold.co/800x500/png?text=Mampang+Prapatan+Map'
+        135000.00
     )
 ON CONFLICT (slug) DO NOTHING;
 

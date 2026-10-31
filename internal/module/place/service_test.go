@@ -15,6 +15,7 @@ import (
 	"rantau-go/internal/module/place"
 	"rantau-go/internal/module/place/mock"
 	"rantau-go/internal/postgis"
+	"rantau-go/internal/storage"
 )
 
 // warungCategory has one required field and one optional field of each data
@@ -63,7 +64,7 @@ func createPlace(t *testing.T, c *place.Category, p *place.Place) (*place.Place,
 			return got, nil
 		}).AnyTimes()
 
-	_, err := place.NewService(repo).Create(context.Background(), p)
+	_, err := place.NewService(repo, noImages(t)).Create(context.Background(), p)
 	return stored, err
 }
 
@@ -85,6 +86,20 @@ func decodeExact(t *testing.T, raw json.RawMessage) any {
 		t.Fatalf("invalid JSON %s: %v", raw, err)
 	}
 	return v
+}
+
+// noImages returns image storage that fails the test if it is used.
+func noImages(t *testing.T) *mock.MockImageStorage {
+	t.Helper()
+	return mock.NewMockImageStorage(gomock.NewController(t))
+}
+
+// newMocks returns a repository and image storage that fail the test on any
+// call they do not expect.
+func newMocks(t *testing.T) (*mock.MockRepository, *mock.MockImageStorage) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	return mock.NewMockRepository(ctrl), mock.NewMockImageStorage(ctrl)
 }
 
 // -----------------------------------------------------------------------------
@@ -328,7 +343,7 @@ func TestService_CreatePlace_Storage(t *testing.T) {
 				repo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&place.Place{ID: 7}, tc.storeErr)
 			}
 
-			got, err := place.NewService(repo).Create(context.Background(), &place.Place{
+			got, err := place.NewService(repo, noImages(t)).Create(context.Background(), &place.Place{
 				Name: "Kopi Senja", SubDistrictID: 1, CategoryID: 2,
 			})
 			if !errors.Is(err, tc.wantErr) {
@@ -406,7 +421,7 @@ func updatePlace(t *testing.T, existing *place.Place, id int64, patch place.Plac
 			return got, nil
 		}).AnyTimes()
 
-	_, err := place.NewService(repo).Update(context.Background(), id, patch)
+	_, err := place.NewService(repo, noImages(t)).Update(context.Background(), id, patch)
 	return stored, err
 }
 
@@ -428,7 +443,7 @@ func TestService_UpdatePlace_LookupFailure(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(nil, tc.getErr)
 
-			_, err := place.NewService(repo).Update(context.Background(), 7,
+			_, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7,
 				place.PlacePatch{Name: present("Kopi Baru")})
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tc.wantErr)
@@ -697,7 +712,7 @@ func TestService_UpdatePlace_Storage(t *testing.T) {
 			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), nil)
 			repo.EXPECT().Update(gomock.Any(), gomock.Any()).Return(&place.Place{ID: 7}, tc.updateErr)
 
-			got, err := place.NewService(repo).Update(context.Background(), 7,
+			got, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7,
 				place.PlacePatch{Name: present("Kopi Baru")})
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tc.wantErr)
@@ -724,12 +739,251 @@ func TestService_DeletePlace(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			// The place has no image, so no image may be deleted.
 			repo := mock.NewMockRepository(gomock.NewController(t))
-			repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(tc.repoErr)
+			repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(nil, tc.repoErr)
 
-			err := place.NewService(repo).Delete(context.Background(), 7)
+			err := place.NewService(repo, noImages(t)).Delete(context.Background(), 7)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestService_DeletePlace_Image(t *testing.T) {
+	tests := []struct {
+		name      string
+		deleteErr error
+	}{
+		{name: "deletes the image", deleteErr: nil},
+		{name: "image delete failure is ignored", deleteErr: errors.New("connection reset")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, images := newMocks(t)
+			gomock.InOrder(
+				repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(ptr(imageKey), nil),
+				images.EXPECT().Delete(gomock.Any(), imageKey).Return(tc.deleteErr),
+			)
+
+			err := place.NewService(repo, images).Delete(context.Background(), 7)
+			if err != nil {
+				t.Fatalf("err = %v, want nil: the place was deleted", err)
+			}
+		})
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Place images
+// -----------------------------------------------------------------------------
+
+const (
+	uploadKey = "uploads/places/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"
+	imageKey  = "places/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"
+	oldKey    = "places/7/9f8e7d6c-5b4a-4321-8fed-cba987654321.png"
+)
+
+func TestService_ImageUploadURL(t *testing.T) {
+	repo, images := newMocks(t)
+	upload := storage.Upload{
+		Key:             uploadKey,
+		PresignedUpload: storage.PresignedUpload{URL: "http://localhost:3900/signed", Method: "PUT"},
+	}
+	gomock.InOrder(
+		repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), nil),
+		images.EXPECT().PresignUpload(gomock.Any(), "places/7", "image/webp").Return(upload, nil),
+	)
+
+	got, err := place.NewService(repo, images).ImageUploadURL(context.Background(), 7, "image/webp")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(got, upload) {
+		t.Errorf("upload = %+v, want %+v", got, upload)
+	}
+}
+
+func TestService_ImageUploadURL_LookupFailure(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name    string
+		getErr  error
+		wantErr error
+	}{
+		{name: "unknown place", getErr: place.ErrPlaceNotFound, wantErr: place.ErrPlaceNotFound},
+		{name: "lookup failure is returned", getErr: boom, wantErr: boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Nothing may be presigned for a place that cannot be read.
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(nil, tc.getErr)
+
+			_, err := place.NewService(repo, noImages(t)).ImageUploadURL(context.Background(), 7, "image/webp")
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestService_ImageUploadURL_PresignFailure(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name       string
+		presignErr error
+	}{
+		{name: "invalid image type", presignErr: storage.ErrInvalidImageType},
+		{name: "storage failure is returned", presignErr: boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, images := newMocks(t)
+			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), nil)
+			images.EXPECT().PresignUpload(gomock.Any(), "places/7", "image/gif").Return(storage.Upload{}, tc.presignErr)
+
+			_, err := place.NewService(repo, images).ImageUploadURL(context.Background(), 7, "image/gif")
+			if !errors.Is(err, tc.presignErr) {
+				t.Fatalf("err = %v, want %v", err, tc.presignErr)
+			}
+		})
+	}
+}
+
+// withImage returns savedKopi with the image stored under key, or with no
+// image if key is nil.
+func withImage(key *string) *place.Place {
+	p := savedKopi()
+	p.ImageKey = key
+	return p
+}
+
+func TestService_SetImage(t *testing.T) {
+	tests := []struct {
+		name      string
+		oldKey    *string
+		deleteErr error
+	}{
+		{name: "first image", oldKey: nil},
+		{name: "replaces the previous image", oldKey: ptr(oldKey)},
+		{name: "previous image delete failure is ignored", oldKey: ptr(oldKey), deleteErr: errors.New("connection reset")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, images := newMocks(t)
+			updated := withImage(ptr(imageKey))
+
+			calls := []any{
+				repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(withImage(tc.oldKey), nil),
+				images.EXPECT().Promote(gomock.Any(), "places/7", uploadKey).Return(imageKey, nil),
+				repo.EXPECT().SetImageKey(gomock.Any(), int64(7), imageKey).Return(updated, nil),
+			}
+			if tc.oldKey != nil {
+				calls = append(calls, images.EXPECT().Delete(gomock.Any(), *tc.oldKey).Return(tc.deleteErr))
+			}
+			gomock.InOrder(calls...)
+
+			got, err := place.NewService(repo, images).SetImage(context.Background(), 7, uploadKey)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != updated {
+				t.Errorf("got %+v, want the stored place %+v", got, updated)
+			}
+		})
+	}
+}
+
+func TestService_SetImage_LookupFailure(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name    string
+		getErr  error
+		wantErr error
+	}{
+		{name: "unknown place", getErr: place.ErrPlaceNotFound, wantErr: place.ErrPlaceNotFound},
+		{name: "lookup failure is returned", getErr: boom, wantErr: boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Nothing may be promoted for a place that cannot be read.
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(nil, tc.getErr)
+
+			_, err := place.NewService(repo, noImages(t)).SetImage(context.Background(), 7, uploadKey)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestService_SetImage_PromoteFailure(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name       string
+		promoteErr error
+	}{
+		{name: "invalid upload key", promoteErr: storage.ErrInvalidImageKey},
+		{name: "image not uploaded", promoteErr: storage.ErrImageNotUploaded},
+		{name: "invalid image type", promoteErr: storage.ErrInvalidImageType},
+		{name: "image too large", promoteErr: storage.ErrImageTooLarge},
+		{name: "storage failure is returned", promoteErr: boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Nothing may be stored, and the old image is kept.
+			repo, images := newMocks(t)
+			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(withImage(ptr(oldKey)), nil)
+			images.EXPECT().Promote(gomock.Any(), "places/7", uploadKey).Return("", tc.promoteErr)
+
+			_, err := place.NewService(repo, images).SetImage(context.Background(), 7, uploadKey)
+			if !errors.Is(err, tc.promoteErr) {
+				t.Fatalf("err = %v, want %v", err, tc.promoteErr)
+			}
+		})
+	}
+}
+
+func TestService_SetImage_StoreFailure(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name      string
+		setErr    error
+		deleteErr error
+	}{
+		{name: "place deleted meanwhile", setErr: place.ErrPlaceNotFound},
+		{name: "storage failure is returned", setErr: boom},
+		{name: "promoted image delete failure is ignored", setErr: boom, deleteErr: errors.New("timeout")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// The promoted image is removed, and the old image is kept.
+			repo, images := newMocks(t)
+			gomock.InOrder(
+				repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(withImage(ptr(oldKey)), nil),
+				images.EXPECT().Promote(gomock.Any(), "places/7", uploadKey).Return(imageKey, nil),
+				repo.EXPECT().SetImageKey(gomock.Any(), int64(7), imageKey).Return(nil, tc.setErr),
+				images.EXPECT().Delete(gomock.Any(), imageKey).Return(tc.deleteErr),
+			)
+
+			_, err := place.NewService(repo, images).SetImage(context.Background(), 7, uploadKey)
+			if !errors.Is(err, tc.setErr) {
+				t.Fatalf("err = %v, want %v", err, tc.setErr)
 			}
 		})
 	}
@@ -757,7 +1011,7 @@ func TestService_GetPlace(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), tc.repoErr)
 
-			got, err := place.NewService(repo).GetPlace(context.Background(), 7)
+			got, err := place.NewService(repo, noImages(t)).GetPlace(context.Background(), 7)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tc.wantErr)
 			}
@@ -786,7 +1040,7 @@ func TestService_GetCategory(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().GetCategory(gomock.Any(), int64(1)).Return(warungCategory(), tc.repoErr)
 
-			got, err := place.NewService(repo).GetCategory(context.Background(), 1)
+			got, err := place.NewService(repo, noImages(t)).GetCategory(context.Background(), 1)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tc.wantErr)
 			}

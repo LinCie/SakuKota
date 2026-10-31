@@ -12,6 +12,7 @@ import (
 	"rantau-go/internal/httpx"
 	"rantau-go/internal/module/subdistrict"
 	"rantau-go/internal/module/subdistrict/mock"
+	"rantau-go/internal/storage"
 )
 
 // family is one emoji made of five code points: man, ZWJ, woman, ZWJ, girl.
@@ -44,8 +45,22 @@ func createSubDistrict(t *testing.T, sd *subdistrict.SubDistrict) (*subdistrict.
 			return got, nil
 		}).AnyTimes()
 
-	_, err := subdistrict.NewService(repo).Create(context.Background(), sd)
+	_, err := subdistrict.NewService(repo, noImages(t)).Create(context.Background(), sd)
 	return stored, err
+}
+
+// noImages returns image storage that fails the test if it is used.
+func noImages(t *testing.T) *mock.MockImageStorage {
+	t.Helper()
+	return mock.NewMockImageStorage(gomock.NewController(t))
+}
+
+// newMocks returns a repository and image storage that fail the test on any
+// call they do not expect.
+func newMocks(t *testing.T) (*mock.MockRepository, *mock.MockImageStorage) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	return mock.NewMockRepository(ctrl), mock.NewMockImageStorage(ctrl)
 }
 
 // -----------------------------------------------------------------------------
@@ -150,9 +165,6 @@ func TestService_CreateSubDistrict_OptionalFieldLimits(t *testing.T) {
 			wantErr: subdistrict.ErrInvalidEstimatedDailySpending},
 		{name: "estimated daily spending too large for DECIMAL(10,2)", in: subdistrict.SubDistrict{EstimatedDailySpending: ptr(100000000.0)},
 			wantErr: subdistrict.ErrInvalidEstimatedDailySpending},
-		{name: "static map image URL of 255 characters", in: subdistrict.SubDistrict{StaticMapImageURL: ptr(strings.Repeat("a", 255))}},
-		{name: "static map image URL of 256 characters", in: subdistrict.SubDistrict{StaticMapImageURL: ptr(strings.Repeat("a", 256))},
-			wantErr: subdistrict.ErrInvalidStaticMapImageURL},
 	}
 
 	for _, tc := range tests {
@@ -191,7 +203,6 @@ func TestService_CreateSubDistrict_StoresFieldsAsSent(t *testing.T) {
 			FloodHistory:           ptr("Banjir tahunan"),
 			SafetyCrimeInformation: ptr("Aman di siang hari"),
 			EstimatedDailySpending: ptr(1500000.5),
-			StaticMapImageURL:      ptr("https://example.com/menteng.png"),
 		}},
 		{name: "only name and slug", in: subdistrict.SubDistrict{Name: "Menteng", Slug: "menteng"}},
 	}
@@ -231,7 +242,7 @@ func TestService_CreateSubDistrict_Storage(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&subdistrict.SubDistrict{ID: 7}, tc.storeErr)
 
-			got, err := subdistrict.NewService(repo).Create(context.Background(), &subdistrict.SubDistrict{
+			got, err := subdistrict.NewService(repo, noImages(t)).Create(context.Background(), &subdistrict.SubDistrict{
 				Name: "Menteng", Slug: "menteng",
 			})
 			if !errors.Is(err, tc.wantErr) {
@@ -249,7 +260,7 @@ func TestService_CreateSubDistrict_Storage(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 // savedMenteng is the stored sub-district that updates start from: a Menteng
-// with every optional field set.
+// with every optional field and both images set.
 func savedMenteng() *subdistrict.SubDistrict {
 	return &subdistrict.SubDistrict{
 		ID:                     7,
@@ -258,7 +269,8 @@ func savedMenteng() *subdistrict.SubDistrict {
 		FloodHistory:           ptr("Banjir 2020"),
 		SafetyCrimeInformation: ptr("Aman di siang hari"),
 		EstimatedDailySpending: ptr(1500000.5),
-		StaticMapImageURL:      ptr("https://example.com/menteng.png"),
+		ImageKey:               ptr(oldImageKey),
+		StaticMapImageKey:      ptr(oldStaticMapKey),
 	}
 }
 
@@ -278,7 +290,7 @@ func updateSubDistrict(t *testing.T, existing *subdistrict.SubDistrict, id int64
 			return got, nil
 		}).AnyTimes()
 
-	_, err := subdistrict.NewService(repo).Update(context.Background(), id, patch)
+	_, err := subdistrict.NewService(repo, noImages(t)).Update(context.Background(), id, patch)
 	return stored, err
 }
 
@@ -305,7 +317,7 @@ func TestService_GetSubDistrict(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(found, tc.repoErr)
 
-			got, err := subdistrict.NewService(repo).GetSubDistrict(context.Background(), 7)
+			got, err := subdistrict.NewService(repo, noImages(t)).GetSubDistrict(context.Background(), 7)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tc.wantErr)
 			}
@@ -334,7 +346,7 @@ func TestService_UpdateSubDistrict_LookupFailure(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(nil, tc.getErr)
 
-			_, err := subdistrict.NewService(repo).Update(context.Background(), 7,
+			_, err := subdistrict.NewService(repo, noImages(t)).Update(context.Background(), 7,
 				subdistrict.SubDistrictPatch{Name: present("Kemang")})
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tc.wantErr)
@@ -364,16 +376,12 @@ func TestService_UpdateSubDistrict_Fields(t *testing.T) {
 			change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(750000.25) }},
 		{name: "estimated daily spending of zero is allowed", patch: subdistrict.SubDistrictPatch{EstimatedDailySpending: present(0.0)},
 			change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(0.0) }},
-		{name: "static map image URL is replaced", patch: subdistrict.SubDistrictPatch{StaticMapImageURL: present("https://example.com/menteng-2.png")},
-			change: func(sd *subdistrict.SubDistrict) { sd.StaticMapImageURL = ptr("https://example.com/menteng-2.png") }},
 		{name: "null clears every nullable field", patch: subdistrict.SubDistrictPatch{
 			FloodHistory:           null[string](),
 			SafetyCrimeInformation: null[string](),
 			EstimatedDailySpending: null[float64](),
-			StaticMapImageURL:      null[string](),
 		}, change: func(sd *subdistrict.SubDistrict) {
-			sd.FloodHistory, sd.SafetyCrimeInformation = nil, nil
-			sd.EstimatedDailySpending, sd.StaticMapImageURL = nil, nil
+			sd.FloodHistory, sd.SafetyCrimeInformation, sd.EstimatedDailySpending = nil, nil, nil
 		}},
 	}
 
@@ -407,8 +415,6 @@ func TestService_UpdateSubDistrict_Rejected(t *testing.T) {
 			wantErr: subdistrict.ErrInvalidEstimatedDailySpending},
 		{name: "estimated daily spending too large for DECIMAL(10,2)", patch: subdistrict.SubDistrictPatch{EstimatedDailySpending: present(100000000.0)},
 			wantErr: subdistrict.ErrInvalidEstimatedDailySpending},
-		{name: "static map image URL of 256 characters", patch: subdistrict.SubDistrictPatch{StaticMapImageURL: present(strings.Repeat("a", 256))},
-			wantErr: subdistrict.ErrInvalidStaticMapImageURL},
 	}
 
 	for _, tc := range tests {
@@ -444,7 +450,7 @@ func TestService_UpdateSubDistrict_Storage(t *testing.T) {
 			repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(savedMenteng(), nil)
 			repo.EXPECT().Update(gomock.Any(), gomock.Any()).Return(&subdistrict.SubDistrict{ID: 7}, tc.updateErr)
 
-			got, err := subdistrict.NewService(repo).Update(context.Background(), 7,
+			got, err := subdistrict.NewService(repo, noImages(t)).Update(context.Background(), 7,
 				subdistrict.SubDistrictPatch{Name: present("Menteng Atas")})
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tc.wantErr)
@@ -473,11 +479,287 @@ func TestService_DeleteSubDistrict(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
-			repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(tc.repoErr)
+			// The sub-district has no images, so no image may be deleted.
+			repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(nil, tc.repoErr)
 
-			err := subdistrict.NewService(repo).Delete(context.Background(), 7)
+			err := subdistrict.NewService(repo, noImages(t)).Delete(context.Background(), 7)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestService_DeleteSubDistrict_Images(t *testing.T) {
+	tests := []struct {
+		name      string
+		deleteErr error
+	}{
+		{name: "deletes every image", deleteErr: nil},
+		{name: "image delete failure is ignored", deleteErr: errors.New("connection reset")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, images := newMocks(t)
+			gomock.InOrder(
+				repo.EXPECT().Delete(gomock.Any(), int64(7)).Return([]string{oldImageKey, oldStaticMapKey}, nil),
+				images.EXPECT().Delete(gomock.Any(), oldImageKey).Return(tc.deleteErr),
+				images.EXPECT().Delete(gomock.Any(), oldStaticMapKey).Return(nil),
+			)
+
+			err := subdistrict.NewService(repo, images).Delete(context.Background(), 7)
+			if err != nil {
+				t.Fatalf("err = %v, want nil: the sub-district was deleted", err)
+			}
+		})
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Sub-district images
+// -----------------------------------------------------------------------------
+
+const (
+	oldImageKey     = "subdistricts/7/image/9f8e7d6c-5b4a-4321-8fed-cba987654321.png"
+	oldStaticMapKey = "subdistricts/7/static-map/1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d.png"
+)
+
+// slotCase is one of a sub-district's image slots, with its storage prefix
+// and keys for sub-district 7.
+type slotCase struct {
+	slot      subdistrict.ImageSlot
+	prefix    string
+	uploadKey string
+	newKey    string
+	oldKey    string
+	// setKey stores key as the image in this slot of sd.
+	setKey func(sd *subdistrict.SubDistrict, key *string)
+}
+
+var slotCases = []slotCase{
+	{
+		slot:      subdistrict.SlotImage,
+		prefix:    "subdistricts/7/image",
+		uploadKey: "uploads/subdistricts/7/image/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp",
+		newKey:    "subdistricts/7/image/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp",
+		oldKey:    oldImageKey,
+		setKey:    func(sd *subdistrict.SubDistrict, key *string) { sd.ImageKey = key },
+	},
+	{
+		slot:      subdistrict.SlotStaticMap,
+		prefix:    "subdistricts/7/static-map",
+		uploadKey: "uploads/subdistricts/7/static-map/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.png",
+		newKey:    "subdistricts/7/static-map/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.png",
+		oldKey:    oldStaticMapKey,
+		setKey:    func(sd *subdistrict.SubDistrict, key *string) { sd.StaticMapImageKey = key },
+	},
+}
+
+func TestService_ImageUploadURL(t *testing.T) {
+	for _, sc := range slotCases {
+		t.Run(string(sc.slot), func(t *testing.T) {
+			repo, images := newMocks(t)
+			upload := storage.Upload{
+				Key:             sc.uploadKey,
+				PresignedUpload: storage.PresignedUpload{URL: "http://localhost:3900/signed", Method: "PUT"},
+			}
+			gomock.InOrder(
+				repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(savedMenteng(), nil),
+				images.EXPECT().PresignUpload(gomock.Any(), sc.prefix, "image/webp").Return(upload, nil),
+			)
+
+			got, err := subdistrict.NewService(repo, images).ImageUploadURL(context.Background(), 7, sc.slot, "image/webp")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(got, upload) {
+				t.Errorf("upload = %+v, want %+v", got, upload)
+			}
+		})
+	}
+}
+
+func TestService_ImageUploadURL_LookupFailure(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name    string
+		getErr  error
+		wantErr error
+	}{
+		{name: "unknown sub-district", getErr: subdistrict.ErrSubDistrictNotFound, wantErr: subdistrict.ErrSubDistrictNotFound},
+		{name: "lookup failure is returned", getErr: boom, wantErr: boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Nothing may be presigned for a sub-district that cannot be read.
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(nil, tc.getErr)
+
+			_, err := subdistrict.NewService(repo, noImages(t)).ImageUploadURL(context.Background(), 7, subdistrict.SlotImage, "image/webp")
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestService_ImageUploadURL_PresignFailure(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name       string
+		presignErr error
+	}{
+		{name: "invalid image type", presignErr: storage.ErrInvalidImageType},
+		{name: "storage failure is returned", presignErr: boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, images := newMocks(t)
+			repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(savedMenteng(), nil)
+			images.EXPECT().PresignUpload(gomock.Any(), "subdistricts/7/image", "image/gif").Return(storage.Upload{}, tc.presignErr)
+
+			_, err := subdistrict.NewService(repo, images).ImageUploadURL(context.Background(), 7, subdistrict.SlotImage, "image/gif")
+			if !errors.Is(err, tc.presignErr) {
+				t.Fatalf("err = %v, want %v", err, tc.presignErr)
+			}
+		})
+	}
+}
+
+func TestService_SetImage(t *testing.T) {
+	tests := []struct {
+		name      string
+		hasOld    bool
+		deleteErr error
+	}{
+		{name: "first image", hasOld: false},
+		{name: "replaces the previous image", hasOld: true},
+		{name: "previous image delete failure is ignored", hasOld: true, deleteErr: errors.New("connection reset")},
+	}
+
+	for _, sc := range slotCases {
+		for _, tc := range tests {
+			t.Run(string(sc.slot)+"/"+tc.name, func(t *testing.T) {
+				// The image in the other slot is never deleted.
+				repo, images := newMocks(t)
+				existing := savedMenteng()
+				if !tc.hasOld {
+					sc.setKey(existing, nil)
+				}
+				updated := savedMenteng()
+				sc.setKey(updated, ptr(sc.newKey))
+
+				calls := []any{
+					repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(existing, nil),
+					images.EXPECT().Promote(gomock.Any(), sc.prefix, sc.uploadKey).Return(sc.newKey, nil),
+					repo.EXPECT().SetImageKey(gomock.Any(), int64(7), sc.slot, sc.newKey).Return(updated, nil),
+				}
+				if tc.hasOld {
+					calls = append(calls, images.EXPECT().Delete(gomock.Any(), sc.oldKey).Return(tc.deleteErr))
+				}
+				gomock.InOrder(calls...)
+
+				got, err := subdistrict.NewService(repo, images).SetImage(context.Background(), 7, sc.slot, sc.uploadKey)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got != updated {
+					t.Errorf("got %+v, want the stored sub-district %+v", got, updated)
+				}
+			})
+		}
+	}
+}
+
+func TestService_SetImage_LookupFailure(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name    string
+		getErr  error
+		wantErr error
+	}{
+		{name: "unknown sub-district", getErr: subdistrict.ErrSubDistrictNotFound, wantErr: subdistrict.ErrSubDistrictNotFound},
+		{name: "lookup failure is returned", getErr: boom, wantErr: boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Nothing may be promoted for a sub-district that cannot be read.
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(nil, tc.getErr)
+
+			_, err := subdistrict.NewService(repo, noImages(t)).SetImage(context.Background(), 7, subdistrict.SlotImage, slotCases[0].uploadKey)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestService_SetImage_PromoteFailure(t *testing.T) {
+	boom := errors.New("connection reset")
+	sc := slotCases[0]
+
+	tests := []struct {
+		name       string
+		promoteErr error
+	}{
+		{name: "invalid upload key", promoteErr: storage.ErrInvalidImageKey},
+		{name: "image not uploaded", promoteErr: storage.ErrImageNotUploaded},
+		{name: "invalid image type", promoteErr: storage.ErrInvalidImageType},
+		{name: "image too large", promoteErr: storage.ErrImageTooLarge},
+		{name: "storage failure is returned", promoteErr: boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Nothing may be stored, and the old image is kept.
+			repo, images := newMocks(t)
+			repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(savedMenteng(), nil)
+			images.EXPECT().Promote(gomock.Any(), sc.prefix, sc.uploadKey).Return("", tc.promoteErr)
+
+			_, err := subdistrict.NewService(repo, images).SetImage(context.Background(), 7, sc.slot, sc.uploadKey)
+			if !errors.Is(err, tc.promoteErr) {
+				t.Fatalf("err = %v, want %v", err, tc.promoteErr)
+			}
+		})
+	}
+}
+
+func TestService_SetImage_StoreFailure(t *testing.T) {
+	boom := errors.New("connection reset")
+	sc := slotCases[0]
+
+	tests := []struct {
+		name      string
+		setErr    error
+		deleteErr error
+	}{
+		{name: "sub-district deleted meanwhile", setErr: subdistrict.ErrSubDistrictNotFound},
+		{name: "storage failure is returned", setErr: boom},
+		{name: "promoted image delete failure is ignored", setErr: boom, deleteErr: errors.New("timeout")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// The promoted image is removed, and the old image is kept.
+			repo, images := newMocks(t)
+			gomock.InOrder(
+				repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(savedMenteng(), nil),
+				images.EXPECT().Promote(gomock.Any(), sc.prefix, sc.uploadKey).Return(sc.newKey, nil),
+				repo.EXPECT().SetImageKey(gomock.Any(), int64(7), sc.slot, sc.newKey).Return(nil, tc.setErr),
+				images.EXPECT().Delete(gomock.Any(), sc.newKey).Return(tc.deleteErr),
+			)
+
+			_, err := subdistrict.NewService(repo, images).SetImage(context.Background(), 7, sc.slot, sc.uploadKey)
+			if !errors.Is(err, tc.setErr) {
+				t.Fatalf("err = %v, want %v", err, tc.setErr)
 			}
 		})
 	}

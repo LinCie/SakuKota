@@ -23,6 +23,8 @@ export type Place = {
   /** Mean star rating of the place's reviews; null before the first review. */
   rating_average: number | null;
   rating_count: number;
+  /** Public URL of the place's image; null if it has none. */
+  image_url: string | null;
   category: Category;
 };
 

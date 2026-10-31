@@ -15,6 +15,7 @@ import (
 	"rantau-go/internal/module/review"
 	"rantau-go/internal/module/subdistrict"
 	"rantau-go/internal/module/users"
+	"rantau-go/internal/storage"
 )
 
 type Router struct {
@@ -35,11 +36,13 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 	r.Get("/docs", docs.Scalar)
 	r.Get("/openapi.json", docs.OpenAPI)
 
+	images := storage.NewImages(storage.NewS3(cfg.Storage), cfg.Storage.PublicURL)
+
 	usersModule := users.NewModule(db)
 	authModule := auth.NewModule(cfg, usersModule.Service)
-	placeModule := place.NewModule(db)
+	placeModule := place.NewModule(db, images)
 	reviewModule := review.NewModule(db)
-	subdisctrictModule := subdistrict.NewModule(db)
+	subdisctrictModule := subdistrict.NewModule(db, images)
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
@@ -68,6 +71,12 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 
 				// DELETE /v1/places/{id}
 				r.Delete("/{id}", placeModule.Handler.DeletePlace)
+
+				// POST /v1/places/{id}/image/upload-url
+				r.Post("/{id}/image/upload-url", placeModule.Handler.CreateImageUpload)
+
+				// PUT /v1/places/{id}/image
+				r.Put("/{id}/image", placeModule.Handler.SetImage)
 			})
 
 			r.Route("/{id}/reviews", func(r chi.Router) {
@@ -111,6 +120,18 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 
 					// DELETE /v1/subdistricts/{id}
 					r.Delete("/{id}", subdisctrictModule.Handler.DeleteSubDistrict)
+
+					// POST /v1/subdistricts/{id}/image/upload-url
+					r.Post("/{id}/image/upload-url", subdisctrictModule.Handler.CreateImageUpload(subdistrict.SlotImage))
+
+					// PUT /v1/subdistricts/{id}/image
+					r.Put("/{id}/image", subdisctrictModule.Handler.SetImage(subdistrict.SlotImage))
+
+					// POST /v1/subdistricts/{id}/static-map/upload-url
+					r.Post("/{id}/static-map/upload-url", subdisctrictModule.Handler.CreateImageUpload(subdistrict.SlotStaticMap))
+
+					// PUT /v1/subdistricts/{id}/static-map
+					r.Put("/{id}/static-map", subdisctrictModule.Handler.SetImage(subdistrict.SlotStaticMap))
 				})
 			})
 		})

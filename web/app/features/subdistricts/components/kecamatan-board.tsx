@@ -1,5 +1,6 @@
 import {
   CloudRain,
+  Image as ImageIcon,
   Map as MapIcon,
   ShieldAlert,
   Wallet,
@@ -7,6 +8,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef } from "react";
 
+import { ImageFrame } from "~/shared/components/image-frame";
 import { MissingSlot } from "~/shared/components/missing-slot";
 import { InfoSection } from "~/shared/components/menu-board";
 import { formatRupiah } from "~/shared/format";
@@ -67,6 +69,15 @@ export function KecamatanBoard({
       <div aria-hidden="true" className="bg-chili h-1.5" />
 
       <div className="flex flex-col gap-4 p-4 sm:p-5">
+        <InfoSection icon={ImageIcon} title="Foto kecamatan">
+          <ImageFrame
+            src={subDistrict.image_url}
+            alt={`Foto Kecamatan ${subDistrict.name}`}
+            missing="Foto tidak tersedia"
+            aspect="aspect-8/5"
+          />
+        </InfoSection>
+
         <InfoSection icon={CloudRain} title="Riwayat banjir">
           {subDistrict.flood_history ? (
             <p className="text-pretty">{subDistrict.flood_history}</p>
