@@ -3,9 +3,10 @@ package users_test
 import (
 	"context"
 	"errors"
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"rantau-go/internal/module/users"
@@ -33,12 +34,8 @@ func TestService_Create_ReturnsCreatedUser(t *testing.T) {
 	repo.EXPECT().Create(gomock.Any(), in).Return(want, nil)
 
 	got, err := svc.Create(context.Background(), in)
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("user = %+v, want %+v", got, want)
-	}
+	require.NoError(t, err, "create")
+	assert.Equal(t, want, got)
 }
 
 func TestService_Create_PropagatesErrors(t *testing.T) {
@@ -48,9 +45,7 @@ func TestService_Create_PropagatesErrors(t *testing.T) {
 			repo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, want)
 
 			_, err := svc.Create(context.Background(), &users.User{Name: "Ana", Email: testEmail})
-			if !errors.Is(err, want) {
-				t.Errorf("error = %v, want %v", err, want)
-			}
+			assert.ErrorIs(t, err, want)
 		})
 	}
 }
@@ -65,12 +60,8 @@ func TestService_GetByEmail_ReturnsUser(t *testing.T) {
 	repo.EXPECT().GetByEmail(gomock.Any(), testEmail).Return(want, nil)
 
 	got, err := svc.GetByEmail(context.Background(), testEmail)
-	if err != nil {
-		t.Fatalf("get by email: %v", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("user = %+v, want %+v", got, want)
-	}
+	require.NoError(t, err, "get by email")
+	assert.Equal(t, want, got)
 }
 
 func TestService_GetByEmail_PropagatesErrors(t *testing.T) {
@@ -80,9 +71,7 @@ func TestService_GetByEmail_PropagatesErrors(t *testing.T) {
 			repo.EXPECT().GetByEmail(gomock.Any(), testEmail).Return(nil, want)
 
 			_, err := svc.GetByEmail(context.Background(), testEmail)
-			if !errors.Is(err, want) {
-				t.Errorf("error = %v, want %v", err, want)
-			}
+			assert.ErrorIs(t, err, want)
 		})
 	}
 }
@@ -97,12 +86,8 @@ func TestService_GetUser_ReturnsUser(t *testing.T) {
 	repo.EXPECT().GetUser(gomock.Any(), int64(7)).Return(want, nil)
 
 	got, err := svc.GetUser(context.Background(), 7)
-	if err != nil {
-		t.Fatalf("get by id: %v", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("user = %+v, want %+v", got, want)
-	}
+	require.NoError(t, err, "get by id")
+	assert.Equal(t, want, got)
 }
 
 func TestService_GetUser_PropagatesErrors(t *testing.T) {
@@ -112,9 +97,7 @@ func TestService_GetUser_PropagatesErrors(t *testing.T) {
 			repo.EXPECT().GetUser(gomock.Any(), int64(7)).Return(nil, want)
 
 			_, err := svc.GetUser(context.Background(), 7)
-			if !errors.Is(err, want) {
-				t.Errorf("error = %v, want %v", err, want)
-			}
+			assert.ErrorIs(t, err, want)
 		})
 	}
 }

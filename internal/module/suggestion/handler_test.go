@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"rantau-go/internal/config"
@@ -75,9 +76,7 @@ func jsonRequest(method, target, body string) *http.Request {
 func tokenRequest(t *testing.T, method, target, body string, userID int64, role string) *http.Request {
 	t.Helper()
 	token, err := jwt.GenerateToken(testConfig, userID, role)
-	if err != nil {
-		t.Fatalf("sign token: %v", err)
-	}
+	require.NoError(t, err, "sign token")
 
 	req := jsonRequest(method, target, body)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -104,23 +103,14 @@ type errorBody struct {
 // assertError checks the status and the { code, message } error envelope.
 func assertError(t *testing.T, rec *httptest.ResponseRecorder, status int, code string) {
 	t.Helper()
-	if rec.Code != status {
-		t.Fatalf("status = %d, want %d; body: %s", rec.Code, status, rec.Body)
-	}
-	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
-		t.Errorf("Content-Type = %q, want application/json", ct)
-	}
+	require.Equal(t, status, rec.Code, "body: %s", rec.Body)
+	ct := rec.Header().Get("Content-Type")
+	assert.True(t, strings.HasPrefix(ct, "application/json"), "Content-Type = %q, want application/json", ct)
 
 	var body errorBody
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("error body is not JSON: %v; body: %s", err, rec.Body)
-	}
-	if body.Code != code {
-		t.Errorf("code = %q, want %q", body.Code, code)
-	}
-	if body.Message == "" {
-		t.Error("message is empty")
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body), "error body is not JSON; body: %s", rec.Body)
+	assert.Equal(t, code, body.Code)
+	assert.NotEmpty(t, body.Message, "message is empty")
 }
 
 // responseData returns the value under the success envelope's "data" key.
@@ -129,29 +119,15 @@ func responseData(t *testing.T, rec *httptest.ResponseRecorder) json.RawMessage 
 	var env struct {
 		Data json.RawMessage `json:"data"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
-		t.Fatalf("response is not JSON: %v; body: %s", err, rec.Body)
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env), "response is not JSON; body: %s", rec.Body)
 	return env.Data
 }
 
 // assertData checks the status and that the response data is the JSON document want.
 func assertData(t *testing.T, rec *httptest.ResponseRecorder, status int, want string) {
 	t.Helper()
-	if rec.Code != status {
-		t.Fatalf("status = %d, want %d; body: %s", rec.Code, status, rec.Body)
-	}
-
-	var got, expected any
-	if err := json.Unmarshal(responseData(t, rec), &got); err != nil {
-		t.Fatalf("data is not JSON: %v", err)
-	}
-	if err := json.Unmarshal([]byte(want), &expected); err != nil {
-		t.Fatalf("bad test fixture: %v", err)
-	}
-	if !reflect.DeepEqual(got, expected) {
-		t.Errorf("data = %s, want %s", responseData(t, rec), want)
-	}
+	require.Equal(t, status, rec.Code, "body: %s", rec.Body)
+	assert.JSONEq(t, want, string(responseData(t, rec)))
 }
 
 // linSuggestion is a stored, pending suggestion by Lin with most fields set.
@@ -309,9 +285,7 @@ func TestHandler_CreateSuggestion_WithoutToken(t *testing.T) {
 	// No expectations: an anonymous request must never reach the service.
 	svc := mock.NewMockService(gomock.NewController(t))
 	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/suggestions", minimalBody))
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401; body: %s", rec.Code, rec.Body)
-	}
+	require.Equal(t, http.StatusUnauthorized, rec.Code, "body: %s", rec.Body)
 }
 
 func TestHandler_CreateSuggestion_PassesSuggestionToService(t *testing.T) {
@@ -397,9 +371,7 @@ func TestHandler_CreateSuggestion_PassesSuggestionToService(t *testing.T) {
 			svc.EXPECT().Create(gomock.Any(), tc.want).Return(ptr(linSuggestion()), nil)
 
 			rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/suggestions", tc.body, 7))
-			if rec.Code != http.StatusCreated {
-				t.Fatalf("status = %d, want 201; body: %s", rec.Code, rec.Body)
-			}
+			require.Equal(t, http.StatusCreated, rec.Code, "body: %s", rec.Body)
 		})
 	}
 }
@@ -517,9 +489,7 @@ func TestHandler_GetSuggestions_PassesFilterToService(t *testing.T) {
 			svc.EXPECT().GetMany(gomock.Any(), tc.want).Return([]suggestion.Suggestion{}, nil)
 
 			rec := serve(t, newRouter(svc), adminRequest(t, http.MethodGet, tc.target, "", 99))
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
-			}
+			require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body)
 		})
 	}
 }
@@ -739,9 +709,7 @@ func TestHandler_ApproveSuggestion_PassesPlaceToService(t *testing.T) {
 			svc.EXPECT().Approve(gomock.Any(), int64(3), int64(99), tc.want).Return(ptr(linApproved()), nil)
 
 			rec := serve(t, newRouter(svc), adminRequest(t, http.MethodPost, "/suggestions/3/approve", tc.body, 99))
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
-			}
+			require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body)
 		})
 	}
 }
@@ -856,9 +824,7 @@ func TestHandler_RejectSuggestion_PassesReasonToService(t *testing.T) {
 			svc.EXPECT().Reject(gomock.Any(), int64(3), int64(99), tc.want).Return(ptr(linRejected()), nil)
 
 			rec := serve(t, newRouter(svc), adminRequest(t, http.MethodPost, "/suggestions/3/reject", tc.body, 99))
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
-			}
+			require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body)
 		})
 	}
 }
@@ -932,16 +898,14 @@ func TestHandler_ContextReachesService(t *testing.T) {
 					case <-got.Done():
 						return nil, got.Err()
 					case <-time.After(2 * time.Second):
-						t.Error("service was not given the request's context")
+						assert.Fail(t, "service was not given the request's context")
 						return nil, errors.New("timed out")
 					}
 				})
 
 			req := authRequest(t, http.MethodPost, "/suggestions", minimalBody, 7).WithContext(ctx)
 			rec := serve(t, newRouter(svc), req)
-			if rec.Code == http.StatusCreated {
-				t.Error("status 201 for a request whose context had ended")
-			}
+			assert.NotEqual(t, http.StatusCreated, rec.Code, "status 201 for a request whose context had ended")
 		})
 	}
 }
@@ -1017,9 +981,8 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 
 			rec := serve(t, newRouter(svc), tc.req(t))
 			assertError(t, rec, http.StatusInternalServerError, "INTERNAL_ERROR")
-			if strings.Contains(rec.Body.String(), "pq:") || strings.Contains(rec.Body.String(), "relation") {
-				t.Errorf("500 body exposes storage detail: %s", rec.Body)
-			}
+			assert.NotContains(t, rec.Body.String(), "pq:", "500 body exposes storage detail")
+			assert.NotContains(t, rec.Body.String(), "relation", "500 body exposes storage detail")
 		})
 	}
 }

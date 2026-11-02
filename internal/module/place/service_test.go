@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"rantau-go/internal/httpx"
@@ -87,9 +88,7 @@ func createPlace(t *testing.T, c *place.Category, p *place.Place) (*place.Place,
 // by their literal text, so 1.50 and 1.5 are different.
 func assertJSON(t *testing.T, got json.RawMessage, want string) {
 	t.Helper()
-	if !reflect.DeepEqual(decodeExact(t, got), decodeExact(t, json.RawMessage(want))) {
-		t.Errorf("got JSON %s, want %s", got, want)
-	}
+	assert.Equal(t, decodeExact(t, json.RawMessage(want)), decodeExact(t, got), "got JSON %s, want %s", got, want)
 }
 
 func decodeExact(t *testing.T, raw json.RawMessage) any {
@@ -97,9 +96,7 @@ func decodeExact(t *testing.T, raw json.RawMessage) any {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
 	var v any
-	if err := dec.Decode(&v); err != nil {
-		t.Fatalf("invalid JSON %s: %v", raw, err)
-	}
+	require.NoError(t, dec.Decode(&v), "invalid JSON %s", raw)
 	return v
 }
 
@@ -142,20 +139,12 @@ func TestService_Create_Name(t *testing.T) {
 				Name: tc.input, SubDistrictID: 1, CategoryID: 2,
 			})
 			if tc.wantErr {
-				if !errors.Is(err, place.ErrInvalidName) {
-					t.Fatalf("err = %v, want ErrInvalidName", err)
-				}
-				if stored != nil {
-					t.Fatalf("blank name reached storage as %q", stored.Name)
-				}
+				require.ErrorIs(t, err, place.ErrInvalidName)
+				require.Nil(t, stored, "blank name reached storage")
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if stored.Name != tc.wantName {
-				t.Errorf("stored name = %q, want %q", stored.Name, tc.wantName)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantName, stored.Name)
 		})
 	}
 }
@@ -164,9 +153,7 @@ func TestService_Create_NameTooLong(t *testing.T) {
 	_, err := createPlace(t, openCategory(), &place.Place{
 		Name: strings.Repeat("a", 151), SubDistrictID: 1, CategoryID: 2,
 	})
-	if !errors.Is(err, place.ErrNameTooLong) {
-		t.Fatalf("err = %v, want ErrNameTooLong", err)
-	}
+	require.ErrorIs(t, err, place.ErrNameTooLong)
 }
 
 func TestService_Create_Attributes(t *testing.T) {
@@ -228,17 +215,11 @@ func TestService_Create_Attributes(t *testing.T) {
 				Attributes: json.RawMessage(tc.attributes),
 			})
 			if tc.wantErr {
-				if !errors.Is(err, place.ErrInvalidAttributes) {
-					t.Fatalf("err = %v, want ErrInvalidAttributes", err)
-				}
-				if stored != nil {
-					t.Fatalf("rejected attributes reached storage as %s", stored.Attributes)
-				}
+				require.ErrorIs(t, err, place.ErrInvalidAttributes)
+				require.Nil(t, stored, "rejected attributes reached storage")
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 			assertJSON(t, stored.Attributes, tc.wantStored)
 		})
 	}
@@ -263,9 +244,7 @@ func TestService_Create_AttributesWithoutRequiredFields(t *testing.T) {
 				Name: "Kopi Senja", SubDistrictID: 1, CategoryID: 2,
 				Attributes: json.RawMessage(tc.attributes),
 			})
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 			assertJSON(t, stored.Attributes, tc.wantStored)
 		})
 	}
@@ -300,9 +279,7 @@ func TestService_Create_BlankOptionalText(t *testing.T) {
 				Name: "Kafe Senja", SubDistrictID: 1, CategoryID: 3,
 				Attributes: json.RawMessage(tc.attributes),
 			})
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 			assertJSON(t, stored.Attributes, tc.wantStored)
 		})
 	}
@@ -334,9 +311,7 @@ func TestService_Create_BlankAttributeRejected(t *testing.T) {
 				Name: "Warung Bu Ani", SubDistrictID: 1, CategoryID: 1,
 				Attributes: json.RawMessage(tc.attributes),
 			})
-			if !errors.Is(err, place.ErrInvalidAttributes) {
-				t.Fatalf("err = %v, want ErrInvalidAttributes", err)
-			}
+			require.ErrorIs(t, err, place.ErrInvalidAttributes)
 		})
 	}
 }
@@ -370,34 +345,24 @@ func TestService_Create_Location(t *testing.T) {
 			p := &place.Place{Name: "Kopi Senja", SubDistrictID: 1, CategoryID: 2}
 			if !tc.omit {
 				point, err := postgis.NewPoint(tc.lon, tc.lat)
-				if err != nil {
-					t.Fatalf("invalid test point: %v", err)
-				}
+				require.NoError(t, err, "invalid test point")
 				p.Location = point
 			}
 
 			stored, err := createPlace(t, openCategory(), p)
 			if tc.wantErr {
-				if err == nil {
-					t.Fatal("location outside Indonesia was accepted")
-				}
-				if stored != nil {
-					t.Fatal("location outside Indonesia reached storage")
-				}
+				require.Error(t, err, "location outside Indonesia was accepted")
+				require.Nil(t, stored, "location outside Indonesia reached storage")
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 			if tc.omit {
-				if stored.Location != nil {
-					t.Errorf("omitted location stored as %v", stored.Location)
-				}
+				assert.Nil(t, stored.Location, "omitted location was stored")
 				return
 			}
-			if stored.Location == nil || stored.Location.X() != tc.lon || stored.Location.Y() != tc.lat {
-				t.Errorf("stored location = %v, want [%v, %v]", stored.Location, tc.lon, tc.lat)
-			}
+			require.NotNil(t, stored.Location, "stored location is missing")
+			assert.Equal(t, tc.lon, stored.Location.X())
+			assert.Equal(t, tc.lat, stored.Location.Y())
 		})
 	}
 }
@@ -431,11 +396,10 @@ func TestService_Create_Storage(t *testing.T) {
 			got, err := place.NewService(repo, noImages(t)).Create(context.Background(), &place.Place{
 				Name: "Kopi Senja", SubDistrictID: 1, CategoryID: 2,
 			})
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
-			if tc.wantErr == nil && got.ID != 7 {
-				t.Errorf("returned ID = %d, want the stored place's ID 7", got.ID)
+			require.ErrorIs(t, err, tc.wantErr)
+			if tc.wantErr == nil {
+				require.NotNil(t, got, "stored place was not returned")
+				assert.Equal(t, int64(7), got.ID, "want the stored place's ID")
 			}
 		})
 	}
@@ -532,9 +496,7 @@ func TestService_Update_LookupFailure(t *testing.T) {
 
 			_, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7,
 				place.PlacePatch{Name: present("Kopi Baru")})
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
+			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
@@ -572,12 +534,8 @@ func TestService_Update_Fields(t *testing.T) {
 			tc.change(want)
 
 			stored, err := updatePlace(t, savedKopi(), 7, tc.patch)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if !reflect.DeepEqual(stored, want) {
-				t.Errorf("stored = %+v, want %+v", stored, want)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, want, stored)
 		})
 	}
 }
@@ -605,20 +563,12 @@ func TestService_Update_Name(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stored, err := updatePlace(t, savedKopi(), 7, place.PlacePatch{Name: present(tc.input)})
 			if tc.wantErr != nil {
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("err = %v, want %v", err, tc.wantErr)
-				}
-				if stored != nil {
-					t.Fatalf("invalid name reached storage as %q", stored.Name)
-				}
+				require.ErrorIs(t, err, tc.wantErr)
+				require.Nil(t, stored, "invalid name reached storage")
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if stored.Name != tc.wantName {
-				t.Errorf("stored name = %q, want %q", stored.Name, tc.wantName)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantName, stored.Name)
 		})
 	}
 }
@@ -641,20 +591,14 @@ func TestService_Update_Location(t *testing.T) {
 			stored, err := updatePlace(t, savedKopi(), 7,
 				place.PlacePatch{Location: present(*postgis.MustPoint(tc.lon, tc.lat))})
 			if tc.wantErr != nil {
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("err = %v, want %v", err, tc.wantErr)
-				}
-				if stored != nil {
-					t.Fatalf("location outside Indonesia reached storage")
-				}
+				require.ErrorIs(t, err, tc.wantErr)
+				require.Nil(t, stored, "location outside Indonesia reached storage")
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if stored.Location == nil || stored.Location.X() != tc.lon || stored.Location.Y() != tc.lat {
-				t.Errorf("stored location = %v, want [%v, %v]", stored.Location, tc.lon, tc.lat)
-			}
+			require.NoError(t, err)
+			require.NotNil(t, stored.Location, "stored location is missing")
+			assert.Equal(t, tc.lon, stored.Location.X())
+			assert.Equal(t, tc.lat, stored.Location.Y())
 		})
 	}
 }
@@ -678,17 +622,11 @@ func TestService_Update_Attributes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stored, err := updatePlace(t, savedKopi(), 7, place.PlacePatch{Attributes: tc.attrs})
 			if tc.wantErr != nil {
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("err = %v, want %v", err, tc.wantErr)
-				}
-				if stored != nil {
-					t.Fatalf("invalid attributes reached storage as %s", stored.Attributes)
-				}
+				require.ErrorIs(t, err, tc.wantErr)
+				require.Nil(t, stored, "invalid attributes reached storage")
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 			assertJSON(t, stored.Attributes, tc.wantAttrs)
 		})
 	}
@@ -727,9 +665,7 @@ func TestService_Update_BlankOptionalText(t *testing.T) {
 
 			_, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7,
 				place.PlacePatch{Attributes: present(json.RawMessage(tc.patch))})
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 			assertJSON(t, stored.Attributes, tc.wantAttrs)
 		})
 	}
@@ -751,9 +687,7 @@ func TestService_Update_BlankRequiredText(t *testing.T) {
 
 			_, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7,
 				place.PlacePatch{Attributes: present(json.RawMessage(patch))})
-			if !errors.Is(err, place.ErrInvalidAttributes) {
-				t.Fatalf("err = %v, want ErrInvalidAttributes", err)
-			}
+			require.ErrorIs(t, err, place.ErrInvalidAttributes)
 		})
 	}
 }
@@ -824,20 +758,12 @@ func TestService_Update_Category(t *testing.T) {
 
 			stored, err := updatePlace(t, existing, 7, tc.patch)
 			if tc.wantErr != nil {
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("err = %v, want %v", err, tc.wantErr)
-				}
-				if stored != nil {
-					t.Fatalf("rejected update reached storage")
-				}
+				require.ErrorIs(t, err, tc.wantErr)
+				require.Nil(t, stored, "rejected update reached storage")
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if stored.CategoryID != tc.wantCategoryID {
-				t.Errorf("stored category = %d, want %d", stored.CategoryID, tc.wantCategoryID)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantCategoryID, stored.CategoryID)
 			assertJSON(t, stored.Attributes, tc.wantAttrs)
 		})
 	}
@@ -865,11 +791,10 @@ func TestService_Update_Storage(t *testing.T) {
 
 			got, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7,
 				place.PlacePatch{Name: present("Kopi Baru")})
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
-			if tc.wantErr == nil && got.ID != 7 {
-				t.Errorf("returned ID = %d, want the stored place's ID 7", got.ID)
+			require.ErrorIs(t, err, tc.wantErr)
+			if tc.wantErr == nil {
+				require.NotNil(t, got, "stored place was not returned")
+				assert.Equal(t, int64(7), got.ID, "want the stored place's ID")
 			}
 		})
 	}
@@ -895,9 +820,7 @@ func TestService_Delete(t *testing.T) {
 			repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(tc.repoErr)
 
 			err := place.NewService(repo, noImages(t)).Delete(context.Background(), 7)
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
+			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
@@ -909,9 +832,7 @@ func TestService_Delete_Image(t *testing.T) {
 	repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(nil)
 
 	err := place.NewService(repo, noImages(t)).Delete(context.Background(), 7)
-	if err != nil {
-		t.Fatalf("err = %v, want nil: the place was deleted", err)
-	}
+	require.NoError(t, err, "the place was deleted")
 }
 
 // -----------------------------------------------------------------------------
@@ -966,12 +887,8 @@ func TestService_Create_OptionalText(t *testing.T) {
 				f.set(p, &input)
 
 				stored, err := createPlace(t, openCategory(), p)
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if got := f.get(stored); !reflect.DeepEqual(got, tc.want) {
-					t.Errorf("stored %s = %v, want %v", f.name, ptrString(got), ptrString(tc.want))
-				}
+				require.NoError(t, err)
+				assert.Equal(t, ptrString(tc.want), ptrString(f.get(stored)), "stored %s", f.name)
 			})
 		}
 	}
@@ -1001,11 +918,9 @@ func TestService_Create_OptionalTextLimits(t *testing.T) {
 				f.set(p, &input)
 
 				stored, err := createPlace(t, openCategory(), p)
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("err = %v, want %v", err, tc.wantErr)
-				}
-				if tc.wantErr != nil && stored != nil {
-					t.Fatal("refused place reached storage")
+				require.ErrorIs(t, err, tc.wantErr)
+				if tc.wantErr != nil {
+					require.Nil(t, stored, "refused place reached storage")
 				}
 			})
 		}
@@ -1048,18 +963,12 @@ func TestService_Update_OptionalText(t *testing.T) {
 				f.setPatch(&patch, tc.input)
 
 				_, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7, patch)
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("err = %v, want %v", err, tc.wantErr)
-				}
+				require.ErrorIs(t, err, tc.wantErr)
 				if tc.wantErr != nil {
-					if stored != nil {
-						t.Fatal("refused update reached storage")
-					}
+					require.Nil(t, stored, "refused update reached storage")
 					return
 				}
-				if got := f.get(stored); !reflect.DeepEqual(got, tc.want) {
-					t.Errorf("stored %s = %v, want %v", f.name, ptrString(got), ptrString(tc.want))
-				}
+				assert.Equal(t, ptrString(tc.want), ptrString(f.get(stored)), "stored %s", f.name)
 			})
 		}
 	}
@@ -1095,12 +1004,8 @@ func TestService_ImageUploadURL(t *testing.T) {
 	)
 
 	got, err := place.NewService(repo, images).ImageUploadURL(context.Background(), 7, "image/webp")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !reflect.DeepEqual(got, upload) {
-		t.Errorf("upload = %+v, want %+v", got, upload)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, upload, got)
 }
 
 func TestService_ImageUploadURL_LookupFailure(t *testing.T) {
@@ -1122,9 +1027,7 @@ func TestService_ImageUploadURL_LookupFailure(t *testing.T) {
 			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(nil, tc.getErr)
 
 			_, err := place.NewService(repo, noImages(t)).ImageUploadURL(context.Background(), 7, "image/webp")
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
+			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
@@ -1147,9 +1050,7 @@ func TestService_ImageUploadURL_PresignFailure(t *testing.T) {
 			images.EXPECT().PresignUpload(gomock.Any(), "places/7", "image/gif").Return(storage.Upload{}, tc.presignErr)
 
 			_, err := place.NewService(repo, images).ImageUploadURL(context.Background(), 7, "image/gif")
-			if !errors.Is(err, tc.presignErr) {
-				t.Fatalf("err = %v, want %v", err, tc.presignErr)
-			}
+			require.ErrorIs(t, err, tc.presignErr)
 		})
 	}
 }
@@ -1185,12 +1086,8 @@ func TestService_SetImage(t *testing.T) {
 			)
 
 			got, err := place.NewService(repo, images).SetImage(context.Background(), 7, uploadKey)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if got != updated {
-				t.Errorf("got %+v, want the stored place %+v", got, updated)
-			}
+			require.NoError(t, err)
+			assert.Same(t, updated, got, "want the stored place")
 		})
 	}
 }
@@ -1214,9 +1111,7 @@ func TestService_SetImage_LookupFailure(t *testing.T) {
 			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(nil, tc.getErr)
 
 			_, err := place.NewService(repo, noImages(t)).SetImage(context.Background(), 7, uploadKey)
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
+			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
@@ -1243,9 +1138,7 @@ func TestService_SetImage_PromoteFailure(t *testing.T) {
 			images.EXPECT().Promote(gomock.Any(), "places/7", uploadKey).Return("", tc.promoteErr)
 
 			_, err := place.NewService(repo, images).SetImage(context.Background(), 7, uploadKey)
-			if !errors.Is(err, tc.promoteErr) {
-				t.Fatalf("err = %v, want %v", err, tc.promoteErr)
-			}
+			require.ErrorIs(t, err, tc.promoteErr)
 		})
 	}
 }
@@ -1275,9 +1168,7 @@ func TestService_SetImage_StoreFailure(t *testing.T) {
 			)
 
 			_, err := place.NewService(repo, images).SetImage(context.Background(), 7, uploadKey)
-			if !errors.Is(err, tc.setErr) {
-				t.Fatalf("err = %v, want %v", err, tc.setErr)
-			}
+			require.ErrorIs(t, err, tc.setErr)
 		})
 	}
 }
@@ -1305,11 +1196,10 @@ func TestService_GetPlace(t *testing.T) {
 			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), tc.repoErr)
 
 			got, err := place.NewService(repo, noImages(t)).GetPlace(context.Background(), 7)
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
-			if tc.wantErr == nil && (got == nil || got.ID != 7) {
-				t.Errorf("got %+v, want the stored place 7", got)
+			require.ErrorIs(t, err, tc.wantErr)
+			if tc.wantErr == nil {
+				require.NotNil(t, got, "stored place was not returned")
+				assert.Equal(t, int64(7), got.ID)
 			}
 		})
 	}
@@ -1334,11 +1224,11 @@ func TestService_GetCategory(t *testing.T) {
 			repo.EXPECT().GetCategory(gomock.Any(), int64(1)).Return(warungCategory(), tc.repoErr)
 
 			got, err := place.NewService(repo, noImages(t)).GetCategory(context.Background(), 1)
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
-			if tc.wantErr == nil && (got == nil || got.ID != 1 || len(got.Fields) != 6) {
-				t.Errorf("got %+v, want Warung with its 6 fields", got)
+			require.ErrorIs(t, err, tc.wantErr)
+			if tc.wantErr == nil {
+				require.NotNil(t, got, "stored category was not returned")
+				assert.Equal(t, int64(1), got.ID)
+				assert.Len(t, got.Fields, 6, "Warung has 6 fields")
 			}
 		})
 	}

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"rantau-go/internal/config"
@@ -49,9 +51,7 @@ func issueSession(t *testing.T, svc auth.Service, userSvc *usermock.MockService)
 		Return(&users.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)
 
 	_, tokens, err := svc.Login(context.Background(), testEmail, testPassword)
-	if err != nil {
-		t.Fatalf("login: %v", err)
-	}
+	require.NoError(t, err, "login")
 	return tokens
 }
 
@@ -70,18 +70,12 @@ func TestService_Register_NormalizesAndStoresHashedUser(t *testing.T) {
 		})
 
 	u, err := svc.Register(context.Background(), &users.User{Name: "  Ana  ", Email: "  ANA@Example.COM "}, testPassword)
-	if err != nil {
-		t.Fatalf("register: %v", err)
-	}
-	if u.ID != 1 {
-		t.Errorf("ID = %d, want 1", u.ID)
-	}
-	if stored.Name != "Ana" || stored.Email != testEmail {
-		t.Errorf("stored name, email = %q, %q; want Ana, %s", stored.Name, stored.Email, testEmail)
-	}
-	if !strings.HasPrefix(stored.PasswordHash, "$argon2id$") {
-		t.Errorf("stored password is not an argon2id hash: %q", stored.PasswordHash)
-	}
+	require.NoError(t, err, "register")
+	assert.Equal(t, int64(1), u.ID)
+	assert.Equal(t, "Ana", stored.Name)
+	assert.Equal(t, testEmail, stored.Email)
+	assert.True(t, strings.HasPrefix(stored.PasswordHash, "$argon2id$"),
+		"stored password is not an argon2id hash: %q", stored.PasswordHash)
 }
 
 func TestService_Register_RejectsInvalidInput(t *testing.T) {
@@ -108,9 +102,7 @@ func TestService_Register_RejectsInvalidInput(t *testing.T) {
 			svc, _ := newService(t)
 
 			_, err := svc.Register(context.Background(), &users.User{Name: tc.userName, Email: tc.email}, tc.password)
-			if !errors.Is(err, tc.want) {
-				t.Errorf("error = %v, want %v", err, tc.want)
-			}
+			assert.ErrorIs(t, err, tc.want)
 		})
 	}
 }
@@ -120,9 +112,8 @@ func TestService_Register_AcceptsEightCharacterPassword(t *testing.T) {
 
 	userSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&users.User{ID: 1}, nil)
 
-	if _, err := svc.Register(context.Background(), &users.User{Name: "Ana", Email: testEmail}, "12345678"); err != nil {
-		t.Errorf("register: %v", err)
-	}
+	_, err := svc.Register(context.Background(), &users.User{Name: "Ana", Email: testEmail}, "12345678")
+	assert.NoError(t, err, "register")
 }
 
 func TestService_Register_AcceptsHundredCharacterName(t *testing.T) {
@@ -130,9 +121,8 @@ func TestService_Register_AcceptsHundredCharacterName(t *testing.T) {
 
 	userSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&users.User{ID: 1}, nil)
 
-	if _, err := svc.Register(context.Background(), &users.User{Name: strings.Repeat("a", 100), Email: testEmail}, "password1"); err != nil {
-		t.Errorf("register: %v", err)
-	}
+	_, err := svc.Register(context.Background(), &users.User{Name: strings.Repeat("a", 100), Email: testEmail}, "password1")
+	assert.NoError(t, err, "register")
 }
 
 func TestService_Register_DuplicateEmailIsReturned(t *testing.T) {
@@ -141,9 +131,7 @@ func TestService_Register_DuplicateEmailIsReturned(t *testing.T) {
 	userSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, users.ErrEmailTaken)
 
 	_, err := svc.Register(context.Background(), &users.User{Name: "Ana", Email: testEmail}, testPassword)
-	if !errors.Is(err, users.ErrEmailTaken) {
-		t.Errorf("error = %v, want %v", err, users.ErrEmailTaken)
-	}
+	assert.ErrorIs(t, err, users.ErrEmailTaken)
 }
 
 // -----------------------------------------------------------------------------
@@ -157,15 +145,10 @@ func TestService_Login_NormalizesEmailAndIssuesTokens(t *testing.T) {
 		Return(&users.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)
 
 	u, tokens, err := svc.Login(context.Background(), "  ANA@Example.com ", testPassword)
-	if err != nil {
-		t.Fatalf("login: %v", err)
-	}
-	if u.ID != 7 {
-		t.Errorf("user ID = %d, want 7", u.ID)
-	}
-	if tokens.AccessToken == "" || tokens.RefreshToken == "" {
-		t.Error("login must return both an access token and a refresh token")
-	}
+	require.NoError(t, err, "login")
+	assert.Equal(t, int64(7), u.ID)
+	assert.NotEmpty(t, tokens.AccessToken, "login must return an access token")
+	assert.NotEmpty(t, tokens.RefreshToken, "login must return a refresh token")
 }
 
 func TestService_Login_InvalidCredentials(t *testing.T) {
@@ -197,12 +180,9 @@ func TestService_Login_InvalidCredentials(t *testing.T) {
 			tc.setup(userSvc)
 
 			u, tokens, err := svc.Login(context.Background(), testEmail, tc.password)
-			if !errors.Is(err, auth.ErrInvalidCredentials) {
-				t.Errorf("error = %v, want %v", err, auth.ErrInvalidCredentials)
-			}
-			if u != nil || tokens != nil {
-				t.Error("failed login returned a user or tokens")
-			}
+			assert.ErrorIs(t, err, auth.ErrInvalidCredentials)
+			assert.Nil(t, u, "failed login returned a user")
+			assert.Nil(t, tokens, "failed login returned tokens")
 		})
 	}
 }
@@ -213,12 +193,8 @@ func TestService_Login_RepositoryFailureIsNotBadCredentials(t *testing.T) {
 	userSvc.EXPECT().GetByEmail(gomock.Any(), testEmail).Return(nil, errBoom)
 
 	_, _, err := svc.Login(context.Background(), testEmail, testPassword)
-	if !errors.Is(err, errBoom) {
-		t.Errorf("error = %v, want %v", err, errBoom)
-	}
-	if errors.Is(err, auth.ErrInvalidCredentials) {
-		t.Error("storage failure was reported as invalid credentials")
-	}
+	assert.ErrorIs(t, err, errBoom)
+	assert.NotErrorIs(t, err, auth.ErrInvalidCredentials, "storage failure was reported as invalid credentials")
 }
 
 func TestService_Login_CorruptHashIsNotBadCredentials(t *testing.T) {
@@ -228,12 +204,8 @@ func TestService_Login_CorruptHashIsNotBadCredentials(t *testing.T) {
 		Return(&users.User{ID: 7, Email: testEmail, PasswordHash: "corrupt"}, nil)
 
 	_, _, err := svc.Login(context.Background(), testEmail, testPassword)
-	if err == nil {
-		t.Fatal("login with a corrupt stored hash succeeded")
-	}
-	if errors.Is(err, auth.ErrInvalidCredentials) {
-		t.Error("corrupt stored hash was reported as invalid credentials")
-	}
+	require.Error(t, err, "login with a corrupt stored hash succeeded")
+	assert.NotErrorIs(t, err, auth.ErrInvalidCredentials, "corrupt stored hash was reported as invalid credentials")
 }
 
 // -----------------------------------------------------------------------------
@@ -248,32 +220,21 @@ func TestService_Refresh_ConsumesOldSessionAndIssuesNewTokens(t *testing.T) {
 		Return(&users.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)
 
 	u, second, err := svc.Refresh(context.Background(), first.RefreshToken)
-	if err != nil {
-		t.Fatalf("refresh: %v", err)
-	}
-	if u.ID != 7 {
-		t.Errorf("user ID = %d, want 7", u.ID)
-	}
-	if second.AccessToken == "" {
-		t.Error("refresh did not return an access token")
-	}
-	if second.RefreshToken == first.RefreshToken {
-		t.Error("refresh token was not rotated")
-	}
+	require.NoError(t, err, "refresh")
+	assert.Equal(t, int64(7), u.ID)
+	assert.NotEmpty(t, second.AccessToken, "refresh did not return an access token")
+	assert.NotEqual(t, first.RefreshToken, second.RefreshToken, "refresh token was not rotated")
 
 	// The old refresh token was consumed, so reusing it must fail.
-	if _, _, err := svc.Refresh(context.Background(), first.RefreshToken); !errors.Is(err, auth.ErrInvalidRefreshToken) {
-		t.Errorf("reused refresh token: error = %v, want %v", err, auth.ErrInvalidRefreshToken)
-	}
+	_, _, err = svc.Refresh(context.Background(), first.RefreshToken)
+	assert.ErrorIs(t, err, auth.ErrInvalidRefreshToken, "reused refresh token")
 }
 
 func TestService_Refresh_UnknownTokenIsRejected(t *testing.T) {
 	svc, _ := newService(t)
 
 	_, _, err := svc.Refresh(context.Background(), "never-issued")
-	if !errors.Is(err, auth.ErrInvalidRefreshToken) {
-		t.Errorf("error = %v, want %v", err, auth.ErrInvalidRefreshToken)
-	}
+	assert.ErrorIs(t, err, auth.ErrInvalidRefreshToken)
 }
 
 func TestService_Refresh_DeletedUserIsRejected(t *testing.T) {
@@ -284,9 +245,7 @@ func TestService_Refresh_DeletedUserIsRejected(t *testing.T) {
 
 	// No session may be issued for a missing user.
 	_, _, err := svc.Refresh(context.Background(), first.RefreshToken)
-	if !errors.Is(err, auth.ErrInvalidRefreshToken) {
-		t.Errorf("error = %v, want %v", err, auth.ErrInvalidRefreshToken)
-	}
+	assert.ErrorIs(t, err, auth.ErrInvalidRefreshToken)
 }
 
 func TestService_Refresh_RepositoryFailureIsReturned(t *testing.T) {
@@ -296,12 +255,8 @@ func TestService_Refresh_RepositoryFailureIsReturned(t *testing.T) {
 	userSvc.EXPECT().GetUser(gomock.Any(), int64(7)).Return(nil, errBoom)
 
 	_, _, err := svc.Refresh(context.Background(), first.RefreshToken)
-	if !errors.Is(err, errBoom) {
-		t.Errorf("error = %v, want %v", err, errBoom)
-	}
-	if errors.Is(err, auth.ErrInvalidRefreshToken) {
-		t.Error("storage failure was reported as an invalid refresh token")
-	}
+	assert.ErrorIs(t, err, errBoom)
+	assert.NotErrorIs(t, err, auth.ErrInvalidRefreshToken, "storage failure was reported as an invalid refresh token")
 }
 
 // -----------------------------------------------------------------------------
@@ -312,11 +267,8 @@ func TestService_Logout_RevokesSession(t *testing.T) {
 	svc, userSvc := newService(t)
 	first := issueSession(t, svc, userSvc)
 
-	if err := svc.Logout(context.Background(), first.RefreshToken); err != nil {
-		t.Fatalf("logout: %v", err)
-	}
+	require.NoError(t, svc.Logout(context.Background(), first.RefreshToken), "logout")
 
-	if _, _, err := svc.Refresh(context.Background(), first.RefreshToken); !errors.Is(err, auth.ErrInvalidRefreshToken) {
-		t.Errorf("refresh after logout: error = %v, want %v", err, auth.ErrInvalidRefreshToken)
-	}
+	_, _, err := svc.Refresh(context.Background(), first.RefreshToken)
+	assert.ErrorIs(t, err, auth.ErrInvalidRefreshToken, "refresh after logout")
 }

@@ -3,10 +3,11 @@ package review_test
 import (
 	"context"
 	"errors"
-	"slices"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"rantau-go/internal/module/review"
@@ -57,23 +58,13 @@ func TestService_Create_Rating(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stored, err := createReview(t, &review.Review{PlaceID: 3, UserID: 7, Rating: tc.rating})
 			if tc.wantErr {
-				if !errors.Is(err, review.ErrInvalidRating) {
-					t.Fatalf("err = %v, want ErrInvalidRating", err)
-				}
-				if stored != nil {
-					t.Fatalf("rating %d reached storage", stored.Rating)
-				}
+				require.ErrorIs(t, err, review.ErrInvalidRating)
+				require.Nil(t, stored, "rating %d reached storage", tc.rating)
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if stored == nil {
-				t.Fatal("accepted review was not stored")
-			}
-			if stored.Rating != tc.rating {
-				t.Errorf("stored rating = %d, want %d", stored.Rating, tc.rating)
-			}
+			require.NoError(t, err)
+			require.NotNil(t, stored, "accepted review was not stored")
+			assert.Equal(t, tc.rating, stored.Rating)
 		})
 	}
 }
@@ -101,20 +92,15 @@ func TestService_Create_Comment(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			stored, err := createReview(t, &review.Review{PlaceID: 3, UserID: 7, Rating: 4, Comment: tc.comment})
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+			require.NoError(t, err)
+			require.NotNil(t, stored, "accepted review was not stored")
+
+			if tc.want == nil {
+				assert.Nil(t, stored.Comment)
+				return
 			}
-			if stored == nil {
-				t.Fatal("accepted review was not stored")
-			}
-			switch {
-			case tc.want == nil && stored.Comment != nil:
-				t.Errorf("stored comment = %q, want none", *stored.Comment)
-			case tc.want != nil && stored.Comment == nil:
-				t.Errorf("stored no comment, want %q", *tc.want)
-			case tc.want != nil && *stored.Comment != *tc.want:
-				t.Errorf("stored comment = %q, want %q", *stored.Comment, *tc.want)
-			}
+			require.NotNil(t, stored.Comment, "stored no comment, want %q", *tc.want)
+			assert.Equal(t, *tc.want, *stored.Comment)
 		})
 	}
 }
@@ -131,27 +117,18 @@ func TestService_Create_CommentTooLong(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			stored, err := createReview(t, &review.Review{PlaceID: 3, UserID: 7, Rating: 4, Comment: ptr(tc.comment)})
-			if !errors.Is(err, review.ErrCommentTooLong) {
-				t.Fatalf("err = %v, want ErrCommentTooLong", err)
-			}
-			if stored != nil {
-				t.Fatal("too long comment reached storage")
-			}
+			require.ErrorIs(t, err, review.ErrCommentTooLong)
+			require.Nil(t, stored, "too long comment reached storage")
 		})
 	}
 }
 
 func TestService_Create_KeepsPlaceAndAuthor(t *testing.T) {
 	stored, err := createReview(t, &review.Review{PlaceID: 3, UserID: 7, Rating: 4})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if stored == nil {
-		t.Fatal("accepted review was not stored")
-	}
-	if stored.PlaceID != 3 || stored.UserID != 7 {
-		t.Errorf("stored place %d by user %d, want place 3 by user 7", stored.PlaceID, stored.UserID)
-	}
+	require.NoError(t, err)
+	require.NotNil(t, stored, "accepted review was not stored")
+	assert.Equal(t, int64(3), stored.PlaceID)
+	assert.Equal(t, int64(7), stored.UserID)
 }
 
 func TestService_Create_Storage(t *testing.T) {
@@ -176,11 +153,10 @@ func TestService_Create_Storage(t *testing.T) {
 			got, err := review.NewService(repo).Create(context.Background(), &review.Review{
 				PlaceID: 3, UserID: 7, Rating: 4,
 			})
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
-			if tc.wantErr == nil && (got == nil || got.ID != 9) {
-				t.Errorf("returned %+v, want the stored review with ID 9", got)
+			require.ErrorIs(t, err, tc.wantErr)
+			if tc.wantErr == nil {
+				require.NotNil(t, got, "stored review was not returned")
+				assert.Equal(t, int64(9), got.ID)
 			}
 		})
 	}
@@ -211,9 +187,7 @@ func TestService_GetByPlace(t *testing.T) {
 			repo.EXPECT().GetByPlace(gomock.Any(), int64(3)).Return(tc.reviews, tc.repoErr)
 
 			got, err := review.NewService(repo).GetByPlace(context.Background(), 3)
-			if !errors.Is(err, tc.repoErr) {
-				t.Fatalf("err = %v, want %v", err, tc.repoErr)
-			}
+			require.ErrorIs(t, err, tc.repoErr)
 			if tc.repoErr != nil {
 				return
 			}
@@ -222,9 +196,7 @@ func TestService_GetByPlace(t *testing.T) {
 			for _, r := range got {
 				ids = append(ids, r.ID)
 			}
-			if !slices.Equal(ids, tc.wantIDs) {
-				t.Errorf("review IDs = %v, want %v", ids, tc.wantIDs)
-			}
+			assert.Equal(t, tc.wantIDs, ids)
 		})
 	}
 }

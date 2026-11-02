@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"rantau-go/internal/httpx"
@@ -93,23 +94,13 @@ func TestService_Create_Name(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stored, err := createSubDistrict(t, &subdistrict.SubDistrict{Name: tc.input, Slug: "menteng"})
 			if tc.wantErr != nil {
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("err = %v, want %v", err, tc.wantErr)
-				}
-				if stored != nil {
-					t.Fatalf("invalid name reached storage as %q", stored.Name)
-				}
+				require.ErrorIs(t, err, tc.wantErr)
+				require.Nil(t, stored, "invalid name reached storage")
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if stored == nil {
-				t.Fatal("accepted sub-district was not stored")
-			}
-			if stored.Name != tc.wantName {
-				t.Errorf("stored name = %q, want %q", stored.Name, tc.wantName)
-			}
+			require.NoError(t, err)
+			require.NotNil(t, stored, "accepted sub-district was not stored")
+			assert.Equal(t, tc.wantName, stored.Name)
 		})
 	}
 }
@@ -132,23 +123,13 @@ func TestService_Create_Slug(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stored, err := createSubDistrict(t, &subdistrict.SubDistrict{Name: "Menteng", Slug: tc.input})
 			if tc.wantErr != nil {
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("err = %v, want %v", err, tc.wantErr)
-				}
-				if stored != nil {
-					t.Fatalf("invalid slug reached storage as %q", stored.Slug)
-				}
+				require.ErrorIs(t, err, tc.wantErr)
+				require.Nil(t, stored, "invalid slug reached storage")
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if stored == nil {
-				t.Fatal("accepted sub-district was not stored")
-			}
-			if stored.Slug != tc.wantSlug {
-				t.Errorf("stored slug = %q, want %q", stored.Slug, tc.wantSlug)
-			}
+			require.NoError(t, err)
+			require.NotNil(t, stored, "accepted sub-district was not stored")
+			assert.Equal(t, tc.wantSlug, stored.Slug)
 		})
 	}
 }
@@ -175,20 +156,12 @@ func TestService_Create_OptionalFieldLimits(t *testing.T) {
 
 			stored, err := createSubDistrict(t, &in)
 			if tc.wantErr != nil {
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("err = %v, want %v", err, tc.wantErr)
-				}
-				if stored != nil {
-					t.Fatal("rejected sub-district reached storage")
-				}
+				require.ErrorIs(t, err, tc.wantErr)
+				require.Nil(t, stored, "rejected sub-district reached storage")
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if stored == nil {
-				t.Fatal("accepted sub-district was not stored")
-			}
+			require.NoError(t, err)
+			require.NotNil(t, stored, "accepted sub-district was not stored")
 		})
 	}
 }
@@ -228,12 +201,8 @@ func TestService_OptionalText(t *testing.T) {
 				f.set(sd, &input)
 
 				stored, err := createSubDistrict(t, sd)
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if got := f.get(stored); !reflect.DeepEqual(got, tc.want) {
-					t.Errorf("stored %s = %v, want %v", f.name, ptrString(got), ptrString(tc.want))
-				}
+				require.NoError(t, err)
+				assert.Equal(t, ptrString(tc.want), ptrString(f.get(stored)), "stored %s", f.name)
 			})
 
 			t.Run("update/"+f.name+"/"+tc.name, func(t *testing.T) {
@@ -241,12 +210,8 @@ func TestService_OptionalText(t *testing.T) {
 				f.setPatch(&patch, tc.input)
 
 				stored, err := updateSubDistrict(t, savedMenteng(), 7, patch)
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if got := f.get(stored); !reflect.DeepEqual(got, tc.want) {
-					t.Errorf("stored %s = %v, want %v", f.name, ptrString(got), ptrString(tc.want))
-				}
+				require.NoError(t, err)
+				assert.Equal(t, ptrString(tc.want), ptrString(f.get(stored)), "stored %s", f.name)
 			})
 		}
 	}
@@ -279,15 +244,9 @@ func TestService_Create_StoresFieldsAsSent(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			in := tc.in
 			stored, err := createSubDistrict(t, &in)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if stored == nil {
-				t.Fatal("accepted sub-district was not stored")
-			}
-			if !reflect.DeepEqual(*stored, tc.in) {
-				t.Errorf("stored = %+v, want %+v", *stored, tc.in)
-			}
+			require.NoError(t, err)
+			require.NotNil(t, stored, "accepted sub-district was not stored")
+			assert.Equal(t, tc.in, *stored)
 		})
 	}
 }
@@ -313,11 +272,10 @@ func TestService_Create_Storage(t *testing.T) {
 			got, err := subdistrict.NewService(repo, noImages(t)).Create(context.Background(), &subdistrict.SubDistrict{
 				Name: "Menteng", Slug: "menteng",
 			})
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
-			if tc.wantErr == nil && (got == nil || got.ID != 7) {
-				t.Errorf("returned sub-district = %+v, want the stored sub-district with ID 7", got)
+			require.ErrorIs(t, err, tc.wantErr)
+			if tc.wantErr == nil {
+				require.NotNil(t, got, "stored sub-district was not returned")
+				assert.Equal(t, int64(7), got.ID)
 			}
 		})
 	}
@@ -386,11 +344,10 @@ func TestService_GetSubDistrict(t *testing.T) {
 			repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(found, tc.repoErr)
 
 			got, err := subdistrict.NewService(repo, noImages(t)).GetSubDistrict(context.Background(), 7)
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
-			if tc.wantErr == nil && (got == nil || got.ID != 7) {
-				t.Errorf("returned sub-district = %+v, want the sub-district with ID 7", got)
+			require.ErrorIs(t, err, tc.wantErr)
+			if tc.wantErr == nil {
+				require.NotNil(t, got, "sub-district was not returned")
+				assert.Equal(t, int64(7), got.ID)
 			}
 		})
 	}
@@ -416,9 +373,7 @@ func TestService_Update_LookupFailure(t *testing.T) {
 
 			_, err := subdistrict.NewService(repo, noImages(t)).Update(context.Background(), 7,
 				subdistrict.SubDistrictPatch{Name: present("Kemang")})
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
+			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
@@ -459,12 +414,8 @@ func TestService_Update_Fields(t *testing.T) {
 			tc.change(want)
 
 			stored, err := updateSubDistrict(t, savedMenteng(), 7, tc.patch)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if !reflect.DeepEqual(stored, want) {
-				t.Errorf("stored = %+v, want %+v", stored, want)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, want, stored)
 		})
 	}
 }
@@ -488,12 +439,8 @@ func TestService_Update_Rejected(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			stored, err := updateSubDistrict(t, savedMenteng(), 7, tc.patch)
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
-			if stored != nil {
-				t.Fatalf("rejected update reached storage as %+v", *stored)
-			}
+			require.ErrorIs(t, err, tc.wantErr)
+			require.Nil(t, stored, "rejected update reached storage")
 		})
 	}
 }
@@ -520,11 +467,10 @@ func TestService_Update_Storage(t *testing.T) {
 
 			got, err := subdistrict.NewService(repo, noImages(t)).Update(context.Background(), 7,
 				subdistrict.SubDistrictPatch{Name: present("Menteng Atas")})
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
-			if tc.wantErr == nil && (got == nil || got.ID != 7) {
-				t.Errorf("returned sub-district = %+v, want the stored sub-district with ID 7", got)
+			require.ErrorIs(t, err, tc.wantErr)
+			if tc.wantErr == nil {
+				require.NotNil(t, got, "stored sub-district was not returned")
+				assert.Equal(t, int64(7), got.ID)
 			}
 		})
 	}
@@ -551,9 +497,7 @@ func TestService_Delete(t *testing.T) {
 			repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(tc.repoErr)
 
 			err := subdistrict.NewService(repo, noImages(t)).Delete(context.Background(), 7)
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
+			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
@@ -565,9 +509,7 @@ func TestService_Delete_QueuesImages(t *testing.T) {
 	repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(nil)
 
 	err := subdistrict.NewService(repo, images).Delete(context.Background(), 7)
-	if err != nil {
-		t.Fatalf("err = %v, want nil: the sub-district was deleted", err)
-	}
+	require.NoError(t, err, "the sub-district was deleted")
 }
 
 // -----------------------------------------------------------------------------
@@ -624,12 +566,8 @@ func TestService_ImageUploadURL(t *testing.T) {
 			)
 
 			got, err := subdistrict.NewService(repo, images).ImageUploadURL(context.Background(), 7, sc.slot, "image/webp")
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if !reflect.DeepEqual(got, upload) {
-				t.Errorf("upload = %+v, want %+v", got, upload)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, upload, got)
 		})
 	}
 }
@@ -653,9 +591,7 @@ func TestService_ImageUploadURL_LookupFailure(t *testing.T) {
 			repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(nil, tc.getErr)
 
 			_, err := subdistrict.NewService(repo, noImages(t)).ImageUploadURL(context.Background(), 7, subdistrict.SlotImage, "image/webp")
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
+			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
@@ -678,9 +614,7 @@ func TestService_ImageUploadURL_PresignFailure(t *testing.T) {
 			images.EXPECT().PresignUpload(gomock.Any(), "subdistricts/7/image", "image/gif").Return(storage.Upload{}, tc.presignErr)
 
 			_, err := subdistrict.NewService(repo, images).ImageUploadURL(context.Background(), 7, subdistrict.SlotImage, "image/gif")
-			if !errors.Is(err, tc.presignErr) {
-				t.Fatalf("err = %v, want %v", err, tc.presignErr)
-			}
+			require.ErrorIs(t, err, tc.presignErr)
 		})
 	}
 }
@@ -714,12 +648,8 @@ func TestService_SetImage(t *testing.T) {
 				)
 
 				got, err := subdistrict.NewService(repo, images).SetImage(context.Background(), 7, sc.slot, sc.uploadKey)
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if got != updated {
-					t.Errorf("got %+v, want the stored sub-district %+v", got, updated)
-				}
+				require.NoError(t, err)
+				assert.Same(t, updated, got, "want the stored sub-district")
 			})
 		}
 	}
@@ -744,9 +674,7 @@ func TestService_SetImage_LookupFailure(t *testing.T) {
 			repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(nil, tc.getErr)
 
 			_, err := subdistrict.NewService(repo, noImages(t)).SetImage(context.Background(), 7, subdistrict.SlotImage, slotCases[0].uploadKey)
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
+			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
@@ -774,9 +702,7 @@ func TestService_SetImage_PromoteFailure(t *testing.T) {
 			images.EXPECT().Promote(gomock.Any(), sc.prefix, sc.uploadKey).Return("", tc.promoteErr)
 
 			_, err := subdistrict.NewService(repo, images).SetImage(context.Background(), 7, sc.slot, sc.uploadKey)
-			if !errors.Is(err, tc.promoteErr) {
-				t.Fatalf("err = %v, want %v", err, tc.promoteErr)
-			}
+			require.ErrorIs(t, err, tc.promoteErr)
 		})
 	}
 }
@@ -807,9 +733,7 @@ func TestService_SetImage_StoreFailure(t *testing.T) {
 			)
 
 			_, err := subdistrict.NewService(repo, images).SetImage(context.Background(), 7, sc.slot, sc.uploadKey)
-			if !errors.Is(err, tc.setErr) {
-				t.Fatalf("err = %v, want %v", err, tc.setErr)
-			}
+			require.ErrorIs(t, err, tc.setErr)
 		})
 	}
 }

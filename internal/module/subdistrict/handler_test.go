@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"rantau-go/internal/module/subdistrict"
@@ -70,23 +71,14 @@ type errorBody struct {
 // assertError checks the status and the { code, message } error envelope.
 func assertError(t *testing.T, rec *httptest.ResponseRecorder, status int, code string) {
 	t.Helper()
-	if rec.Code != status {
-		t.Fatalf("status = %d, want %d; body: %s", rec.Code, status, rec.Body)
-	}
-	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
-		t.Errorf("Content-Type = %q, want application/json", ct)
-	}
+	require.Equal(t, status, rec.Code, "body: %s", rec.Body)
+	ct := rec.Header().Get("Content-Type")
+	assert.True(t, strings.HasPrefix(ct, "application/json"), "Content-Type = %q, want application/json", ct)
 
 	var body errorBody
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("error body is not JSON: %v; body: %s", err, rec.Body)
-	}
-	if body.Code != code {
-		t.Errorf("code = %q, want %q", body.Code, code)
-	}
-	if body.Message == "" {
-		t.Error("message is empty")
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body), "error body is not JSON; body: %s", rec.Body)
+	assert.Equal(t, code, body.Code)
+	assert.NotEmpty(t, body.Message, "message is empty")
 }
 
 // responseData returns the value under the success envelope's "data" key.
@@ -95,29 +87,15 @@ func responseData(t *testing.T, rec *httptest.ResponseRecorder) json.RawMessage 
 	var env struct {
 		Data json.RawMessage `json:"data"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
-		t.Fatalf("response is not JSON: %v; body: %s", err, rec.Body)
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env), "response is not JSON; body: %s", rec.Body)
 	return env.Data
 }
 
 // assertData checks the status and that the response data is the JSON document want.
 func assertData(t *testing.T, rec *httptest.ResponseRecorder, status int, want string) {
 	t.Helper()
-	if rec.Code != status {
-		t.Fatalf("status = %d, want %d; body: %s", rec.Code, status, rec.Body)
-	}
-
-	var got, expected any
-	if err := json.Unmarshal(responseData(t, rec), &got); err != nil {
-		t.Fatalf("data is not JSON: %v", err)
-	}
-	if err := json.Unmarshal([]byte(want), &expected); err != nil {
-		t.Fatalf("bad test fixture: %v", err)
-	}
-	if !reflect.DeepEqual(got, expected) {
-		t.Errorf("data = %s, want %s", responseData(t, rec), want)
-	}
+	require.Equal(t, status, rec.Code, "body: %s", rec.Body)
+	assert.JSONEq(t, want, string(responseData(t, rec)))
 }
 
 // -----------------------------------------------------------------------------
@@ -308,18 +286,14 @@ func TestHandler_CreateSubDistrict_Success(t *testing.T) {
 		`"id":77,"created_at":"yesterday"}`
 	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/subdistricts", body))
 
-	if got == nil {
-		t.Fatal("service was not called")
-	}
+	require.NotNil(t, got, "service was not called")
 	want := subdistrict.SubDistrict{
 		Name:                   "Menteng",
 		Slug:                   "menteng",
 		FloodHistory:           ptr("Banjir 2020"),
 		EstimatedDailySpending: ptr(1500000.5),
 	}
-	if !reflect.DeepEqual(*got, want) {
-		t.Errorf("service got %+v, want %+v; a client-sent id or unknown key reached the service", *got, want)
-	}
+	assert.Equal(t, want, *got, "a client-sent id or unknown key reached the service")
 
 	assertData(t, rec, http.StatusCreated, `{
 		"id": 42,
@@ -366,16 +340,14 @@ func TestHandler_CreateSubDistrict_ContextReachesService(t *testing.T) {
 					case <-got.Done():
 						return nil, got.Err()
 					case <-time.After(2 * time.Second):
-						t.Error("service was not given the request's context")
+						assert.Fail(t, "service was not given the request's context")
 						return nil, errors.New("timed out")
 					}
 				})
 
 			req := jsonRequest(http.MethodPost, "/subdistricts", `{"name":"Menteng","slug":"menteng"}`).WithContext(ctx)
 			rec := serve(t, newRouter(svc), req)
-			if rec.Code == http.StatusCreated {
-				t.Error("status 201 for a request whose context had ended")
-			}
+			assert.NotEqual(t, http.StatusCreated, rec.Code, "status 201 for a request whose context had ended")
 		})
 	}
 }
@@ -448,9 +420,8 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 
 			rec := serve(t, newRouter(svc), jsonRequest(tc.method, tc.target, tc.body))
 			assertError(t, rec, http.StatusInternalServerError, "INTERNAL_ERROR")
-			if strings.Contains(rec.Body.String(), "pq:") || strings.Contains(rec.Body.String(), "relation") {
-				t.Errorf("500 body exposes storage detail: %s", rec.Body)
-			}
+			assert.NotContains(t, rec.Body.String(), "pq:", "500 body exposes storage detail")
+			assert.NotContains(t, rec.Body.String(), "relation", "500 body exposes storage detail")
 		})
 	}
 }
@@ -525,9 +496,7 @@ func TestHandler_PatchSubDistrict_PassesPatchToService(t *testing.T) {
 			svc.EXPECT().Update(gomock.Any(), tc.wantID, tc.want).Return(&subdistrict.SubDistrict{ID: tc.wantID}, nil)
 
 			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, tc.target, tc.body))
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body)
-			}
+			require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body)
 		})
 	}
 }
@@ -636,12 +605,8 @@ func TestHandler_DeleteSubDistrict_Success(t *testing.T) {
 	svc.EXPECT().Delete(gomock.Any(), int64(4)).Return(nil)
 
 	rec := serve(t, newRouter(svc), jsonRequest(http.MethodDelete, "/subdistricts/4", ""))
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want 204; body: %s", rec.Code, rec.Body)
-	}
-	if rec.Body.Len() != 0 {
-		t.Errorf("body = %q, want empty", rec.Body)
-	}
+	require.Equal(t, http.StatusNoContent, rec.Code, "body: %s", rec.Body)
+	assert.Empty(t, rec.Body.String(), "body should be empty")
 }
 
 // -----------------------------------------------------------------------------

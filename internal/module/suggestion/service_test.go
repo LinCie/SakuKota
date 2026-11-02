@@ -5,12 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"reflect"
-	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"rantau-go/internal/module/place"
@@ -41,9 +41,7 @@ func newMocks(t *testing.T) (*mock.MockRepository, *mock.MockPlaceService) {
 // by their literal text, so 1.50 and 1.5 are different.
 func assertJSON(t *testing.T, got json.RawMessage, want string) {
 	t.Helper()
-	if !reflect.DeepEqual(decodeExact(t, got), decodeExact(t, json.RawMessage(want))) {
-		t.Errorf("got JSON %s, want %s", got, want)
-	}
+	assert.Equal(t, decodeExact(t, json.RawMessage(want)), decodeExact(t, got), "got JSON %s, want %s", got, want)
 }
 
 func decodeExact(t *testing.T, raw json.RawMessage) any {
@@ -51,9 +49,7 @@ func decodeExact(t *testing.T, raw json.RawMessage) any {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
 	var v any
-	if err := dec.Decode(&v); err != nil {
-		t.Fatalf("invalid JSON %s: %v", raw, err)
-	}
+	require.NoError(t, dec.Decode(&v), "invalid JSON %s", raw)
 	return v
 }
 
@@ -92,9 +88,7 @@ func createSuggestion(t *testing.T, s *suggestion.Suggestion) (*suggestion.Sugge
 // -----------------------------------------------------------------------------
 
 func TestService_Create_MaxPendingPerUser(t *testing.T) {
-	if suggestion.MaxPendingPerUser != 5 {
-		t.Errorf("MaxPendingPerUser = %d, want 5", suggestion.MaxPendingPerUser)
-	}
+	assert.Equal(t, 5, suggestion.MaxPendingPerUser)
 }
 
 // -----------------------------------------------------------------------------
@@ -130,20 +124,12 @@ func TestService_Create_Name(t *testing.T) {
 
 			stored, err := createSuggestion(t, s)
 			if tc.wantErr != nil {
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("err = %v, want %v", err, tc.wantErr)
-				}
-				if stored != nil {
-					t.Fatalf("invalid name reached storage as %q", stored.Name)
-				}
+				require.ErrorIs(t, err, tc.wantErr)
+				require.Nil(t, stored, "invalid name reached storage")
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if stored.Name != tc.wantName {
-				t.Errorf("stored name = %q, want %q", stored.Name, tc.wantName)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantName, stored.Name)
 		})
 	}
 }
@@ -177,28 +163,20 @@ func TestService_Create_Location(t *testing.T) {
 			s.Location = nil
 			if !tc.omit {
 				point, err := postgis.NewPoint(tc.lon, tc.lat)
-				if err != nil {
-					t.Fatalf("invalid test point: %v", err)
-				}
+				require.NoError(t, err, "invalid test point")
 				s.Location = point
 			}
 
 			stored, err := createSuggestion(t, s)
 			if tc.wantErr {
-				if !errors.Is(err, suggestion.ErrInvalidLocation) {
-					t.Fatalf("err = %v, want ErrInvalidLocation", err)
-				}
-				if stored != nil {
-					t.Fatal("missing or outside location reached storage")
-				}
+				require.ErrorIs(t, err, suggestion.ErrInvalidLocation)
+				require.Nil(t, stored, "missing or outside location reached storage")
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if stored.Location == nil || stored.Location.X() != tc.lon || stored.Location.Y() != tc.lat {
-				t.Errorf("stored location = %v, want [%v, %v]", stored.Location, tc.lon, tc.lat)
-			}
+			require.NoError(t, err)
+			require.NotNil(t, stored.Location, "stored location is missing")
+			assert.Equal(t, tc.lon, stored.Location.X())
+			assert.Equal(t, tc.lat, stored.Location.Y())
 		})
 	}
 }
@@ -246,18 +224,14 @@ func TestService_Create_OptionalText(t *testing.T) {
 				f.set(s, tc.input)
 
 				stored, err := createSuggestion(t, s)
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
+				require.NoError(t, err)
 				got := f.get(stored)
-				switch {
-				case tc.want == nil && got != nil:
-					t.Errorf("stored %s = %q, want none", f.name, *got)
-				case tc.want != nil && got == nil:
-					t.Errorf("stored no %s, want %q", f.name, *tc.want)
-				case tc.want != nil && *got != *tc.want:
-					t.Errorf("stored %s = %q, want %q", f.name, *got, *tc.want)
+				if tc.want == nil {
+					assert.Nil(t, got, "stored %s, want none", f.name)
+					return
 				}
+				require.NotNil(t, got, "stored no %s, want %q", f.name, *tc.want)
+				assert.Equal(t, *tc.want, *got, "stored %s", f.name)
 			})
 		}
 	}
@@ -297,11 +271,9 @@ func TestService_Create_OptionalTextLimits(t *testing.T) {
 				f.set(s, &input)
 
 				stored, err := createSuggestion(t, s)
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("err = %v, want %v", err, tc.wantErr)
-				}
-				if tc.wantErr != nil && stored != nil {
-					t.Fatal("refused suggestion reached storage")
+				require.ErrorIs(t, err, tc.wantErr)
+				if tc.wantErr != nil {
+					require.Nil(t, stored, "refused suggestion reached storage")
 				}
 			})
 		}
@@ -329,11 +301,9 @@ func TestService_Create_NoteLength(t *testing.T) {
 			s.Note = ptr(tc.note)
 
 			stored, err := createSuggestion(t, s)
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
-			if tc.wantErr != nil && stored != nil {
-				t.Fatal("too long note reached storage")
+			require.ErrorIs(t, err, tc.wantErr)
+			if tc.wantErr != nil {
+				require.Nil(t, stored, "too long note reached storage")
 			}
 		})
 	}
@@ -366,17 +336,11 @@ func TestService_Create_Attributes(t *testing.T) {
 
 			stored, err := createSuggestion(t, s)
 			if tc.wantErr {
-				if !errors.Is(err, suggestion.ErrInvalidAttributes) {
-					t.Fatalf("err = %v, want ErrInvalidAttributes", err)
-				}
-				if stored != nil {
-					t.Fatalf("rejected attributes reached storage as %s", stored.Attributes)
-				}
+				require.ErrorIs(t, err, suggestion.ErrInvalidAttributes)
+				require.Nil(t, stored, "rejected attributes reached storage")
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, err)
 			assertJSON(t, stored.Attributes, tc.wantStored)
 		})
 	}
@@ -392,27 +356,20 @@ func TestService_Create_StartsPending(t *testing.T) {
 	s.ReviewedAt = ptr(time.Date(2026, 10, 4, 12, 30, 0, 0, time.UTC))
 
 	stored, err := createSuggestion(t, s)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if stored.Status != suggestion.StatusPending {
-		t.Errorf("stored status = %q, want %q", stored.Status, suggestion.StatusPending)
-	}
-	if stored.RejectionReason != nil || stored.PlaceID != nil || stored.ReviewedBy != nil || stored.ReviewedAt != nil {
-		t.Errorf("review fields reached storage: reason %v, place %v, reviewer %v, reviewed at %v",
-			stored.RejectionReason, stored.PlaceID, stored.ReviewedBy, stored.ReviewedAt)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, suggestion.StatusPending, stored.Status)
+	assert.Nil(t, stored.RejectionReason, "review fields reached storage")
+	assert.Nil(t, stored.PlaceID, "review fields reached storage")
+	assert.Nil(t, stored.ReviewedBy, "review fields reached storage")
+	assert.Nil(t, stored.ReviewedAt, "review fields reached storage")
 }
 
 func TestService_Create_KeepsAuthorAndCatalog(t *testing.T) {
 	stored, err := createSuggestion(t, submitted())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if stored.UserID != 7 || stored.SubDistrictID != 1 || stored.CategoryID != 2 {
-		t.Errorf("stored user %d, sub-district %d, category %d; want user 7, sub-district 1, category 2",
-			stored.UserID, stored.SubDistrictID, stored.CategoryID)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, int64(7), stored.UserID)
+	assert.Equal(t, int64(1), stored.SubDistrictID)
+	assert.Equal(t, int64(2), stored.CategoryID)
 }
 
 func TestService_Create_Storage(t *testing.T) {
@@ -436,11 +393,10 @@ func TestService_Create_Storage(t *testing.T) {
 			repo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&suggestion.Suggestion{ID: 3}, tc.storeErr)
 
 			got, err := suggestion.NewService(repo, noPlaces(t)).Create(context.Background(), submitted())
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
-			if tc.wantErr == nil && (got == nil || got.ID != 3) {
-				t.Errorf("returned %+v, want the stored suggestion with ID 3", got)
+			require.ErrorIs(t, err, tc.wantErr)
+			if tc.wantErr == nil {
+				require.NotNil(t, got, "stored suggestion was not returned")
+				assert.Equal(t, int64(3), got.ID)
 			}
 		})
 	}
@@ -468,11 +424,10 @@ func TestService_GetSuggestion(t *testing.T) {
 			repo.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(pending(), tc.repoErr)
 
 			got, err := suggestion.NewService(repo, noPlaces(t)).GetSuggestion(context.Background(), 3)
-			if !errors.Is(err, tc.repoErr) {
-				t.Fatalf("err = %v, want %v", err, tc.repoErr)
-			}
-			if tc.repoErr == nil && (got == nil || got.ID != 3) {
-				t.Errorf("got %+v, want the stored suggestion 3", got)
+			require.ErrorIs(t, err, tc.repoErr)
+			if tc.repoErr == nil {
+				require.NotNil(t, got, "stored suggestion was not returned")
+				assert.Equal(t, int64(3), got.ID)
 			}
 		})
 	}
@@ -498,9 +453,7 @@ func TestService_GetByUser(t *testing.T) {
 			repo.EXPECT().GetByUser(gomock.Any(), int64(7)).Return(tc.suggestions, tc.repoErr)
 
 			got, err := suggestion.NewService(repo, noPlaces(t)).GetByUser(context.Background(), 7)
-			if !errors.Is(err, tc.repoErr) {
-				t.Fatalf("err = %v, want %v", err, tc.repoErr)
-			}
+			require.ErrorIs(t, err, tc.repoErr)
 			if tc.repoErr != nil {
 				return
 			}
@@ -509,9 +462,7 @@ func TestService_GetByUser(t *testing.T) {
 			for _, s := range got {
 				ids = append(ids, s.ID)
 			}
-			if !slices.Equal(ids, tc.wantIDs) {
-				t.Errorf("suggestion IDs = %v, want %v", ids, tc.wantIDs)
-			}
+			assert.Equal(t, tc.wantIDs, ids)
 		})
 	}
 }
@@ -540,9 +491,7 @@ func TestService_GetMany_Status(t *testing.T) {
 			}
 
 			_, err := suggestion.NewService(repo, noPlaces(t)).GetMany(context.Background(), filter)
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
+			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
@@ -555,9 +504,7 @@ func TestService_GetMany_Storage(t *testing.T) {
 
 	_, err := suggestion.NewService(repo, noPlaces(t)).GetMany(context.Background(),
 		suggestion.SuggestionFilter{Status: suggestion.StatusPending})
-	if !errors.Is(err, boom) {
-		t.Fatalf("err = %v, want %v", err, boom)
-	}
+	require.ErrorIs(t, err, boom)
 }
 
 // -----------------------------------------------------------------------------
@@ -620,12 +567,8 @@ func TestService_Approve(t *testing.T) {
 	)
 
 	got, err := suggestion.NewService(repo, places).Approve(context.Background(), 3, adminID, finalPlace())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != want {
-		t.Errorf("got %+v, want the approved suggestion %+v", got, want)
-	}
+	require.NoError(t, err)
+	assert.Same(t, want, got, "want the approved suggestion")
 }
 
 func TestService_Approve_PlaceWithoutLocation(t *testing.T) {
@@ -636,9 +579,7 @@ func TestService_Approve_PlaceWithoutLocation(t *testing.T) {
 	p.Location = nil
 
 	_, err := suggestion.NewService(repo, places).Approve(context.Background(), 3, adminID, p)
-	if !errors.Is(err, suggestion.ErrInvalidLocation) {
-		t.Fatalf("err = %v, want ErrInvalidLocation", err)
-	}
+	require.ErrorIs(t, err, suggestion.ErrInvalidLocation)
 }
 
 func TestService_Approve_LookupFailure(t *testing.T) {
@@ -659,9 +600,7 @@ func TestService_Approve_LookupFailure(t *testing.T) {
 			repo.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(nil, tc.getErr)
 
 			_, err := suggestion.NewService(repo, places).Approve(context.Background(), 3, adminID, finalPlace())
-			if !errors.Is(err, tc.getErr) {
-				t.Fatalf("err = %v, want %v", err, tc.getErr)
-			}
+			require.ErrorIs(t, err, tc.getErr)
 		})
 	}
 }
@@ -682,9 +621,7 @@ func TestService_Approve_AlreadyReviewed(t *testing.T) {
 			repo.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(tc.existing, nil)
 
 			_, err := suggestion.NewService(repo, places).Approve(context.Background(), 3, adminID, finalPlace())
-			if !errors.Is(err, suggestion.ErrAlreadyReviewed) {
-				t.Fatalf("err = %v, want ErrAlreadyReviewed", err)
-			}
+			require.ErrorIs(t, err, suggestion.ErrAlreadyReviewed)
 		})
 	}
 }
@@ -713,9 +650,7 @@ func TestService_Approve_PlaceRejected(t *testing.T) {
 			)
 
 			_, err := suggestion.NewService(repo, places).Approve(context.Background(), 3, adminID, finalPlace())
-			if !errors.Is(err, tc.createErr) {
-				t.Fatalf("err = %v, want %v", err, tc.createErr)
-			}
+			require.ErrorIs(t, err, tc.createErr)
 		})
 	}
 }
@@ -747,9 +682,7 @@ func TestService_Approve_MarkFailure(t *testing.T) {
 			)
 
 			_, err := suggestion.NewService(repo, places).Approve(context.Background(), 3, adminID, finalPlace())
-			if !errors.Is(err, tc.markErr) {
-				t.Fatalf("err = %v, want %v", err, tc.markErr)
-			}
+			require.ErrorIs(t, err, tc.markErr)
 		})
 	}
 }
@@ -789,20 +722,14 @@ func TestService_Reject_Reason(t *testing.T) {
 				})
 
 			_, err := suggestion.NewService(repo, noPlaces(t)).Reject(context.Background(), 3, adminID, tc.reason)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+			require.NoError(t, err)
+			require.True(t, called, "rejection was not stored")
+			if tc.want == nil {
+				assert.Nil(t, stored, "stored reason, want none")
+				return
 			}
-			if !called {
-				t.Fatal("rejection was not stored")
-			}
-			switch {
-			case tc.want == nil && stored != nil:
-				t.Errorf("stored reason = %q, want none", *stored)
-			case tc.want != nil && stored == nil:
-				t.Errorf("stored no reason, want %q", *tc.want)
-			case tc.want != nil && *stored != *tc.want:
-				t.Errorf("stored reason = %q, want %q", *stored, *tc.want)
-			}
+			require.NotNil(t, stored, "stored no reason, want %q", *tc.want)
+			assert.Equal(t, *tc.want, *stored)
 		})
 	}
 }
@@ -822,9 +749,7 @@ func TestService_Reject_ReasonTooLong(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 
 			_, err := suggestion.NewService(repo, noPlaces(t)).Reject(context.Background(), 3, adminID, ptr(tc.reason))
-			if !errors.Is(err, suggestion.ErrReasonTooLong) {
-				t.Fatalf("err = %v, want ErrReasonTooLong", err)
-			}
+			require.ErrorIs(t, err, suggestion.ErrReasonTooLong)
 		})
 	}
 }
@@ -850,11 +775,9 @@ func TestService_Reject_Storage(t *testing.T) {
 			repo.EXPECT().Reject(gomock.Any(), int64(3), adminID, gomock.Any()).Return(want, tc.rejectErr)
 
 			got, err := suggestion.NewService(repo, noPlaces(t)).Reject(context.Background(), 3, adminID, ptr("Sudah tutup"))
-			if !errors.Is(err, tc.rejectErr) {
-				t.Fatalf("err = %v, want %v", err, tc.rejectErr)
-			}
-			if tc.rejectErr == nil && got != want {
-				t.Errorf("got %+v, want the rejected suggestion %+v", got, want)
+			require.ErrorIs(t, err, tc.rejectErr)
+			if tc.rejectErr == nil {
+				assert.Same(t, want, got, "want the rejected suggestion")
 			}
 		})
 	}

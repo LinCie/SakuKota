@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"rantau-go/internal/module/storagecleanup"
@@ -38,9 +39,7 @@ func TestService_Run_DeletesDueObjects(t *testing.T) {
 		repo.EXPECT().Remove(gomock.Any(), keyB).Return(nil),
 	)
 
-	if err := storagecleanup.NewService(repo, objects).Run(context.Background()); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, storagecleanup.NewService(repo, objects).Run(context.Background()))
 }
 
 func TestService_Run_EmptyQueue(t *testing.T) {
@@ -48,9 +47,7 @@ func TestService_Run_EmptyQueue(t *testing.T) {
 	repo, objects := newMocks(t)
 	repo.EXPECT().ClaimDue(gomock.Any(), 100).Return(nil, nil)
 
-	if err := storagecleanup.NewService(repo, objects).Run(context.Background()); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, storagecleanup.NewService(repo, objects).Run(context.Background()))
 }
 
 func TestService_Run_ClaimFailure(t *testing.T) {
@@ -59,9 +56,8 @@ func TestService_Run_ClaimFailure(t *testing.T) {
 	repo, objects := newMocks(t)
 	repo.EXPECT().ClaimDue(gomock.Any(), 100).Return(nil, boom)
 
-	if err := storagecleanup.NewService(repo, objects).Run(context.Background()); !errors.Is(err, boom) {
-		t.Fatalf("err = %v, want %v", err, boom)
-	}
+	err := storagecleanup.NewService(repo, objects).Run(context.Background())
+	require.ErrorIs(t, err, boom)
 }
 
 func TestService_Run_DeleteFailureIsRescheduled(t *testing.T) {
@@ -92,9 +88,7 @@ func TestService_Run_DeleteFailureIsRescheduled(t *testing.T) {
 			)
 
 			// A failed delete is retried later, so it does not fail the run.
-			if err := storagecleanup.NewService(repo, objects).Run(context.Background()); err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(t, storagecleanup.NewService(repo, objects).Run(context.Background()))
 		})
 	}
 }
@@ -112,9 +106,7 @@ func TestService_Run_ContinuesAfterDeleteFailure(t *testing.T) {
 		repo.EXPECT().Remove(gomock.Any(), keyB).Return(nil),
 	)
 
-	if err := storagecleanup.NewService(repo, objects).Run(context.Background()); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, storagecleanup.NewService(repo, objects).Run(context.Background()))
 }
 
 func TestService_Run_QueueUpdateFailure(t *testing.T) {
@@ -148,9 +140,8 @@ func TestService_Run_QueueUpdateFailure(t *testing.T) {
 			}, nil)
 			tc.expect(repo, objects)
 
-			if err := storagecleanup.NewService(repo, objects).Run(context.Background()); !errors.Is(err, boom) {
-				t.Fatalf("err = %v, want %v", err, boom)
-			}
+			err := storagecleanup.NewService(repo, objects).Run(context.Background())
+			require.ErrorIs(t, err, boom)
 		})
 	}
 }

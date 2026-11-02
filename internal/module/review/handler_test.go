@@ -6,12 +6,13 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"rantau-go/internal/config"
@@ -58,9 +59,7 @@ func jsonRequest(method, target, body string) *http.Request {
 func authRequest(t *testing.T, method, target, body string, userID int64) *http.Request {
 	t.Helper()
 	token, err := jwt.GenerateToken(testConfig, userID, "user")
-	if err != nil {
-		t.Fatalf("sign token: %v", err)
-	}
+	require.NoError(t, err, "sign token")
 
 	req := jsonRequest(method, target, body)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -75,23 +74,14 @@ type errorBody struct {
 // assertError checks the status and the { code, message } error envelope.
 func assertError(t *testing.T, rec *httptest.ResponseRecorder, status int, code string) {
 	t.Helper()
-	if rec.Code != status {
-		t.Fatalf("status = %d, want %d; body: %s", rec.Code, status, rec.Body)
-	}
-	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
-		t.Errorf("Content-Type = %q, want application/json", ct)
-	}
+	require.Equal(t, status, rec.Code, "body: %s", rec.Body)
+	ct := rec.Header().Get("Content-Type")
+	assert.True(t, strings.HasPrefix(ct, "application/json"), "Content-Type = %q, want application/json", ct)
 
 	var body errorBody
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("error body is not JSON: %v; body: %s", err, rec.Body)
-	}
-	if body.Code != code {
-		t.Errorf("code = %q, want %q", body.Code, code)
-	}
-	if body.Message == "" {
-		t.Error("message is empty")
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body), "error body is not JSON; body: %s", rec.Body)
+	assert.Equal(t, code, body.Code)
+	assert.NotEmpty(t, body.Message, "message is empty")
 }
 
 // responseData returns the value under the success envelope's "data" key.
@@ -100,29 +90,15 @@ func responseData(t *testing.T, rec *httptest.ResponseRecorder) json.RawMessage 
 	var env struct {
 		Data json.RawMessage `json:"data"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
-		t.Fatalf("response is not JSON: %v; body: %s", err, rec.Body)
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env), "response is not JSON; body: %s", rec.Body)
 	return env.Data
 }
 
 // assertData checks the status and that the response data is the JSON document want.
 func assertData(t *testing.T, rec *httptest.ResponseRecorder, status int, want string) {
 	t.Helper()
-	if rec.Code != status {
-		t.Fatalf("status = %d, want %d; body: %s", rec.Code, status, rec.Body)
-	}
-
-	var got, expected any
-	if err := json.Unmarshal(responseData(t, rec), &got); err != nil {
-		t.Fatalf("data is not JSON: %v", err)
-	}
-	if err := json.Unmarshal([]byte(want), &expected); err != nil {
-		t.Fatalf("bad test fixture: %v", err)
-	}
-	if !reflect.DeepEqual(got, expected) {
-		t.Errorf("data = %s, want %s", responseData(t, rec), want)
-	}
+	require.Equal(t, status, rec.Code, "body: %s", rec.Body)
+	assert.JSONEq(t, want, string(responseData(t, rec)))
 }
 
 // linReview is a stored review with every field set.
@@ -334,9 +310,7 @@ func TestHandler_CreateReview_PassesReviewToService(t *testing.T) {
 			svc.EXPECT().Create(gomock.Any(), tc.want).Return(ptr(linReview()), nil)
 
 			rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/places/3/reviews", tc.body, 7))
-			if rec.Code != http.StatusCreated {
-				t.Fatalf("status = %d, want 201; body: %s", rec.Code, rec.Body)
-			}
+			require.Equal(t, http.StatusCreated, rec.Code, "body: %s", rec.Body)
 		})
 	}
 }
@@ -386,17 +360,13 @@ func TestHandler_CreateReview_ContextReachesService(t *testing.T) {
 	svc := mock.NewMockService(gomock.NewController(t))
 	svc.EXPECT().Create(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(got context.Context, _ *review.Review) (*review.Review, error) {
-			if got.Err() == nil {
-				t.Error("service was not given the request's context")
-			}
+			assert.Error(t, got.Err(), "service was not given the request's context")
 			return nil, got.Err()
 		})
 
 	req := authRequest(t, http.MethodPost, "/places/3/reviews", `{"rating":4}`, 7).WithContext(ctx)
 	rec := serve(t, newRouter(svc), req)
-	if rec.Code == http.StatusCreated {
-		t.Error("status 201 for a request whose context had ended")
-	}
+	assert.NotEqual(t, http.StatusCreated, rec.Code, "status 201 for a request whose context had ended")
 }
 
 func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
@@ -434,12 +404,9 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			tc.fail(svc)
 
 			rec := serve(t, newRouter(svc), authRequest(t, tc.method, tc.target, tc.body, 7))
-			if rec.Code != http.StatusInternalServerError {
-				t.Fatalf("status = %d, want 500; body: %s", rec.Code, rec.Body)
-			}
-			if strings.Contains(rec.Body.String(), "pq:") || strings.Contains(rec.Body.String(), "relation") {
-				t.Errorf("500 body exposes storage detail: %s", rec.Body)
-			}
+			require.Equal(t, http.StatusInternalServerError, rec.Code, "body: %s", rec.Body)
+			assert.NotContains(t, rec.Body.String(), "pq:", "500 body exposes storage detail")
+			assert.NotContains(t, rec.Body.String(), "relation", "500 body exposes storage detail")
 		})
 	}
 }

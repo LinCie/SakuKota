@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"rantau-go/internal/storage"
@@ -58,19 +60,13 @@ func TestImages_PresignUpload(t *testing.T) {
 				})
 
 			got, err := images.PresignUpload(context.Background(), "places/7", tc.contentType)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if !tc.wantKey.MatchString(presignedKey) {
-				t.Errorf("presigned key = %q, want a match for %s", presignedKey, tc.wantKey)
-			}
-			if got.Key != presignedKey {
-				t.Errorf("returned key = %q, want the presigned key %q", got.Key, presignedKey)
-			}
-			if got.URL != presigned.URL || got.Method != presigned.Method ||
-				got.Headers["Content-Type"] != tc.contentType || !got.ExpiresAt.Equal(presigned.ExpiresAt) {
-				t.Errorf("returned upload = %+v, want the presigned request %+v", got.PresignedUpload, presigned)
-			}
+			require.NoError(t, err)
+			assert.Regexp(t, tc.wantKey, presignedKey)
+			assert.Equal(t, presignedKey, got.Key, "returned key should be the presigned key")
+			assert.Equal(t, presigned.URL, got.URL)
+			assert.Equal(t, presigned.Method, got.Method)
+			assert.Equal(t, tc.contentType, got.Headers["Content-Type"])
+			assert.True(t, got.ExpiresAt.Equal(presigned.ExpiresAt), "ExpiresAt = %v, want %v", got.ExpiresAt, presigned.ExpiresAt)
 		})
 	}
 }
@@ -86,17 +82,12 @@ func TestImages_PresignUpload_KeysAreUnique(t *testing.T) {
 		Return(storage.PresignedUpload{}, nil).Times(2)
 
 	first, err := images.PresignUpload(context.Background(), "places/7", "image/png")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 	second, err := images.PresignUpload(context.Background(), "places/7", "image/png")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
-	if first.Key == "" || first.Key == second.Key {
-		t.Errorf("keys = %q and %q, want two different keys", first.Key, second.Key)
-	}
+	assert.NotEmpty(t, first.Key)
+	assert.NotEqual(t, first.Key, second.Key)
 }
 
 func TestImages_PresignUpload_RejectedType(t *testing.T) {
@@ -118,9 +109,7 @@ func TestImages_PresignUpload_RejectedType(t *testing.T) {
 			images, _ := newImages(t)
 
 			_, err := images.PresignUpload(context.Background(), "places/7", tc.contentType)
-			if !errors.Is(err, storage.ErrInvalidImageType) {
-				t.Fatalf("err = %v, want ErrInvalidImageType", err)
-			}
+			require.ErrorIs(t, err, storage.ErrInvalidImageType)
 		})
 	}
 }
@@ -132,9 +121,7 @@ func TestImages_PresignUpload_StoreFailure(t *testing.T) {
 		Return(storage.PresignedUpload{}, boom)
 
 	_, err := images.PresignUpload(context.Background(), "places/7", "image/png")
-	if !errors.Is(err, boom) {
-		t.Fatalf("err = %v, want %v", err, boom)
-	}
+	require.ErrorIs(t, err, boom)
 }
 
 // -----------------------------------------------------------------------------
@@ -163,12 +150,8 @@ func TestImages_Promote(t *testing.T) {
 			)
 
 			got, err := images.Promote(context.Background(), "places/7", uploadKey)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if got != promotedKey {
-				t.Errorf("key = %q, want %q", got, promotedKey)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, promotedKey, got)
 		})
 	}
 }
@@ -198,9 +181,7 @@ func TestImages_Promote_InvalidKey(t *testing.T) {
 			images, _ := newImages(t)
 
 			_, err := images.Promote(context.Background(), "places/7", tc.key)
-			if !errors.Is(err, storage.ErrInvalidImageKey) {
-				t.Fatalf("err = %v, want ErrInvalidImageKey", err)
-			}
+			require.ErrorIs(t, err, storage.ErrInvalidImageKey)
 		})
 	}
 }
@@ -210,9 +191,7 @@ func TestImages_Promote_NotUploaded(t *testing.T) {
 	store.EXPECT().Stat(gomock.Any(), uploadKey).Return(storage.ObjectInfo{}, storage.ErrObjectNotFound)
 
 	_, err := images.Promote(context.Background(), "places/7", uploadKey)
-	if !errors.Is(err, storage.ErrImageNotUploaded) {
-		t.Fatalf("err = %v, want ErrImageNotUploaded", err)
-	}
+	require.ErrorIs(t, err, storage.ErrImageNotUploaded)
 }
 
 func TestImages_Promote_RejectedImage(t *testing.T) {
@@ -233,9 +212,7 @@ func TestImages_Promote_RejectedImage(t *testing.T) {
 			store.EXPECT().Delete(gomock.Any(), uploadKey).Return(nil)
 
 			_, err := images.Promote(context.Background(), "places/7", uploadKey)
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
+			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
@@ -247,9 +224,7 @@ func TestImages_Promote_RejectedImageCleanupFailure(t *testing.T) {
 	store.EXPECT().Delete(gomock.Any(), uploadKey).Return(errors.New("connection reset"))
 
 	_, err := images.Promote(context.Background(), "places/7", uploadKey)
-	if !errors.Is(err, storage.ErrImageTooLarge) {
-		t.Fatalf("err = %v, want ErrImageTooLarge", err)
-	}
+	require.ErrorIs(t, err, storage.ErrImageTooLarge)
 }
 
 func TestImages_Promote_StoreFailure(t *testing.T) {
@@ -260,9 +235,7 @@ func TestImages_Promote_StoreFailure(t *testing.T) {
 		store.EXPECT().Stat(gomock.Any(), uploadKey).Return(storage.ObjectInfo{}, boom)
 
 		_, err := images.Promote(context.Background(), "places/7", uploadKey)
-		if !errors.Is(err, boom) {
-			t.Fatalf("err = %v, want %v", err, boom)
-		}
+		require.ErrorIs(t, err, boom)
 	})
 
 	t.Run("copy", func(t *testing.T) {
@@ -272,9 +245,7 @@ func TestImages_Promote_StoreFailure(t *testing.T) {
 		store.EXPECT().Copy(gomock.Any(), uploadKey, promotedKey).Return(boom)
 
 		_, err := images.Promote(context.Background(), "places/7", uploadKey)
-		if !errors.Is(err, boom) {
-			t.Fatalf("err = %v, want %v", err, boom)
-		}
+		require.ErrorIs(t, err, boom)
 	})
 }
 
@@ -300,9 +271,7 @@ func TestImages_Delete(t *testing.T) {
 			store.EXPECT().Delete(gomock.Any(), promotedKey).Return(tc.storeErr)
 
 			err := images.Delete(context.Background(), promotedKey)
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("err = %v, want %v", err, tc.wantErr)
-			}
+			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
@@ -322,9 +291,7 @@ func TestImages_PublicURL(t *testing.T) {
 			store := mock.NewMockObjectStore(gomock.NewController(t))
 
 			got := storage.NewImages(store, tc.baseURL).PublicURL(promotedKey)
-			if got != tc.want {
-				t.Errorf("PublicURL = %q, want %q", got, tc.want)
-			}
+			assert.Equal(t, tc.want, got)
 		})
 	}
 }
