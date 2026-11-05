@@ -9,7 +9,6 @@ import {
   createPlace,
   deletePlace,
   getCategories,
-  getCategory,
   getPlace,
   getPlaces,
   requestPlaceImageUpload,
@@ -36,7 +35,6 @@ export const placeKeys = {
 export const categoryKeys = {
   all: ["categories"] as const,
   lists: () => [...categoryKeys.all, "list"] as const,
-  detail: (id: number) => [...categoryKeys.all, "detail", id] as const,
 };
 
 // -----------------------------------------------------------------------------
@@ -65,13 +63,6 @@ export function categoriesQuery() {
   });
 }
 
-export function categoryQuery(id: number) {
-  return queryOptions({
-    queryKey: categoryKeys.detail(id),
-    queryFn: () => getCategory(id),
-  });
-}
-
 export function usePlaces(params: GetPlacesParams = {}) {
   return useSuspenseQuery(placesQuery(params));
 }
@@ -82,10 +73,6 @@ export function usePlace(id: number) {
 
 export function useCategories() {
   return useSuspenseQuery(categoriesQuery());
-}
-
-export function useCategory(id: number) {
-  return useSuspenseQuery(categoryQuery(id));
 }
 
 // -----------------------------------------------------------------------------

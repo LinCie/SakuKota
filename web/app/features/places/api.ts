@@ -28,8 +28,6 @@ export type PlaceErrorCode =
 export type GetPlaceErrorCode =
   CommonApiErrorCode | "INVALID_PLACE_ID" | "PLACE_NOT_FOUND";
 export type CategoryErrorCode = CommonApiErrorCode;
-export type GetCategoryErrorCode =
-  CommonApiErrorCode | "INVALID_CATEGORY_ID" | "CATEGORY_NOT_FOUND";
 export type UpdatePlaceErrorCode =
   | AdminWriteErrorCode
   | "INVALID_PLACE_ID"
@@ -110,14 +108,6 @@ export async function getPlace(id: number): Promise<Place> {
 export async function getCategories(): Promise<CategoryDetail[]> {
   return unwrap(
     await apiGet<CategoryDetail[], CategoryErrorCode>("places/categories"),
-  );
-}
-
-export async function getCategory(id: number): Promise<CategoryDetail> {
-  return unwrap(
-    await apiGet<CategoryDetail, GetCategoryErrorCode>(
-      `places/categories/${id}`,
-    ),
   );
 }
 

@@ -16,12 +16,8 @@ import { Route as UsulanRouteImport } from './routes/usulan'
 import { Route as AuthDaftarRouteImport } from './routes/_auth/daftar'
 import { Route as AuthMasukRouteImport } from './routes/_auth/masuk'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
-import { Route as AdminCategoriesIndexRouteImport } from './routes/admin/categories/index'
-import { Route as AdminCategoriesCategoryIdRouteImport } from './routes/admin/categories/$categoryId'
 import { Route as AdminPlacesIndexRouteImport } from './routes/admin/places/index'
 import { Route as AdminPlacesPlaceIdRouteImport } from './routes/admin/places/$placeId'
-import { Route as AdminSubdistrictsIndexRouteImport } from './routes/admin/subdistricts/index'
-import { Route as AdminSubdistrictsSubDistrictIdRouteImport } from './routes/admin/subdistricts/$subDistrictId'
 import { Route as AdminSuggestionsIndexRouteImport } from './routes/admin/suggestions/index'
 import { Route as AdminSuggestionsSuggestionIdRouteImport } from './routes/admin/suggestions/$suggestionId'
 
@@ -59,17 +55,6 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminCategoriesIndexRoute = AdminCategoriesIndexRouteImport.update({
-  id: '/categories/',
-  path: '/categories/',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminCategoriesCategoryIdRoute =
-  AdminCategoriesCategoryIdRouteImport.update({
-    id: '/categories/$categoryId',
-    path: '/categories/$categoryId',
-    getParentRoute: () => AdminRoute,
-  } as any)
 const AdminPlacesIndexRoute = AdminPlacesIndexRouteImport.update({
   id: '/places/',
   path: '/places/',
@@ -80,17 +65,6 @@ const AdminPlacesPlaceIdRoute = AdminPlacesPlaceIdRouteImport.update({
   path: '/places/$placeId',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminSubdistrictsIndexRoute = AdminSubdistrictsIndexRouteImport.update({
-  id: '/subdistricts/',
-  path: '/subdistricts/',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminSubdistrictsSubDistrictIdRoute =
-  AdminSubdistrictsSubDistrictIdRouteImport.update({
-    id: '/subdistricts/$subDistrictId',
-    path: '/subdistricts/$subDistrictId',
-    getParentRoute: () => AdminRoute,
-  } as any)
 const AdminSuggestionsIndexRoute = AdminSuggestionsIndexRouteImport.update({
   id: '/suggestions/',
   path: '/suggestions/',
@@ -110,13 +84,9 @@ export interface FileRoutesByFullPath {
   '/daftar': typeof AuthDaftarRoute
   '/masuk': typeof AuthMasukRoute
   '/admin/': typeof AdminIndexRoute
-  '/admin/categories/$categoryId': typeof AdminCategoriesCategoryIdRoute
   '/admin/places/$placeId': typeof AdminPlacesPlaceIdRoute
-  '/admin/subdistricts/$subDistrictId': typeof AdminSubdistrictsSubDistrictIdRoute
   '/admin/suggestions/$suggestionId': typeof AdminSuggestionsSuggestionIdRoute
-  '/admin/categories/': typeof AdminCategoriesIndexRoute
   '/admin/places/': typeof AdminPlacesIndexRoute
-  '/admin/subdistricts/': typeof AdminSubdistrictsIndexRoute
   '/admin/suggestions/': typeof AdminSuggestionsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -125,13 +95,9 @@ export interface FileRoutesByTo {
   '/daftar': typeof AuthDaftarRoute
   '/masuk': typeof AuthMasukRoute
   '/admin': typeof AdminIndexRoute
-  '/admin/categories/$categoryId': typeof AdminCategoriesCategoryIdRoute
   '/admin/places/$placeId': typeof AdminPlacesPlaceIdRoute
-  '/admin/subdistricts/$subDistrictId': typeof AdminSubdistrictsSubDistrictIdRoute
   '/admin/suggestions/$suggestionId': typeof AdminSuggestionsSuggestionIdRoute
-  '/admin/categories': typeof AdminCategoriesIndexRoute
   '/admin/places': typeof AdminPlacesIndexRoute
-  '/admin/subdistricts': typeof AdminSubdistrictsIndexRoute
   '/admin/suggestions': typeof AdminSuggestionsIndexRoute
 }
 export interface FileRoutesById {
@@ -143,13 +109,9 @@ export interface FileRoutesById {
   '/_auth/daftar': typeof AuthDaftarRoute
   '/_auth/masuk': typeof AuthMasukRoute
   '/admin/': typeof AdminIndexRoute
-  '/admin/categories/$categoryId': typeof AdminCategoriesCategoryIdRoute
   '/admin/places/$placeId': typeof AdminPlacesPlaceIdRoute
-  '/admin/subdistricts/$subDistrictId': typeof AdminSubdistrictsSubDistrictIdRoute
   '/admin/suggestions/$suggestionId': typeof AdminSuggestionsSuggestionIdRoute
-  '/admin/categories/': typeof AdminCategoriesIndexRoute
   '/admin/places/': typeof AdminPlacesIndexRoute
-  '/admin/subdistricts/': typeof AdminSubdistrictsIndexRoute
   '/admin/suggestions/': typeof AdminSuggestionsIndexRoute
 }
 export interface FileRouteTypes {
@@ -161,13 +123,9 @@ export interface FileRouteTypes {
     | '/daftar'
     | '/masuk'
     | '/admin/'
-    | '/admin/categories/$categoryId'
     | '/admin/places/$placeId'
-    | '/admin/subdistricts/$subDistrictId'
     | '/admin/suggestions/$suggestionId'
-    | '/admin/categories/'
     | '/admin/places/'
-    | '/admin/subdistricts/'
     | '/admin/suggestions/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -176,13 +134,9 @@ export interface FileRouteTypes {
     | '/daftar'
     | '/masuk'
     | '/admin'
-    | '/admin/categories/$categoryId'
     | '/admin/places/$placeId'
-    | '/admin/subdistricts/$subDistrictId'
     | '/admin/suggestions/$suggestionId'
-    | '/admin/categories'
     | '/admin/places'
-    | '/admin/subdistricts'
     | '/admin/suggestions'
   id:
     | '__root__'
@@ -193,13 +147,9 @@ export interface FileRouteTypes {
     | '/_auth/daftar'
     | '/_auth/masuk'
     | '/admin/'
-    | '/admin/categories/$categoryId'
     | '/admin/places/$placeId'
-    | '/admin/subdistricts/$subDistrictId'
     | '/admin/suggestions/$suggestionId'
-    | '/admin/categories/'
     | '/admin/places/'
-    | '/admin/subdistricts/'
     | '/admin/suggestions/'
   fileRoutesById: FileRoutesById
 }
@@ -261,20 +211,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/categories/': {
-      id: '/admin/categories/'
-      path: '/categories'
-      fullPath: '/admin/categories/'
-      preLoaderRoute: typeof AdminCategoriesIndexRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/categories/$categoryId': {
-      id: '/admin/categories/$categoryId'
-      path: '/categories/$categoryId'
-      fullPath: '/admin/categories/$categoryId'
-      preLoaderRoute: typeof AdminCategoriesCategoryIdRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/places/': {
       id: '/admin/places/'
       path: '/places'
@@ -287,20 +223,6 @@ declare module '@tanstack/react-router' {
       path: '/places/$placeId'
       fullPath: '/admin/places/$placeId'
       preLoaderRoute: typeof AdminPlacesPlaceIdRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/subdistricts/': {
-      id: '/admin/subdistricts/'
-      path: '/subdistricts'
-      fullPath: '/admin/subdistricts/'
-      preLoaderRoute: typeof AdminSubdistrictsIndexRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/subdistricts/$subDistrictId': {
-      id: '/admin/subdistricts/$subDistrictId'
-      path: '/subdistricts/$subDistrictId'
-      fullPath: '/admin/subdistricts/$subDistrictId'
-      preLoaderRoute: typeof AdminSubdistrictsSubDistrictIdRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/suggestions/': {
@@ -334,25 +256,17 @@ const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
 interface AdminRouteChildren {
   AdminIndexRoute: typeof AdminIndexRoute
-  AdminCategoriesCategoryIdRoute: typeof AdminCategoriesCategoryIdRoute
   AdminPlacesPlaceIdRoute: typeof AdminPlacesPlaceIdRoute
-  AdminSubdistrictsSubDistrictIdRoute: typeof AdminSubdistrictsSubDistrictIdRoute
   AdminSuggestionsSuggestionIdRoute: typeof AdminSuggestionsSuggestionIdRoute
-  AdminCategoriesIndexRoute: typeof AdminCategoriesIndexRoute
   AdminPlacesIndexRoute: typeof AdminPlacesIndexRoute
-  AdminSubdistrictsIndexRoute: typeof AdminSubdistrictsIndexRoute
   AdminSuggestionsIndexRoute: typeof AdminSuggestionsIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminIndexRoute: AdminIndexRoute,
-  AdminCategoriesCategoryIdRoute: AdminCategoriesCategoryIdRoute,
   AdminPlacesPlaceIdRoute: AdminPlacesPlaceIdRoute,
-  AdminSubdistrictsSubDistrictIdRoute: AdminSubdistrictsSubDistrictIdRoute,
   AdminSuggestionsSuggestionIdRoute: AdminSuggestionsSuggestionIdRoute,
-  AdminCategoriesIndexRoute: AdminCategoriesIndexRoute,
   AdminPlacesIndexRoute: AdminPlacesIndexRoute,
-  AdminSubdistrictsIndexRoute: AdminSubdistrictsIndexRoute,
   AdminSuggestionsIndexRoute: AdminSuggestionsIndexRoute,
 }
 
