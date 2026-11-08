@@ -2,6 +2,10 @@ package users
 
 import "time"
 
+// RoleAdmin is the role of users who may manage places, sub-districts and
+// suggestions.
+const RoleAdmin = "admin"
+
 // User represents a row in the USERS table.
 type User struct {
 	ID           int64     `db:"id"`

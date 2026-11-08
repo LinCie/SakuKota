@@ -19,11 +19,6 @@ import (
 	"rantau-go/internal/storage"
 )
 
-type Router struct {
-	mux *http.ServeMux
-	cfg config.Config
-}
-
 func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 	r := chi.NewRouter()
 
@@ -63,7 +58,7 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.WithAuth(cfg))
-				r.Use(middleware.Guard([]string{"admin"}))
+				r.Use(middleware.Guard([]string{users.RoleAdmin}))
 
 				// POST /v1/places
 				r.Post("/", placeModule.Handler.CreatePlace)
@@ -115,7 +110,7 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.WithAuth(cfg))
-				r.Use(middleware.Guard([]string{"admin"}))
+				r.Use(middleware.Guard([]string{users.RoleAdmin}))
 
 				// GET /v1/suggestions
 				r.Get("/", suggestionModule.Handler.GetSuggestions)
@@ -131,39 +126,37 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 			})
 		})
 
-		r.Group(func(r chi.Router) {
-			r.Route("/subdistricts", func(r chi.Router) {
-				// GET /v1/subdistricts
-				r.Get("/", subdistrictModule.Handler.GetSubDistricts)
+		r.Route("/subdistricts", func(r chi.Router) {
+			// GET /v1/subdistricts
+			r.Get("/", subdistrictModule.Handler.GetSubDistricts)
 
-				// GET /v1/subdistricts/{id}
-				r.Get("/{id}", subdistrictModule.Handler.GetSubDistrict)
+			// GET /v1/subdistricts/{id}
+			r.Get("/{id}", subdistrictModule.Handler.GetSubDistrict)
 
-				r.Group(func(r chi.Router) {
-					r.Use(middleware.WithAuth(cfg))
-					r.Use(middleware.Guard([]string{"admin"}))
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.WithAuth(cfg))
+				r.Use(middleware.Guard([]string{users.RoleAdmin}))
 
-					// POST /v1/subdistricts
-					r.Post("/", subdistrictModule.Handler.CreateSubDistrict)
+				// POST /v1/subdistricts
+				r.Post("/", subdistrictModule.Handler.CreateSubDistrict)
 
-					// PUT /v1/subdistricts/{id}
-					r.Put("/{id}", subdistrictModule.Handler.PutSubDistrict)
+				// PUT /v1/subdistricts/{id}
+				r.Put("/{id}", subdistrictModule.Handler.PutSubDistrict)
 
-					// DELETE /v1/subdistricts/{id}
-					r.Delete("/{id}", subdistrictModule.Handler.DeleteSubDistrict)
+				// DELETE /v1/subdistricts/{id}
+				r.Delete("/{id}", subdistrictModule.Handler.DeleteSubDistrict)
 
-					// POST /v1/subdistricts/{id}/image/upload-url
-					r.Post("/{id}/image/upload-url", subdistrictModule.Handler.CreateImageUpload(subdistrict.SlotImage))
+				// POST /v1/subdistricts/{id}/image/upload-url
+				r.Post("/{id}/image/upload-url", subdistrictModule.Handler.CreateImageUpload(subdistrict.SlotImage))
 
-					// PUT /v1/subdistricts/{id}/image
-					r.Put("/{id}/image", subdistrictModule.Handler.SetImage(subdistrict.SlotImage))
+				// PUT /v1/subdistricts/{id}/image
+				r.Put("/{id}/image", subdistrictModule.Handler.SetImage(subdistrict.SlotImage))
 
-					// POST /v1/subdistricts/{id}/static-map/upload-url
-					r.Post("/{id}/static-map/upload-url", subdistrictModule.Handler.CreateImageUpload(subdistrict.SlotStaticMap))
+				// POST /v1/subdistricts/{id}/static-map/upload-url
+				r.Post("/{id}/static-map/upload-url", subdistrictModule.Handler.CreateImageUpload(subdistrict.SlotStaticMap))
 
-					// PUT /v1/subdistricts/{id}/static-map
-					r.Put("/{id}/static-map", subdistrictModule.Handler.SetImage(subdistrict.SlotStaticMap))
-				})
+				// PUT /v1/subdistricts/{id}/static-map
+				r.Put("/{id}/static-map", subdistrictModule.Handler.SetImage(subdistrict.SlotStaticMap))
 			})
 		})
 	})
