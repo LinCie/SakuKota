@@ -30,13 +30,16 @@ type service struct {
 	cfg   config.Config
 	users users.Service
 	store RefreshStore
+	// hashSlots holds one token per running password hash.
+	hashSlots chan struct{}
 }
 
 func NewService(cfg config.Config, userService users.Service, store RefreshStore) Service {
 	return &service{
-		cfg:   cfg,
-		users: userService,
-		store: store,
+		cfg:       cfg,
+		users:     userService,
+		store:     store,
+		hashSlots: make(chan struct{}, maxConcurrentHashes),
 	}
 }
 
@@ -63,11 +66,14 @@ func (s *service) Register(ctx context.Context, u *users.User, password string) 
 		return nil, ErrInvalidEmail
 	}
 
-	if len(password) < minPasswordLength {
+	switch n := utf8.RuneCountInString(password); {
+	case n < minPasswordLength:
 		return nil, ErrWeakPassword
+	case n > maxPasswordLength:
+		return nil, ErrPasswordTooLong
 	}
 
-	hash, err := hashPassword(password)
+	hash, err := s.hash(ctx, password)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +84,11 @@ func (s *service) Register(ctx context.Context, u *users.User, password string) 
 }
 
 func (s *service) Login(ctx context.Context, email, password string) (*users.User, *Tokens, error) {
+	// No stored password is this long, so there is nothing to verify.
+	if utf8.RuneCountInString(password) > maxPasswordLength {
+		return nil, nil, ErrInvalidCredentials
+	}
+
 	u, err := s.users.GetByEmail(ctx, normalizeEmail(email))
 	if err != nil {
 		if errors.Is(err, users.ErrNotFound) {
@@ -86,7 +97,7 @@ func (s *service) Login(ctx context.Context, email, password string) (*users.Use
 		return nil, nil, err
 	}
 
-	ok, err := verifyPassword(password, u.PasswordHash)
+	ok, err := s.verify(ctx, password, u.PasswordHash)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -151,6 +162,39 @@ func (s *service) issueTokens(ctx context.Context, u *users.User) (*Tokens, erro
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
+}
+
+// hash hashes password once a hash slot is free.
+func (s *service) hash(ctx context.Context, password string) (string, error) {
+	release, err := s.acquireHashSlot(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer release()
+
+	return hashPassword(password)
+}
+
+// verify checks password against encodedHash once a hash slot is free.
+func (s *service) verify(ctx context.Context, password, encodedHash string) (bool, error) {
+	release, err := s.acquireHashSlot(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer release()
+
+	return verifyPassword(password, encodedHash)
+}
+
+// acquireHashSlot waits for a free slot, or for ctx to end, and returns the
+// function that frees the slot.
+func (s *service) acquireHashSlot(ctx context.Context) (release func(), err error) {
+	select {
+	case s.hashSlots <- struct{}{}:
+		return func() { <-s.hashSlots }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 func hashToken(token string) string {

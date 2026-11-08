@@ -11,6 +11,7 @@ var (
 	ErrInvalidEmail        = errors.New("invalid email")
 	ErrEmailTooLong        = fmt.Errorf("email must be %d characters or fewer", maxEmailLength)
 	ErrWeakPassword        = fmt.Errorf("password must be at least %d characters", minPasswordLength)
+	ErrPasswordTooLong     = fmt.Errorf("password must be %d characters or fewer", maxPasswordLength)
 	ErrInvalidCredentials  = errors.New("invalid email or password")
 	ErrInvalidRefreshToken = errors.New("invalid or expired refresh token")
 	ErrInvalidHash         = errors.New("invalid argon2id hash")

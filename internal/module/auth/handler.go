@@ -40,7 +40,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 			errors.Is(err, ErrNameTooLong),
 			errors.Is(err, ErrInvalidEmail),
 			errors.Is(err, ErrEmailTooLong),
-			errors.Is(err, ErrWeakPassword):
+			errors.Is(err, ErrWeakPassword),
+			errors.Is(err, ErrPasswordTooLong):
 			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 		case errors.Is(err, users.ErrEmailTaken):
 			httpx.RespondError(w, http.StatusConflict, httpx.CodeEmailTaken, err.Error())

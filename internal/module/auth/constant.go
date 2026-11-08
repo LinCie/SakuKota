@@ -15,7 +15,16 @@ const (
 	maxEmailLength = 255
 )
 
-const minPasswordLength = 8
+// Password lengths in characters. The cap is a sanity limit: it keeps absurd
+// input away from the hash, and a login with a longer password cannot be right.
+const (
+	minPasswordLength = 8
+	maxPasswordLength = 128
+)
+
+// maxConcurrentHashes bounds how many argon2id hashes run at once. Each one
+// allocates argonMemory, so unbounded logins could exhaust memory.
+const maxConcurrentHashes = 4
 
 const refreshTokenBytes = 32
 

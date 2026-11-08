@@ -90,6 +90,8 @@ func TestService_Register_RejectsInvalidInput(t *testing.T) {
 		{name: "malformed email", userName: "Ana", email: "not-an-email", password: "password1", want: auth.ErrInvalidEmail},
 		{name: "empty email", userName: "Ana", email: "", password: "password1", want: auth.ErrInvalidEmail},
 		{name: "7-character password", userName: "Ana", email: testEmail, password: "1234567", want: auth.ErrWeakPassword},
+		{name: "4 multibyte characters are fewer than 8 characters", userName: "Ana", email: testEmail, password: strings.Repeat("é", 4), want: auth.ErrWeakPassword},
+		{name: "129-character password", userName: "Ana", email: testEmail, password: strings.Repeat("a", 129), want: auth.ErrPasswordTooLong},
 		{name: "101-character name", userName: strings.Repeat("a", 101), email: testEmail, password: "password1", want: auth.ErrNameTooLong},
 		{name: "101 multibyte-character name", userName: strings.Repeat("é", 101), email: testEmail, password: "password1", want: auth.ErrNameTooLong},
 		{name: "email over 255 characters", userName: "Ana", email: strings.Repeat("a", 245) + "@example.com", password: "password1", want: auth.ErrEmailTooLong},
@@ -114,6 +116,25 @@ func TestService_Register_AcceptsEightCharacterPassword(t *testing.T) {
 
 	_, err := svc.Register(context.Background(), &users.User{Name: "Ana", Email: testEmail}, "12345678")
 	assert.NoError(t, err, "register")
+}
+
+func TestService_Register_PasswordLengthLimitsCountCharacters(t *testing.T) {
+	for _, password := range []string{strings.Repeat("a", 128), strings.Repeat("é", 8), strings.Repeat("é", 128)} {
+		svc, userSvc := newService(t)
+
+		userSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&users.User{ID: 1}, nil)
+
+		_, err := svc.Register(context.Background(), &users.User{Name: "Ana", Email: testEmail}, password)
+		assert.NoError(t, err, "register with %d bytes", len(password))
+	}
+}
+
+func TestService_Login_PasswordOverMaximumIsInvalidCredentials(t *testing.T) {
+	// No expectations: the password is refused before storage is read.
+	svc, _ := newService(t)
+
+	_, _, err := svc.Login(context.Background(), testEmail, strings.Repeat("a", 129))
+	assert.ErrorIs(t, err, auth.ErrInvalidCredentials)
 }
 
 func TestService_Register_AcceptsHundredCharacterName(t *testing.T) {
