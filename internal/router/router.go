@@ -26,6 +26,7 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 		chimiddleware.Recoverer,
 		chimiddleware.Logger,
 		chimiddleware.StripSlashes,
+		middleware.WithMaxBody(),
 		middleware.WithCORS(cfg),
 	)
 
