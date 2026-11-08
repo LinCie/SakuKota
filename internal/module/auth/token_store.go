@@ -27,7 +27,13 @@ type memoryRefreshEntry struct {
 type memoryRefreshStore struct {
 	mu     sync.Mutex
 	tokens map[string]memoryRefreshEntry
+	// nextSweep is when Save next removes expired tokens.
+	nextSweep time.Time
 }
+
+// refreshSweepInterval is the least time between two sweeps for expired
+// tokens. A sweep visits every token, so it must not run on every Save.
+const refreshSweepInterval = time.Minute
 
 func NewMemoryRefreshStore() RefreshStore {
 	return &memoryRefreshStore{
@@ -43,12 +49,29 @@ func (s *memoryRefreshStore) Save(_ context.Context, tokenHash string, userID in
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	now := time.Now()
+	if now.After(s.nextSweep) {
+		s.sweepExpired(now)
+		s.nextSweep = now.Add(refreshSweepInterval)
+	}
+
 	s.tokens[tokenHash] = memoryRefreshEntry{
 		userID:    userID,
-		expiresAt: time.Now().Add(ttl),
+		expiresAt: now.Add(ttl),
 	}
 
 	return nil
+}
+
+// sweepExpired removes tokens that expired before now. Tokens are otherwise
+// removed only when presented, so one that is never used again would stay.
+// The caller holds s.mu.
+func (s *memoryRefreshStore) sweepExpired(now time.Time) {
+	for hash, e := range s.tokens {
+		if now.After(e.expiresAt) {
+			delete(s.tokens, hash)
+		}
+	}
 }
 
 // Consume atomically looks up and removes a token, so each refresh token can
