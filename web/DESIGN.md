@@ -109,24 +109,19 @@ components:
     rounded: "{rounded.plate}"
     padding: "0 44px 0 40px"
     height: "{spacing.control}"
-  filter-plate-inactive:
+  category-filter-trigger:
     backgroundColor: "{colors.paint}"
+    textColor: "{colors.ink}"
     typography: "{typography.label}"
     rounded: "{rounded.plate}"
-    padding: "0 12px 0 4px"
+    padding: "0 12px"
     height: "{spacing.control-sm}"
-  filter-plate-all-active:
+  category-filter-trigger-active:
     backgroundColor: "{colors.ink}"
     textColor: "{colors.paint}"
     typography: "{typography.label}"
     rounded: "{rounded.plate}"
     padding: "0 12px"
-    height: "{spacing.control-sm}"
-  filter-plate-warung-active:
-    backgroundColor: "{colors.chili}"
-    textColor: "{colors.paint}"
-    typography: "{typography.label}"
-    rounded: "{rounded.plate}"
     height: "{spacing.control-sm}"
   code-plate:
     typography: "{typography.code}"
@@ -230,7 +225,7 @@ components:
 
 **Creative North Star: "The Warung Signboard"**
 
-Rantau is lettered the way a Jakarta street is lettered: hand-painted warung and kaki-lima signage. Every surface is a flat painted panel (warung-green board, sign yellow, chili red, painted blue, plum, paint white, ink) with no gradients and no glossy app chrome. Components are signboards: rectangular plates with a thin painted inset border, category codes (W, J, K, L, A) lettered in Bungee, and pins that are miniature signs planted on a post. The map is a quiet, slightly warmed street canvas so the painted signs are the only loud things on it.
+Rantau is lettered the way a Jakarta street is lettered: hand-painted warung and kaki-lima signage. Every surface is a flat painted panel (warung-green board, sign yellow, chili red, painted blue, plum, paint white, ink) with no gradients and no glossy app chrome. Components are signboards: rectangular plates with a thin painted inset border, category codes (W, J, K, L, A, and more) lettered in Bungee, and pins that are miniature signs planted on a post. The map is a quiet, slightly warmed street canvas so the painted signs are the only loud things on it.
 
 Density is working-app density, not marketing density. A green header board carries the wordmark, kecamatan picker, the yellow "Lihat info" plate, and search; a paint-white strip of category plates and a live count sits under it; the map owns the rest. Place details read as a menu board with dotted leaders; kecamatan facts are a notice board. Missing data is never hidden: it is drawn as an empty dashed slot. State changes by the mark itself: an active plate is solid paint, an inactive plate is a dashed outline, a selected pin inverts to ink with a yellow code.
 
@@ -252,19 +247,19 @@ A signwriter's tin set: a few saturated, flat enamel colours over warm paint whi
 
 ### Primary
 
-- **Warung Board Green** (board): the header board, notice-board header, the Apotek category plate, and info-section icons. The ground colour of the whole world.
+- **Warung Board Green** (board): the header board, notice-board header, the Apotek, Masjid, and Ibadah Lain category plates, and info-section icons. The ground colour of the whole world.
 - **Deep Board Green** (board-deep): recessed areas on the board: the wordmark frame, the kecamatan select field, hover on board-coloured buttons.
 
 ### Secondary
 
-- **Sign Yellow** (sign): the lettering colour on green (wordmark, notice-board title, header inset borders), the primary action plate ("Lihat info", empty-state actions, "Coba lagi"), the Laundry category plate, the code on a selected pin, and focus borders on the header's fields. Also the text-selection colour.
+- **Sign Yellow** (sign): the lettering colour on green (wordmark, notice-board title, header inset borders), the primary action plate ("Lihat info", empty-state actions, "Coba lagi"), the Laundry, Bank & ATM, Halte/Stasiun, and Layanan Publik category plates, the code on a selected pin, and focus borders on the header's fields. Also the text-selection colour.
 - **Faded Sign Yellow** (sign-soft): the hover/focus fill for sign-yellow plates, quiet buttons, zoom buttons, and list rows (list rows at 60% strength).
 
 ### Tertiary
 
-- **Chili Red** (chili): the Warung category, the 6px stripe under every green board, the daily-spending figure, and the text caret.
-- **Painted Blue** (cat): the Klinik category, focus outlines on paint-white surfaces, and links in the map attribution.
-- **Tailor Plum** (plum): the Penjahit category only.
+- **Chili Red** (chili): the Warung, Minimarket, and Air & Gas categories, the 6px stripe under every green board, the daily-spending figure, and the text caret.
+- **Painted Blue** (cat): the Klinik, Rumah Sakit, Puskesmas, and Pos Polisi categories, focus outlines on paint-white surfaces, and links in the map attribution.
+- **Tailor Plum** (plum): the Penjahit and Fotokopi categories only.
 
 ### Neutral
 
@@ -275,9 +270,9 @@ A signwriter's tin set: a few saturated, flat enamel colours over warm paint whi
 
 ### Named Rules
 
-**The One Hue Per Category Rule.** Each category owns exactly one paint: Warung chili (W), Penjahit plum (J), Klinik blue (K), Laundry yellow (L), Apotek green (A). The same hue marks its filter plate, map sign, list code plate, and badge; each category's code, label, and hue come from the API (`code`, `label`, `color`), and the app maps the `color` key to its paints.
+**The One Hue Per Theme Rule.** Each category has exactly one paint, and categories of the same theme share it; the code letter and icon tell them apart. Food and daily goods are chili (Warung W, Minimarket T, Air & Gas G). Crafts are plum (Penjahit J, Fotokopi F). Health and emergency are blue (Klinik K, Rumah Sakit R, Puskesmas S, Pos Polisi P). City services and paperwork are yellow (Laundry L, Bank & ATM B, Halte/Stasiun H, Layanan Publik U). Care and community are green (Apotek A, Masjid M, Ibadah Lain I). The same hue marks a category's code plate in the filter menu, map sign, list code plate, and badge; each category's code, label, and hue come from the API (`code`, `label`, `color`), and the app maps the `color` key to its paints.
 
-**The Yellow Takes Ink Rule.** Sign yellow is never lettered in paint white. Yellow plates carry ink text and an ink border; the inactive Laundry plate is outlined in ink at 60%, not yellow, because yellow on paint white is illegible.
+**The Yellow Takes Ink Rule.** Sign yellow is never lettered in paint white. Yellow plates carry ink text and an ink border; inactive yellow plates are outlined in ink at 60%, not yellow, because yellow on paint white is illegible.
 
 **The Flat Enamel Rule.** Colour fields are solid. No gradients, glass, or tinted overlays beyond ink-at-opacity dividers and the paint-at-70% scrim behind the empty state.
 
@@ -297,7 +292,7 @@ A signwriter's tin set: a few saturated, flat enamel colours over warm paint whi
 - **Code** (Bungee 400, 0.875rem, line-height 1): category codes on plates and pins (1rem on map signs, 0.75rem in badges), and the text of yellow action plates.
 - **Body** (Figtree 400, 1rem, line-height 1.5): descriptions and kecamatan notes, capped at prose width (~65ch) with pretty wrapping.
 - **Body Strong** (Figtree 600, 1rem): place names in the list, leader-row values, the select value.
-- **Label** (Figtree 600–700, 0.875rem): filter-plate labels, info-section headings, leader labels, addresses, prices in the list, the count sentence.
+- **Label** (Figtree 600–700, 0.875rem): category-filter labels, info-section headings, leader labels, addresses, prices in the list, the count sentence.
 
 ### Named Rules
 
@@ -315,7 +310,7 @@ The auth pages (`/masuk`, `/daftar`) are a separate full-viewport layout: the wo
 
 On phones the page stacks and scrolls: header controls wrap (picker and "Lihat info" share a row, search below), category plates wrap onto two rows with the count under them, the map takes 58% of the dynamic viewport (minimum 320px), and the place list follows beneath. Selecting a place opens its menu board as a fixed bottom sheet (up to 60% viewport height) instead of replacing the list; the map pans so the selected sign stays above the sheet.
 
-Spacing runs on a 4px grid with 8px and 12px as the working gaps: 12px side padding on phones, 20px from 768px; 8px between plates; 12px–16px inside rows and boards. Touch targets are 40px (filter plates, zoom buttons) or 44px (header fields and the primary plate).
+Spacing runs on a 4px grid with 8px and 12px as the working gaps: 12px side padding on phones, 20px from 768px; 8px between plates; 12px–16px inside rows and boards. Touch targets are 40px (category filter, zoom buttons) or 44px (header fields and the primary plate).
 
 ## Elevation & Depth
 
@@ -352,11 +347,12 @@ Painted plates, confident and flat.
 - **Icons:** Lucide line icons at a 2.5 stroke, 16–20px.
 - **Submit plate (forms):** a full-width sign plate, 44px, ink Bungee at 0.875rem, blue focus outline offset 2px (it sits on paint white). Hover fades to faded sign yellow. While pending it is disabled, holds the faded sign-yellow fill, and reads "Memproses…".
 
-### Chips (category filter plates)
+### Category filter (dropdown)
 
-- **Style:** 40px plate with a small code square on the left and a Figtree bold label.
-- **Inactive:** paint-white fill, dashed 2px outline in the category hue (ink at 60% for Laundry and "Semua"); the code square is a solid category plate. Hover turns the dashed outline solid.
-- **Active:** the whole plate fills solid with the category paint and paint-white (or ink, for yellow) lettering; the code square becomes a 20% paint-white tint. "Semua" active is a solid ink plate. Plates toggle independently, and "Semua" is active when no category is filtered.
+- **Trigger:** a 40px plate with a bold Figtree label and a trailing chevron, full width on phones. It reads "Semua kategori" with no filter, the category's label with one, and "N kategori" with several.
+- **Inactive (no filter):** paint-white fill, dashed 2px outline in ink at 60%. Hover turns the outline solid.
+- **Active (filtering):** a solid ink plate with paint-white lettering.
+- **Menu:** a Base UI menu on paint white with a faint ink border and a lifted shadow, as wide as the trigger at least and scrolling when taller than the screen. It opens with a "Semua kategori" item that clears the filter (disabled when nothing is filtered), a thin divider, then one checkbox item per category: its solid code plate, its label, and a check on the right when selected. Items toggle independently and the menu stays open so several categories can be picked; the highlighted item takes the deep-paint fill.
 
 ### Cards / Containers
 

@@ -16,7 +16,7 @@ Rantau is a hyper-local survival map for young perantau in Jakarta. It surfaces 
 
 ## Positioning
 
-Curated micro-services (warung, tailors, local clinics, laundries, pharmacies) rather than the restaurants and major businesses general map apps favor, combined with kecamatan-level flood history, safety/crime notes, and estimated daily spending in one place.
+Curated micro-services (warung, tailors, local clinics, laundries, pharmacies, plus hospitals, mosques, police posts, and other perantau essentials) rather than the restaurants and major businesses general map apps favor, combined with kecamatan-level flood history, safety/crime notes, and estimated daily spending in one place.
 
 ## Operating Context
 
@@ -30,7 +30,7 @@ Curated micro-services (warung, tailors, local clinics, laundries, pharmacies) r
 - Frontend: TanStack Router (file routes) + Tailwind CSS v4 in `web/`; Tailwind utilities only, no raw CSS.
 - Map: Leaflet (confirmed) with real coordinates from the API.
 - Backend (Go, PostGIS) endpoints: `GET /places/` (optional `sub_district_id`, comma-separated `category_id`, `q` search, `bbox` as `west,south,east,north`, and `limit`; returns `{places, total}`, where `total` counts every match before the limit), `GET /places/categories/`, `GET /subdistricts/`.
-- Categories: Affordable Food & Warung, Tailor, Local Clinic, Laundry, Pharmacy.
+- Categories: Affordable Food & Warung, Tailor, Local Clinic, Laundry, Pharmacy, Mosque & Musala, Other Worship, Police Post, Hospital, Community Health Center, Bank & ATM, Minimarket, Transit Stop, Public Service Office, Water & Gas Refill, Print & Copy.
 - Place fields: name, address, location (GeoJSON point), operating hours, estimated price range, short description, plus custom fields per category (`attributes`, described by each category's `fields` from `GET /places/categories/`; data types text, number, boolean, select, range, date). Nullable fields must show placeholders ("Hours not available", "Data not available").
 - Kecamatan fields: flood history, safety/crime information, estimated daily spending (Rupiah), static map image URL.
 - Auth endpoints: `POST /auth/register` (name, email, password of at least 8 characters; returns the user, no tokens), `POST /auth/login` (user plus access and refresh tokens), `POST /auth/refresh` (single-use refresh tokens, held in backend memory, so a restart ends sessions), `POST /auth/logout`. Only the admin place and kecamatan write endpoints require sign-in, as a user with the `admin` role; the frontend's `/admin` area uses them, and categories there are read-only.
@@ -42,7 +42,7 @@ Curated micro-services (warung, tailors, local clinics, laundries, pharmacies) r
 ## Brand Commitments
 
 - Name: Rantau.
-- Layout reference: the low-fi wireframe in the planning docs (not published) (header with kecamatan picker, View Info, and search; category filter bar; result count; map with place detail panel; kecamatan info modal). The homepage layout should stay similar to it.
+- Layout reference: the low-fi wireframe in the planning docs (not published) (header with kecamatan picker, View Info, and search; category filter dropdown; result count; map with place detail panel; kecamatan info modal). The homepage layout should stay similar to it.
 
 ## Evidence on Hand
 

@@ -192,7 +192,7 @@ func (r *postgresRepository) GetCategories(ctx context.Context) ([]Category, err
 	err := r.db.SelectContext(
 		ctx,
 		&categories,
-		`SELECT id, name, slug, code, label, color FROM CATEGORIES`,
+		`SELECT id, name, slug, code, label, color FROM CATEGORIES ORDER BY id`,
 	)
 	if err != nil {
 		return nil, err

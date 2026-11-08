@@ -144,7 +144,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Warung, penjahit, klinik, laundry, dan apotek terjangkau di sekitarmu, plus info banjir, keamanan, dan biaya harian per kecamatan.",
+          "Warung, penjahit, klinik, laundry, apotek, masjid, dan kebutuhan harian perantau lainnya di sekitarmu, plus info banjir, keamanan, dan biaya harian per kecamatan.",
       },
     ],
   }),

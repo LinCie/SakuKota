@@ -4,8 +4,8 @@
 > backend is *specified to do*. Update it only after a VERIFICATION phase
 > completes (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-01. Updated after a verification pass of the validation, normalization, and image-cleanup changes (see the change log).
-> - Status: verified. The unit and integration tests pass, including with `-race`, and the changed rules were checked by reintroducing the old behavior.
+> - Last updated: 2026-11-05. Updated after a verification pass of the category expansion (see the change log).
+> - Status: verified. The place tests pass, the migration and seed were applied to a clean database, and the web app type-checks, lints, and builds.
 
 ## Contents
 
@@ -29,8 +29,10 @@ The source docs (not published) call the project **Perantau Helper**.
 In this repo it is called **Rantau** / `rantau-go`.
 
 - **Problem.** People who move to Jakarta for work (*perantau*) struggle to find
-  cheap everyday essentials: warung, tailors, local clinics, laundries, and
-  pharmacies. Mainstream maps either miss these places or bury them. Newcomers
+  cheap everyday essentials: warung, tailors, local clinics, laundries,
+  pharmacies, and the places a newcomer soon needs (mosques, police posts,
+  hospitals, puskesmas, banks and ATMs, minimarkets, transit stops, public
+  service offices, water and gas refills, print shops). Mainstream maps either miss these places or bury them. Newcomers
   also know little about each neighbourhood: flood risk, safety, and the cost
   of daily life. Today they rely on trial and error or word of mouth.
 - **Target users.** Fresh graduates, trainees, and young professionals moving to
@@ -276,9 +278,33 @@ no ratings. `image_url` is the storage public URL of the image key, or `null`.
   - Promotion and type errors return `400 VALIDATION_ERROR`.
 - **Categories.** `GET /categories` and `GET /categories/{id}` return
   `{id,name,slug,code,label,color,fields[]}`. `fields` is always an array,
-  sorted by `sort_order` 1..n. Each field is `{id, category_id, key, label,
+  sorted by `sort_order` 1..n. `GET /categories` lists categories ordered by
+  id. Each field is `{id, category_id, key, label,
   data_type, required, options|null, sort_order}`. Invalid ids return
   `INVALID_CATEGORY_ID`, and unknown ids return `404 CATEGORY_NOT_FOUND`.
+
+  The categories are defined by migrations, so the set below is not covered by
+  the unit tests (see §10). `color` is grouped by theme, and the web app tells
+  categories of one hue apart by their `code` and icon.
+
+  | Slug | Label | Code | Color | Required fields |
+  | ---- | ----- | ---- | ----- | --------------- |
+  | `affordable-food-warung` | Warung | W | chili | `halal`, `serving_style` |
+  | `minimarket` | Minimarket | T | chili | `store_type` |
+  | `water-gas` | Air & Gas | G | chili | `service` |
+  | `tailor` | Penjahit | J | plum | `specialty`, `turnaround_days` |
+  | `print-copy` | Fotokopi | F | plum | none |
+  | `local-clinic` | Klinik | K | cat | `bpjs_accepted` |
+  | `hospital` | Rumah Sakit | R | cat | `igd_24h`, `bpjs_accepted`, `ownership` |
+  | `puskesmas` | Puskesmas | S | cat | `open_24h` |
+  | `police-post` | Pos Polisi | P | cat | `facility_type`, `open_24h` |
+  | `laundry` | Laundry | L | sign | `service_type`, `turnaround_hours` |
+  | `bank-atm` | Bank & ATM | B | sign | `banks` |
+  | `transit-stop` | Halte/Stasiun | H | sign | `mode` |
+  | `public-service` | Layanan Publik | U | sign | `office_type` |
+  | `pharmacy` | Apotek | A | board | `accepts_prescriptions` |
+  | `mosque` | Masjid | M | board | `facility_type`, `friday_prayer` |
+  | `worship-other` | Ibadah Lain | I | board | `religion` |
 
 ### 6.4 Reviews (`internal/module/review`)
 
@@ -513,7 +539,8 @@ them.
   auth or admin** (place and sub-district writes, image endpoints, suggestion
   admin routes), middleware (`WithAuth` details, logging, recovery, CORS),
   `config`, `httpx`, `jwt`, `postgis`, `database`, `cmd/*` (API, migrate,
-  seed), and seed data.
+  seed), seed data, and the set of categories and fields that the migrations
+  define (including the category list order).
 - **Admin enforcement** is said to live in the router, but no test verifies it.
 - **Refresh-token storage.** Tests use `auth.NewMemoryRefreshStore()`. Whether
   production sessions survive a restart is not specified.
@@ -539,3 +566,4 @@ them.
 | ---- | -------------- | ------- |
 | 2026-11-01 | Initial draft | Written from the planning docs and all 19 `*_test.go` files |
 | 2026-11-01 | Verification update | Null bodies on JSON endpoints return `INVALID_BODY`; length limits and bare-address email are validated; optional place and sub-district text is trimmed and blank is stored as absent; sub-district image deletes and replacements are queued in `STORAGE_DELETIONS`; a missing refresh cookie clears the cookie; §6.3 error name corrected; resolved §10 items removed |
+| 2026-11-05 | Verification update | Categories grew from 5 to 16 (migration `add_perantau_categories`) with themed colors, and `GET /categories` is ordered by id; seed data covers every new category; the web category filter became a Base UI dropdown |
