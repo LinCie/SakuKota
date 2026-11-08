@@ -4,8 +4,8 @@
 > backend is *specified to do*. Update it only after a VERIFICATION phase
 > completes (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-09. Updated after a verification pass of the PATCH-to-PUT change (see the change log).
-> - Status: verified. All Go tests pass, and the web app type-checks, lints, and builds.
+> - Last updated: 2026-11-09. Updated after a verification pass of the hardening changes (see the change log).
+> - Status: verified. All Go tests pass. The web app was not changed or re-checked in this pass.
 
 ## Contents
 
@@ -82,7 +82,7 @@ MoSCoW scope agreed with the mentor in Week 3:
 | Must | Interactive survival map and essential pins | Delivered: places API with filters, bbox, limit, total |
 | Must | Kecamatan dropdown and info modal (flood, safety/crime, daily spending, static map image) | Delivered: sub-districts API with uploaded images |
 | Must | Category filter and search | Delivered: `category_id` (any of several), `q` |
-| Should | Basic admin verification panel | Backend delivered: admin review of suggestions; create/update/delete for places and sub-districts (which roles may call them is untested, see §10) |
+| Should | Basic admin verification panel | Backend delivered: admin review of suggestions; create/update/delete for places and sub-districts, all admin-only (route access is tested, see §5) |
 | Could | Place suggestion form | Delivered: suggestions with a pending limit |
 | Could | Upvote/downvote and review system | Delivered as **1–5 star reviews** with comments (not up/down votes) |
 | Could | Kecamatan GeoJSON overlay | Not present |
@@ -155,11 +155,31 @@ These rules apply to every HTTP module unless §6 says otherwise.
   request or an expired deadline must not produce a success response.
 - **Auth.** Protected routes use `middleware.WithAuth`, which requires
   `Authorization: Bearer <JWT>`. The JWT carries the user ID and role (`user` or
-  `admin`). A request without a token returns 401. A handler that needs a user
-  but finds none in the context returns `401 UNAUTHORIZED`. Admin-only routes
-  are guarded by the **API router**, not by the handlers.
-- **Privacy.** No response exposes user emails. A nested author appears as
-  `{"id", "name"}`. Password material never appears in any response.
+  `admin`). A request without a valid token returns `401 UNAUTHORIZED`. A
+  handler that needs a user but finds none in the context returns `401
+  UNAUTHORIZED`. A valid token without the admin role on an admin-only route
+  returns `403 FORBIDDEN`. Admin-only routes are guarded by the **API router**,
+  not by the handlers.
+- **Access tokens.** A token is accepted only if it is signed with HS256 and the
+  configured secret, names the issuer `rantau-go`, and has an expiry that has
+  not passed. Tokens with another algorithm (including `none`), another or no
+  issuer, no expiry, or another secret are rejected.
+- **Route access.** The router test builds the real router and fails if a route
+  is missing from, or extra in, its access table. Every route is one of:
+  - *Public:* `/docs`, `/openapi.json`, the four `/v1/auth/*` routes,
+    `GET /v1/places`, `GET /v1/places/{id}`, `GET /v1/places/{id}/reviews`,
+    `GET /v1/places/categories` and `/{id}`, `GET /v1/subdistricts` and `/{id}`.
+  - *Any signed-in user:* `POST /v1/places/{id}/reviews`, `POST /v1/suggestions`,
+    `GET /v1/suggestions/mine`.
+  - *Admin only:* `POST /v1/places`, `PUT` and `DELETE /v1/places/{id}`, the
+    place image routes (`.../image/upload-url`, `.../image`), `GET
+    /v1/suggestions`, `GET /v1/suggestions/{id}`, `.../approve`, `.../reject`,
+    `POST /v1/subdistricts`, `PUT` and `DELETE /v1/subdistricts/{id}`, and the
+    sub-district `image` and `static-map` routes.
+- **Privacy.** The only place a user's email appears is the caller's own user
+  object in the register, login, and refresh responses. No other response
+  exposes user emails. A nested author appears as `{"id", "name"}`. Password
+  material never appears in any response.
 
 ## 6. Behavior by module
 
@@ -173,12 +193,15 @@ The test router posts to `/v1/auth`, and the refresh cookie path is
   trimmed, must not be blank, and has at most 100 code points. The email is
   trimmed, lower-cased, has at most 255 code points, and must be a bare address
   such as `ana@example.com`; a display-name form such as `Ana <ana@example.com>`
-  is rejected. The password needs at least 8 characters. The password is stored
-  as an argon2id hash. Invalid input returns `400 VALIDATION_ERROR` and never
-  reaches storage. A duplicate email returns `409 EMAIL_TAKEN`. Success returns
+  is rejected. The password needs 8 to 128 characters, counted as Unicode code
+  points, so `é` counts as 1. The password is stored as an argon2id hash.
+  Invalid input (including a password under 8 or over 128 characters) returns
+  `400 VALIDATION_ERROR` and never reaches storage. A duplicate email returns `409 EMAIL_TAKEN`. Success returns
   `201` with the user, never the password.
 - **Login.** The email is normalized before lookup. An unknown email and a wrong
-  password both return `401 INVALID_CREDENTIALS`, and neither sets a cookie.
+  password both return `401 INVALID_CREDENTIALS`, and neither sets a cookie. A
+  password over 128 characters returns `INVALID_CREDENTIALS` without reading
+  storage or hashing.
   Storage failures and corrupt stored hashes are **not** reported as bad
   credentials: they return 500. Success returns `200 {access_token, user}`.
   The refresh token travels **only** in the `refresh_token` cookie (HttpOnly,
@@ -190,6 +213,11 @@ The test router posts to `/v1/auth`, and the refresh cookie path is
   **rotate**: the old token is consumed, and reusing it fails. An unknown token
   or a deleted user returns `INVALID_REFRESH_TOKEN` and clears the cookie.
   Storage failures return 500 and are not reported as an invalid token.
+  The in-memory store removes expired tokens that were never presented again
+  (a sweep during `Save`, at most once a minute).
+- **Hashing.** At most 4 password hashes (register and login) run at once, so
+  concurrent logins cannot exhaust memory. A request that ends while waiting for
+  a free slot fails without hashing and without a success response.
 - **Logout.** Always returns `204` and clears the cookie. Without a cookie the
   service is not called. If revocation fails, the response is 500 but the
   cookie is still cleared. A revoked token can no longer refresh.
@@ -246,7 +274,10 @@ no ratings. `image_url` is the storage public URL of the image key, or `null`.
   - `q`: trimmed, and blank means no search. Case-insensitive substring match
     on name, address, short description, and category name. `%` and `_` are
     literal. Attributes are **not** searched.
-  - `limit`: a positive int64, otherwise `INVALID_LIMIT`.
+  - `limit`: a positive integer, otherwise `INVALID_LIMIT`. An absent limit, or
+    one above 1000, is replaced by 1000, so no list is unbounded. `total` still
+    counts every match, so a client can tell when the list was cut off. This
+    includes requests that the web map sends without a limit.
   - `bbox=west,south,east,north`: four finite numbers with lon in ±180, lat in
     ±90, `west ≤ east`, and `south ≤ north`, otherwise `INVALID_BBOX`. Edges
     count as inside, and places without a location are excluded. A GiST index
@@ -278,7 +309,8 @@ no ratings. `image_url` is the storage public URL of the image key, or `null`.
   - If storing the key fails after promotion, the promoted object is deleted
     (best effort, failures ignored) and the old image is kept.
   - Promotion and type errors return `400 VALIDATION_ERROR`.
-- **Categories.** `GET /categories` and `GET /categories/{id}` return
+- **Categories.** `GET /categories` and `GET /categories/{id}` (served in
+  production at `/v1/places/categories` and `/v1/places/categories/{id}`, see §9) return
   `{id,name,slug,code,label,color,fields[]}`. `fields` is always an array,
   sorted by `sort_order` 1..n. `GET /categories` lists categories ordered by
   id. Each field is `{id, category_id, key, label,
@@ -487,11 +519,12 @@ runs one batch and exits, so it must be scheduled.
 | Code | Status | Raised by |
 | ---- | ------ | --------- |
 | `INVALID_BODY` | 400 | Every JSON endpoint (undecodable or wrongly-typed body) |
-| `VALIDATION_ERROR` | 400 | Business-rule violations: names, attributes, locations, ratings, lengths, unknown referenced sub-district or category on writes, and image type, key, size, or upload errors |
+| `VALIDATION_ERROR` | 400 | Business-rule violations: names, passwords, attributes, locations, ratings, lengths, unknown referenced sub-district or category on writes, and image type, key, size, or upload errors |
 | `INVALID_PLACE_ID` / `INVALID_SUB_DISTRICT_ID` / `INVALID_CATEGORY_ID` / `INVALID_SUGGESTION_ID` | 400 | Bad path id, or a bad list filter for places |
 | `INVALID_LIMIT` / `INVALID_BBOX` | 400 | `GET /places` |
 | `INVALID_STATUS` | 400 | `GET /suggestions` |
-| `UNAUTHORIZED` | 401 | No authenticated user in the request context |
+| `UNAUTHORIZED` | 401 | A missing, malformed, expired, or otherwise invalid access token, or no authenticated user in the request context |
+| `FORBIDDEN` | 403 | A valid token whose role is not allowed on an admin-only route |
 | `INVALID_CREDENTIALS` / `INVALID_REFRESH_TOKEN` | 401 | Auth |
 | `PLACE_NOT_FOUND` / `SUB_DISTRICT_NOT_FOUND` / `CATEGORY_NOT_FOUND` / `SUGGESTION_NOT_FOUND` | 404 | Unknown resource in the path. For `GET /places`, also unknown filter ids |
 | `EMAIL_TAKEN` / `SUB_DISTRICT_EXISTS` / `SUB_DISTRICT_IN_USE` / `ALREADY_REVIEWED` | 409 | Conflicts (`ALREADY_REVIEWED` covers both reviews and suggestions) |
@@ -528,8 +561,9 @@ When they disagree, the tests win. The docs record the history:
   `GEOMETRY(Point, 4326)`. The API uses GeoJSON.
 - **Paths and error codes.** Week 9–10 reports list `/places/`,
   `/places/categories/`, and lower-case codes such as `invalid_sub_district_id`.
-  The tests use `/places`, `/categories`, `/subdistricts`, and UPPER_SNAKE
-  codes. The cookie path suggests the API is mounted under `/v1`.
+  The handler tests use `/places`, `/categories`, `/subdistricts`, and UPPER_SNAKE
+  codes. The real router (checked by the router test) serves everything under
+  `/v1`, and the categories live at `/v1/places/categories`, not `/v1/categories`.
 - **Scope.** The ERD and Week 9 report exclude users, reviews, admin, and
   suggestions, and describe a read-only API. Those features now exist (see §4).
 - **Voting.** "Upvote / downvote" became 1–5 star reviews.
@@ -539,15 +573,29 @@ When they disagree, the tests win. The docs record the history:
 These are observations, not decisions. Raise them in PLANNING before relying on
 them.
 
-- **No tests cover:** router wiring and URL prefixes, **which routes require
-  auth or admin** (place and sub-district writes, image endpoints, suggestion
-  admin routes), middleware (`WithAuth` details, logging, recovery, CORS),
-  `config`, `httpx`, `jwt`, `postgis`, `database`, `cmd/*` (API, migrate,
-  seed), seed data, and the set of categories and fields that the migrations
-  define (including the category list order).
-- **Admin enforcement** is said to live in the router, but no test verifies it.
+- **No tests cover:** middleware beyond what the router test exercises
+  (`WithAuth` edge cases, recovery, CORS, the request-body cap), `config`,
+  `httpx`, `postgis`, `database`, `cmd/*` (API, migrate, seed), seed data, the
+  SQL in the repositories, and the set of categories and fields that the
+  migrations define (including the category list order).
+- **Specified but untested** (changed in the 2026-11-09 hardening pass, so they
+  are not yet part of the tested contract):
+  - Request bodies over 1 MiB fail as `400 INVALID_BODY` (`WithMaxBody`).
+  - The server sets read-header (10s), read (30s), write (30s), and idle (120s)
+    timeouts.
+  - Startup fails on an invalid `JWT_EXPIRES_MINUTES`,
+    `REFRESH_TOKEN_EXPIRES_DAYS`, or `COOKIE_SECURE`, and on a `JWT_SECRET`
+    shorter than 32 bytes.
+  - Migrations add indexes on `PLACES(sub_district_id, category_id)` and
+    `PLACE_SUGGESTIONS(user_id, status)` and `(place_id)`, and a `CHECK` that
+    `USERS.role` is `user` or `admin`.
+  - Cleanup after a failed approval or image store ignores request
+    cancellation, so a dropped request still removes the orphan.
+  - Every command logs through `slog`, and the `log` package and chi's request
+    log share its format.
 - **Refresh-token storage.** Tests use `auth.NewMemoryRefreshStore()`. Whether
-  production sessions survive a restart is not specified.
+  production sessions survive a restart is not specified, and the code keeps
+  tokens in memory, so a restart signs everyone out.
 - **Unspecified values:** `UploadTTL`, `MaxImageSize`, how and when the
   cleanup worker runs, and how long access tokens last in production.
 - **Unspecified behaviors:** review editing or deletion; a "current user" endpoint; listing users.
@@ -572,3 +620,4 @@ them.
 | 2026-11-01 | Verification update | Null bodies on JSON endpoints return `INVALID_BODY`; length limits and bare-address email are validated; optional place and sub-district text is trimmed and blank is stored as absent; sub-district image deletes and replacements are queued in `STORAGE_DELETIONS`; a missing refresh cookie clears the cookie; §6.3 error name corrected; resolved §10 items removed |
 | 2026-11-05 | Verification update | Categories grew from 5 to 16 (migration `add_perantau_categories`) with themed colors, and `GET /categories` is ordered by id; seed data covers every new category; the web category filter became a Base UI dropdown |
 | 2026-11-09 | Verification update | Update routes changed from `PATCH` to `PUT`: an update takes the same body as create and replaces every editable field, so absent nullable fields are cleared and `{}` or a `null` required field is a `400 VALIDATION_ERROR`. The partial-update type `httpx.Optional` was removed |
+| 2026-11-09 | Verification update | Hardening pass. Route access (public, signed-in, admin) is now tested against the real router; `403 FORBIDDEN` added to the catalogue; the access-token rules (HS256, issuer, expiry) are tested; passwords are 8 to 128 code points, with an over-long login returning `INVALID_CREDENTIALS`, and at most 4 hashes run at once; `GET /places` limit defaults to and is capped at 1000; expired refresh tokens are swept from the in-memory store; the privacy rule now allows the caller's own email in auth responses; production paths (`/v1/places/categories`) recorded in §9; untested hardening (body cap, timeouts, env checks, indexes, role `CHECK`, logging) listed in §10 |
