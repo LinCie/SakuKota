@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { slugify } from "~/shared/text";
 
@@ -58,19 +58,16 @@ export function useSlugFollow(followSlug: boolean) {
 
 /**
  * Filters table rows by a search term, matched case-insensitively against the
- * text `textOf` returns for each row. `textOf` should be a stable function.
+ * text `textOf` returns for each row.
  */
 export function useTableQuery<T>(rows: T[], textOf: (row: T) => string) {
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
 
-  const filtered = useMemo(
-    () =>
-      needle === ""
-        ? rows
-        : rows.filter((row) => textOf(row).toLowerCase().includes(needle)),
-    [rows, needle, textOf],
-  );
+  const filtered =
+    needle === ""
+      ? rows
+      : rows.filter((row) => textOf(row).toLowerCase().includes(needle));
 
   return { query, setQuery, rows: filtered };
 }

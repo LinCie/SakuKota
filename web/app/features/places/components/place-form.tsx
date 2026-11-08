@@ -1,6 +1,6 @@
 import { useSelector } from "@tanstack/react-form";
 import { LocateFixed } from "lucide-react";
-import { useMemo, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import type { SubDistrict } from "~/features/subdistricts/types";
 import { Button } from "~/shared/components/button";
@@ -53,13 +53,9 @@ export function PlaceForm({
   const position = useCurrentPosition();
 
   const category = categories.find((c) => String(c.id) === categoryId);
-  const neighbours = useMemo(
-    () =>
-      places.filter(
-        (place) =>
-          String(place.sub_district_id) === subDistrictId && place.location,
-      ),
-    [places, subDistrictId],
+  const neighbours = places.filter(
+    (place) =>
+      String(place.sub_district_id) === subDistrictId && place.location,
   );
   const pin: Pin | null =
     validCoordinate(lat, 90) && validCoordinate(lng, 180)
