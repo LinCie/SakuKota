@@ -101,7 +101,7 @@ func (s *service) SetImage(ctx context.Context, id int64, slot ImageSlot, upload
 
 	updated, err := s.repo.SetImageKey(ctx, id, slot, key)
 	if err != nil {
-		_ = s.images.Delete(ctx, key)
+		_ = s.images.Delete(context.WithoutCancel(ctx), key)
 		return nil, err
 	}
 

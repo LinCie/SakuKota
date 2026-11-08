@@ -152,8 +152,9 @@ func (s *service) Approve(ctx context.Context, id, adminID int64, p *place.Place
 	approved, err := s.repo.MarkApproved(ctx, id, created.ID, adminID)
 	if err != nil {
 		// A failure to delete the place is ignored: the place is left without
-		// a suggestion, but the approval itself has failed either way.
-		_ = s.places.Delete(ctx, created.ID)
+		// a suggestion, but the approval itself has failed either way. The
+		// delete ignores cancellation so a dropped request still cleans up.
+		_ = s.places.Delete(context.WithoutCancel(ctx), created.ID)
 		return nil, err
 	}
 
