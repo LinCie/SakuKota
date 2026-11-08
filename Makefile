@@ -6,7 +6,7 @@ DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/rantaugo?sslmode=dis
 MIGRATIONS_DIR ?= migrations
 # Pass everything from .env (JWT_SECRET, PORT, ...) on to the commands below.
 .EXPORT_ALL_VARIABLES:
-GOOSE := go run github.com/pressly/goose/v3/cmd/goose@v3.27.3
+GOOSE := go run github.com/pressly/goose/v3/cmd/goose@v3.28.0
 
 dev-backend:
 	@command -v air >/dev/null || { echo "air not found"; exit 1; }
