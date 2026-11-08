@@ -115,7 +115,8 @@ func (r *postgresRepository) GetByPlace(ctx context.Context, placeID int64) ([]R
 // ErrAlreadyReviewed and a missing place into ErrPlaceNotFound. Other errors
 // are returned unchanged.
 func mapCreateError(err error) error {
-	if database.IsCode(err, database.UniqueViolation) {
+	if database.IsCode(err, database.UniqueViolation) &&
+		database.ConstraintName(err) == "place_reviews_place_id_user_id_key" {
 		return ErrAlreadyReviewed
 	}
 

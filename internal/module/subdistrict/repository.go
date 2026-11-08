@@ -171,7 +171,8 @@ func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
 		id,
 	)
 	if err != nil {
-		if database.IsCode(err, database.ForeignKeyViolation) {
+		if database.IsCode(err, database.ForeignKeyViolation) &&
+			database.ConstraintName(err) == "places_sub_district_id_fkey" {
 			return ErrSubDistrictInUse
 		}
 		return err
