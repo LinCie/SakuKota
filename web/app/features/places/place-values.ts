@@ -1,7 +1,7 @@
 import type { SubDistrict } from "~/features/subdistricts/types";
 import { orNull } from "~/shared/text";
 
-import type { CreatePlaceRequest } from "./api";
+import type { PlaceRequest } from "./api";
 import { isRange } from "./attribute-format";
 import {
   buildAttributes,
@@ -102,7 +102,7 @@ export function attributesToValues(
 export function toPlaceRequest(
   values: PlaceValues,
   fields: CategoryField[],
-): CreatePlaceRequest {
+): PlaceRequest {
   return {
     sub_district_id: Number(values.subDistrictId),
     category_id: Number(values.categoryId),

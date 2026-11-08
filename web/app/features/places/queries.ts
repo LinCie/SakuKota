@@ -15,7 +15,7 @@ import {
   setPlaceImage,
   updatePlace,
   type GetPlacesParams,
-  type UpdatePlaceRequest,
+  type PlaceRequest,
 } from "./api";
 import { uploadImage } from "~/shared/image-upload";
 
@@ -104,7 +104,7 @@ export function useUploadPlaceImage() {
 export function useUpdatePlace() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, body }: { id: number; body: UpdatePlaceRequest }) =>
+    mutationFn: ({ id, body }: { id: number; body: PlaceRequest }) =>
       updatePlace(id, body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: placeKeys.all }),
   });

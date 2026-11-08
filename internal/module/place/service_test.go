@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/httpx"
 	"rantau-go/internal/module/place"
 	"rantau-go/internal/module/place/mock"
 	"rantau-go/internal/postgis"
@@ -409,16 +408,6 @@ func TestService_Create_Storage(t *testing.T) {
 // Updating and deleting places
 // -----------------------------------------------------------------------------
 
-// present is a PATCH field the client sent with the value v.
-func present[T any](v T) httpx.Optional[T] {
-	return httpx.Optional[T]{Set: true, Value: &v}
-}
-
-// null is a PATCH field the client sent as null.
-func null[T any]() httpx.Optional[T] {
-	return httpx.Optional[T]{Set: true}
-}
-
 func ptr[T any](v T) *T {
 	return &v
 }
@@ -455,14 +444,29 @@ func lookupCategory(_ context.Context, id int64) (*place.Category, error) {
 	return nil, place.ErrCategoryNotFound
 }
 
-// updatePlace runs Service.Update for place id, where existing is the stored
-// place. It returns the place the repository was asked to store, or nil if
-// storage was never reached.
-func updatePlace(t *testing.T, existing *place.Place, id int64, patch place.PlacePatch) (*place.Place, error) {
+// kopiInput is a full replacement for savedKopi: a Kopi in Menteng with every
+// optional field set. Updates change one field of it at a time.
+func kopiInput() *place.Place {
+	return &place.Place{
+		SubDistrictID:       1,
+		CategoryID:          2,
+		Name:                "Kopi Senja",
+		Address:             ptr("Jl. Sudirman 9"),
+		Location:            postgis.MustPoint(106.8, -6.2),
+		OperatingHours:      ptr("08:00-17:00"),
+		EstimatedPriceRange: ptr("Rp20.000-50.000"),
+		ShortDescription:    ptr("Kopi tubruk"),
+		Attributes:          json.RawMessage(`{"halal":true,"seats":12}`),
+	}
+}
+
+// updatePlace runs Service.Update for place id with the replacement p. It
+// returns the place the repository was asked to store, or nil if storage was
+// never reached.
+func updatePlace(t *testing.T, id int64, p *place.Place) (*place.Place, error) {
 	t.Helper()
 
 	repo := mock.NewMockRepository(gomock.NewController(t))
-	repo.EXPECT().GetPlace(gomock.Any(), id).Return(existing, nil).AnyTimes()
 	repo.EXPECT().GetCategory(gomock.Any(), gomock.Any()).DoAndReturn(lookupCategory).AnyTimes()
 
 	var stored *place.Place
@@ -472,72 +476,63 @@ func updatePlace(t *testing.T, existing *place.Place, id int64, patch place.Plac
 			return got, nil
 		}).AnyTimes()
 
-	_, err := place.NewService(repo, noImages(t)).Update(context.Background(), id, patch)
+	_, err := place.NewService(repo, noImages(t)).Update(context.Background(), id, p)
 	return stored, err
-}
-
-func TestService_Update_LookupFailure(t *testing.T) {
-	boom := errors.New("connection reset")
-
-	tests := []struct {
-		name    string
-		getErr  error
-		wantErr error
-	}{
-		{name: "unknown place", getErr: place.ErrPlaceNotFound, wantErr: place.ErrPlaceNotFound},
-		{name: "lookup failure is returned", getErr: boom, wantErr: boom},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// No Update expectation: nothing may be stored when the place cannot be read.
-			repo := mock.NewMockRepository(gomock.NewController(t))
-			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(nil, tc.getErr)
-
-			_, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7,
-				place.PlacePatch{Name: present("Kopi Baru")})
-			require.ErrorIs(t, err, tc.wantErr)
-		})
-	}
 }
 
 func TestService_Update_Fields(t *testing.T) {
 	tests := []struct {
 		name   string
-		patch  place.PlacePatch
-		change func(*place.Place) // turns savedKopi into the wanted stored place
+		change func(*place.Place) // turns kopiInput into the replacement
+		want   func(*place.Place) // turns kopiInput into the wanted stored place
 	}{
-		{name: "empty patch changes nothing", patch: place.PlacePatch{}, change: func(*place.Place) {}},
-		{name: "name is trimmed", patch: place.PlacePatch{Name: present("  Kopi Baru\t")},
-			change: func(p *place.Place) { p.Name = "Kopi Baru" }},
-		{name: "address is replaced", patch: place.PlacePatch{Address: present("Jl. Kemang 2")},
-			change: func(p *place.Place) { p.Address = ptr("Jl. Kemang 2") }},
-		{name: "location is replaced", patch: place.PlacePatch{Location: present(*postgis.MustPoint(106.85, -6.18))},
-			change: func(p *place.Place) { p.Location = postgis.MustPoint(106.85, -6.18) }},
-		{name: "sub-district is replaced", patch: place.PlacePatch{SubDistrictID: present(int64(2))},
-			change: func(p *place.Place) { p.SubDistrictID = 2 }},
-		{name: "null clears every nullable field", patch: place.PlacePatch{
-			Address:             null[string](),
-			Location:            null[postgis.Point](),
-			OperatingHours:      null[string](),
-			EstimatedPriceRange: null[string](),
-			ShortDescription:    null[string](),
-		}, change: func(p *place.Place) {
-			p.Address, p.Location, p.OperatingHours = nil, nil, nil
-			p.EstimatedPriceRange, p.ShortDescription = nil, nil
-		}},
+		{name: "same fields change nothing", change: func(*place.Place) {}, want: func(*place.Place) {}},
+		{name: "name is trimmed",
+			change: func(p *place.Place) { p.Name = "  Kopi Baru\t" },
+			want:   func(p *place.Place) { p.Name = "Kopi Baru" }},
+		{name: "address is replaced",
+			change: func(p *place.Place) { p.Address = ptr("Jl. Kemang 2") },
+			want:   func(p *place.Place) { p.Address = ptr("Jl. Kemang 2") }},
+		{name: "location is replaced",
+			change: func(p *place.Place) { p.Location = postgis.MustPoint(106.85, -6.18) },
+			want:   func(p *place.Place) { p.Location = postgis.MustPoint(106.85, -6.18) }},
+		{name: "sub-district is replaced",
+			change: func(p *place.Place) { p.SubDistrictID = 2 },
+			want:   func(p *place.Place) { p.SubDistrictID = 2 }},
+		{name: "absent nullable fields are cleared",
+			change: func(p *place.Place) {
+				p.Address, p.Location, p.OperatingHours = nil, nil, nil
+				p.EstimatedPriceRange, p.ShortDescription = nil, nil
+			},
+			want: func(p *place.Place) {
+				p.Address, p.Location, p.OperatingHours = nil, nil, nil
+				p.EstimatedPriceRange, p.ShortDescription = nil, nil
+			}},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			want := savedKopi()
-			tc.change(want)
+			want := kopiInput()
+			want.ID = 7
+			tc.want(want)
 
-			stored, err := updatePlace(t, savedKopi(), 7, tc.patch)
+			input := kopiInput()
+			tc.change(input)
+
+			stored, err := updatePlace(t, 7, input)
 			require.NoError(t, err)
 			assert.Equal(t, want, stored)
 		})
 	}
+}
+
+func TestService_Update_ID(t *testing.T) {
+	input := kopiInput()
+	input.ID = 99 // the place comes from the path, not from the replacement
+
+	stored, err := updatePlace(t, 7, input)
+	require.NoError(t, err)
+	assert.Equal(t, int64(7), stored.ID)
 }
 
 func TestService_Update_Name(t *testing.T) {
@@ -561,7 +556,10 @@ func TestService_Update_Name(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			stored, err := updatePlace(t, savedKopi(), 7, place.PlacePatch{Name: present(tc.input)})
+			input := kopiInput()
+			input.Name = tc.input
+
+			stored, err := updatePlace(t, 7, input)
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr)
 				require.Nil(t, stored, "invalid name reached storage")
@@ -588,8 +586,10 @@ func TestService_Update_Location(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			stored, err := updatePlace(t, savedKopi(), 7,
-				place.PlacePatch{Location: present(*postgis.MustPoint(tc.lon, tc.lat))})
+			input := kopiInput()
+			input.Location = postgis.MustPoint(tc.lon, tc.lat)
+
+			stored, err := updatePlace(t, 7, input)
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr)
 				require.Nil(t, stored, "location outside Indonesia reached storage")
@@ -607,20 +607,24 @@ func TestService_Update_Attributes(t *testing.T) {
 	// The place is a Kopi, which has no required fields.
 	tests := []struct {
 		name      string
-		attrs     httpx.Optional[json.RawMessage]
+		attrs     json.RawMessage
 		wantAttrs string
 		wantErr   error
 	}{
-		{name: "new attributes replace the old ones", attrs: present(json.RawMessage(`{"halal":false}`)), wantAttrs: `{"halal":false}`, wantErr: nil},
-		{name: "null attributes become an empty object", attrs: null[json.RawMessage](), wantAttrs: `{}`, wantErr: nil},
-		{name: "unknown key is rejected", attrs: present(json.RawMessage(`{"parking":true}`)), wantAttrs: "", wantErr: place.ErrInvalidAttributes},
-		{name: "wrong type is rejected", attrs: present(json.RawMessage(`{"seats":"many"}`)), wantAttrs: "", wantErr: place.ErrInvalidAttributes},
-		{name: "array is rejected", attrs: present(json.RawMessage(`[1]`)), wantAttrs: "", wantErr: place.ErrInvalidAttributes},
+		{name: "attributes are stored", attrs: json.RawMessage(`{"halal":false}`), wantAttrs: `{"halal":false}`, wantErr: nil},
+		{name: "null attributes become an empty object", attrs: json.RawMessage(`null`), wantAttrs: `{}`, wantErr: nil},
+		{name: "absent attributes become an empty object", attrs: nil, wantAttrs: `{}`, wantErr: nil},
+		{name: "unknown key is rejected", attrs: json.RawMessage(`{"parking":true}`), wantAttrs: "", wantErr: place.ErrInvalidAttributes},
+		{name: "wrong type is rejected", attrs: json.RawMessage(`{"seats":"many"}`), wantAttrs: "", wantErr: place.ErrInvalidAttributes},
+		{name: "array is rejected", attrs: json.RawMessage(`[1]`), wantAttrs: "", wantErr: place.ErrInvalidAttributes},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			stored, err := updatePlace(t, savedKopi(), 7, place.PlacePatch{Attributes: tc.attrs})
+			input := kopiInput()
+			input.Attributes = tc.attrs
+
+			stored, err := updatePlace(t, 7, input)
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr)
 				require.Nil(t, stored, "invalid attributes reached storage")
@@ -635,36 +639,21 @@ func TestService_Update_Attributes(t *testing.T) {
 func TestService_Update_BlankOptionalText(t *testing.T) {
 	tests := []struct {
 		name      string
-		stored    string // attributes of the place before the update
-		patch     string // attributes sent in the update
+		attrs     string // attributes sent in the update
 		wantAttrs string
 	}{
-		{name: "empty string is dropped", stored: `{"seats":12}`, patch: `{"website":"","seats":12}`, wantAttrs: `{"seats":12}`},
-		{name: "spaces only is dropped", stored: `{"seats":12}`, patch: `{"website":"   ","seats":12}`, wantAttrs: `{"seats":12}`},
-		{name: "tabs and newlines only is dropped", stored: `{"seats":12}`, patch: `{"website":"\t\n"}`, wantAttrs: `{}`},
-		{name: "stored text is removed when the patch blanks it", stored: `{"website":"https://a.example","seats":12}`, patch: `{"website":"","seats":12}`, wantAttrs: `{"seats":12}`},
+		{name: "empty string is dropped", attrs: `{"website":"","seats":12}`, wantAttrs: `{"seats":12}`},
+		{name: "spaces only is dropped", attrs: `{"website":"   ","seats":12}`, wantAttrs: `{"seats":12}`},
+		{name: "tabs and newlines only is dropped", attrs: `{"website":"\t\n"}`, wantAttrs: `{}`},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			existing := savedKopi()
-			existing.CategoryID = 3
-			existing.Category = place.Category{ID: 3, Name: "Cafe", Slug: "cafe"}
-			existing.Attributes = json.RawMessage(tc.stored)
+			input := kopiInput()
+			input.CategoryID = 3 // Cafe
+			input.Attributes = json.RawMessage(tc.attrs)
 
-			repo := mock.NewMockRepository(gomock.NewController(t))
-			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(existing, nil).AnyTimes()
-			repo.EXPECT().GetCategory(gomock.Any(), gomock.Any()).DoAndReturn(lookupCategory).AnyTimes()
-
-			var stored *place.Place
-			repo.EXPECT().Update(gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ context.Context, got *place.Place) (*place.Place, error) {
-					stored = got
-					return got, nil
-				})
-
-			_, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7,
-				place.PlacePatch{Attributes: present(json.RawMessage(tc.patch))})
+			stored, err := updatePlace(t, 7, input)
 			require.NoError(t, err)
 			assertJSON(t, stored.Attributes, tc.wantAttrs)
 		})
@@ -672,22 +661,16 @@ func TestService_Update_BlankOptionalText(t *testing.T) {
 }
 
 func TestService_Update_BlankRequiredText(t *testing.T) {
-	for _, patch := range []string{`{"contact":""}`, `{"contact":"   "}`, `{"contact":"\t\n"}`} {
-		t.Run(patch, func(t *testing.T) {
-			// The place is a Warung, which requires "contact". No Update
-			// expectation: nothing may be stored.
-			existing := savedKopi()
-			existing.CategoryID = 1
-			existing.Category = place.Category{ID: 1, Name: "Warung", Slug: "warung"}
-			existing.Attributes = json.RawMessage(`{"contact":"0812"}`)
+	for _, attrs := range []string{`{"contact":""}`, `{"contact":"   "}`, `{"contact":"\t\n"}`} {
+		t.Run(attrs, func(t *testing.T) {
+			// The place is a Warung, which requires "contact".
+			input := kopiInput()
+			input.CategoryID = 1
+			input.Attributes = json.RawMessage(attrs)
 
-			repo := mock.NewMockRepository(gomock.NewController(t))
-			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(existing, nil).AnyTimes()
-			repo.EXPECT().GetCategory(gomock.Any(), gomock.Any()).DoAndReturn(lookupCategory).AnyTimes()
-
-			_, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7,
-				place.PlacePatch{Attributes: present(json.RawMessage(patch))})
+			stored, err := updatePlace(t, 7, input)
 			require.ErrorIs(t, err, place.ErrInvalidAttributes)
+			require.Nil(t, stored, "blank required text reached storage")
 		})
 	}
 }
@@ -695,68 +678,52 @@ func TestService_Update_BlankRequiredText(t *testing.T) {
 func TestService_Update_Category(t *testing.T) {
 	tests := []struct {
 		name           string
-		attrs          string // the place's attributes before the update
-		patch          place.PlacePatch
+		categoryID     int64
+		attrs          json.RawMessage
 		wantCategoryID int64
 		wantAttrs      string
 		wantErr        error
 	}{
 		{
-			name:           "attributes that fit the new category are kept",
-			attrs:          `{"contact":"0812","seats":12}`,
-			patch:          place.PlacePatch{CategoryID: present(int64(1))},
+			name:           "attributes that fit the category are stored",
+			categoryID:     1,
+			attrs:          json.RawMessage(`{"contact":"0812","seats":12}`),
 			wantCategoryID: 1,
 			wantAttrs:      `{"contact":"0812","seats":12}`,
-			wantErr:        nil,
 		},
 		{
-			name:           "attributes missing a required field of the new category are rejected",
-			attrs:          `{"halal":true,"seats":12}`,
-			patch:          place.PlacePatch{CategoryID: present(int64(1))},
-			wantCategoryID: 0,
-			wantAttrs:      "",
-			wantErr:        place.ErrInvalidAttributes,
+			name:       "attributes missing a required field of the category are rejected",
+			categoryID: 1,
+			attrs:      json.RawMessage(`{"halal":true,"seats":12}`),
+			wantErr:    place.ErrInvalidAttributes,
 		},
 		{
-			name:           "attributes unknown to the new category are rejected",
-			attrs:          `{"contact":"0812"}`,
-			patch:          place.PlacePatch{CategoryID: present(int64(2))},
-			wantCategoryID: 0,
-			wantAttrs:      "",
-			wantErr:        place.ErrInvalidAttributes,
+			name:       "absent attributes are rejected when the category requires a field",
+			categoryID: 1,
+			attrs:      nil,
+			wantErr:    place.ErrInvalidAttributes,
 		},
 		{
-			name:           "new attributes are checked against the new category",
-			attrs:          `{"contact":"0812"}`,
-			patch:          place.PlacePatch{CategoryID: present(int64(1)), Attributes: present(json.RawMessage(`{"seats":12}`))},
-			wantCategoryID: 0,
-			wantAttrs:      "",
-			wantErr:        place.ErrInvalidAttributes,
+			name:       "attributes unknown to the category are rejected",
+			categoryID: 2,
+			attrs:      json.RawMessage(`{"contact":"0812"}`),
+			wantErr:    place.ErrInvalidAttributes,
 		},
 		{
-			name:           "new attributes that fit the new category are stored",
-			attrs:          `{"halal":true}`,
-			patch:          place.PlacePatch{CategoryID: present(int64(1)), Attributes: present(json.RawMessage(`{"contact":"0812"}`))},
-			wantCategoryID: 1,
-			wantAttrs:      `{"contact":"0812"}`,
-			wantErr:        nil,
-		},
-		{
-			name:           "unknown category is rejected",
-			attrs:          `{"halal":true}`,
-			patch:          place.PlacePatch{CategoryID: present(int64(99))},
-			wantCategoryID: 0,
-			wantAttrs:      "",
-			wantErr:        place.ErrCategoryNotFound,
+			name:       "unknown category is rejected",
+			categoryID: 99,
+			attrs:      json.RawMessage(`{"halal":true}`),
+			wantErr:    place.ErrCategoryNotFound,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			existing := savedKopi()
-			existing.Attributes = json.RawMessage(tc.attrs)
+			input := kopiInput()
+			input.CategoryID = tc.categoryID
+			input.Attributes = tc.attrs
 
-			stored, err := updatePlace(t, existing, 7, tc.patch)
+			stored, err := updatePlace(t, 7, input)
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr)
 				require.Nil(t, stored, "rejected update reached storage")
@@ -786,11 +753,10 @@ func TestService_Update_Storage(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
-			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), nil)
+			repo.EXPECT().GetCategory(gomock.Any(), int64(2)).Return(openCategory(), nil)
 			repo.EXPECT().Update(gomock.Any(), gomock.Any()).Return(&place.Place{ID: 7}, tc.updateErr)
 
-			got, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7,
-				place.PlacePatch{Name: present("Kopi Baru")})
+			got, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7, kopiInput())
 			require.ErrorIs(t, err, tc.wantErr)
 			if tc.wantErr == nil {
 				require.NotNil(t, got, "stored place was not returned")
@@ -842,31 +808,26 @@ func TestService_Delete_Image(t *testing.T) {
 // placeTextField is an optional text field of a place. limit is the length its
 // column allows in characters, or 0 when the field has no limit.
 type placeTextField struct {
-	name     string
-	limit    int
-	tooLong  error
-	set      func(p *place.Place, v *string)
-	setPatch func(p *place.PlacePatch, v string)
-	get      func(p *place.Place) *string
+	name    string
+	limit   int
+	tooLong error
+	set     func(p *place.Place, v *string)
+	get     func(p *place.Place) *string
 }
 
 var placeTextFields = []placeTextField{
 	{name: "address", limit: place.MaxAddressLength, tooLong: place.ErrAddressTooLong,
-		set:      func(p *place.Place, v *string) { p.Address = v },
-		setPatch: func(p *place.PlacePatch, v string) { p.Address = present(v) },
-		get:      func(p *place.Place) *string { return p.Address }},
+		set: func(p *place.Place, v *string) { p.Address = v },
+		get: func(p *place.Place) *string { return p.Address }},
 	{name: "operating hours", limit: place.MaxOperatingHoursLength, tooLong: place.ErrOperatingHoursTooLong,
-		set:      func(p *place.Place, v *string) { p.OperatingHours = v },
-		setPatch: func(p *place.PlacePatch, v string) { p.OperatingHours = present(v) },
-		get:      func(p *place.Place) *string { return p.OperatingHours }},
+		set: func(p *place.Place, v *string) { p.OperatingHours = v },
+		get: func(p *place.Place) *string { return p.OperatingHours }},
 	{name: "estimated price range", limit: place.MaxEstimatedPriceRangeLength, tooLong: place.ErrEstimatedPriceRangeTooLong,
-		set:      func(p *place.Place, v *string) { p.EstimatedPriceRange = v },
-		setPatch: func(p *place.PlacePatch, v string) { p.EstimatedPriceRange = present(v) },
-		get:      func(p *place.Place) *string { return p.EstimatedPriceRange }},
+		set: func(p *place.Place, v *string) { p.EstimatedPriceRange = v },
+		get: func(p *place.Place) *string { return p.EstimatedPriceRange }},
 	{name: "short description",
-		set:      func(p *place.Place, v *string) { p.ShortDescription = v },
-		setPatch: func(p *place.PlacePatch, v string) { p.ShortDescription = present(v) },
-		get:      func(p *place.Place) *string { return p.ShortDescription }},
+		set: func(p *place.Place, v *string) { p.ShortDescription = v },
+		get: func(p *place.Place) *string { return p.ShortDescription }},
 }
 
 func TestService_Create_OptionalText(t *testing.T) {
@@ -949,20 +910,11 @@ func TestService_Update_OptionalText(t *testing.T) {
 
 		for _, tc := range tests {
 			t.Run(f.name+"/"+tc.name, func(t *testing.T) {
-				repo := mock.NewMockRepository(gomock.NewController(t))
-				repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), nil)
+				input := kopiInput()
+				value := tc.input
+				f.set(input, &value)
 
-				var stored *place.Place
-				repo.EXPECT().Update(gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ context.Context, got *place.Place) (*place.Place, error) {
-						stored = got
-						return got, nil
-					}).AnyTimes()
-
-				var patch place.PlacePatch
-				f.setPatch(&patch, tc.input)
-
-				_, err := place.NewService(repo, noImages(t)).Update(context.Background(), 7, patch)
+				stored, err := updatePlace(t, 7, input)
 				require.ErrorIs(t, err, tc.wantErr)
 				if tc.wantErr != nil {
 					require.Nil(t, stored, "refused update reached storage")

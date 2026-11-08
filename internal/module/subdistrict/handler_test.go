@@ -29,7 +29,7 @@ func newRouter(svc subdistrict.Service) http.Handler {
 	r.Get("/subdistricts", h.GetSubDistricts)
 	r.Get("/subdistricts/{id}", h.GetSubDistrict)
 	r.Post("/subdistricts", h.CreateSubDistrict)
-	r.Patch("/subdistricts/{id}", h.PatchSubDistrict)
+	r.Put("/subdistricts/{id}", h.PutSubDistrict)
 	r.Delete("/subdistricts/{id}", h.DeleteSubDistrict)
 	r.Post("/subdistricts/{id}/image/upload-url", h.CreateImageUpload(subdistrict.SlotImage))
 	r.Put("/subdistricts/{id}/image", h.SetImage(subdistrict.SlotImage))
@@ -395,9 +395,9 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 		},
 		{
 			name:   "update sub-district",
-			method: http.MethodPatch,
+			method: http.MethodPut,
 			target: "/subdistricts/1",
-			body:   `{"name":"Menteng Atas"}`,
+			body:   `{"name":"Menteng Atas","slug":"menteng"}`,
 			fail: func(s *mock.MockService) {
 				s.EXPECT().Update(gomock.Any(), int64(1), gomock.Any()).Return(nil, dbErr)
 			},
@@ -427,81 +427,80 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// PATCH /subdistricts/{id}
+// PUT /subdistricts/{id}
 // -----------------------------------------------------------------------------
 
-func TestHandler_PatchSubDistrict_RejectsInvalidRequests(t *testing.T) {
+func TestHandler_PutSubDistrict_RejectsInvalidRequests(t *testing.T) {
+	const valid = `{"name":"Kemang","slug":"kemang"}`
+
 	tests := []struct {
 		name     string
 		target   string
 		body     string
 		wantCode string
 	}{
-		{name: "id is not a number", target: "/subdistricts/abc", body: `{"name":"Kemang"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
-		{name: "id is fractional", target: "/subdistricts/1.5", body: `{"name":"Kemang"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
-		{name: "id is zero", target: "/subdistricts/0", body: `{"name":"Kemang"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
-		{name: "id is negative", target: "/subdistricts/-1", body: `{"name":"Kemang"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "id is not a number", target: "/subdistricts/abc", body: valid, wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "id is fractional", target: "/subdistricts/1.5", body: valid, wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "id is zero", target: "/subdistricts/0", body: valid, wantCode: "INVALID_SUB_DISTRICT_ID"},
+		{name: "id is negative", target: "/subdistricts/-1", body: valid, wantCode: "INVALID_SUB_DISTRICT_ID"},
 		{name: "empty body", target: "/subdistricts/1", body: ``, wantCode: "INVALID_BODY"},
 		{name: "truncated JSON", target: "/subdistricts/1", body: `{"name":"Kemang"`, wantCode: "INVALID_BODY"},
 		{name: "body is an array", target: "/subdistricts/1", body: `[]`, wantCode: "INVALID_BODY"},
 		{name: "body is null", target: "/subdistricts/1", body: `null`, wantCode: "INVALID_BODY"},
-		{name: "name is a number", target: "/subdistricts/1", body: `{"name":5}`, wantCode: "INVALID_BODY"},
-		{name: "name is null", target: "/subdistricts/1", body: `{"name":null}`, wantCode: "INVALID_BODY"},
-		{name: "slug is null", target: "/subdistricts/1", body: `{"slug":null}`, wantCode: "INVALID_BODY"},
-		{name: "estimated daily spending is a string", target: "/subdistricts/1", body: `{"estimated_daily_spending":"1.5"}`, wantCode: "INVALID_BODY"},
+		{name: "name is a number", target: "/subdistricts/1", body: `{"name":5,"slug":"kemang"}`, wantCode: "INVALID_BODY"},
+		{name: "estimated daily spending is a string", target: "/subdistricts/1",
+			body: `{"name":"Kemang","slug":"kemang","estimated_daily_spending":"1.5"}`, wantCode: "INVALID_BODY"},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// No expectations: an invalid request must never reach the service.
 			svc := mock.NewMockService(gomock.NewController(t))
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, tc.target, tc.body))
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, tc.target, tc.body))
 			assertError(t, rec, http.StatusBadRequest, tc.wantCode)
 		})
 	}
 }
 
-func TestHandler_PatchSubDistrict_PassesPatchToService(t *testing.T) {
+func TestHandler_PutSubDistrict_PassesSubDistrictToService(t *testing.T) {
 	tests := []struct {
-		name   string
-		target string
-		body   string
-		wantID int64
-		want   subdistrict.SubDistrictPatch
+		name string
+		body string
+		want *subdistrict.SubDistrict
 	}{
-		{name: "empty body changes nothing", target: "/subdistricts/9", body: `{}`, wantID: 9,
-			want: subdistrict.SubDistrictPatch{}},
-		{name: "name is passed as sent", target: "/subdistricts/9", body: `{"name":"  Menteng Atas  "}`, wantID: 9,
-			want: subdistrict.SubDistrictPatch{Name: present("  Menteng Atas  ")}},
-		{name: "slug is replaced", target: "/subdistricts/9", body: `{"slug":"menteng-atas"}`, wantID: 9,
-			want: subdistrict.SubDistrictPatch{Slug: present("menteng-atas")}},
-		{name: "text is replaced", target: "/subdistricts/9", body: `{"safety_crime_information":"Aman"}`, wantID: 9,
-			want: subdistrict.SubDistrictPatch{SafetyCrimeInformation: present("Aman")}},
-		{name: "null clears an optional text field", target: "/subdistricts/9", body: `{"flood_history":null}`, wantID: 9,
-			want: subdistrict.SubDistrictPatch{FloodHistory: null[string]()}},
-		{name: "number is replaced", target: "/subdistricts/9", body: `{"estimated_daily_spending":750000.25}`, wantID: 9,
-			want: subdistrict.SubDistrictPatch{EstimatedDailySpending: present(750000.25)}},
-		{name: "null clears the number", target: "/subdistricts/9", body: `{"estimated_daily_spending":null}`, wantID: 9,
-			want: subdistrict.SubDistrictPatch{EstimatedDailySpending: null[float64]()}},
-		{name: "map image URL can no longer be patched", target: "/subdistricts/9", body: `{"static_map_image_url":null}`, wantID: 9,
-			want: subdistrict.SubDistrictPatch{}},
-		{name: "client id and unknown keys are ignored", target: "/subdistricts/9",
-			body: `{"id":99,"created_at":"yesterday","slug":"menteng-atas"}`, wantID: 9,
-			want: subdistrict.SubDistrictPatch{Slug: present("menteng-atas")}},
+		{name: "every field is passed as sent",
+			body: `{"name":"  Menteng Atas  ","slug":"menteng-atas","flood_history":"Banjir 2024",
+				"safety_crime_information":"Aman","estimated_daily_spending":750000.25}`,
+			want: &subdistrict.SubDistrict{
+				Name:                   "  Menteng Atas  ",
+				Slug:                   "menteng-atas",
+				FloodHistory:           ptr("Banjir 2024"),
+				SafetyCrimeInformation: ptr("Aman"),
+				EstimatedDailySpending: ptr(750000.25),
+			}},
+		{name: "null and left-out keys are passed as absent",
+			body: `{"name":"Menteng","slug":"menteng","flood_history":null}`,
+			want: &subdistrict.SubDistrict{Name: "Menteng", Slug: "menteng"}},
+		{name: "map image URL is ignored",
+			body: `{"name":"Menteng","slug":"menteng","static_map_image_url":"https://evil.test/x.png"}`,
+			want: &subdistrict.SubDistrict{Name: "Menteng", Slug: "menteng"}},
+		{name: "client id and unknown keys are ignored",
+			body: `{"id":99,"created_at":"yesterday","name":"Menteng","slug":"menteng"}`,
+			want: &subdistrict.SubDistrict{Name: "Menteng", Slug: "menteng"}},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().Update(gomock.Any(), tc.wantID, tc.want).Return(&subdistrict.SubDistrict{ID: tc.wantID}, nil)
+			svc.EXPECT().Update(gomock.Any(), int64(9), tc.want).Return(&subdistrict.SubDistrict{ID: 9}, nil)
 
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, tc.target, tc.body))
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/9", tc.body))
 			require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body)
 		})
 	}
 }
 
-func TestHandler_PatchSubDistrict_MapsServiceErrors(t *testing.T) {
+func TestHandler_PutSubDistrict_MapsServiceErrors(t *testing.T) {
 	tests := []struct {
 		name       string
 		err        error
@@ -523,22 +522,22 @@ func TestHandler_PatchSubDistrict_MapsServiceErrors(t *testing.T) {
 			svc := mock.NewMockService(gomock.NewController(t))
 			svc.EXPECT().Update(gomock.Any(), int64(1), gomock.Any()).Return(nil, tc.err)
 
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, "/subdistricts/1", `{"name":"Menteng"}`))
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/1", `{"name":"Menteng","slug":"menteng"}`))
 			assertError(t, rec, tc.wantStatus, tc.wantCode)
 		})
 	}
 }
 
-func TestHandler_PatchSubDistrict_Success(t *testing.T) {
+func TestHandler_PutSubDistrict_Success(t *testing.T) {
 	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().Update(gomock.Any(), int64(3), subdistrict.SubDistrictPatch{Name: present("Menteng Atas")}).Return(&subdistrict.SubDistrict{
+	svc.EXPECT().Update(gomock.Any(), int64(3), &subdistrict.SubDistrict{Name: "Menteng Atas", Slug: "menteng"}).Return(&subdistrict.SubDistrict{
 		ID:                3,
 		Name:              "Menteng Atas",
 		Slug:              "menteng",
 		StaticMapImageKey: ptr("subdistricts/3/static-map/a.png"),
 	}, nil)
 
-	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, "/subdistricts/3", `{"name":"Menteng Atas"}`))
+	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/3", `{"name":"Menteng Atas","slug":"menteng"}`))
 	assertData(t, rec, http.StatusOK, `{
 		"id": 3,
 		"name": "Menteng Atas",

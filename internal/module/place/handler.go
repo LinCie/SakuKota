@@ -177,7 +177,7 @@ func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
-	var req *CreatePlaceRequest
+	var req *PlaceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
 		return
@@ -192,8 +192,8 @@ func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusCreated, toPlaceResponse(*p, h.imageURL))
 }
 
-// PatchPlace partially updates the place given by the `id` path parameter.
-func (h *Handler) PatchPlace(w http.ResponseWriter, r *http.Request) {
+// PutPlace replaces the place given by the `id` path parameter.
+func (h *Handler) PutPlace(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
@@ -201,13 +201,13 @@ func (h *Handler) PatchPlace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// A body of null decodes to a nil pointer and is rejected with the others.
-	var req *UpdatePlaceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil || req.clearsRequiredField() {
+	var req *PlaceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
 		return
 	}
 
-	p, err := h.service.Update(r.Context(), id, PlacePatch(*req))
+	p, err := h.service.Update(r.Context(), id, toPlace(*req))
 	if err != nil {
 		respondPlaceError(w, err)
 		return

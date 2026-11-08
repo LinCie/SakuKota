@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/httpx"
 	"rantau-go/internal/module/subdistrict"
 	"rantau-go/internal/module/subdistrict/mock"
 	"rantau-go/internal/storage"
@@ -19,16 +18,6 @@ import (
 
 // family is one emoji made of five code points: man, ZWJ, woman, ZWJ, girl.
 const family = "\U0001F468\u200D\U0001F469\u200D\U0001F467"
-
-// present is a PATCH field the client sent with the value v.
-func present[T any](v T) httpx.Optional[T] {
-	return httpx.Optional[T]{Set: true, Value: &v}
-}
-
-// null is a PATCH field the client sent as null.
-func null[T any]() httpx.Optional[T] {
-	return httpx.Optional[T]{Set: true}
-}
 
 func ptr[T any](v T) *T {
 	return &v
@@ -168,19 +157,16 @@ func TestService_Create_OptionalFieldLimits(t *testing.T) {
 
 func TestService_OptionalText(t *testing.T) {
 	fields := []struct {
-		name     string
-		set      func(*subdistrict.SubDistrict, *string)
-		setPatch func(*subdistrict.SubDistrictPatch, string)
-		get      func(*subdistrict.SubDistrict) *string
+		name string
+		set  func(*subdistrict.SubDistrict, *string)
+		get  func(*subdistrict.SubDistrict) *string
 	}{
 		{name: "flood history",
-			set:      func(sd *subdistrict.SubDistrict, v *string) { sd.FloodHistory = v },
-			setPatch: func(p *subdistrict.SubDistrictPatch, v string) { p.FloodHistory = present(v) },
-			get:      func(sd *subdistrict.SubDistrict) *string { return sd.FloodHistory }},
+			set: func(sd *subdistrict.SubDistrict, v *string) { sd.FloodHistory = v },
+			get: func(sd *subdistrict.SubDistrict) *string { return sd.FloodHistory }},
 		{name: "safety and crime information",
-			set:      func(sd *subdistrict.SubDistrict, v *string) { sd.SafetyCrimeInformation = v },
-			setPatch: func(p *subdistrict.SubDistrictPatch, v string) { p.SafetyCrimeInformation = present(v) },
-			get:      func(sd *subdistrict.SubDistrict) *string { return sd.SafetyCrimeInformation }},
+			set: func(sd *subdistrict.SubDistrict, v *string) { sd.SafetyCrimeInformation = v },
+			get: func(sd *subdistrict.SubDistrict) *string { return sd.SafetyCrimeInformation }},
 	}
 
 	tests := []struct {
@@ -206,10 +192,11 @@ func TestService_OptionalText(t *testing.T) {
 			})
 
 			t.Run("update/"+f.name+"/"+tc.name, func(t *testing.T) {
-				var patch subdistrict.SubDistrictPatch
-				f.setPatch(&patch, tc.input)
+				sd := mentengInput()
+				input := tc.input
+				f.set(sd, &input)
 
-				stored, err := updateSubDistrict(t, savedMenteng(), 7, patch)
+				stored, err := updateSubDistrict(t, 7, sd)
 				require.NoError(t, err)
 				assert.Equal(t, ptrString(tc.want), ptrString(f.get(stored)), "stored %s", f.name)
 			})
@@ -300,14 +287,25 @@ func savedMenteng() *subdistrict.SubDistrict {
 	}
 }
 
-// updateSubDistrict runs Service.Update for sub-district id, where existing is
-// the stored sub-district. It returns the sub-district the repository was asked
-// to store, or nil if storage was never reached.
-func updateSubDistrict(t *testing.T, existing *subdistrict.SubDistrict, id int64, patch subdistrict.SubDistrictPatch) (*subdistrict.SubDistrict, error) {
+// mentengInput is a full replacement for savedMenteng: a Menteng with every
+// optional field set. Updates change one field of it at a time.
+func mentengInput() *subdistrict.SubDistrict {
+	return &subdistrict.SubDistrict{
+		Name:                   "Menteng",
+		Slug:                   "menteng",
+		FloodHistory:           ptr("Banjir 2020"),
+		SafetyCrimeInformation: ptr("Aman di siang hari"),
+		EstimatedDailySpending: ptr(1500000.5),
+	}
+}
+
+// updateSubDistrict runs Service.Update for sub-district id with the
+// replacement sd. It returns the sub-district the repository was asked to
+// store, or nil if storage was never reached.
+func updateSubDistrict(t *testing.T, id int64, sd *subdistrict.SubDistrict) (*subdistrict.SubDistrict, error) {
 	t.Helper()
 
 	repo := mock.NewMockRepository(gomock.NewController(t))
-	repo.EXPECT().GetSubDistrict(gomock.Any(), id).Return(existing, nil).AnyTimes()
 
 	var stored *subdistrict.SubDistrict
 	repo.EXPECT().Update(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -316,7 +314,7 @@ func updateSubDistrict(t *testing.T, existing *subdistrict.SubDistrict, id int64
 			return got, nil
 		}).AnyTimes()
 
-	_, err := subdistrict.NewService(repo, noImages(t)).Update(context.Background(), id, patch)
+	_, err := subdistrict.NewService(repo, noImages(t)).Update(context.Background(), id, sd)
 	return stored, err
 }
 
@@ -353,92 +351,90 @@ func TestService_GetSubDistrict(t *testing.T) {
 	}
 }
 
-func TestService_Update_LookupFailure(t *testing.T) {
-	boom := errors.New("connection reset")
-
-	tests := []struct {
-		name    string
-		getErr  error
-		wantErr error
-	}{
-		{name: "unknown sub-district", getErr: subdistrict.ErrSubDistrictNotFound, wantErr: subdistrict.ErrSubDistrictNotFound},
-		{name: "lookup failure is returned", getErr: boom, wantErr: boom},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// No Update expectation: nothing may be stored when the sub-district cannot be read.
-			repo := mock.NewMockRepository(gomock.NewController(t))
-			repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(nil, tc.getErr)
-
-			_, err := subdistrict.NewService(repo, noImages(t)).Update(context.Background(), 7,
-				subdistrict.SubDistrictPatch{Name: present("Kemang")})
-			require.ErrorIs(t, err, tc.wantErr)
-		})
-	}
-}
-
 func TestService_Update_Fields(t *testing.T) {
 	tests := []struct {
 		name   string
-		patch  subdistrict.SubDistrictPatch
-		change func(*subdistrict.SubDistrict) // turns savedMenteng into the wanted stored sub-district
+		change func(*subdistrict.SubDistrict) // turns mentengInput into the replacement
+		want   func(*subdistrict.SubDistrict) // turns mentengInput into the wanted stored sub-district
 	}{
-		{name: "empty patch changes nothing", patch: subdistrict.SubDistrictPatch{}, change: func(*subdistrict.SubDistrict) {}},
-		{name: "name is trimmed", patch: subdistrict.SubDistrictPatch{Name: present("  Menteng Atas\t")},
-			change: func(sd *subdistrict.SubDistrict) { sd.Name = "Menteng Atas" }},
-		{name: "name of 100 characters is allowed", patch: subdistrict.SubDistrictPatch{Name: present(strings.Repeat("a", 100))},
-			change: func(sd *subdistrict.SubDistrict) { sd.Name = strings.Repeat("a", 100) }},
-		{name: "slug is trimmed", patch: subdistrict.SubDistrictPatch{Slug: present("  menteng-atas ")},
-			change: func(sd *subdistrict.SubDistrict) { sd.Slug = "menteng-atas" }},
-		{name: "flood history is replaced", patch: subdistrict.SubDistrictPatch{FloodHistory: present("Banjir 2024")},
-			change: func(sd *subdistrict.SubDistrict) { sd.FloodHistory = ptr("Banjir 2024") }},
-		{name: "safety information is replaced", patch: subdistrict.SubDistrictPatch{SafetyCrimeInformation: present("Rawan malam")},
-			change: func(sd *subdistrict.SubDistrict) { sd.SafetyCrimeInformation = ptr("Rawan malam") }},
-		{name: "estimated daily spending is replaced", patch: subdistrict.SubDistrictPatch{EstimatedDailySpending: present(750000.25)},
-			change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(750000.25) }},
-		{name: "estimated daily spending of zero is allowed", patch: subdistrict.SubDistrictPatch{EstimatedDailySpending: present(0.0)},
-			change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(0.0) }},
-		{name: "null clears every nullable field", patch: subdistrict.SubDistrictPatch{
-			FloodHistory:           null[string](),
-			SafetyCrimeInformation: null[string](),
-			EstimatedDailySpending: null[float64](),
-		}, change: func(sd *subdistrict.SubDistrict) {
-			sd.FloodHistory, sd.SafetyCrimeInformation, sd.EstimatedDailySpending = nil, nil, nil
-		}},
+		{name: "same fields change nothing", change: func(*subdistrict.SubDistrict) {}, want: func(*subdistrict.SubDistrict) {}},
+		{name: "name is trimmed",
+			change: func(sd *subdistrict.SubDistrict) { sd.Name = "  Menteng Atas\t" },
+			want:   func(sd *subdistrict.SubDistrict) { sd.Name = "Menteng Atas" }},
+		{name: "name of 100 characters is allowed",
+			change: func(sd *subdistrict.SubDistrict) { sd.Name = strings.Repeat("a", 100) },
+			want:   func(sd *subdistrict.SubDistrict) { sd.Name = strings.Repeat("a", 100) }},
+		{name: "slug is trimmed",
+			change: func(sd *subdistrict.SubDistrict) { sd.Slug = "  menteng-atas " },
+			want:   func(sd *subdistrict.SubDistrict) { sd.Slug = "menteng-atas" }},
+		{name: "flood history is replaced",
+			change: func(sd *subdistrict.SubDistrict) { sd.FloodHistory = ptr("Banjir 2024") },
+			want:   func(sd *subdistrict.SubDistrict) { sd.FloodHistory = ptr("Banjir 2024") }},
+		{name: "safety information is replaced",
+			change: func(sd *subdistrict.SubDistrict) { sd.SafetyCrimeInformation = ptr("Rawan malam") },
+			want:   func(sd *subdistrict.SubDistrict) { sd.SafetyCrimeInformation = ptr("Rawan malam") }},
+		{name: "estimated daily spending is replaced",
+			change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(750000.25) },
+			want:   func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(750000.25) }},
+		{name: "estimated daily spending of zero is allowed",
+			change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(0.0) },
+			want:   func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(0.0) }},
+		{name: "absent nullable fields are cleared",
+			change: func(sd *subdistrict.SubDistrict) {
+				sd.FloodHistory, sd.SafetyCrimeInformation, sd.EstimatedDailySpending = nil, nil, nil
+			},
+			want: func(sd *subdistrict.SubDistrict) {
+				sd.FloodHistory, sd.SafetyCrimeInformation, sd.EstimatedDailySpending = nil, nil, nil
+			}},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			want := savedMenteng()
-			tc.change(want)
+			want := mentengInput()
+			want.ID = 7
+			tc.want(want)
 
-			stored, err := updateSubDistrict(t, savedMenteng(), 7, tc.patch)
+			input := mentengInput()
+			tc.change(input)
+
+			stored, err := updateSubDistrict(t, 7, input)
 			require.NoError(t, err)
 			assert.Equal(t, want, stored)
 		})
 	}
 }
 
+func TestService_Update_ID(t *testing.T) {
+	input := mentengInput()
+	input.ID = 99 // the sub-district comes from the path, not from the replacement
+
+	stored, err := updateSubDistrict(t, 7, input)
+	require.NoError(t, err)
+	assert.Equal(t, int64(7), stored.ID)
+}
+
 func TestService_Update_Rejected(t *testing.T) {
 	tests := []struct {
 		name    string
-		patch   subdistrict.SubDistrictPatch
+		change  func(*subdistrict.SubDistrict)
 		wantErr error
 	}{
-		{name: "name of spaces only", patch: subdistrict.SubDistrictPatch{Name: present("   ")}, wantErr: subdistrict.ErrInvalidName},
-		{name: "name of 101 characters", patch: subdistrict.SubDistrictPatch{Name: present(strings.Repeat("a", 101))}, wantErr: subdistrict.ErrInvalidName},
-		{name: "empty slug", patch: subdistrict.SubDistrictPatch{Slug: present("")}, wantErr: subdistrict.ErrInvalidSlug},
-		{name: "slug of 101 characters", patch: subdistrict.SubDistrictPatch{Slug: present(strings.Repeat("a", 101))}, wantErr: subdistrict.ErrInvalidSlug},
-		{name: "negative estimated daily spending", patch: subdistrict.SubDistrictPatch{EstimatedDailySpending: present(-0.01)},
+		{name: "name of spaces only", change: func(sd *subdistrict.SubDistrict) { sd.Name = "   " }, wantErr: subdistrict.ErrInvalidName},
+		{name: "name of 101 characters", change: func(sd *subdistrict.SubDistrict) { sd.Name = strings.Repeat("a", 101) }, wantErr: subdistrict.ErrInvalidName},
+		{name: "empty slug", change: func(sd *subdistrict.SubDistrict) { sd.Slug = "" }, wantErr: subdistrict.ErrInvalidSlug},
+		{name: "slug of 101 characters", change: func(sd *subdistrict.SubDistrict) { sd.Slug = strings.Repeat("a", 101) }, wantErr: subdistrict.ErrInvalidSlug},
+		{name: "negative estimated daily spending", change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(-0.01) },
 			wantErr: subdistrict.ErrInvalidEstimatedDailySpending},
-		{name: "estimated daily spending too large for DECIMAL(10,2)", patch: subdistrict.SubDistrictPatch{EstimatedDailySpending: present(100000000.0)},
+		{name: "estimated daily spending too large for DECIMAL(10,2)", change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(100000000.0) },
 			wantErr: subdistrict.ErrInvalidEstimatedDailySpending},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			stored, err := updateSubDistrict(t, savedMenteng(), 7, tc.patch)
+			input := mentengInput()
+			tc.change(input)
+
+			stored, err := updateSubDistrict(t, 7, input)
 			require.ErrorIs(t, err, tc.wantErr)
 			require.Nil(t, stored, "rejected update reached storage")
 		})
@@ -462,11 +458,9 @@ func TestService_Update_Storage(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
-			repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(savedMenteng(), nil)
 			repo.EXPECT().Update(gomock.Any(), gomock.Any()).Return(&subdistrict.SubDistrict{ID: 7}, tc.updateErr)
 
-			got, err := subdistrict.NewService(repo, noImages(t)).Update(context.Background(), 7,
-				subdistrict.SubDistrictPatch{Name: present("Menteng Atas")})
+			got, err := subdistrict.NewService(repo, noImages(t)).Update(context.Background(), 7, mentengInput())
 			require.ErrorIs(t, err, tc.wantErr)
 			if tc.wantErr == nil {
 				require.NotNil(t, got, "stored sub-district was not returned")

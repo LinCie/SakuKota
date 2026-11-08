@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"time"
 
-	"rantau-go/internal/httpx"
 	"rantau-go/internal/postgis"
 	"rantau-go/internal/storage"
 )
 
-// CreatePlaceRequest is the API payload for creating a Place.
-type CreatePlaceRequest struct {
+// PlaceRequest is the API payload for creating a Place or replacing one. An
+// update sends every field: keys left out are cleared.
+type PlaceRequest struct {
 	SubDistrictID       int64          `json:"sub_district_id"`
 	CategoryID          int64          `json:"category_id"`
 	Name                string         `json:"name"`
@@ -21,28 +21,6 @@ type CreatePlaceRequest struct {
 	ShortDescription    *string        `json:"short_description"`
 	// Attributes is a JSON object keyed by the category's field keys.
 	Attributes json.RawMessage `json:"attributes"`
-}
-
-// UpdatePlaceRequest is the API payload for partially updating a Place. Keys
-// left out keep their current value. Nullable fields accept null to clear them.
-type UpdatePlaceRequest struct {
-	SubDistrictID       httpx.Optional[int64]           `json:"sub_district_id"`
-	CategoryID          httpx.Optional[int64]           `json:"category_id"`
-	Name                httpx.Optional[string]          `json:"name"`
-	Address             httpx.Optional[string]          `json:"address"`
-	Location            httpx.Optional[postgis.Point]   `json:"location"`
-	OperatingHours      httpx.Optional[string]          `json:"operating_hours"`
-	EstimatedPriceRange httpx.Optional[string]          `json:"estimated_price_range"`
-	ShortDescription    httpx.Optional[string]          `json:"short_description"`
-	Attributes          httpx.Optional[json.RawMessage] `json:"attributes"`
-}
-
-// clearsRequiredField reports whether the client sent null for a field that
-// cannot be cleared.
-func (r *UpdatePlaceRequest) clearsRequiredField() bool {
-	return (r.SubDistrictID.Set && r.SubDistrictID.Value == nil) ||
-		(r.CategoryID.Set && r.CategoryID.Value == nil) ||
-		(r.Name.Set && r.Name.Value == nil)
 }
 
 // PlaceResponse is the API representation of a Place.
@@ -129,7 +107,7 @@ type CategoryFieldResponse struct {
 // Conversions
 // -----------------------------------------------------------------------------
 
-func toPlace(req CreatePlaceRequest) *Place {
+func toPlace(req PlaceRequest) *Place {
 	return &Place{
 		SubDistrictID:       req.SubDistrictID,
 		CategoryID:          req.CategoryID,

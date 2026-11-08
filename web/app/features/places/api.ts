@@ -1,7 +1,6 @@
 import {
   apiDelete,
   apiGet,
-  apiPatch,
   apiPost,
   apiPut,
   type AdminWriteErrorCode,
@@ -52,7 +51,7 @@ export type GetPlacesParams = {
   bbox?: string;
 };
 
-export type CreatePlaceRequest = {
+export type PlaceRequest = {
   sub_district_id: number;
   category_id: number;
   name: string;
@@ -63,19 +62,6 @@ export type CreatePlaceRequest = {
   short_description?: string | null;
   /** Values of the category's custom fields, keyed by `CategoryField.key`. */
   attributes?: Record<string, unknown>;
-};
-
-export type UpdatePlaceRequest = {
-  sub_district_id?: number;
-  category_id?: number;
-  name?: string;
-  address?: string | null;
-  location?: GeoPoint | null;
-  operating_hours?: string | null;
-  estimated_price_range?: string | null;
-  short_description?: string | null;
-  /** Replaces all attributes when set; must match the category's fields. */
-  attributes?: Record<string, unknown> | null;
 };
 
 // -----------------------------------------------------------------------------
@@ -112,7 +98,7 @@ export async function getCategories(): Promise<CategoryDetail[]> {
 }
 
 /** Admin only. */
-export async function createPlace(body: CreatePlaceRequest): Promise<Place> {
+export async function createPlace(body: PlaceRequest): Promise<Place> {
   return unwrap(
     await apiPost<Place, CreatePlaceErrorCode>("places", { json: body }),
   );
@@ -121,10 +107,10 @@ export async function createPlace(body: CreatePlaceRequest): Promise<Place> {
 /** Admin only. */
 export async function updatePlace(
   id: number,
-  body: UpdatePlaceRequest,
+  body: PlaceRequest,
 ): Promise<Place> {
   return unwrap(
-    await apiPatch<Place, UpdatePlaceErrorCode>(`places/${id}`, {
+    await apiPut<Place, UpdatePlaceErrorCode>(`places/${id}`, {
       json: body,
     }),
   );

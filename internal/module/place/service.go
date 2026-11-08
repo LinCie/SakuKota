@@ -25,7 +25,8 @@ type Service interface {
 	GetPlace(ctx context.Context, id int64) (*Place, error)
 	GetCategories(ctx context.Context) ([]Category, error)
 	GetCategory(ctx context.Context, id int64) (*Category, error)
-	Update(ctx context.Context, id int64, patch PlacePatch) (*Place, error)
+	// Update replaces the place's editable fields with those of p.
+	Update(ctx context.Context, id int64, p *Place) (*Place, error)
 	Delete(ctx context.Context, id int64) error
 	// ImageUploadURL returns an upload for a new image of the place.
 	ImageUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error)
@@ -67,108 +68,52 @@ func (s *service) GetCategory(ctx context.Context, id int64) (*Category, error) 
 }
 
 func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
-	name, err := normalizePlaceName(p.Name)
-	if err != nil {
+	if err := s.validate(ctx, p); err != nil {
 		return nil, err
 	}
-	p.Name = name
-
-	if err := normalizeOptionalFields(p); err != nil {
-		return nil, err
-	}
-
-	if err := validateLocation(p.Location); err != nil {
-		return nil, err
-	}
-
-	category, err := s.repo.GetCategory(ctx, p.CategoryID)
-	if err != nil {
-		return nil, err
-	}
-
-	attributes, err := validateAttributes(category.Fields, p.Attributes)
-	if err != nil {
-		return nil, err
-	}
-	p.Attributes = attributes
 
 	return s.repo.Create(ctx, p)
 }
 
-// Update applies the patch to the stored place. Attributes are checked against
-// the place's category whenever the patch sets either the category or the
-// attributes.
-func (s *service) Update(ctx context.Context, id int64, patch PlacePatch) (*Place, error) {
-	p, err := s.repo.GetPlace(ctx, id)
-	if err != nil {
+// Update replaces the stored place's fields with those of p. The repository
+// reports ErrPlaceNotFound when there is no such place.
+func (s *service) Update(ctx context.Context, id int64, p *Place) (*Place, error) {
+	if err := s.validate(ctx, p); err != nil {
 		return nil, err
 	}
-
-	if patch.Name.Set && patch.Name.Value != nil {
-		name, err := normalizePlaceName(*patch.Name.Value)
-		if err != nil {
-			return nil, err
-		}
-		p.Name = name
-	}
-
-	if patch.SubDistrictID.Set && patch.SubDistrictID.Value != nil {
-		p.SubDistrictID = *patch.SubDistrictID.Value
-	}
-
-	if patch.CategoryID.Set && patch.CategoryID.Value != nil {
-		p.CategoryID = *patch.CategoryID.Value
-	}
-
-	if patch.Address.Set {
-		p.Address = patch.Address.Value
-	}
-
-	if patch.Location.Set {
-		if err := validateLocation(patch.Location.Value); err != nil {
-			return nil, err
-		}
-		p.Location = patch.Location.Value
-	}
-
-	if patch.OperatingHours.Set {
-		p.OperatingHours = patch.OperatingHours.Value
-	}
-
-	if patch.EstimatedPriceRange.Set {
-		p.EstimatedPriceRange = patch.EstimatedPriceRange.Value
-	}
-
-	if patch.ShortDescription.Set {
-		p.ShortDescription = patch.ShortDescription.Value
-	}
-
-	if err := normalizeOptionalFields(p); err != nil {
-		return nil, err
-	}
-
-	if patch.CategoryID.Set || patch.Attributes.Set {
-		category, err := s.repo.GetCategory(ctx, p.CategoryID)
-		if err != nil {
-			return nil, err
-		}
-
-		raw := p.Attributes
-		if patch.Attributes.Set {
-			raw = nil
-			if patch.Attributes.Value != nil {
-				raw = *patch.Attributes.Value
-			}
-		}
-
-		attributes, err := validateAttributes(category.Fields, raw)
-		if err != nil {
-			return nil, err
-		}
-		p.Attributes = attributes
-	}
+	p.ID = id
 
 	return s.repo.Update(ctx, p)
+}
+
+// validate normalizes p and checks it against its category's fields.
+func (s *service) validate(ctx context.Context, p *Place) error {
+	name, err := normalizePlaceName(p.Name)
+	if err != nil {
+		return err
+	}
+	p.Name = name
+
+	if err := normalizeOptionalFields(p); err != nil {
+		return err
+	}
+
+	if err := validateLocation(p.Location); err != nil {
+		return err
+	}
+
+	category, err := s.repo.GetCategory(ctx, p.CategoryID)
+	if err != nil {
+		return err
+	}
+
+	attributes, err := validateAttributes(category.Fields, p.Attributes)
+	if err != nil {
+		return err
+	}
+	p.Attributes = attributes
+
+	return nil
 }
 
 // Delete removes the place. The repository queues its image for deletion.

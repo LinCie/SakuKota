@@ -3,34 +3,17 @@ package subdistrict
 import (
 	"time"
 
-	"rantau-go/internal/httpx"
 	"rantau-go/internal/storage"
 )
 
-// CreateSubDistrictRequest is the API payload for creating a SubDistrict.
-type CreateSubDistrictRequest struct {
+// SubDistrictRequest is the API payload for creating a SubDistrict or
+// replacing one. An update sends every field: keys left out are cleared.
+type SubDistrictRequest struct {
 	Name                   string   `json:"name"`
 	Slug                   string   `json:"slug"`
 	FloodHistory           *string  `json:"flood_history"`
 	SafetyCrimeInformation *string  `json:"safety_crime_information"`
 	EstimatedDailySpending *float64 `json:"estimated_daily_spending"`
-}
-
-// UpdateSubDistrictRequest is the API payload for partially updating a SubDistrict.
-// Keys left out keep their current value. Nullable fields accept null to clear them.
-type UpdateSubDistrictRequest struct {
-	Name                   httpx.Optional[string]  `json:"name"`
-	Slug                   httpx.Optional[string]  `json:"slug"`
-	FloodHistory           httpx.Optional[string]  `json:"flood_history"`
-	SafetyCrimeInformation httpx.Optional[string]  `json:"safety_crime_information"`
-	EstimatedDailySpending httpx.Optional[float64] `json:"estimated_daily_spending"`
-}
-
-// clearsRequiredField reports whether the client sent null for a field that
-// cannot be cleared.
-func (r *UpdateSubDistrictRequest) clearsRequiredField() bool {
-	return (r.Name.Set && r.Name.Value == nil) ||
-		(r.Slug.Set && r.Slug.Value == nil)
 }
 
 // SubDistrictResponse is the API representation of a SubDistrict.
@@ -71,7 +54,7 @@ type SetImageRequest struct {
 // Conversions
 // -----------------------------------------------------------------------------
 
-func toSubDistrict(req CreateSubDistrictRequest) *SubDistrict {
+func toSubDistrict(req SubDistrictRequest) *SubDistrict {
 	return &SubDistrict{
 		Name:                   req.Name,
 		Slug:                   req.Slug,

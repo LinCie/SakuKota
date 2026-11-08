@@ -4,8 +4,8 @@
 > backend is *specified to do*. Update it only after a VERIFICATION phase
 > completes (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-05. Updated after a verification pass of the category expansion (see the change log).
-> - Status: verified. The place tests pass, the migration and seed were applied to a clean database, and the web app type-checks, lints, and builds.
+> - Last updated: 2026-11-09. Updated after a verification pass of the PATCH-to-PUT change (see the change log).
+> - Status: verified. All Go tests pass, and the web app type-checks, lints, and builds.
 
 ## Contents
 
@@ -123,11 +123,13 @@ These rules apply to every HTTP module unless §6 says otherwise.
   `created_at`, `user_id`, `status`, review fields, and any unknown keys sent
   by the client. The author always comes from the access token, and the
   resource ID always comes from the path.
-- **PATCH semantics.** A field that is absent stays unchanged. A field sent as
-  `null` clears a nullable field. A field sent with a value replaces it. Sending
-  `null` for a required field (`name`, `slug`, `sub_district_id`,
-  `category_id`) returns `INVALID_BODY`. An empty object `{}` changes nothing
-  and returns 200. A failed update leaves stored data unchanged.
+- **PUT semantics.** Updates (`PUT /places/{id}`, `PUT /subdistricts/{id}`) take
+  the same body as create and replace every editable field. A nullable field
+  that is absent or `null` is cleared. Required fields (`name`, `slug`,
+  `sub_district_id`, `category_id`) are checked as in create, so a missing or
+  `null` one returns `400 VALIDATION_ERROR`, and an empty object `{}` is
+  rejected. A body with the wrong shape still returns `INVALID_BODY`. A failed
+  update leaves stored data unchanged.
 - **Text normalization.** Names and free-text inputs are trimmed of surrounding
   whitespace, including tabs and newlines. Inner whitespace and line breaks are
   kept. Length limits count Unicode **code points after trimming**, so `é`
@@ -217,7 +219,7 @@ no ratings. `image_url` is the storage public URL of the image key, or `null`.
   (255), and `estimated_price_range` (100) are trimmed and checked with
   `ErrAddressTooLong`, `ErrOperatingHoursTooLong`, and
   `ErrEstimatedPriceRangeTooLong`. `short_description` is trimmed. Blank values
-  are stored as `null`. Patches follow the same rules.
+  are stored as `null`. Updates follow the same rules.
 - **Attributes** are validated against the category's fields:
   - Field types are `text`, `number`, `boolean`, `select` (one of `options`),
     `range` (exactly `{min, max}`, both numbers, `min ≤ max`), and `date`
@@ -251,15 +253,15 @@ no ratings. `image_url` is the storage public URL of the image key, or `null`.
     on `PLACES.location` is required.
 - **Get (`GET /places/{id}`).** Returns `404 PLACE_NOT_FOUND` for an unknown
   place.
-- **Patch (`PATCH /places/{id}`).**
+- **Update (`PUT /places/{id}`).** The body has the same shape and validation as
+  `POST /places`.
   - Nullable fields are `address`, `location`, `operating_hours`,
-    `estimated_price_range`, and `short_description`. A `null` attribute sends
-    attributes back to `{}`.
-  - Changing the category re-validates the existing attributes against the
-    new category. New attributes sent in the same patch are validated against
-    the new category.
-  - Unknown category or sub-district returns `400 VALIDATION_ERROR`. Unknown
-    place returns `404`.
+    `estimated_price_range`, and `short_description`. Absent or `null` attributes
+    become `{}`.
+  - The attributes in the body are validated against the category in the body.
+  - Unknown category or sub-district returns `400 VALIDATION_ERROR`. An unknown
+    place returns `404` when the body is valid; validation runs before the place
+    is looked up.
   - Edits keep the rating and the image.
 - **Delete (`DELETE /places/{id}`).** Returns `204`, and a second delete
   returns `404`. If the place had an image, the **repository queues its key in
@@ -333,7 +335,7 @@ no ratings. `image_url` is the storage public URL of the image key, or `null`.
 **Response:** `id, name, slug, flood_history, safety_crime_information,
 estimated_daily_spending, image_url, static_map_image_url`. Both URLs are
 derived from stored image keys. `static_map_image_url` is **not** writable: the
-server ignores it in create and patch bodies.
+server ignores it in create and update bodies.
 
 - **Validation.** The name is trimmed and must have 1–100 code points;
   violations return `ErrInvalidName`, which covers both blank and too long. The
@@ -349,8 +351,10 @@ server ignores it in create and patch bodies.
   changing only the case, is allowed. Deleting a sub-district frees its name
   and slug.
 - **List.** Ordered by id.
-- **Patch.** `flood_history`, `safety_crime_information`, and
-  `estimated_daily_spending` are nullable. Images are kept.
+- **Update (`PUT /subdistricts/{id}`).** The body has the same shape and
+  validation as `POST /subdistricts`. `flood_history`,
+  `safety_crime_information`, and `estimated_daily_spending` are nullable, and
+  are cleared when absent or `null`. Images are kept.
 - **Delete.**
   - A sub-district that places still reference returns `409
     SUB_DISTRICT_IN_USE` and is not deleted.
@@ -567,3 +571,4 @@ them.
 | 2026-11-01 | Initial draft | Written from the planning docs and all 19 `*_test.go` files |
 | 2026-11-01 | Verification update | Null bodies on JSON endpoints return `INVALID_BODY`; length limits and bare-address email are validated; optional place and sub-district text is trimmed and blank is stored as absent; sub-district image deletes and replacements are queued in `STORAGE_DELETIONS`; a missing refresh cookie clears the cookie; §6.3 error name corrected; resolved §10 items removed |
 | 2026-11-05 | Verification update | Categories grew from 5 to 16 (migration `add_perantau_categories`) with themed colors, and `GET /categories` is ordered by id; seed data covers every new category; the web category filter became a Base UI dropdown |
+| 2026-11-09 | Verification update | Update routes changed from `PATCH` to `PUT`: an update takes the same body as create and replaces every editable field, so absent nullable fields are cleared and `{}` or a `null` required field is a `400 VALIDATION_ERROR`. The partial-update type `httpx.Optional` was removed |

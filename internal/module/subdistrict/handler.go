@@ -62,7 +62,7 @@ func (h *Handler) GetSubDistrict(w http.ResponseWriter, r *http.Request) {
 
 // CreateSubDistrict stores the sub-district given in the body.
 func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
-	var req *CreateSubDistrictRequest
+	var req *SubDistrictRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
 		return
@@ -77,8 +77,8 @@ func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusCreated, toSubDistrictResponse(*sd, h.imageURL))
 }
 
-// PatchSubDistrict partially updates the sub-district given by the `id` path parameter.
-func (h *Handler) PatchSubDistrict(w http.ResponseWriter, r *http.Request) {
+// PutSubDistrict replaces the sub-district given by the `id` path parameter.
+func (h *Handler) PutSubDistrict(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidSubDistrictID, "invalid sub_district_id")
@@ -86,13 +86,13 @@ func (h *Handler) PatchSubDistrict(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// A body of null decodes to a nil pointer and is rejected with the others.
-	var req *UpdateSubDistrictRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil || req.clearsRequiredField() {
+	var req *SubDistrictRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
 		return
 	}
 
-	sd, err := h.service.Update(r.Context(), id, SubDistrictPatch(*req))
+	sd, err := h.service.Update(r.Context(), id, toSubDistrict(*req))
 	if err != nil {
 		respondSubDistrictError(w, err)
 		return

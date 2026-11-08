@@ -306,7 +306,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreatePlaceRequest" },
+              "schema": { "$ref": "#/components/schemas/PlaceRequest" },
               "example": {
                 "sub_district_id": 1,
                 "category_id": 1,
@@ -394,11 +394,11 @@
           "500": { "$ref": "#/components/responses/InternalServerError" }
         }
       },
-      "patch": {
+      "put": {
         "tags": ["Places"],
         "operationId": "updatePlace",
-        "summary": "Update a place",
-        "description": "Partially updates a place. Requires the admin role. Keys left out keep their current value, and nullable fields accept null to clear them. If category_id or attributes change, the attributes are validated against the category's fields.",
+        "summary": "Replace a place",
+        "description": "Replaces a place's editable fields. Requires the admin role. Send every field: nullable fields left out or sent as null are cleared. The attributes are validated against the category's fields. The place's rating and image are kept.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -415,8 +415,11 @@
             "application/json": {
               "schema": { "$ref": "#/components/schemas/UpdatePlaceRequest" },
               "example": {
+                "sub_district_id": 1,
+                "category_id": 1,
                 "name": "Warung Bu Sri Pusat",
-                "operating_hours": "08:00-22:00"
+                "operating_hours": "08:00-22:00",
+                "attributes": { "halal": true, "serving_style": "Dimasak saat dipesan" }
               }
             }
           }
@@ -431,7 +434,7 @@
             }
           },
           "400": {
-            "description": "The place ID is invalid, the body is malformed, a required field is set to null, or a value failed validation.",
+            "description": "The place ID is invalid, the body is malformed, or a value failed validation.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
@@ -1294,7 +1297,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateSubDistrictRequest" },
+              "schema": { "$ref": "#/components/schemas/SubDistrictRequest" },
               "example": {
                 "name": "Kebayoran Baru",
                 "slug": "kebayoran-baru",
@@ -1381,11 +1384,11 @@
           "500": { "$ref": "#/components/responses/InternalServerError" }
         }
       },
-      "patch": {
+      "put": {
         "tags": ["Sub-districts"],
         "operationId": "updateSubDistrict",
-        "summary": "Update a sub-district",
-        "description": "Partially updates a sub-district. Requires the admin role.",
+        "summary": "Replace a sub-district",
+        "description": "Replaces a sub-district's editable fields. Requires the admin role. Send every field: nullable fields left out or sent as null are cleared. The sub-district's images are kept.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -1402,6 +1405,8 @@
             "application/json": {
               "schema": { "$ref": "#/components/schemas/UpdateSubDistrictRequest" },
               "example": {
+                "name": "Menteng",
+                "slug": "menteng",
                 "estimated_daily_spending": 175000
               }
             }
@@ -1417,7 +1422,7 @@
             }
           },
           "400": {
-            "description": "The sub-district ID is invalid, the body is malformed, a required field is set to null, or a value failed validation.",
+            "description": "The sub-district ID is invalid, the body is malformed, or a value failed validation.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
@@ -1876,8 +1881,9 @@
           }
         }
       },
-      "CreatePlaceRequest": {
+      "PlaceRequest": {
         "type": "object",
+        "description": "A place's editable fields. Used to create a place and to replace one: an update sends every field, and keys left out are cleared.",
         "required": ["sub_district_id", "category_id", "name"],
         "properties": {
           "sub_district_id": { "type": "integer", "format": "int64" },
@@ -1896,29 +1902,6 @@
           "attributes": {
             "type": ["object", "null"],
             "description": "Values for the chosen category's custom fields, keyed by field key. Required fields must be present."
-          }
-        }
-      },
-      "UpdatePlaceRequest": {
-        "type": "object",
-        "description": "Partial update. Keys left out keep their current value. sub_district_id, category_id, and name cannot be null; other nullable fields accept null to clear them.",
-        "properties": {
-          "sub_district_id": { "type": "integer", "format": "int64" },
-          "category_id": { "type": "integer", "format": "int64" },
-          "name": { "type": "string", "minLength": 1, "maxLength": 150 },
-          "address": { "type": ["string", "null"], "maxLength": 255 },
-          "location": {
-            "oneOf": [
-              { "$ref": "#/components/schemas/Point" },
-              { "type": "null" }
-            ]
-          },
-          "operating_hours": { "type": ["string", "null"], "maxLength": 255 },
-          "estimated_price_range": { "type": ["string", "null"], "maxLength": 100 },
-          "short_description": { "type": ["string", "null"] },
-          "attributes": {
-            "type": ["object", "null"],
-            "description": "Replaces all attributes when set. Must match the fields of the place's category."
           }
         }
       },
@@ -2134,20 +2117,10 @@
           "sort_order": { "type": "integer", "format": "int32" }
         }
       },
-      "CreateSubDistrictRequest": {
+      "SubDistrictRequest": {
         "type": "object",
+        "description": "A sub-district's editable fields. Used to create a sub-district and to replace one: an update sends every field, and keys left out are cleared.",
         "required": ["name", "slug"],
-        "properties": {
-          "name": { "type": "string", "minLength": 1, "maxLength": 100 },
-          "slug": { "type": "string", "minLength": 1, "maxLength": 100 },
-          "flood_history": { "type": ["string", "null"] },
-          "safety_crime_information": { "type": ["string", "null"] },
-          "estimated_daily_spending": { "type": ["number", "null"], "minimum": 0, "maximum": 99999999.99 }
-        }
-      },
-      "UpdateSubDistrictRequest": {
-        "type": "object",
-        "description": "Partial update. Keys left out keep their current value. name and slug cannot be null; other nullable fields accept null to clear them.",
         "properties": {
           "name": { "type": "string", "minLength": 1, "maxLength": 100 },
           "slug": { "type": "string", "minLength": 1, "maxLength": 100 },

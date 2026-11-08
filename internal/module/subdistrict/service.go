@@ -17,7 +17,8 @@ type Service interface {
 	GetMany(ctx context.Context) ([]SubDistrict, error)
 	GetSubDistrict(ctx context.Context, id int64) (*SubDistrict, error)
 	Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error)
-	Update(ctx context.Context, id int64, patch SubDistrictPatch) (*SubDistrict, error)
+	// Update replaces the sub-district's editable fields with those of sd.
+	Update(ctx context.Context, id int64, sd *SubDistrict) (*SubDistrict, error)
 	Delete(ctx context.Context, id int64) error
 	// ImageUploadURL returns an upload for a new image in the sub-district's slot.
 	ImageUploadURL(ctx context.Context, id int64, slot ImageSlot, contentType string) (storage.Upload, error)
@@ -58,37 +59,13 @@ func (s *service) Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, er
 	return s.repo.Create(ctx, sd)
 }
 
-// Update applies the patch to the stored sub-district. The result is validated
-// as a whole, so a patch cannot leave the sub-district invalid.
-func (s *service) Update(ctx context.Context, id int64, patch SubDistrictPatch) (*SubDistrict, error) {
-	sd, err := s.repo.GetSubDistrict(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	if patch.Name.Set && patch.Name.Value != nil {
-		sd.Name = *patch.Name.Value
-	}
-
-	if patch.Slug.Set && patch.Slug.Value != nil {
-		sd.Slug = *patch.Slug.Value
-	}
-
-	if patch.FloodHistory.Set {
-		sd.FloodHistory = patch.FloodHistory.Value
-	}
-
-	if patch.SafetyCrimeInformation.Set {
-		sd.SafetyCrimeInformation = patch.SafetyCrimeInformation.Value
-	}
-
-	if patch.EstimatedDailySpending.Set {
-		sd.EstimatedDailySpending = patch.EstimatedDailySpending.Value
-	}
-
+// Update replaces the stored sub-district's fields with those of sd. The
+// repository reports ErrSubDistrictNotFound when there is no such sub-district.
+func (s *service) Update(ctx context.Context, id int64, sd *SubDistrict) (*SubDistrict, error) {
 	if err := validate(sd); err != nil {
 		return nil, err
 	}
+	sd.ID = id
 
 	return s.repo.Update(ctx, sd)
 }

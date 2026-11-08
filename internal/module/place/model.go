@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"rantau-go/internal/httpx"
 	"rantau-go/internal/postgis"
 )
 
@@ -53,20 +52,6 @@ type BoundingBox struct {
 	MinLat float64
 	MaxLng float64
 	MaxLat float64
-}
-
-// PlacePatch holds the fields a client may change on a place. A field that is
-// not Set keeps its current value.
-type PlacePatch struct {
-	SubDistrictID       httpx.Optional[int64]
-	CategoryID          httpx.Optional[int64]
-	Name                httpx.Optional[string]
-	Address             httpx.Optional[string]
-	Location            httpx.Optional[postgis.Point]
-	OperatingHours      httpx.Optional[string]
-	EstimatedPriceRange httpx.Optional[string]
-	ShortDescription    httpx.Optional[string]
-	Attributes          httpx.Optional[json.RawMessage]
 }
 
 // Category represents a row in the CATEGORIES table. Categories are defined by

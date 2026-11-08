@@ -30,7 +30,7 @@ func newRouter(svc place.Service) http.Handler {
 	r.Get("/places", h.GetPlaces)
 	r.Post("/places", h.CreatePlace)
 	r.Get("/places/{id}", h.GetPlace)
-	r.Patch("/places/{id}", h.PatchPlace)
+	r.Put("/places/{id}", h.PutPlace)
 	r.Delete("/places/{id}", h.DeletePlace)
 	r.Post("/places/{id}/image/upload-url", h.CreateImageUpload)
 	r.Put("/places/{id}/image", h.SetImage)
@@ -491,87 +491,86 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// PATCH /places/{id}
+// PUT /places/{id}
 // -----------------------------------------------------------------------------
 
-func TestHandler_PatchPlace_RejectsInvalidRequests(t *testing.T) {
+func TestHandler_PutPlace_RejectsInvalidRequests(t *testing.T) {
+	const valid = `{"name":"Kopi","sub_district_id":1,"category_id":2}`
+
 	tests := []struct {
 		name     string
 		target   string
 		body     string
 		wantCode string
 	}{
-		{name: "place id is not a number", target: "/places/abc", body: `{"name":"Kopi"}`, wantCode: "INVALID_PLACE_ID"},
-		{name: "place id is fractional", target: "/places/1.5", body: `{"name":"Kopi"}`, wantCode: "INVALID_PLACE_ID"},
-		{name: "place id is zero", target: "/places/0", body: `{"name":"Kopi"}`, wantCode: "INVALID_PLACE_ID"},
-		{name: "place id is negative", target: "/places/-1", body: `{"name":"Kopi"}`, wantCode: "INVALID_PLACE_ID"},
+		{name: "place id is not a number", target: "/places/abc", body: valid, wantCode: "INVALID_PLACE_ID"},
+		{name: "place id is fractional", target: "/places/1.5", body: valid, wantCode: "INVALID_PLACE_ID"},
+		{name: "place id is zero", target: "/places/0", body: valid, wantCode: "INVALID_PLACE_ID"},
+		{name: "place id is negative", target: "/places/-1", body: valid, wantCode: "INVALID_PLACE_ID"},
 		{name: "empty body", target: "/places/1", body: ``, wantCode: "INVALID_BODY"},
 		{name: "truncated JSON", target: "/places/1", body: `{"name":"Kopi"`, wantCode: "INVALID_BODY"},
 		{name: "body is an array", target: "/places/1", body: `[]`, wantCode: "INVALID_BODY"},
 		{name: "body is null", target: "/places/1", body: `null`, wantCode: "INVALID_BODY"},
-		{name: "name is a number", target: "/places/1", body: `{"name":5}`, wantCode: "INVALID_BODY"},
-		{name: "name is null", target: "/places/1", body: `{"name":null}`, wantCode: "INVALID_BODY"},
-		{name: "sub_district_id is null", target: "/places/1", body: `{"sub_district_id":null}`, wantCode: "INVALID_BODY"},
-		{name: "category_id is null", target: "/places/1", body: `{"category_id":null}`, wantCode: "INVALID_BODY"},
-		{name: "sub_district_id is a string", target: "/places/1", body: `{"sub_district_id":"one"}`, wantCode: "INVALID_BODY"},
+		{name: "name is a number", target: "/places/1", body: `{"name":5,"sub_district_id":1,"category_id":2}`, wantCode: "INVALID_BODY"},
+		{name: "sub_district_id is a string", target: "/places/1", body: `{"name":"Kopi","sub_district_id":"one","category_id":2}`, wantCode: "INVALID_BODY"},
 		{name: "location is a line", target: "/places/1",
-			body: `{"location":{"type":"LineString","coordinates":[[106.8,-6.2],[106.9,-6.3]]}}`, wantCode: "INVALID_BODY"},
+			body: `{"name":"Kopi","sub_district_id":1,"category_id":2,"location":{"type":"LineString","coordinates":[[106.8,-6.2],[106.9,-6.3]]}}`, wantCode: "INVALID_BODY"},
 		{name: "location coordinates are swapped", target: "/places/1",
-			body: `{"location":{"type":"Point","coordinates":[-6.2,106.8]}}`, wantCode: "INVALID_BODY"},
+			body: `{"name":"Kopi","sub_district_id":1,"category_id":2,"location":{"type":"Point","coordinates":[-6.2,106.8]}}`, wantCode: "INVALID_BODY"},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// No expectations: an invalid request must never reach the service.
 			svc := mock.NewMockService(gomock.NewController(t))
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, tc.target, tc.body))
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, tc.target, tc.body))
 			assertError(t, rec, http.StatusBadRequest, tc.wantCode)
 		})
 	}
 }
 
-func TestHandler_PatchPlace_PassesPatchToService(t *testing.T) {
+func TestHandler_PutPlace_PassesPlaceToService(t *testing.T) {
 	tests := []struct {
-		name   string
-		target string
-		body   string
-		wantID int64
-		want   place.PlacePatch
+		name string
+		body string
+		want *place.Place
 	}{
-		{name: "empty body changes nothing", target: "/places/9", body: `{}`, wantID: 9, want: place.PlacePatch{}},
-		{name: "name is passed as sent", target: "/places/9", body: `{"name":"  Kopi Senja  "}`, wantID: 9,
-			want: place.PlacePatch{Name: present("  Kopi Senja  ")}},
-		{name: "null clears an optional field", target: "/places/9", body: `{"address":null}`, wantID: 9,
-			want: place.PlacePatch{Address: null[string]()}},
-		{name: "text is replaced", target: "/places/9", body: `{"operating_hours":"08:00-17:00"}`, wantID: 9,
-			want: place.PlacePatch{OperatingHours: present("08:00-17:00")}},
-		{name: "location is replaced", target: "/places/9", body: `{"location":{"type":"Point","coordinates":[106.8,-6.2]}}`, wantID: 9,
-			want: place.PlacePatch{Location: present(*postgis.MustPoint(106.8, -6.2))}},
-		{name: "null clears location", target: "/places/9", body: `{"location":null}`, wantID: 9,
-			want: place.PlacePatch{Location: null[postgis.Point]()}},
-		{name: "sub-district and category are replaced", target: "/places/9", body: `{"sub_district_id":2,"category_id":3}`, wantID: 9,
-			want: place.PlacePatch{SubDistrictID: present(int64(2)), CategoryID: present(int64(3))}},
-		{name: "attributes are passed as sent", target: "/places/9", body: `{"attributes":{"contact":"0812"}}`, wantID: 9,
-			want: place.PlacePatch{Attributes: present(json.RawMessage(`{"contact":"0812"}`))}},
-		{name: "null clears attributes", target: "/places/9", body: `{"attributes":null}`, wantID: 9,
-			want: place.PlacePatch{Attributes: null[json.RawMessage]()}},
-		{name: "client id and unknown keys are ignored", target: "/places/9",
-			body: `{"id":99,"created_at":"yesterday","name":"Kopi"}`, wantID: 9,
-			want: place.PlacePatch{Name: present("Kopi")}},
+		{name: "every field is passed as sent",
+			body: `{"sub_district_id":2,"category_id":3,"name":"  Kopi Senja  ","address":"Jl. Sudirman 9",
+				"location":{"type":"Point","coordinates":[106.8,-6.2]},"operating_hours":"08:00-17:00",
+				"estimated_price_range":"Rp20.000-50.000","short_description":"Kopi tubruk",
+				"attributes":{"contact":"0812"}}`,
+			want: &place.Place{
+				SubDistrictID:       2,
+				CategoryID:          3,
+				Name:                "  Kopi Senja  ",
+				Address:             ptr("Jl. Sudirman 9"),
+				Location:            postgis.MustPoint(106.8, -6.2),
+				OperatingHours:      ptr("08:00-17:00"),
+				EstimatedPriceRange: ptr("Rp20.000-50.000"),
+				ShortDescription:    ptr("Kopi tubruk"),
+				Attributes:          json.RawMessage(`{"contact":"0812"}`),
+			}},
+		{name: "left-out keys are passed as absent",
+			body: `{"sub_district_id":2,"category_id":3,"name":"Kopi"}`,
+			want: &place.Place{SubDistrictID: 2, CategoryID: 3, Name: "Kopi"}},
+		{name: "client id and unknown keys are ignored",
+			body: `{"id":99,"created_at":"yesterday","sub_district_id":2,"category_id":3,"name":"Kopi"}`,
+			want: &place.Place{SubDistrictID: 2, CategoryID: 3, Name: "Kopi"}},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().Update(gomock.Any(), tc.wantID, tc.want).Return(&place.Place{ID: tc.wantID}, nil)
+			svc.EXPECT().Update(gomock.Any(), int64(9), tc.want).Return(&place.Place{ID: 9}, nil)
 
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, tc.target, tc.body))
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/places/9", tc.body))
 			require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body)
 		})
 	}
 }
 
-func TestHandler_PatchPlace_MapsServiceErrors(t *testing.T) {
+func TestHandler_PutPlace_MapsServiceErrors(t *testing.T) {
 	tests := []struct {
 		name       string
 		err        error
@@ -598,15 +597,15 @@ func TestHandler_PatchPlace_MapsServiceErrors(t *testing.T) {
 			svc := mock.NewMockService(gomock.NewController(t))
 			svc.EXPECT().Update(gomock.Any(), int64(1), gomock.Any()).Return(nil, tc.err)
 
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, "/places/1", `{"name":"Kopi"}`))
+			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/places/1", `{"name":"Kopi","sub_district_id":1,"category_id":2}`))
 			assertError(t, rec, tc.wantStatus, tc.wantCode)
 		})
 	}
 }
 
-func TestHandler_PatchPlace_Success(t *testing.T) {
+func TestHandler_PutPlace_Success(t *testing.T) {
 	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().Update(gomock.Any(), int64(3), place.PlacePatch{Name: present("Kopi Senja")}).Return(&place.Place{
+	svc.EXPECT().Update(gomock.Any(), int64(3), &place.Place{SubDistrictID: 1, CategoryID: 2, Name: "Kopi Senja"}).Return(&place.Place{
 		ID:            3,
 		SubDistrictID: 1,
 		Name:          "Kopi Senja",
@@ -614,7 +613,7 @@ func TestHandler_PatchPlace_Success(t *testing.T) {
 		Category:      place.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
 	}, nil)
 
-	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPatch, "/places/3", `{"name":"Kopi Senja"}`))
+	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/places/3", `{"name":"Kopi Senja","sub_district_id":1,"category_id":2}`))
 	assertData(t, rec, http.StatusOK, `{
 		"id": 3,
 		"sub_district_id": 1,

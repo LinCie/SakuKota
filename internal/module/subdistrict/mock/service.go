@@ -132,16 +132,16 @@ func (mr *MockServiceMockRecorder) SetImage(ctx, id, slot, uploadKey any) *gomoc
 }
 
 // Update mocks base method.
-func (m *MockService) Update(ctx context.Context, id int64, patch subdistrict.SubDistrictPatch) (*subdistrict.SubDistrict, error) {
+func (m *MockService) Update(ctx context.Context, id int64, sd *subdistrict.SubDistrict) (*subdistrict.SubDistrict, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Update", ctx, id, patch)
+	ret := m.ctrl.Call(m, "Update", ctx, id, sd)
 	ret0, _ := ret[0].(*subdistrict.SubDistrict)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Update indicates an expected call of Update.
-func (mr *MockServiceMockRecorder) Update(ctx, id, patch any) *gomock.Call {
+func (mr *MockServiceMockRecorder) Update(ctx, id, sd any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockService)(nil).Update), ctx, id, patch)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockService)(nil).Update), ctx, id, sd)
 }

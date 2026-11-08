@@ -68,8 +68,8 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 				// POST /v1/places
 				r.Post("/", placeModule.Handler.CreatePlace)
 
-				// PATCH /v1/places/{id}
-				r.Patch("/{id}", placeModule.Handler.PatchPlace)
+				// PUT /v1/places/{id}
+				r.Put("/{id}", placeModule.Handler.PutPlace)
 
 				// DELETE /v1/places/{id}
 				r.Delete("/{id}", placeModule.Handler.DeletePlace)
@@ -146,8 +146,8 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 					// POST /v1/subdistricts
 					r.Post("/", subdistrictModule.Handler.CreateSubDistrict)
 
-					// PATCH /v1/subdistricts/{id}
-					r.Patch("/{id}", subdistrictModule.Handler.PatchSubDistrict)
+					// PUT /v1/subdistricts/{id}
+					r.Put("/{id}", subdistrictModule.Handler.PutSubDistrict)
 
 					// DELETE /v1/subdistricts/{id}
 					r.Delete("/{id}", subdistrictModule.Handler.DeleteSubDistrict)

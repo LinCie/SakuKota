@@ -7,7 +7,7 @@ import {
   type InvalidBodyErrorCode,
   unwrap,
 } from "~/shared/api";
-import type { CreatePlaceRequest } from "~/features/places/api";
+import type { PlaceRequest } from "~/features/places/api";
 import type { Suggestion, SuggestionStatus } from "./types";
 
 // -----------------------------------------------------------------------------
@@ -43,13 +43,13 @@ export type GetSuggestionsParams = {
 };
 
 /** A place as the user knows it, plus a note to the reviewer. */
-export type CreateSuggestionRequest = CreatePlaceRequest & {
+export type CreateSuggestionRequest = PlaceRequest & {
   /** Trimmed by the backend; a blank note is stored as null. */
   note?: string | null;
 };
 
 /** The place the admin creates from the suggestion. */
-export type ApproveSuggestionRequest = CreatePlaceRequest;
+export type ApproveSuggestionRequest = PlaceRequest;
 
 export type RejectSuggestionRequest = {
   /** Trimmed by the backend; a blank reason is stored as null. */
