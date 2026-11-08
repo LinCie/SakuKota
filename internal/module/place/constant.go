@@ -21,3 +21,7 @@ const (
 	MaxOperatingHoursLength      = 255
 	MaxEstimatedPriceRangeLength = 100
 )
+
+// maxLimit is the most places a list returns. A request without a limit, or
+// with a larger one, gets this many; the total still counts every match.
+const maxLimit = 1000

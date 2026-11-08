@@ -766,6 +766,33 @@ func TestService_Update_Storage(t *testing.T) {
 	}
 }
 
+func TestService_GetMany_LimitDefaultsToAndIsCappedAtMaximum(t *testing.T) {
+	const maximum = 1000
+
+	tests := []struct {
+		name  string
+		limit int
+		want  int
+	}{
+		{name: "absent limit gets the maximum", limit: 0, want: maximum},
+		{name: "limit within the maximum is kept", limit: 25, want: 25},
+		{name: "limit at the maximum is kept", limit: maximum, want: maximum},
+		{name: "limit above the maximum is capped", limit: maximum + 1, want: maximum},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, images := newMocks(t)
+			repo.EXPECT().GetMany(gomock.Any(), place.PlaceFilter{Query: "kopi", Limit: tc.want}).
+				Return([]place.Place{}, 0, nil)
+
+			_, _, err := place.NewService(repo, images).GetMany(context.Background(),
+				place.PlaceFilter{Query: "kopi", Limit: tc.limit})
+			assert.NoError(t, err, "get many")
+		})
+	}
+}
+
 func TestService_Delete(t *testing.T) {
 	boom := errors.New("connection reset")
 

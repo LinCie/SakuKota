@@ -41,7 +41,8 @@ type PlaceFilter struct {
 	Query string
 	// Bounds keeps places located inside the box, edges included.
 	Bounds *BoundingBox
-	// Limit caps the number of places returned, lowest ids first. Zero applies no limit.
+	// Limit caps the number of places returned, lowest ids first. The service
+	// replaces zero, or a value above its maximum, with the maximum.
 	Limit int
 }
 

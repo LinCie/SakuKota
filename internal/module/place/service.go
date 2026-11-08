@@ -59,7 +59,13 @@ func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
 	return s.repo.Create(ctx, p)
 }
 
+// GetMany lists the places matching the filter. The limit defaults to, and is
+// capped at, maxLimit, so no request returns an unbounded list.
 func (s *service) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error) {
+	if filter.Limit <= 0 || filter.Limit > maxLimit {
+		filter.Limit = maxLimit
+	}
+
 	return s.repo.GetMany(ctx, filter)
 }
 
