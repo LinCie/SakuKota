@@ -2,10 +2,15 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"time"
 )
+
+// minJWTSecretBytes is the least a JWT_SECRET may hold: HS256 wants a key as
+// long as its 256-bit hash (RFC 7518, section 3.2).
+const minJWTSecretBytes = 32
 
 type Config struct {
 	DatabaseURL        string
@@ -52,19 +57,26 @@ func NewConfig() (Config, error) {
 	if jwtSecret == "" {
 		return Config{}, errors.New("JWT_SECRET is required")
 	}
+	if len(jwtSecret) < minJWTSecretBytes {
+		return Config{}, fmt.Errorf("JWT_SECRET must be at least %d bytes (try: openssl rand -hex 32)", minJWTSecretBytes)
+	}
 	minutes := 5
 	if v := os.Getenv("JWT_EXPIRES_MINUTES"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			minutes = n
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			return Config{}, errors.New("JWT_EXPIRES_MINUTES must be a positive integer")
 		}
+		minutes = n
 	}
 	jwtExpiry := time.Duration(minutes) * time.Minute
 
 	days := 30
 	if v := os.Getenv("REFRESH_TOKEN_EXPIRES_DAYS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			days = n
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			return Config{}, errors.New("REFRESH_TOKEN_EXPIRES_DAYS must be a positive integer")
 		}
+		days = n
 	}
 	refreshTokenExpiry := time.Duration(days) * 24 * time.Hour
 
@@ -72,9 +84,11 @@ func NewConfig() (Config, error) {
 	// over plain HTTP.
 	cookieSecure := true
 	if v := os.Getenv("COOKIE_SECURE"); v != "" {
-		if b, err := strconv.ParseBool(v); err == nil {
-			cookieSecure = b
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return Config{}, errors.New("COOKIE_SECURE must be a boolean")
 		}
+		cookieSecure = b
 	}
 
 	corsAllowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
