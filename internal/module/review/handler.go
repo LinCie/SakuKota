@@ -25,28 +25,6 @@ func NewHandler(service Service) *Handler {
 // Handler
 // -----------------------------------------------------------------------------
 
-// GetReviews lists the reviews of the place given by the `id` path parameter,
-// newest first.
-func (h *Handler) GetReviews(w http.ResponseWriter, r *http.Request) {
-	placeID, ok := httpx.ParseID(chi.URLParam(r, "id"))
-	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
-		return
-	}
-
-	reviews, err := h.service.GetByPlace(r.Context(), placeID)
-	if err != nil {
-		if errors.Is(err, ErrPlaceNotFound) {
-			httpx.RespondError(w, http.StatusNotFound, httpx.CodePlaceNotFound, err.Error())
-			return
-		}
-		httpx.RespondInternalError(w)
-		return
-	}
-
-	httpx.RespondJSON(w, http.StatusOK, toReviewResponses(reviews))
-}
-
 // CreateReview stores the authenticated user's review of the place given by
 // the `id` path parameter. It must be served behind middleware.WithAuth.
 func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
@@ -85,4 +63,26 @@ func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.RespondJSON(w, http.StatusCreated, toReviewResponse(*created))
+}
+
+// GetReviews lists the reviews of the place given by the `id` path parameter,
+// newest first.
+func (h *Handler) GetReviews(w http.ResponseWriter, r *http.Request) {
+	placeID, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
+		return
+	}
+
+	reviews, err := h.service.GetByPlace(r.Context(), placeID)
+	if err != nil {
+		if errors.Is(err, ErrPlaceNotFound) {
+			httpx.RespondError(w, http.StatusNotFound, httpx.CodePlaceNotFound, err.Error())
+			return
+		}
+		httpx.RespondInternalError(w)
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusOK, toReviewResponses(reviews))
 }

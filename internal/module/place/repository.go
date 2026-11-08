@@ -18,17 +18,17 @@ import (
 //
 //go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock
 type Repository interface {
-	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error)
 	Create(ctx context.Context, p *Place) (*Place, error)
+	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error)
 	GetCategories(ctx context.Context) ([]Category, error)
 	GetCategory(ctx context.Context, id int64) (*Category, error)
 	GetPlace(ctx context.Context, id int64) (*Place, error)
 	Update(ctx context.Context, p *Place) (*Place, error)
-	// SetImageKey stores key as the place's image and returns the place.
-	SetImageKey(ctx context.Context, id int64, key string) (*Place, error)
 	// Delete removes the place and queues its image, if any, for deletion. It
 	// returns ErrPlaceNotFound if there is no such place.
 	Delete(ctx context.Context, id int64) error
+	// SetImageKey stores key as the place's image and returns the place.
+	SetImageKey(ctx context.Context, id int64, key string) (*Place, error)
 }
 
 type postgresRepository struct {
@@ -63,91 +63,38 @@ const placeRowColumns = `id, sub_district_id, category_id, name, address,
 	location, operating_hours, estimated_price_range, short_description,
 	attributes, rating_count, rating_sum, image_key`
 
-// checkFilterTargets returns ErrSubDistrictNotFound or ErrCategoryNotFound when
-// the filter names a sub-district or category that does not exist.
-func (r *postgresRepository) checkFilterTargets(ctx context.Context, filter PlaceFilter) error {
-	if filter.SubDistrictID != 0 {
-		var exists bool
-		err := r.db.GetContext(
-			ctx,
-			&exists,
-			`SELECT EXISTS (SELECT 1 FROM SUB_DISTRICTS WHERE id = $1)`,
-			filter.SubDistrictID,
-		)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return ErrSubDistrictNotFound
-		}
-	}
+// Create inserts the place and returns it joined with its category.
+func (r *postgresRepository) Create(ctx context.Context, p *Place) (*Place, error) {
+	var created Place
 
-	if len(filter.CategoryIDs) == 0 {
-		return nil
-	}
-
-	var found []int64
-	err := r.db.SelectContext(
+	err := r.db.GetContext(
 		ctx,
-		&found,
-		`SELECT id FROM CATEGORIES WHERE id = ANY($1)`,
-		filter.CategoryIDs,
+		&created,
+		`WITH inserted AS (
+			INSERT INTO PLACES (sub_district_id, category_id, name, address,
+				location, operating_hours, estimated_price_range, short_description,
+				attributes)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			RETURNING `+placeRowColumns+`
+		)
+		SELECT `+placeColumns+`
+		FROM inserted p
+		JOIN CATEGORIES c ON c.id = p.category_id`,
+		p.SubDistrictID,
+		p.CategoryID,
+		p.Name,
+		p.Address,
+		p.Location,
+		p.OperatingHours,
+		p.EstimatedPriceRange,
+		p.ShortDescription,
+		p.Attributes,
 	)
 	if err != nil {
-		return err
+		return nil, mapForeignKeyError(err)
 	}
 
-	for _, id := range filter.CategoryIDs {
-		if !slices.Contains(found, id) {
-			return ErrCategoryNotFound
-		}
-	}
-
-	return nil
-}
-
-// placeFrom is the FROM clause the place filters are written against.
-const placeFrom = ` FROM PLACES p JOIN CATEGORIES c ON c.id = p.category_id`
-
-// placeWhere returns the WHERE clause for the filter and its arguments. Only
-// the filters that are set become conditions, so cached statements get plans
-// that can use the indexes (a catch-all `$1 IS NULL OR ...` cannot).
-func placeWhere(filter PlaceFilter) (string, []any) {
-	var conditions []string
-	var args []any
-	arg := func(v any) string {
-		args = append(args, v)
-		return "$" + strconv.Itoa(len(args))
-	}
-
-	if filter.SubDistrictID != 0 {
-		conditions = append(conditions, "p.sub_district_id = "+arg(filter.SubDistrictID))
-	}
-
-	if len(filter.CategoryIDs) > 0 {
-		conditions = append(conditions, "p.category_id = ANY("+arg(filter.CategoryIDs)+")")
-	}
-
-	if filter.Query != "" {
-		pattern := arg("%" + likeEscaper.Replace(filter.Query) + "%")
-		conditions = append(conditions, fmt.Sprintf(
-			"(p.name ILIKE %[1]s OR p.address ILIKE %[1]s OR p.short_description ILIKE %[1]s OR c.name ILIKE %[1]s)",
-			pattern,
-		))
-	}
-
-	if b := filter.Bounds; b != nil {
-		conditions = append(conditions, fmt.Sprintf(
-			"p.location && ST_MakeEnvelope(%s, %s, %s, %s, 4326)",
-			arg(b.MinLng), arg(b.MinLat), arg(b.MaxLng), arg(b.MaxLat),
-		))
-	}
-
-	if len(conditions) == 0 {
-		return "", args
-	}
-
-	return " WHERE " + strings.Join(conditions, " AND "), args
+	return &created, nil
 }
 
 // GetMany returns the places matching the filter and the number of matches
@@ -230,40 +177,6 @@ func (r *postgresRepository) GetCategory(ctx context.Context, id int64) (*Catego
 	return &categories[0], nil
 }
 
-// Create inserts the place and returns it joined with its category.
-func (r *postgresRepository) Create(ctx context.Context, p *Place) (*Place, error) {
-	var created Place
-
-	err := r.db.GetContext(
-		ctx,
-		&created,
-		`WITH inserted AS (
-			INSERT INTO PLACES (sub_district_id, category_id, name, address,
-				location, operating_hours, estimated_price_range, short_description,
-				attributes)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			RETURNING `+placeRowColumns+`
-		)
-		SELECT `+placeColumns+`
-		FROM inserted p
-		JOIN CATEGORIES c ON c.id = p.category_id`,
-		p.SubDistrictID,
-		p.CategoryID,
-		p.Name,
-		p.Address,
-		p.Location,
-		p.OperatingHours,
-		p.EstimatedPriceRange,
-		p.ShortDescription,
-		p.Attributes,
-	)
-	if err != nil {
-		return nil, mapForeignKeyError(err)
-	}
-
-	return &created, nil
-}
-
 // GetPlace returns the place with its category, or ErrPlaceNotFound.
 func (r *postgresRepository) GetPlace(ctx context.Context, id int64) (*Place, error) {
 	var p Place
@@ -326,6 +239,78 @@ func (r *postgresRepository) Update(ctx context.Context, p *Place) (*Place, erro
 	return &updated, nil
 }
 
+// Delete removes the place and queues its image for deletion, or returns
+// ErrPlaceNotFound if there is no such place.
+func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
+	var deleted int
+
+	err := r.db.GetContext(
+		ctx,
+		&deleted,
+		`WITH deleted AS (
+			DELETE FROM PLACES WHERE id = $1 RETURNING image_key
+		), queued AS (
+			INSERT INTO STORAGE_DELETIONS (key)
+			SELECT image_key FROM deleted
+			WHERE image_key IS NOT NULL
+			ON CONFLICT (key) DO NOTHING
+		)
+		SELECT COUNT(*) FROM deleted`,
+		id,
+	)
+	if err != nil {
+		return err
+	}
+	if deleted == 0 {
+		return ErrPlaceNotFound
+	}
+
+	return nil
+}
+
+// checkFilterTargets returns ErrSubDistrictNotFound or ErrCategoryNotFound when
+// the filter names a sub-district or category that does not exist.
+func (r *postgresRepository) checkFilterTargets(ctx context.Context, filter PlaceFilter) error {
+	if filter.SubDistrictID != 0 {
+		var exists bool
+		err := r.db.GetContext(
+			ctx,
+			&exists,
+			`SELECT EXISTS (SELECT 1 FROM SUB_DISTRICTS WHERE id = $1)`,
+			filter.SubDistrictID,
+		)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return ErrSubDistrictNotFound
+		}
+	}
+
+	if len(filter.CategoryIDs) == 0 {
+		return nil
+	}
+
+	var found []int64
+	err := r.db.SelectContext(
+		ctx,
+		&found,
+		`SELECT id FROM CATEGORIES WHERE id = ANY($1)`,
+		filter.CategoryIDs,
+	)
+	if err != nil {
+		return err
+	}
+
+	for _, id := range filter.CategoryIDs {
+		if !slices.Contains(found, id) {
+			return ErrCategoryNotFound
+		}
+	}
+
+	return nil
+}
+
 // SetImageKey stores key as the place's image and returns the place joined
 // with its category, or ErrPlaceNotFound. A previous image with another key is
 // queued for deletion. The row is locked while its previous key is read, so a
@@ -369,50 +354,6 @@ func (r *postgresRepository) SetImageKey(ctx context.Context, id int64, key stri
 	return &updated, nil
 }
 
-// Delete removes the place and queues its image for deletion, or returns
-// ErrPlaceNotFound if there is no such place.
-func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
-	var deleted int
-
-	err := r.db.GetContext(
-		ctx,
-		&deleted,
-		`WITH deleted AS (
-			DELETE FROM PLACES WHERE id = $1 RETURNING image_key
-		), queued AS (
-			INSERT INTO STORAGE_DELETIONS (key)
-			SELECT image_key FROM deleted
-			WHERE image_key IS NOT NULL
-			ON CONFLICT (key) DO NOTHING
-		)
-		SELECT COUNT(*) FROM deleted`,
-		id,
-	)
-	if err != nil {
-		return err
-	}
-	if deleted == 0 {
-		return ErrPlaceNotFound
-	}
-
-	return nil
-}
-
-// mapForeignKeyError translates a foreign key violation on PLACES into the
-// sub-district or category it refers to. Other errors are returned unchanged.
-func mapForeignKeyError(err error) error {
-	if database.IsCode(err, database.ForeignKeyViolation) {
-		switch database.ConstraintName(err) {
-		case "places_sub_district_id_fkey":
-			return ErrSubDistrictNotFound
-		case "places_category_id_fkey":
-			return ErrCategoryNotFound
-		}
-	}
-
-	return err
-}
-
 // attachFields loads the fields of every given category in one query and
 // assigns them to each category's Fields field.
 func (r *postgresRepository) attachFields(ctx context.Context, categories []Category) error {
@@ -453,4 +394,63 @@ func (r *postgresRepository) attachFields(ctx context.Context, categories []Cate
 	}
 
 	return nil
+}
+
+// placeFrom is the FROM clause the place filters are written against.
+const placeFrom = ` FROM PLACES p JOIN CATEGORIES c ON c.id = p.category_id`
+
+// placeWhere returns the WHERE clause for the filter and its arguments. Only
+// the filters that are set become conditions, so cached statements get plans
+// that can use the indexes (a catch-all `$1 IS NULL OR ...` cannot).
+func placeWhere(filter PlaceFilter) (string, []any) {
+	var conditions []string
+	var args []any
+	arg := func(v any) string {
+		args = append(args, v)
+		return "$" + strconv.Itoa(len(args))
+	}
+
+	if filter.SubDistrictID != 0 {
+		conditions = append(conditions, "p.sub_district_id = "+arg(filter.SubDistrictID))
+	}
+
+	if len(filter.CategoryIDs) > 0 {
+		conditions = append(conditions, "p.category_id = ANY("+arg(filter.CategoryIDs)+")")
+	}
+
+	if filter.Query != "" {
+		pattern := arg("%" + likeEscaper.Replace(filter.Query) + "%")
+		conditions = append(conditions, fmt.Sprintf(
+			"(p.name ILIKE %[1]s OR p.address ILIKE %[1]s OR p.short_description ILIKE %[1]s OR c.name ILIKE %[1]s)",
+			pattern,
+		))
+	}
+
+	if b := filter.Bounds; b != nil {
+		conditions = append(conditions, fmt.Sprintf(
+			"p.location && ST_MakeEnvelope(%s, %s, %s, %s, 4326)",
+			arg(b.MinLng), arg(b.MinLat), arg(b.MaxLng), arg(b.MaxLat),
+		))
+	}
+
+	if len(conditions) == 0 {
+		return "", args
+	}
+
+	return " WHERE " + strings.Join(conditions, " AND "), args
+}
+
+// mapForeignKeyError translates a foreign key violation on PLACES into the
+// sub-district or category it refers to. Other errors are returned unchanged.
+func mapForeignKeyError(err error) error {
+	if database.IsCode(err, database.ForeignKeyViolation) {
+		switch database.ConstraintName(err) {
+		case "places_sub_district_id_fkey":
+			return ErrSubDistrictNotFound
+		case "places_category_id_fkey":
+			return ErrCategoryNotFound
+		}
+	}
+
+	return err
 }

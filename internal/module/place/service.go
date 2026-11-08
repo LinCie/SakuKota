@@ -20,8 +20,8 @@ import (
 //
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
 type Service interface {
-	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error)
 	Create(ctx context.Context, p *Place) (*Place, error)
+	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error)
 	GetPlace(ctx context.Context, id int64) (*Place, error)
 	GetCategories(ctx context.Context) ([]Category, error)
 	GetCategory(ctx context.Context, id int64) (*Category, error)
@@ -51,6 +51,14 @@ func NewService(repo Repository, images ImageStorage) Service {
 // service
 // -----------------------------------------------------------------------------
 
+func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
+	if err := s.validate(ctx, p); err != nil {
+		return nil, err
+	}
+
+	return s.repo.Create(ctx, p)
+}
+
 func (s *service) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error) {
 	return s.repo.GetMany(ctx, filter)
 }
@@ -67,14 +75,6 @@ func (s *service) GetCategory(ctx context.Context, id int64) (*Category, error) 
 	return s.repo.GetCategory(ctx, id)
 }
 
-func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
-	if err := s.validate(ctx, p); err != nil {
-		return nil, err
-	}
-
-	return s.repo.Create(ctx, p)
-}
-
 // Update replaces the stored place's fields with those of p. The repository
 // reports ErrPlaceNotFound when there is no such place.
 func (s *service) Update(ctx context.Context, id int64, p *Place) (*Place, error) {
@@ -84,6 +84,11 @@ func (s *service) Update(ctx context.Context, id int64, p *Place) (*Place, error
 	p.ID = id
 
 	return s.repo.Update(ctx, p)
+}
+
+// Delete removes the place. The repository queues its image for deletion.
+func (s *service) Delete(ctx context.Context, id int64) error {
+	return s.repo.Delete(ctx, id)
 }
 
 // validate normalizes p and checks it against its category's fields.
@@ -114,11 +119,6 @@ func (s *service) validate(ctx context.Context, p *Place) error {
 	p.Attributes = attributes
 
 	return nil
-}
-
-// Delete removes the place. The repository queues its image for deletion.
-func (s *service) Delete(ctx context.Context, id int64) error {
-	return s.repo.Delete(ctx, id)
 }
 
 // ImageUploadURL returns an upload for a new image of the place.

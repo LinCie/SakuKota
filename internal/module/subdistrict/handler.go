@@ -28,6 +28,49 @@ func NewHandler(service Service, imageURL func(key string) string) *Handler {
 // Handler
 // -----------------------------------------------------------------------------
 
+// CreateSubDistrict stores the sub-district given in the body.
+func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
+	var req *SubDistrictRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+		return
+	}
+
+	sd, err := h.service.Create(r.Context(), toSubDistrict(*req))
+	if err != nil {
+		respondSubDistrictError(w, err)
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusCreated, toSubDistrictResponse(*sd, h.imageURL))
+}
+
+// CreateImageUpload returns a handler that presigns an upload for a new image
+// in slot of the sub-district given by the `id` path parameter.
+func (h *Handler) CreateImageUpload(slot ImageSlot) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+		if !ok {
+			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidSubDistrictID, "invalid sub_district_id")
+			return
+		}
+
+		var req *ImageUploadRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
+			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+			return
+		}
+
+		upload, err := h.service.ImageUploadURL(r.Context(), id, slot, req.ContentType)
+		if err != nil {
+			respondImageError(w, err)
+			return
+		}
+
+		httpx.RespondJSON(w, http.StatusOK, toImageUploadResponse(upload))
+	}
+}
+
 // GetSubDistricts lists every sub-district in id order.
 func (h *Handler) GetSubDistricts(w http.ResponseWriter, r *http.Request) {
 	subDistricts, err := h.service.GetMany(r.Context())
@@ -58,23 +101,6 @@ func (h *Handler) GetSubDistrict(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponse(*sd, h.imageURL))
-}
-
-// CreateSubDistrict stores the sub-district given in the body.
-func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
-	var req *SubDistrictRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
-		return
-	}
-
-	sd, err := h.service.Create(r.Context(), toSubDistrict(*req))
-	if err != nil {
-		respondSubDistrictError(w, err)
-		return
-	}
-
-	httpx.RespondJSON(w, http.StatusCreated, toSubDistrictResponse(*sd, h.imageURL))
 }
 
 // PutSubDistrict replaces the sub-district given by the `id` path parameter.
@@ -122,32 +148,6 @@ func (h *Handler) DeleteSubDistrict(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// CreateImageUpload returns a handler that presigns an upload for a new image
-// in slot of the sub-district given by the `id` path parameter.
-func (h *Handler) CreateImageUpload(slot ImageSlot) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, ok := httpx.ParseID(chi.URLParam(r, "id"))
-		if !ok {
-			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidSubDistrictID, "invalid sub_district_id")
-			return
-		}
-
-		var req *ImageUploadRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
-			return
-		}
-
-		upload, err := h.service.ImageUploadURL(r.Context(), id, slot, req.ContentType)
-		if err != nil {
-			respondImageError(w, err)
-			return
-		}
-
-		httpx.RespondJSON(w, http.StatusOK, toImageUploadResponse(upload))
-	}
 }
 
 // SetImage returns a handler that makes the uploaded image the image in slot

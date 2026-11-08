@@ -14,9 +14,9 @@ import (
 //
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
 type Service interface {
+	Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error)
 	GetMany(ctx context.Context) ([]SubDistrict, error)
 	GetSubDistrict(ctx context.Context, id int64) (*SubDistrict, error)
-	Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error)
 	// Update replaces the sub-district's editable fields with those of sd.
 	Update(ctx context.Context, id int64, sd *SubDistrict) (*SubDistrict, error)
 	Delete(ctx context.Context, id int64) error
@@ -43,20 +43,20 @@ func NewService(repo Repository, images ImageStorage) Service {
 // service
 // -----------------------------------------------------------------------------
 
-func (s *service) GetMany(ctx context.Context) ([]SubDistrict, error) {
-	return s.repo.GetMany(ctx)
-}
-
-func (s *service) GetSubDistrict(ctx context.Context, id int64) (*SubDistrict, error) {
-	return s.repo.GetSubDistrict(ctx, id)
-}
-
 func (s *service) Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error) {
 	if err := validate(sd); err != nil {
 		return nil, err
 	}
 
 	return s.repo.Create(ctx, sd)
+}
+
+func (s *service) GetMany(ctx context.Context) ([]SubDistrict, error) {
+	return s.repo.GetMany(ctx)
+}
+
+func (s *service) GetSubDistrict(ctx context.Context, id int64) (*SubDistrict, error) {
+	return s.repo.GetSubDistrict(ctx, id)
 }
 
 // Update replaces the stored sub-district's fields with those of sd. The

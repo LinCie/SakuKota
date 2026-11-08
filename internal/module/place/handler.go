@@ -31,6 +31,46 @@ func NewHandler(service Service, imageURL func(key string) string) *Handler {
 // Handler
 // -----------------------------------------------------------------------------
 
+func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
+	var req *PlaceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+		return
+	}
+
+	p, err := h.service.Create(r.Context(), toPlace(*req))
+	if err != nil {
+		respondPlaceError(w, err)
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusCreated, toPlaceResponse(*p, h.imageURL))
+}
+
+// CreateImageUpload returns a presigned upload for a new image of the place
+// given by the `id` path parameter.
+func (h *Handler) CreateImageUpload(w http.ResponseWriter, r *http.Request) {
+	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
+		return
+	}
+
+	var req *ImageUploadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+		return
+	}
+
+	upload, err := h.service.ImageUploadURL(r.Context(), id, req.ContentType)
+	if err != nil {
+		respondImageError(w, err)
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusOK, toImageUploadResponse(upload))
+}
+
 // GetPlaces lists places, optionally filtered by `sub_district_id`,
 // `category_id` (comma-separated, matches any), a `q` search term, and a
 // `bbox` (west,south,east,north), and capped to the `limit` lowest ids. The
@@ -96,33 +136,6 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// parseBoundingBox parses "west,south,east,north" in degrees. It reports false
-// unless there are four finite coordinates in range with west <= east and
-// south <= north.
-func parseBoundingBox(param string) (*BoundingBox, bool) {
-	parts := strings.Split(param, ",")
-	if len(parts) != 4 {
-		return nil, false
-	}
-
-	var coords [4]float64
-	for i, part := range parts {
-		f, err := strconv.ParseFloat(part, 64)
-		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
-			return nil, false
-		}
-		coords[i] = f
-	}
-
-	b := BoundingBox{MinLng: coords[0], MinLat: coords[1], MaxLng: coords[2], MaxLat: coords[3]}
-	if b.MinLng < -180 || b.MaxLng > 180 || b.MinLat < -90 || b.MaxLat > 90 ||
-		b.MinLng > b.MaxLng || b.MinLat > b.MaxLat {
-		return nil, false
-	}
-
-	return &b, true
-}
-
 // GetPlace returns the place given by the `id` path parameter.
 func (h *Handler) GetPlace(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
@@ -176,22 +189,6 @@ func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toCategoryDetailResponse(*c))
 }
 
-func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
-	var req *PlaceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
-		return
-	}
-
-	p, err := h.service.Create(r.Context(), toPlace(*req))
-	if err != nil {
-		respondPlaceError(w, err)
-		return
-	}
-
-	httpx.RespondJSON(w, http.StatusCreated, toPlaceResponse(*p, h.imageURL))
-}
-
 // PutPlace replaces the place given by the `id` path parameter.
 func (h *Handler) PutPlace(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
@@ -236,30 +233,6 @@ func (h *Handler) DeletePlace(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// CreateImageUpload returns a presigned upload for a new image of the place
-// given by the `id` path parameter.
-func (h *Handler) CreateImageUpload(w http.ResponseWriter, r *http.Request) {
-	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
-	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
-		return
-	}
-
-	var req *ImageUploadRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
-		return
-	}
-
-	upload, err := h.service.ImageUploadURL(r.Context(), id, req.ContentType)
-	if err != nil {
-		respondImageError(w, err)
-		return
-	}
-
-	httpx.RespondJSON(w, http.StatusOK, toImageUploadResponse(upload))
-}
-
 // SetImage makes the uploaded image the image of the place given by the `id`
 // path parameter.
 func (h *Handler) SetImage(w http.ResponseWriter, r *http.Request) {
@@ -282,6 +255,33 @@ func (h *Handler) SetImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.imageURL))
+}
+
+// parseBoundingBox parses "west,south,east,north" in degrees. It reports false
+// unless there are four finite coordinates in range with west <= east and
+// south <= north.
+func parseBoundingBox(param string) (*BoundingBox, bool) {
+	parts := strings.Split(param, ",")
+	if len(parts) != 4 {
+		return nil, false
+	}
+
+	var coords [4]float64
+	for i, part := range parts {
+		f, err := strconv.ParseFloat(part, 64)
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+			return nil, false
+		}
+		coords[i] = f
+	}
+
+	b := BoundingBox{MinLng: coords[0], MinLat: coords[1], MaxLng: coords[2], MaxLat: coords[3]}
+	if b.MinLng < -180 || b.MaxLng > 180 || b.MinLat < -90 || b.MaxLat > 90 ||
+		b.MinLng > b.MaxLng || b.MinLat > b.MaxLat {
+		return nil, false
+	}
+
+	return &b, true
 }
 
 // respondImageError writes the response for an error from uploading a place's image.

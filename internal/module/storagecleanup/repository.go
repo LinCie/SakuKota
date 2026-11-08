@@ -11,11 +11,11 @@ import (
 //
 //go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock
 type Repository interface {
+	// Remove takes key off the queue.
+	Remove(ctx context.Context, key string) error
 	// ClaimDue returns up to limit deletions that are due and holds them back
 	// from other workers until they are removed or rescheduled.
 	ClaimDue(ctx context.Context, limit int) ([]Deletion, error)
-	// Remove takes key off the queue.
-	Remove(ctx context.Context, key string) error
 	// Reschedule records a failed attempt to delete key and makes it due again
 	// after retryIn.
 	Reschedule(ctx context.Context, key string, retryIn time.Duration, lastErr string) error
@@ -34,6 +34,13 @@ func NewPostgresRepository(db *sqlx.DB) Repository {
 // -----------------------------------------------------------------------------
 // postgresRepository
 // -----------------------------------------------------------------------------
+
+// Remove takes key off the queue. Removing a key that is not queued is not an
+// error.
+func (r *postgresRepository) Remove(ctx context.Context, key string) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM STORAGE_DELETIONS WHERE key = $1`, key)
+	return err
+}
 
 // ClaimDue returns up to limit due deletions, longest due first, and holds
 // them back by moving their next attempt claimLease ahead. Rows claimed by a
@@ -67,13 +74,6 @@ func (r *postgresRepository) ClaimDue(ctx context.Context, limit int) ([]Deletio
 	}
 
 	return deletions, nil
-}
-
-// Remove takes key off the queue. Removing a key that is not queued is not an
-// error.
-func (r *postgresRepository) Remove(ctx context.Context, key string) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM STORAGE_DELETIONS WHERE key = $1`, key)
-	return err
 }
 
 // Reschedule records a failed attempt to delete key and makes it due again
