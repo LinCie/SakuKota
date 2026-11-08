@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"rantau-go/internal/config"
-	"rantau-go/internal/httpx"
 	"rantau-go/internal/module/users"
+	"rantau-go/internal/pkg/httpx"
 )
 
 type Handler struct {

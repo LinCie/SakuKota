@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"rantau-go/internal/postgis"
+	"rantau-go/internal/pkg/postgis"
 )
 
 // Status is where a suggestion stands in its review.

@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"rantau-go/internal/httpx"
+	"rantau-go/internal/pkg/httpx"
 	"rantau-go/internal/storage"
 )
 

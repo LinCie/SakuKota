@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"rantau-go/internal/config"
-	"rantau-go/internal/httpx"
-	"rantau-go/internal/jwt"
+	"rantau-go/internal/pkg/httpx"
+	"rantau-go/internal/pkg/jwt"
 )
 
 type contextKey string

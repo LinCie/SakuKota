@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"rantau-go/internal/config"
-	"rantau-go/internal/httpx"
+	"rantau-go/internal/pkg/httpx"
 )
 
 // WithCORS allows cross-origin requests from the configured origin and

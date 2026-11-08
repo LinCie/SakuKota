@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"rantau-go/internal/postgis"
+	"rantau-go/internal/pkg/postgis"
 )
 
 // Place represents a row in the PLACES table, joined with its category.

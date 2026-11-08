@@ -16,7 +16,7 @@ import (
 	"rantau-go/internal/module/place"
 	"rantau-go/internal/module/suggestion"
 	"rantau-go/internal/module/suggestion/mock"
-	"rantau-go/internal/postgis"
+	"rantau-go/internal/pkg/postgis"
 )
 
 func ptr[T any](v T) *T {

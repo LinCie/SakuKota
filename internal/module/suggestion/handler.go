@@ -7,9 +7,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"rantau-go/internal/httpx"
 	"rantau-go/internal/middleware"
 	"rantau-go/internal/module/place"
+	"rantau-go/internal/pkg/httpx"
 )
 
 type Handler struct {

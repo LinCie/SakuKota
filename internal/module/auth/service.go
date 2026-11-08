@@ -12,8 +12,8 @@ import (
 	"unicode/utf8"
 
 	"rantau-go/internal/config"
-	"rantau-go/internal/jwt"
 	"rantau-go/internal/module/users"
+	"rantau-go/internal/pkg/jwt"
 )
 
 // Service defines the operations required by the handler.

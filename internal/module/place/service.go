@@ -11,9 +11,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"rantau-go/internal/postgis"
+	"rantau-go/internal/pkg/postgis"
+	"rantau-go/internal/pkg/text"
 	"rantau-go/internal/storage"
-	"rantau-go/internal/text"
 )
 
 // Service defines the operations required by the handler.

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"rantau-go/internal/postgis"
+	"rantau-go/internal/pkg/postgis"
 	"rantau-go/internal/storage"
 )
 

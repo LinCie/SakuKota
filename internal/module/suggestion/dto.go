@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"rantau-go/internal/module/place"
-	"rantau-go/internal/postgis"
+	"rantau-go/internal/pkg/postgis"
 )
 
 // CreateSuggestionRequest is the API payload for suggesting a place. The

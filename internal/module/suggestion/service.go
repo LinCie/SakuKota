@@ -7,8 +7,8 @@ import (
 	"unicode/utf8"
 
 	"rantau-go/internal/module/place"
-	"rantau-go/internal/postgis"
-	"rantau-go/internal/text"
+	"rantau-go/internal/pkg/postgis"
+	"rantau-go/internal/pkg/text"
 )
 
 // Service defines the operations required by the handler.

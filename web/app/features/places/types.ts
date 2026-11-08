@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// Types (see internal/module/place/dto.go and internal/postgis/point.go)
+// Types (see internal/module/place/dto.go and internal/pkg/postgis/point.go)
 // -----------------------------------------------------------------------------
 
 /** A PostGIS point, serialized by the backend as a GeoJSON Point. */

@@ -18,7 +18,7 @@ import (
 
 	"rantau-go/internal/module/place"
 	"rantau-go/internal/module/place/mock"
-	"rantau-go/internal/postgis"
+	"rantau-go/internal/pkg/postgis"
 	"rantau-go/internal/storage"
 )
 

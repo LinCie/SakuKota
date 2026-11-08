@@ -68,12 +68,12 @@ export const api = ky.create({
 // Backend response envelopes
 // -----------------------------------------------------------------------------
 
-/** The backend's `{ "data": T }` success envelope (see internal/httpx.RespondJSON). */
+/** The backend's `{ "data": T }` success envelope (see internal/pkg/httpx.RespondJSON). */
 export type ApiResponse<T> = {
   data: T;
 };
 
-/** The backend's `{ "code": string, "message": string }` error envelope (see internal/httpx.RespondError). */
+/** The backend's `{ "code": string, "message": string }` error envelope (see internal/pkg/httpx.RespondError). */
 export type ApiErrorResponse<C extends string = string> = {
   code: C;
   message: string;

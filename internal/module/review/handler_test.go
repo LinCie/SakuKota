@@ -16,10 +16,10 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"rantau-go/internal/config"
-	"rantau-go/internal/jwt"
 	"rantau-go/internal/middleware"
 	"rantau-go/internal/module/review"
 	"rantau-go/internal/module/review/mock"
+	"rantau-go/internal/pkg/jwt"
 )
 
 // testConfig signs and checks the access tokens in these tests.
