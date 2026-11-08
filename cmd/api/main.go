@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
+	"os"
 
 	"rantau-go/internal/config"
 	"rantau-go/internal/database"
@@ -12,6 +14,10 @@ import (
 )
 
 func main() {
+	// Also the destination of the log package, so chi's request log and
+	// log.Printf share the format of slog.
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
 	cfg, err := config.NewConfig()
 	if err != nil {
 		log.Fatal(err)

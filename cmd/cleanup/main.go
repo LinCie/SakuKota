@@ -5,6 +5,8 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
+	"os"
 
 	"rantau-go/internal/config"
 	"rantau-go/internal/database"
@@ -13,6 +15,8 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
 	cfg, err := config.NewConfig()
 	if err != nil {
 		log.Fatal(err)

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -18,6 +19,8 @@ const (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
 	if len(os.Args) != 2 {
 		log.Fatalf("usage: %s {up|down|status|reset|version}", os.Args[0])
 	}

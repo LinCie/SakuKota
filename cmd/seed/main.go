@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -17,6 +18,8 @@ const defaultDatabaseURL = "postgres://postgres:postgres@localhost:5432/rantaugo
 var seedSQL string
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
 	databaseURL := getenv("DATABASE_URL", defaultDatabaseURL)
 
 	db, err := sql.Open("pgx", databaseURL)
