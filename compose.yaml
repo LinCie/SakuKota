@@ -17,6 +17,18 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   garage:
     image: dxflrs/garage:v2.5.0
     environment:
@@ -31,5 +43,6 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   garage_meta:
   garage_data:

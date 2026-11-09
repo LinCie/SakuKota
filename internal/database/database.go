@@ -8,7 +8,7 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func NewDB(
+func NewPostgresDB(
 	ctx context.Context,
 	databaseURL string,
 ) (*sqlx.DB, error) {

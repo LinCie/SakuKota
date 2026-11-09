@@ -6,6 +6,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/jmoiron/sqlx"
+	"github.com/redis/go-redis/v9"
 
 	"rantau-go/internal/config"
 	"rantau-go/internal/docs"
@@ -19,7 +20,7 @@ import (
 	"rantau-go/internal/storage"
 )
 
-func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
+func NewRouter(db *sqlx.DB, cache *redis.Client, cfg config.Config) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(
@@ -36,7 +37,7 @@ func NewRouter(db *sqlx.DB, cfg config.Config) http.Handler {
 	images := storage.NewImages(storage.NewS3(cfg.Storage), cfg.Storage.PublicURL)
 
 	usersModule := users.NewModule(db)
-	authModule := auth.NewModule(cfg, usersModule.Service)
+	authModule := auth.NewModule(cfg, usersModule.Service, cache)
 	placeModule := place.NewModule(db, images)
 	reviewModule := review.NewModule(db)
 	subdistrictModule := subdistrict.NewModule(db, images)

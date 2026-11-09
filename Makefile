@@ -1,4 +1,4 @@
-.PHONY: dev dev-backend dev-frontend start build postgres-up postgres-down storage-up storage-init cleanup migrate-up migrate-down migrate-status migrate-version migrate-reset migration seed
+.PHONY: dev dev-backend dev-frontend start build postgres-up postgres-down redis-up storage-up storage-init cleanup migrate-up migrate-down migrate-status migrate-version migrate-reset migration seed
 
 -include .env
 
@@ -37,6 +37,9 @@ postgres-up:
 
 postgres-down:
 	docker compose down
+
+redis-up:
+	docker compose up -d redis
 
 storage-up:
 	docker compose up -d garage

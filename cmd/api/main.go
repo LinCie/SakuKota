@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"rantau-go/internal/cache"
 	"rantau-go/internal/config"
 	"rantau-go/internal/database"
 	"rantau-go/internal/router"
@@ -24,15 +25,21 @@ func main() {
 		log.Fatal(err)
 	}
 
-	db, err := database.NewDB(context.Background(), cfg.DatabaseURL)
+	db, err := database.NewPostgresDB(context.Background(), cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("create database connection: %v", err)
 	}
 	defer db.Close()
 
+	rdb, err := cache.NewRedisCache(context.Background(), cfg)
+	if err != nil {
+		log.Fatalf("create redis connection: %v", err)
+	}
+	defer rdb.Close()
+
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
-		Handler: router.NewRouter(db, cfg),
+		Handler: router.NewRouter(db, rdb, cfg),
 
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,

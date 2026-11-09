@@ -4,7 +4,7 @@
 > backend is *specified to do*. Update it only after a VERIFICATION phase
 > completes (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-09. Updated after a verification pass of the hardening changes (see the change log).
+> - Last updated: 2026-11-09. Updated after the Redis refresh-token store was added (see the change log).
 > - Status: verified. All Go tests pass. The web app was not changed or re-checked in this pass.
 
 ## Contents
@@ -593,9 +593,12 @@ them.
     cancellation, so a dropped request still removes the orphan.
   - Every command logs through `slog`, and the `log` package and chi's request
     log share its format.
-- **Refresh-token storage.** Tests use `auth.NewMemoryRefreshStore()`. Whether
-  production sessions survive a restart is not specified, and the code keeps
-  tokens in memory, so a restart signs everyone out.
+- **Refresh-token storage.** Tests use `auth.NewMemoryRefreshStore()`. The API
+  uses `auth.NewRedisRefreshStore` (keys `auth:refresh:<hash>`, expiry set by
+  Redis, `Consume` is an atomic `GETDEL`, so it needs Redis 6.2+), so sessions
+  survive a restart and are shared between instances. The API pings Redis at
+  startup and exits if `REDIS_URL` is invalid or unreachable. None of this is
+  tested: no test runs against a real Redis.
 - **Unspecified values:** `UploadTTL`, `MaxImageSize`, how and when the
   cleanup worker runs, and how long access tokens last in production.
 - **Unspecified behaviors:** review editing or deletion; a "current user" endpoint; listing users.
@@ -621,3 +624,4 @@ them.
 | 2026-11-05 | Verification update | Categories grew from 5 to 16 (migration `add_perantau_categories`) with themed colors, and `GET /categories` is ordered by id; seed data covers every new category; the web category filter became a Base UI dropdown |
 | 2026-11-09 | Verification update | Update routes changed from `PATCH` to `PUT`: an update takes the same body as create and replaces every editable field, so absent nullable fields are cleared and `{}` or a `null` required field is a `400 VALIDATION_ERROR`. The partial-update type `httpx.Optional` was removed |
 | 2026-11-09 | Verification update | Hardening pass. Route access (public, signed-in, admin) is now tested against the real router; `403 FORBIDDEN` added to the catalogue; the access-token rules (HS256, issuer, expiry) are tested; passwords are 8 to 128 code points, with an over-long login returning `INVALID_CREDENTIALS`, and at most 4 hashes run at once; `GET /places` limit defaults to and is capped at 1000; expired refresh tokens are swept from the in-memory store; the privacy rule now allows the caller's own email in auth responses; production paths (`/v1/places/categories`) recorded in §9; untested hardening (body cap, timeouts, env checks, indexes, role `CHECK`, logging) listed in §10 |
+| 2026-11-09 | Update | Production refresh tokens moved from process memory to Redis (`auth.NewRedisRefreshStore`); `cmd/api` pings Redis at startup and exits early on a bad `REDIS_URL`. Untested against a real Redis, so recorded in §10 only |

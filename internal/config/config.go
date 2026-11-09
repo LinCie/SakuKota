@@ -14,6 +14,7 @@ const minJWTSecretBytes = 32
 
 type Config struct {
 	DatabaseURL        string
+	RedisURL           string
 	Port               int
 	JWTSecret          string
 	JWTExpiry          time.Duration
@@ -42,6 +43,11 @@ func NewConfig() (Config, error) {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
+	}
+
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		return Config{}, errors.New("REDIS_URL is required")
 	}
 
 	port := 8080
@@ -103,6 +109,7 @@ func NewConfig() (Config, error) {
 
 	return Config{
 		DatabaseURL:        databaseURL,
+		RedisURL:           redisURL,
 		Port:               port,
 		JWTSecret:          jwtSecret,
 		JWTExpiry:          jwtExpiry,

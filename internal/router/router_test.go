@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -110,7 +111,10 @@ func newRouter(t *testing.T) http.Handler {
 	db := sqlx.NewDb(raw, "pgx")
 	t.Cleanup(func() { db.Close() })
 
-	return router.NewRouter(db, testConfig())
+	rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
+	t.Cleanup(func() { rdb.Close() })
+
+	return router.NewRouter(db, rdb, testConfig())
 }
 
 func token(t *testing.T, role string) string {

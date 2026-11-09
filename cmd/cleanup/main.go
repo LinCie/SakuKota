@@ -24,7 +24,7 @@ func main() {
 
 	ctx := context.Background()
 
-	db, err := database.NewDB(ctx, cfg.DatabaseURL)
+	db, err := database.NewPostgresDB(ctx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("create database connection: %v", err)
 	}
