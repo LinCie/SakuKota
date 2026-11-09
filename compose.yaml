@@ -18,7 +18,7 @@ services:
       retries: 5
 
   redis:
-    image: redis:8-alpine
+    image: docker.io/library/redis:8-alpine
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
@@ -30,7 +30,7 @@ services:
       retries: 5
 
   garage:
-    image: dxflrs/garage:v2.5.0
+    image: docker.io/dxflrs/garage:v2.5.0
     environment:
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:-ab585f3faae621737dbe043edb29dfe69a95d3194d76218cda428e47c2f25338}
     ports:

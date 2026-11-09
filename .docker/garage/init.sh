@@ -43,7 +43,7 @@ aws() {
 		-e AWS_ACCESS_KEY_ID="$STORAGE_ACCESS_KEY_ID" \
 		-e AWS_SECRET_ACCESS_KEY="$STORAGE_SECRET_ACCESS_KEY" \
 		-e AWS_DEFAULT_REGION=garage \
-		amazon/aws-cli:2.39.3 --endpoint-url http://localhost:3900 "$@"
+		docker.io/amazon/aws-cli:2.39.3 --endpoint-url http://localhost:3900 "$@"
 }
 
 # Browsers upload straight to the bucket with presigned PUT URLs. Garage matches
