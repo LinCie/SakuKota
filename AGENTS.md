@@ -4,7 +4,7 @@ Rantau ("rantaugo") is a Go REST API with a React/Vite frontend. The Go module i
 
 ## Project context
 
-Read `docs/CONTEXT.md` before planning or changing behavior. It covers the product's purpose, the current tested backend contract, where the design docs and the tests disagree, and open questions. It is a living document: update it only after a VERIFICATION phase passes. Tests remain the source of truth when they disagree with it.
+Read `.docs/CONTEXT.md` before planning or changing behavior. It covers the product's purpose, the current tested backend contract, where the design docs and the tests disagree, and open questions. It is a living document: update it only after a VERIFICATION phase passes. Tests remain the source of truth when they disagree with it.
 
 ## What the repository contains
 

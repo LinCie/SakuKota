@@ -1,7 +1,7 @@
 services:
   postgres:
     build:
-      context: ./docker/postgres
+      context: ./.docker/postgres
       dockerfile: Dockerfile
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-rantaugo}
@@ -37,7 +37,7 @@ services:
       - "3900:3900"
       - "3902:3902"
     volumes:
-      - ./docker/garage/garage.toml:/etc/garage.toml:ro
+      - ./.docker/garage/garage.toml:/etc/garage.toml:ro
       - garage_meta:/var/lib/garage/meta
       - garage_data:/var/lib/garage/data
 
