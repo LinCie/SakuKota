@@ -2,6 +2,7 @@ package postgis
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 
 	"github.com/twpayne/go-geom"
@@ -55,9 +56,13 @@ func MustPoint(longitude, latitude float64) *Point {
 }
 
 // MarshalJSON encodes a point as a GeoJSON Point instead of exposing the
-// unexported fields used internally by go-geom.
+// unexported fields used internally by go-geom. It marshals once, unlike
+// geojson.Marshal, which marshals the coordinates and then the geometry.
 func (p Point) MarshalJSON() ([]byte, error) {
-	return geojson.Marshal(&p.Point)
+	return json.Marshal(struct {
+		Type        string     `json:"type"`
+		Coordinates [2]float64 `json:"coordinates"`
+	}{"Point", [2]float64{p.X(), p.Y()}})
 }
 
 // UnmarshalJSON decodes a GeoJSON Point whose coordinates are

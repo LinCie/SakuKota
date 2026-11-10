@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	_ "net/http/pprof" // registers /debug/pprof/* on http.DefaultServeMux
 	"os"
 	"time"
 
@@ -36,6 +37,15 @@ func main() {
 		log.Fatalf("create redis connection: %v", err)
 	}
 	defer rdb.Close()
+
+	// Profiling is opt-in and served apart from the API, which has write
+	// timeouts that would cut off long profiles.
+	if addr := os.Getenv("PPROF_ADDR"); addr != "" {
+		go func() {
+			log.Printf("pprof listening on %s", addr)
+			log.Println(http.ListenAndServe(addr, nil)) //nolint:gosec // opt-in, meant for localhost
+		}()
+	}
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
