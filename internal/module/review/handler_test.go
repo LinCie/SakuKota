@@ -30,8 +30,12 @@ var testConfig = config.Config{JWTSecret: "test-secret", JWTExpiry: time.Hour}
 func newRouter(svc review.Service) http.Handler {
 	h := review.NewHandler(svc)
 	r := chi.NewRouter()
-	r.Get("/places/{id}/reviews", h.GetReviews)
-	r.With(middleware.WithAuth(testConfig)).Post("/places/{id}/reviews", h.CreateReview)
+	r.Route("/places", func(r chi.Router) {
+		r.Route("/{id}/reviews", func(r chi.Router) {
+			r.Get("/", h.GetReviews)
+			r.With(middleware.WithAuth(testConfig)).Post("/", h.CreateReview)
+		})
+	})
 	return r
 }
 
@@ -124,249 +128,241 @@ const linReviewJSON = `{
 	"user": {"id": 7, "name": "Lin"}
 }`
 
-// -----------------------------------------------------------------------------
-// GET /places/{id}/reviews
-// -----------------------------------------------------------------------------
+func TestHandler_GetReviews(t *testing.T) {
+	t.Run("rejects invalid place id", func(t *testing.T) {
+		tests := []struct {
+			name   string
+			target string
+		}{
+			{name: "place id is not a number", target: "/places/abc/reviews"},
+			{name: "place id is zero", target: "/places/0/reviews"},
+			{name: "place id is negative", target: "/places/-1/reviews"},
+		}
 
-func TestHandler_GetReviews_RejectsInvalidPlaceID(t *testing.T) {
-	tests := []struct {
-		name   string
-		target string
-	}{
-		{name: "place id is not a number", target: "/places/abc/reviews"},
-		{name: "place id is zero", target: "/places/0/reviews"},
-		{name: "place id is negative", target: "/places/-1/reviews"},
-	}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				// No expectations: an invalid id must never reach the service.
+				svc := mock.NewMockService(gomock.NewController(t))
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, tc.target, ""))
+				assertError(t, rec, http.StatusBadRequest, "INVALID_PLACE_ID")
+			})
+		}
+	})
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// No expectations: an invalid id must never reach the service.
-			svc := mock.NewMockService(gomock.NewController(t))
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, tc.target, ""))
-			assertError(t, rec, http.StatusBadRequest, "INVALID_PLACE_ID")
-		})
-	}
+	t.Run("maps service errors", func(t *testing.T) {
+		tests := []struct {
+			name       string
+			err        error
+			wantStatus int
+			wantCode   string
+		}{
+			{name: "unknown place", err: review.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
+			{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				svc := mock.NewMockService(gomock.NewController(t))
+				svc.EXPECT().GetByPlace(gomock.Any(), gomock.Any()).Return(nil, tc.err)
+
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/places/3/reviews", ""))
+				assertError(t, rec, tc.wantStatus, tc.wantCode)
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		sari := review.Review{
+			ID:        2,
+			PlaceID:   3,
+			UserID:    8,
+			Rating:    5,
+			CreatedAt: time.Date(2026, 10, 5, 8, 0, 0, 0, time.UTC),
+			User:      review.Author{ID: 8, Name: "Sari"},
+		}
+
+		tests := []struct {
+			name    string
+			reviews []review.Review
+			want    string
+		}{
+			{name: "no reviews", reviews: []review.Review{}, want: `[]`},
+			{
+				name:    "reviews in the order given",
+				reviews: []review.Review{sari, linReview()},
+				want: `[{
+					"id": 2,
+					"place_id": 3,
+					"rating": 5,
+					"comment": null,
+					"created_at": "2026-10-05T08:00:00Z",
+					"user": {"id": 8, "name": "Sari"}
+				}, ` + linReviewJSON + `]`,
+			},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				svc := mock.NewMockService(gomock.NewController(t))
+				svc.EXPECT().GetByPlace(gomock.Any(), int64(3)).Return(tc.reviews, nil)
+
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/places/3/reviews", ""))
+				assertData(t, rec, http.StatusOK, tc.want)
+			})
+		}
+	})
 }
 
-func TestHandler_GetReviews_MapsServiceErrors(t *testing.T) {
-	tests := []struct {
-		name       string
-		err        error
-		wantStatus int
-		wantCode   string
-	}{
-		{name: "unknown place", err: review.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
-	}
+func TestHandler_CreateReview(t *testing.T) {
+	t.Run("rejects invalid place id", func(t *testing.T) {
+		tests := []struct {
+			name   string
+			target string
+		}{
+			{name: "place id is not a number", target: "/places/abc/reviews"},
+			{name: "place id is zero", target: "/places/0/reviews"},
+			{name: "place id is negative", target: "/places/-1/reviews"},
+		}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().GetByPlace(gomock.Any(), gomock.Any()).Return(nil, tc.err)
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				// No expectations: an invalid id must never reach the service.
+				svc := mock.NewMockService(gomock.NewController(t))
+				rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, tc.target, `{"rating":4}`, 7))
+				assertError(t, rec, http.StatusBadRequest, "INVALID_PLACE_ID")
+			})
+		}
+	})
 
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/places/3/reviews", ""))
-			assertError(t, rec, tc.wantStatus, tc.wantCode)
-		})
-	}
-}
+	t.Run("rejects malformed bodies", func(t *testing.T) {
+		tests := []struct {
+			name string
+			body string
+		}{
+			{name: "empty body", body: ``},
+			{name: "body is null", body: `null`},
+			{name: "malformed JSON", body: `{"rating":`},
+			{name: "not JSON", body: `four stars`},
+			{name: "array instead of object", body: `[4]`},
+			{name: "rating as a string", body: `{"rating":"4"}`},
+			{name: "fractional rating", body: `{"rating":4.5}`},
+			{name: "comment as a number", body: `{"rating":4,"comment":5}`},
+		}
 
-func TestHandler_GetReviews_Success(t *testing.T) {
-	sari := review.Review{
-		ID:        2,
-		PlaceID:   3,
-		UserID:    8,
-		Rating:    5,
-		CreatedAt: time.Date(2026, 10, 5, 8, 0, 0, 0, time.UTC),
-		User:      review.Author{ID: 8, Name: "Sari"},
-	}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				// No expectations: a malformed body must never reach the service.
+				svc := mock.NewMockService(gomock.NewController(t))
+				rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/places/3/reviews", tc.body, 7))
+				assertError(t, rec, http.StatusBadRequest, "INVALID_BODY")
+			})
+		}
+	})
 
-	tests := []struct {
-		name    string
-		reviews []review.Review
-		want    string
-	}{
-		{name: "no reviews", reviews: []review.Review{}, want: `[]`},
-		{
-			name:    "reviews in the order given",
-			reviews: []review.Review{sari, linReview()},
-			want: `[{
-				"id": 2,
-				"place_id": 3,
-				"rating": 5,
-				"comment": null,
-				"created_at": "2026-10-05T08:00:00Z",
-				"user": {"id": 8, "name": "Sari"}
-			}, ` + linReviewJSON + `]`,
-		},
-	}
+	t.Run("without user", func(t *testing.T) {
+		// No expectations: without WithAuth in front there is no user to
+		// attribute the review to, so it must never reach the service.
+		svc := mock.NewMockService(gomock.NewController(t))
+		r := chi.NewRouter()
+		r.Post("/places/{id}/reviews", review.NewHandler(svc).CreateReview)
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().GetByPlace(gomock.Any(), int64(3)).Return(tc.reviews, nil)
+		rec := serve(t, r, jsonRequest(http.MethodPost, "/places/3/reviews", `{"rating":4}`))
+		assertError(t, rec, http.StatusUnauthorized, "UNAUTHORIZED")
+	})
 
-			rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/places/3/reviews", ""))
-			assertData(t, rec, http.StatusOK, tc.want)
-		})
-	}
-}
+	t.Run("passes review to service", func(t *testing.T) {
+		tests := []struct {
+			name string
+			body string
+			want *review.Review
+		}{
+			{
+				name: "rating and comment",
+				body: `{"rating":4,"comment":"Murah"}`,
+				want: &review.Review{PlaceID: 3, UserID: 7, Rating: 4, Comment: new("Murah")},
+			},
+			{
+				name: "comment is passed on untrimmed",
+				body: `{"rating":4,"comment":"  Murah  "}`,
+				want: &review.Review{PlaceID: 3, UserID: 7, Rating: 4, Comment: new("  Murah  ")},
+			},
+			{
+				name: "rating only",
+				body: `{"rating":5}`,
+				want: &review.Review{PlaceID: 3, UserID: 7, Rating: 5},
+			},
+			{
+				name: "null comment",
+				body: `{"rating":5,"comment":null}`,
+				want: &review.Review{PlaceID: 3, UserID: 7, Rating: 5},
+			},
+			{
+				name: "place comes from the path and author from the token",
+				body: `{"rating":2,"id":99,"place_id":5,"user_id":1,"created_at":"yesterday"}`,
+				want: &review.Review{PlaceID: 3, UserID: 7, Rating: 2},
+			},
+		}
 
-// -----------------------------------------------------------------------------
-// POST /places/{id}/reviews
-// -----------------------------------------------------------------------------
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				svc := mock.NewMockService(gomock.NewController(t))
+				svc.EXPECT().Create(gomock.Any(), tc.want).Return(new(linReview()), nil)
 
-func TestHandler_CreateReview_RejectsInvalidPlaceID(t *testing.T) {
-	tests := []struct {
-		name   string
-		target string
-	}{
-		{name: "place id is not a number", target: "/places/abc/reviews"},
-		{name: "place id is zero", target: "/places/0/reviews"},
-		{name: "place id is negative", target: "/places/-1/reviews"},
-	}
+				rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/places/3/reviews", tc.body, 7))
+				require.Equal(t, http.StatusCreated, rec.Code, "body: %s", rec.Body)
+			})
+		}
+	})
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// No expectations: an invalid id must never reach the service.
-			svc := mock.NewMockService(gomock.NewController(t))
-			rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, tc.target, `{"rating":4}`, 7))
-			assertError(t, rec, http.StatusBadRequest, "INVALID_PLACE_ID")
-		})
-	}
-}
+	t.Run("maps service errors", func(t *testing.T) {
+		tests := []struct {
+			name       string
+			err        error
+			wantStatus int
+			wantCode   string
+		}{
+			{name: "rating out of range", err: review.ErrInvalidRating, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "comment too long", err: review.ErrCommentTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "unknown place", err: review.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
+			{name: "already reviewed", err: review.ErrAlreadyReviewed, wantStatus: http.StatusConflict, wantCode: "ALREADY_REVIEWED"},
+			{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
+		}
 
-func TestHandler_CreateReview_RejectsMalformedBodies(t *testing.T) {
-	tests := []struct {
-		name string
-		body string
-	}{
-		{name: "empty body", body: ``},
-		{name: "body is null", body: `null`},
-		{name: "malformed JSON", body: `{"rating":`},
-		{name: "not JSON", body: `four stars`},
-		{name: "array instead of object", body: `[4]`},
-		{name: "rating as a string", body: `{"rating":"4"}`},
-		{name: "fractional rating", body: `{"rating":4.5}`},
-		{name: "comment as a number", body: `{"rating":4,"comment":5}`},
-	}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				svc := mock.NewMockService(gomock.NewController(t))
+				svc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, tc.err)
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// No expectations: a malformed body must never reach the service.
-			svc := mock.NewMockService(gomock.NewController(t))
-			rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/places/3/reviews", tc.body, 7))
-			assertError(t, rec, http.StatusBadRequest, "INVALID_BODY")
-		})
-	}
-}
+				rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/places/3/reviews", `{"rating":4}`, 7))
+				assertError(t, rec, tc.wantStatus, tc.wantCode)
+			})
+		}
+	})
 
-func TestHandler_CreateReview_WithoutUser(t *testing.T) {
-	// No expectations: without WithAuth in front there is no user to
-	// attribute the review to, so it must never reach the service.
-	svc := mock.NewMockService(gomock.NewController(t))
-	r := chi.NewRouter()
-	r.Post("/places/{id}/reviews", review.NewHandler(svc).CreateReview)
+	t.Run("success", func(t *testing.T) {
+		svc := mock.NewMockService(gomock.NewController(t))
+		svc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(new(linReview()), nil)
 
-	rec := serve(t, r, jsonRequest(http.MethodPost, "/places/3/reviews", `{"rating":4}`))
-	assertError(t, rec, http.StatusUnauthorized, "UNAUTHORIZED")
-}
+		rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/places/3/reviews",
+			`{"rating":4,"comment":"Murah, porsi besar"}`, 7))
+		assertData(t, rec, http.StatusCreated, linReviewJSON)
+	})
 
-func TestHandler_CreateReview_PassesReviewToService(t *testing.T) {
-	tests := []struct {
-		name string
-		body string
-		want *review.Review
-	}{
-		{
-			name: "rating and comment",
-			body: `{"rating":4,"comment":"Murah"}`,
-			want: &review.Review{PlaceID: 3, UserID: 7, Rating: 4, Comment: new("Murah")},
-		},
-		{
-			name: "comment is passed on untrimmed",
-			body: `{"rating":4,"comment":"  Murah  "}`,
-			want: &review.Review{PlaceID: 3, UserID: 7, Rating: 4, Comment: new("  Murah  ")},
-		},
-		{
-			name: "rating only",
-			body: `{"rating":5}`,
-			want: &review.Review{PlaceID: 3, UserID: 7, Rating: 5},
-		},
-		{
-			name: "null comment",
-			body: `{"rating":5,"comment":null}`,
-			want: &review.Review{PlaceID: 3, UserID: 7, Rating: 5},
-		},
-		{
-			name: "place comes from the path and author from the token",
-			body: `{"rating":2,"id":99,"place_id":5,"user_id":1,"created_at":"yesterday"}`,
-			want: &review.Review{PlaceID: 3, UserID: 7, Rating: 2},
-		},
-	}
+	t.Run("context reaches service", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().Create(gomock.Any(), tc.want).Return(new(linReview()), nil)
+		svc := mock.NewMockService(gomock.NewController(t))
+		svc.EXPECT().Create(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(got context.Context, _ *review.Review) (*review.Review, error) {
+				assert.Error(t, got.Err(), "service was not given the request's context")
+				return nil, got.Err()
+			})
 
-			rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/places/3/reviews", tc.body, 7))
-			require.Equal(t, http.StatusCreated, rec.Code, "body: %s", rec.Body)
-		})
-	}
-}
-
-func TestHandler_CreateReview_MapsServiceErrors(t *testing.T) {
-	tests := []struct {
-		name       string
-		err        error
-		wantStatus int
-		wantCode   string
-	}{
-		{name: "rating out of range", err: review.ErrInvalidRating, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-		{name: "comment too long", err: review.ErrCommentTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-		{name: "unknown place", err: review.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
-		{name: "already reviewed", err: review.ErrAlreadyReviewed, wantStatus: http.StatusConflict, wantCode: "ALREADY_REVIEWED"},
-		{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, tc.err)
-
-			rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/places/3/reviews", `{"rating":4}`, 7))
-			assertError(t, rec, tc.wantStatus, tc.wantCode)
-		})
-	}
-}
-
-func TestHandler_CreateReview_Success(t *testing.T) {
-	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(new(linReview()), nil)
-
-	rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/places/3/reviews",
-		`{"rating":4,"comment":"Murah, porsi besar"}`, 7))
-	assertData(t, rec, http.StatusCreated, linReviewJSON)
-}
-
-// -----------------------------------------------------------------------------
-// Context and failures shared by the endpoints
-// -----------------------------------------------------------------------------
-
-func TestHandler_CreateReview_ContextReachesService(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().Create(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(got context.Context, _ *review.Review) (*review.Review, error) {
-			assert.Error(t, got.Err(), "service was not given the request's context")
-			return nil, got.Err()
-		})
-
-	req := authRequest(t, http.MethodPost, "/places/3/reviews", `{"rating":4}`, 7).WithContext(ctx)
-	rec := serve(t, newRouter(svc), req)
-	assert.NotEqual(t, http.StatusCreated, rec.Code, "status 201 for a request whose context had ended")
+		req := authRequest(t, http.MethodPost, "/places/3/reviews", `{"rating":4}`, 7).WithContext(ctx)
+		rec := serve(t, newRouter(svc), req)
+		assert.NotEqual(t, http.StatusCreated, rec.Code, "status 201 for a request whose context had ended")
+	})
 }
 
 func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
