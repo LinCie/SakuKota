@@ -21,6 +21,14 @@ type CategoryFieldInputProps = {
 const choiceClass =
   "focus-visible:outline-cat inline-flex h-10 cursor-pointer items-center rounded-[3px] border-2 px-4 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 data-checked:border-ink data-checked:bg-ink data-checked:text-paint data-unchecked:border-ink/60 data-unchecked:hover:border-ink data-unchecked:border-dashed data-unchecked:hover:border-solid";
 
+// A real button: a drawer's swipe handler captures the pointer from anything
+// else, so a click on a `span role="radio"` never reaches it.
+const radioProps = {
+  nativeButton: true,
+  render: <button type="button" />,
+  className: choiceClass,
+};
+
 /**
  * One of a category's custom fields, drawn by its data type. Required fields
  * carry no mark; optional ones say "opsional".
@@ -49,14 +57,14 @@ export function CategoryFieldInput({
           aria-describedby={described}
           className="flex flex-wrap gap-2"
         >
-          <Radio.Root value="true" className={choiceClass}>
+          <Radio.Root value="true" {...radioProps}>
             Ya
           </Radio.Root>
-          <Radio.Root value="false" className={choiceClass}>
+          <Radio.Root value="false" {...radioProps}>
             Tidak
           </Radio.Root>
           {optional ? (
-            <Radio.Root value="" className={choiceClass}>
+            <Radio.Root value="" {...radioProps}>
               Belum tahu
             </Radio.Root>
           ) : null}
