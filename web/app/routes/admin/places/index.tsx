@@ -1,16 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { AdminRouteError } from "~/features/admin/components/admin-route-error";
+import { AdminListSkeleton } from "~/features/admin/components/admin-skeletons";
 import { PlacesPage } from "~/features/places/pages/places-page";
 import {
   ensurePlaceData,
   usePlaceData,
 } from "~/features/places/load-place-data";
-import { LoadingState } from "~/shared/components/loading-state";
 
 export const Route = createFileRoute("/admin/places/")({
   loader: ({ context: { queryClient } }) => ensurePlaceData(queryClient),
-  pendingComponent: LoadingState,
+  pendingComponent: () => <AdminListSkeleton action />,
   errorComponent: AdminRouteError,
   head: () => ({ meta: [{ title: "Tempat · Admin Rantau" }] }),
   component: PlacesRoute,

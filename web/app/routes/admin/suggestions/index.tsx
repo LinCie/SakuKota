@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { AdminRouteError } from "~/features/admin/components/admin-route-error";
+import { AdminListSkeleton } from "~/features/admin/components/admin-skeletons";
 import { categoriesQuery, useCategories } from "~/features/places/queries";
 import {
   subDistrictsQuery,
@@ -15,7 +16,6 @@ import {
   SUGGESTION_STATUSES,
   type SuggestionStatus,
 } from "~/features/suggestions/types";
-import { LoadingState } from "~/shared/components/loading-state";
 
 type SuggestionsSearch = {
   /** Filters to one status; absent shows every status. */
@@ -34,7 +34,7 @@ export const Route = createFileRoute("/admin/suggestions/")({
       queryClient.query({ ...categoriesQuery(), staleTime: "static" }),
       queryClient.query({ ...subDistrictsQuery(), staleTime: "static" }),
     ]),
-  pendingComponent: LoadingState,
+  pendingComponent: () => <AdminListSkeleton filter />,
   errorComponent: AdminRouteError,
   head: () => ({ meta: [{ title: "Usulan · Admin Rantau" }] }),
   component: SuggestionsRoute,

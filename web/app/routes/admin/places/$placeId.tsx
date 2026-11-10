@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { AdminRouteError } from "~/features/admin/components/admin-route-error";
+import { AdminDetailSkeleton } from "~/features/admin/components/admin-skeletons";
 import { PlaceDetailPage } from "~/features/places/pages/place-detail-page";
 import {
   ensurePlaceData,
   usePlaceData,
 } from "~/features/places/load-place-data";
 import { placeQuery, usePlace } from "~/features/places/queries";
-import { LoadingState } from "~/shared/components/loading-state";
 
 export const Route = createFileRoute("/admin/places/$placeId")({
   loader: ({ context: { queryClient }, params }) =>
@@ -18,7 +18,16 @@ export const Route = createFileRoute("/admin/places/$placeId")({
       }),
       ensurePlaceData(queryClient),
     ]),
-  pendingComponent: LoadingState,
+  pendingComponent: () => (
+    <AdminDetailSkeleton
+      actions={2}
+      cards={[
+        { title: "Informasi", content: 7 },
+        { title: "Khusus kategori", content: 4 },
+        { title: "Foto tempat", content: "image" },
+      ]}
+    />
+  ),
   errorComponent: AdminRouteError,
   component: PlaceDetailRoute,
 });

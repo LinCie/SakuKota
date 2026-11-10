@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { AdminRouteError } from "~/features/admin/components/admin-route-error";
+import { AdminDetailSkeleton } from "~/features/admin/components/admin-skeletons";
 import {
   ensurePlaceData,
   usePlaceData,
 } from "~/features/places/load-place-data";
 import { SuggestionDetailPage } from "~/features/suggestions/pages/suggestion-detail-page";
 import { suggestionQuery, useSuggestion } from "~/features/suggestions/queries";
-import { LoadingState } from "~/shared/components/loading-state";
 
 export const Route = createFileRoute("/admin/suggestions/$suggestionId")({
   // The places are for the approve form's map.
@@ -19,7 +19,16 @@ export const Route = createFileRoute("/admin/suggestions/$suggestionId")({
       }),
       ensurePlaceData(queryClient),
     ]),
-  pendingComponent: LoadingState,
+  pendingComponent: () => (
+    <AdminDetailSkeleton
+      actions={2}
+      cards={[
+        { title: "Tinjauan", content: 4 },
+        { title: "Informasi", content: 7 },
+        { title: "Khusus kategori", content: 4 },
+      ]}
+    />
+  ),
   errorComponent: AdminRouteError,
   head: () => ({ meta: [{ title: "Usulan · Admin Rantau" }] }),
   component: SuggestionDetailRoute,
