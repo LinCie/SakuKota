@@ -78,7 +78,7 @@ function StarField({ field }: { field: AnyFieldApi }) {
         {STARS.map((star) => (
           <label
             key={star}
-            className="hover:bg-sign-soft has-focus-visible:outline-cat grid size-11 cursor-pointer place-items-center rounded-[3px] transition-colors has-focus-visible:outline-2"
+            className="relative hover:bg-sign-soft has-focus-visible:outline-cat grid size-11 cursor-pointer place-items-center rounded-[3px] transition-colors has-focus-visible:outline-2"
           >
             <input
               type="radio"
