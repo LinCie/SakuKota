@@ -1,7 +1,9 @@
 import {
+  infiniteQueryOptions,
   queryOptions,
   useMutation,
   useQueryClient,
+  useSuspenseInfiniteQuery,
   useSuspenseQuery,
 } from "@tanstack/react-query";
 
@@ -21,6 +23,14 @@ import { uploadImage } from "~/shared/image-upload";
 
 import type { PlacePage } from "./types";
 
+/** The filters of a list that loads page by page; the page is not part of them. */
+export type PlaceListParams = Omit<
+  GetPlacesParams,
+  "limit" | "offset" | "bbox"
+>;
+
+const PLACES_PAGE_SIZE = 20;
+
 // -----------------------------------------------------------------------------
 // Query keys
 // -----------------------------------------------------------------------------
@@ -29,6 +39,9 @@ export const placeKeys = {
   all: ["places"] as const,
   lists: () => [...placeKeys.all, "list"] as const,
   list: (params: GetPlacesParams) => [...placeKeys.lists(), params] as const,
+  // Outside `lists()`: paged data has another shape than a `PlacePage`.
+  infinite: (params: PlaceListParams) =>
+    [...placeKeys.all, "infinite", params] as const,
   detail: (id: number) => [...placeKeys.all, "detail", id] as const,
 };
 
@@ -49,6 +62,22 @@ export function placesQuery(params: GetPlacesParams = {}) {
   });
 }
 
+/** The places matching the filters, loaded page by page. */
+export function placesInfiniteQuery(params: PlaceListParams = {}) {
+  return infiniteQueryOptions({
+    queryKey: placeKeys.infinite(params),
+    queryFn: ({ pageParam }) =>
+      getPlaces({ ...params, limit: PLACES_PAGE_SIZE, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) => {
+      const loaded = pages.reduce((sum, page) => sum + page.places.length, 0);
+      return lastPage.places.length > 0 && loaded < lastPage.total
+        ? loaded
+        : undefined;
+    },
+  });
+}
+
 export function placeQuery(id: number) {
   return queryOptions({
     queryKey: placeKeys.detail(id),
@@ -65,6 +94,10 @@ export function categoriesQuery() {
 
 export function usePlaces(params: GetPlacesParams = {}) {
   return useSuspenseQuery(placesQuery(params));
+}
+
+export function usePlacesInfinite(params: PlaceListParams = {}) {
+  return useSuspenseInfiniteQuery(placesInfiniteQuery(params));
 }
 
 export function usePlace(id: number) {

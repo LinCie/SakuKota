@@ -14,6 +14,10 @@ import { signIcon } from "./map-icons";
 import { ZoomPlate } from "./zoom-plate";
 
 const FIT_OPTIONS = { padding: [56, 56] as [number, number], maxZoom: 16 };
+// A picked place is shown at least this close, past MAP_UNLIMITED_ZOOM so its sign is not cut by the limit.
+const PLACE_ZOOM = 16;
+// Keeps a selected sign this far from the map's edges.
+const SIGN_MARGIN = 72;
 // Below this zoom the map asks for at most MAP_PLACE_LIMIT places.
 const MAP_UNLIMITED_ZOOM = 15;
 const MAP_PLACE_LIMIT = 25;
@@ -49,6 +53,24 @@ function coveredHeight(
   );
 }
 
+/** Padding that keeps a point clear of the map's edges and of the bottom sheet. */
+function signPadding(
+  container: HTMLElement,
+  sheet: HTMLElement | null | undefined,
+) {
+  return {
+    paddingTopLeft: [SIGN_MARGIN, SIGN_MARGIN] as [number, number],
+    paddingBottomRight: [
+      SIGN_MARGIN,
+      SIGN_MARGIN + coveredHeight(container, sheet),
+    ] as [number, number],
+  };
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 /** The place limit for a zoom level; undefined shows every place. */
 function placeLimitForZoom(zoom: number) {
   return zoom < MAP_UNLIMITED_ZOOM ? MAP_PLACE_LIMIT : undefined;
@@ -78,6 +100,9 @@ export type MapView = {
   limit: number | undefined;
 };
 
+/** Asks the map to teleport to a place. A new object each time, so asking again repeats it. */
+export type FlyRequest = { place: Place };
+
 type SurvivalMapProps = {
   /** Places to plant as signs. The map frames them when the kecamatan changes. */
   places: Place[];
@@ -85,6 +110,8 @@ type SurvivalMapProps = {
   focusKey: string;
   selectedId: number | null;
   onSelect: (placeId: number) => void;
+  /** Flies to the place and keeps it clear of the sheet; null until asked. */
+  flyRequest: FlyRequest | null;
   /** Reports the view after each pan or zoom, so the places can follow it. */
   onViewChange: (view: MapView) => void;
   /** A bottom sheet that may cover the map; the selected sign is kept above it. */
@@ -98,6 +125,7 @@ export function SurvivalMap({
   focusKey,
   selectedId,
   onSelect,
+  flyRequest,
   onViewChange,
   sheetRef,
   children,
@@ -105,6 +133,8 @@ export function SurvivalMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef(new Map<number, Leaflet.Marker>());
   const focusedKeyRef = useRef<string | null>(null);
+  // True from a fly request until the map settles; panning to the selected sign meanwhile would cancel it.
+  const flyingRef = useRef(false);
   const leaflet = useLeafletMap(containerRef, MAP_OPTIONS);
   const onSelectEvent = useEffectEvent(onSelect);
   const onViewChangeEvent = useEffectEvent(onViewChange);
@@ -141,11 +171,8 @@ export function SurvivalMap({
     const bounds = L.latLngBounds(
       located.map(({ lat, lng }) => L.latLng(lat, lng)),
     );
-    const reduceMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
 
-    if (focusedKeyRef.current === null || reduceMotion) {
+    if (focusedKeyRef.current === null || prefersReducedMotion()) {
       map.fitBounds(bounds, FIT_OPTIONS);
     } else {
       map.flyToBounds(bounds, { ...FIT_OPTIONS, duration: 0.9 });
@@ -187,6 +214,32 @@ export function SurvivalMap({
     });
   }, [leaflet, places]);
 
+  // Teleport to a place picked from the list, like framing a kecamatan.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!leaflet || !flyRequest || !container) return;
+    const { place } = flyRequest;
+    if (!place.location) return;
+    const { L, map } = leaflet;
+    const [lng, lat] = place.location.coordinates;
+
+    map.invalidateSize();
+    const bounds = L.latLngBounds([[lat, lng]]);
+    const options = {
+      ...signPadding(container, sheetRef?.current),
+      maxZoom: Math.max(map.getZoom(), PLACE_ZOOM),
+    };
+    flyingRef.current = true;
+    map.once("moveend", () => {
+      flyingRef.current = false;
+    });
+    if (prefersReducedMotion()) {
+      map.fitBounds(bounds, options);
+    } else {
+      map.flyToBounds(bounds, { ...options, duration: 0.9 });
+    }
+  }, [leaflet, flyRequest, sheetRef]);
+
   // Invert the selected sign and keep it in view.
   useEffect(() => {
     if (!leaflet) return;
@@ -201,14 +254,11 @@ export function SurvivalMap({
     const selectedMarker =
       selectedId !== null ? markers.get(selectedId) : undefined;
     const container = containerRef.current;
-    if (selectedMarker && container) {
-      leaflet.map.panInside(selectedMarker.getLatLng(), {
-        paddingTopLeft: [72, 72],
-        paddingBottomRight: [
-          72,
-          72 + coveredHeight(container, sheetRef?.current),
-        ],
-      });
+    if (selectedMarker && container && !flyingRef.current) {
+      leaflet.map.panInside(
+        selectedMarker.getLatLng(),
+        signPadding(container, sheetRef?.current),
+      );
     }
   }, [leaflet, selectedId, places, sheetRef]);
 

@@ -13,16 +13,20 @@ import { PlaceDetails } from "~/features/places/components/place-details";
 import { PlaceList } from "~/features/places/components/place-list";
 import {
   SurvivalMap,
+  type FlyRequest,
   type MapView,
 } from "~/features/places/components/survival-map";
 import {
   categoriesQuery,
   placeQuery,
+  placesInfiniteQuery,
   placesQuery,
   useCategories,
   usePlaces,
+  usePlacesInfinite,
+  type PlaceListParams,
 } from "~/features/places/queries";
-import type { CategoryDetail } from "~/features/places/types";
+import type { CategoryDetail, Place } from "~/features/places/types";
 import { PlaceReviews } from "~/features/reviews/components/place-reviews";
 import {
   subDistrictsQuery,
@@ -89,7 +93,9 @@ type PlacesFilters = Pick<
 
 /**
  * The kecamatan on show (the one in the URL, else the first) and the places
- * query for the filters. With no kecamatan at all there are no places either.
+ * queries for the filters: `params` for the map, which follows its view, and
+ * `listParams` for the list, which does not. With no kecamatan at all there are
+ * no places either.
  */
 function placesSelection(
   { kecamatan, kategori, q, limit, bbox }: PlacesFilters,
@@ -99,16 +105,15 @@ function placesSelection(
   const subDistrict =
     subDistricts.find((sd) => sd.slug === kecamatan) ?? subDistricts[0];
   const activeSlugs = activeCategorySlugs(kategori);
-  const params: GetPlacesParams = {
+  const listParams: PlaceListParams = {
     subDistrictId: subDistrict?.id,
     categoryIds: categories
       .filter((category) => activeSlugs.includes(category.slug))
       .map((category) => category.id),
     q: q?.trim(),
-    limit,
-    bbox,
   };
-  return { subDistrict, params };
+  const params: GetPlacesParams = { ...listParams, limit, bbox };
+  return { subDistrict, params, listParams };
 }
 
 export const Route = createFileRoute("/")({
@@ -135,8 +140,18 @@ export const Route = createFileRoute("/")({
       queryClient.query({ ...categoriesQuery(), staleTime: "static" }),
       queryClient.query({ ...subDistrictsQuery(), staleTime: "static" }),
     ]);
-    const { params } = placesSelection(deps, categories, subDistricts);
-    await queryClient.query({ ...placesQuery(params), staleTime: "static" });
+    const { params, listParams } = placesSelection(
+      deps,
+      categories,
+      subDistricts,
+    );
+    await Promise.all([
+      queryClient.query({ ...placesQuery(params), staleTime: "static" }),
+      queryClient.infiniteQuery({
+        ...placesInfiniteQuery(listParams),
+        staleTime: "static",
+      }),
+    ]);
   },
   head: () => ({
     meta: [
@@ -156,14 +171,25 @@ function Home() {
   const search = Route.useSearch();
   const { data: categories } = useCategories();
   const { data: subDistricts } = useSubDistricts();
-  const { subDistrict, params } = placesSelection(
+  const { subDistrict, params, listParams } = placesSelection(
     search,
     categories,
     subDistricts,
   );
+  // The map's places follow its view; the list's do not.
   const {
-    data: { places: visiblePlaces, total: matchingPlaces },
+    data: { places: mapPlaces },
   } = usePlaces(params);
+  const {
+    data: list,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+  } = usePlacesInfinite(listParams);
+  const listPlaces = list.pages.flatMap((page) => page.places);
+  const listTotal = list.pages[0]?.total ?? 0;
+  const [flyRequest, setFlyRequest] = useState<FlyRequest | null>(null);
   const navigate = Route.useNavigate();
   const [infoOpen, setInfoOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -194,8 +220,10 @@ function Home() {
   const needle = query.trim();
 
   const listedPlace =
-    visiblePlaces.find((place) => place.id === search.tempat) ?? null;
-  // A zoomed-out list can drop the selected place; it is fetched so its details stay open.
+    listPlaces.find((place) => place.id === search.tempat) ??
+    mapPlaces.find((place) => place.id === search.tempat) ??
+    null;
+  // The selected place may be on neither (a link, or a filter that leaves it out, or a page not loaded yet); it is fetched so its details stay open.
   const { data: detachedPlace } = useQuery({
     ...placeQuery(search.tempat ?? 0),
     enabled: search.tempat !== undefined && listedPlace === null,
@@ -207,6 +235,12 @@ function Home() {
 
   function selectPlace(placeId: number | null) {
     updateParams({ tempat: placeId ?? undefined });
+  }
+
+  // Picking from the list teleports the map to the place.
+  function selectListedPlace(place: Place) {
+    setFlyRequest({ place });
+    selectPlace(place.id);
   }
 
   function setView({ bbox, limit }: MapView) {
@@ -246,12 +280,8 @@ function Home() {
   const allActive = activeSlugs.length === 0;
   const areaName = subDistrict?.name ?? "Jakarta";
 
-  // With a bbox the places follow the map, so no places only means none are
-  // in view. That is said in the list alone, leaving the map free to pan.
-  const inView = search.bbox !== undefined;
-
   let emptyState: EmptyState | null = null;
-  if (visiblePlaces.length === 0 && !inView) {
+  if (listTotal === 0) {
     emptyState = needle
       ? {
           message: `Tidak ada hasil untuk “${query}” di ${areaName}.`,
@@ -270,9 +300,6 @@ function Home() {
             onAction: () => updateParams({ kategori: undefined }),
           };
   }
-  const emptyMessage = inView
-    ? `${needle ? `Tidak ada hasil untuk “${query}”` : "Tidak ada tempat"} di area peta ini. Geser atau perkecil peta.`
-    : (emptyState?.message ?? "");
 
   return (
     <div className="flex min-h-dvh flex-col md:h-dvh">
@@ -300,8 +327,7 @@ function Home() {
         activeSlugs={activeSlugs}
         onToggle={toggleCategory}
         onShowAll={() => updateParams({ kategori: undefined })}
-        placeCount={visiblePlaces.length}
-        totalCount={matchingPlaces}
+        count={listTotal}
         areaName={areaName}
         query={query}
       />
@@ -313,10 +339,11 @@ function Home() {
           className="md:border-ink relative h-[58dvh] min-h-80 md:h-auto md:border-r-2"
         >
           <SurvivalMap
-            places={visiblePlaces}
+            places={mapPlaces}
             focusKey={subDistrict?.slug ?? ""}
             selectedId={selectedPlace?.id ?? null}
             onSelect={selectPlace}
+            flyRequest={flyRequest}
             onViewChange={setView}
             sheetRef={sheetRef}
           >
@@ -333,9 +360,13 @@ function Home() {
               Daftar tempat
             </h2>
             <PlaceList
-              places={visiblePlaces}
-              onSelect={selectPlace}
-              emptyMessage={emptyMessage}
+              places={listPlaces}
+              onSelect={selectListedPlace}
+              emptyMessage={emptyState?.message ?? ""}
+              hasMore={hasNextPage}
+              loadingMore={isFetchingNextPage}
+              loadMoreFailed={isFetchNextPageError}
+              onLoadMore={() => void fetchNextPage()}
             />
           </div>
 
