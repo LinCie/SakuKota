@@ -98,7 +98,7 @@ func (r *postgresRepository) Create(ctx context.Context, p *Place) (*Place, erro
 }
 
 // GetMany returns the places matching the filter and the number of matches
-// before the limit is applied.
+// before the offset and limit are applied.
 func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error) {
 	if err := r.checkFilterTargets(ctx, filter); err != nil {
 		return nil, 0, err
@@ -113,14 +113,18 @@ func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([
 		pageArgs = append(slices.Clip(args), filter.Limit)
 		query += ` LIMIT $` + strconv.Itoa(len(pageArgs))
 	}
+	if filter.Offset > 0 {
+		pageArgs = append(slices.Clip(pageArgs), filter.Offset)
+		query += ` OFFSET $` + strconv.Itoa(len(pageArgs))
+	}
 
 	places := make([]Place, 0)
 	if err := r.db.SelectContext(ctx, &places, query, pageArgs...); err != nil {
 		return nil, 0, err
 	}
 
-	// Fewer places than the limit means none were cut off.
-	if filter.Limit == 0 || len(places) < filter.Limit {
+	// A first page with fewer places than the limit means none were cut off.
+	if filter.Offset == 0 && (filter.Limit == 0 || len(places) < filter.Limit) {
 		return places, len(places), nil
 	}
 

@@ -352,6 +352,30 @@ func TestRepository_GetMany(t *testing.T) {
 			wantTotal: 4,
 		},
 		{
+			name:      "offset skips the lowest ids and total counts every match",
+			filter:    place.PlaceFilter{Limit: 2, Offset: 1},
+			want:      []string{"Penjahit Maju", "Apotek Sehat"},
+			wantTotal: 4,
+		},
+		{
+			name:      "last page reports every match",
+			filter:    place.PlaceFilter{Limit: 2, Offset: 3},
+			want:      []string{"Kios_Jahit"},
+			wantTotal: 4,
+		},
+		{
+			name:      "offset past the matches returns no places but still the total",
+			filter:    place.PlaceFilter{Limit: 2, Offset: 10},
+			want:      []string{},
+			wantTotal: 4,
+		},
+		{
+			name:      "offset applies after the other filters",
+			filter:    place.PlaceFilter{SubDistrictID: menteng, Limit: 1, Offset: 1},
+			want:      []string{"Kios_Jahit"},
+			wantTotal: 2,
+		},
+		{
 			name:      "limit applies after the other filters",
 			filter:    place.PlaceFilter{SubDistrictID: menteng, Limit: 1},
 			want:      []string{"Apotek Sehat"},

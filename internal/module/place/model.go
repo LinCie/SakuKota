@@ -44,6 +44,8 @@ type PlaceFilter struct {
 	// Limit caps the number of places returned, lowest ids first. The service
 	// replaces zero, or a value above its maximum, with the maximum.
 	Limit int
+	// Offset skips this many places, lowest ids first, before Limit applies.
+	Offset int
 }
 
 // BoundingBox is an area in degrees, from its west and south edges to its

@@ -21,6 +21,7 @@ export type PlaceErrorCode =
   | "INVALID_SUB_DISTRICT_ID"
   | "INVALID_CATEGORY_ID"
   | "INVALID_LIMIT"
+  | "INVALID_OFFSET"
   | "INVALID_BBOX"
   | "SUB_DISTRICT_NOT_FOUND"
   | "CATEGORY_NOT_FOUND";
@@ -47,6 +48,8 @@ export type GetPlacesParams = {
   q?: string;
   /** Keeps only the lowest-id places, matching the `limit` query param. */
   limit?: number;
+  /** Skips the lowest-id places before `limit` applies, matching the `offset` query param. */
+  offset?: number;
   /** Keeps places inside "west,south,east,north" (degrees), matching the `bbox` query param. */
   bbox?: string;
 };
@@ -71,7 +74,7 @@ export type PlaceRequest = {
 export async function getPlaces(
   params: GetPlacesParams = {},
 ): Promise<PlacePage> {
-  const { subDistrictId, categoryIds, q, limit, bbox } = params;
+  const { subDistrictId, categoryIds, q, limit, offset, bbox } = params;
   const searchParams = new URLSearchParams();
   if (subDistrictId !== undefined) {
     searchParams.set("sub_district_id", String(subDistrictId));
@@ -80,6 +83,7 @@ export async function getPlaces(
     searchParams.set("category_id", categoryIds.join(","));
   if (q) searchParams.set("q", q);
   if (limit !== undefined) searchParams.set("limit", String(limit));
+  if (offset) searchParams.set("offset", String(offset));
   if (bbox) searchParams.set("bbox", bbox);
 
   return unwrap(

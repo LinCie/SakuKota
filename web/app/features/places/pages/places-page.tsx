@@ -1,13 +1,14 @@
 import { useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 
 import type { SubDistrict } from "~/features/subdistricts/types";
 import { Button } from "~/shared/components/button";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { PageHeader } from "~/shared/components/page-header";
+import { Pagination } from "~/shared/components/pagination";
 import { SearchField } from "~/shared/components/search-field";
-import { useDisclosure, useTableQuery } from "~/shared/hooks";
+import { useDisclosure } from "~/shared/hooks";
 import { formatNumber } from "~/shared/format";
 import { toastManager } from "~/shared/toast-manager";
 import { writeErrorMessage } from "~/shared/write-error";
@@ -18,23 +19,43 @@ import { PlacesTable } from "../components/places-table";
 import { useDeletePlace } from "../queries";
 
 type PlacesPageProps = {
+  /** The places on the current page. */
   places: Place[];
+  /** The places matching the search, across every page. */
+  total: number;
   subDistricts: SubDistrict[];
   categories: CategoryDetail[];
+  /** The search the places are filtered by. */
+  query: string;
+  onQueryChange: (query: string) => void;
+  /** The current page, counting from 1. */
+  page: number;
+  pageCount: number;
+  onPageChange: (page: number) => void;
 };
 
-function placeSearchText(place: Place) {
-  return [place.name, place.address ?? "", place.category.name].join(" ");
-}
-
-/** The places list: search, a table with row actions, and the add, edit, and delete flows. */
+/** The places list: search, a paged table with row actions, and the add, edit, and delete flows. */
 export function PlacesPage({
   places,
+  total,
   subDistricts,
   categories,
+  query,
+  onQueryChange,
+  page,
+  pageCount,
+  onPageChange,
 }: PlacesPageProps) {
   const navigate = useNavigate();
-  const search = useTableQuery(places, placeSearchText);
+  const [draft, setDraft] = useState(query);
+
+  // Debounce typing into the URL.
+  const applyDraft = useEffectEvent(() => onQueryChange(draft.trim()));
+  useEffect(() => {
+    if (draft.trim() === query) return;
+    const timeout = setTimeout(applyDraft, 250);
+    return () => clearTimeout(timeout);
+  }, [draft, query]);
   const drawer = useDisclosure();
   // Null while adding; the place being edited otherwise.
   const [editing, setEditing] = useState<Place | null>(null);
@@ -88,19 +109,18 @@ export function PlacesPage({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SearchField
-          value={search.query}
-          onValueChange={search.setQuery}
+          value={draft}
+          onValueChange={setDraft}
           label="Cari tempat"
           placeholder="Cari nama, alamat, atau kategori"
         />
         <p className="text-ink-soft text-sm tabular-nums">
-          {formatNumber(search.rows.length)} dari {formatNumber(places.length)}{" "}
-          tempat
+          {formatNumber(total)} tempat
         </p>
       </div>
 
       <PlacesTable
-        places={search.rows}
+        places={places}
         subDistricts={subDistricts}
         onView={(place) =>
           void navigate({
@@ -111,6 +131,14 @@ export function PlacesPage({
         onEdit={openEdit}
         onDelete={setDeleting}
       />
+
+      {pageCount > 1 ? (
+        <Pagination
+          page={page}
+          pageCount={pageCount}
+          onPageChange={onPageChange}
+        />
+      ) : null}
 
       <PlaceFormDrawer
         key={editing?.id ?? "new"}

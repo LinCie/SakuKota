@@ -73,8 +73,8 @@ func (h *Handler) CreateImageUpload(w http.ResponseWriter, r *http.Request) {
 
 // GetPlaces lists places, optionally filtered by `sub_district_id`,
 // `category_id` (comma-separated, matches any), a `q` search term, and a
-// `bbox` (west,south,east,north), and capped to the `limit` lowest ids. The
-// response carries the total number of matches alongside the places.
+// `bbox` (west,south,east,north), and capped to the `limit` lowest ids after
+// skipping the first `offset`. The response carries the total number of matches alongside the places.
 func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	filter := PlaceFilter{Query: strings.TrimSpace(query.Get("q"))}
@@ -106,6 +106,15 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		filter.Limit = limit
+	}
+
+	if param := query.Get("offset"); param != "" {
+		offset, err := strconv.Atoi(param)
+		if err != nil || offset < 0 {
+			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidOffset, "invalid offset")
+			return
+		}
+		filter.Offset = offset
 	}
 
 	if param := query.Get("bbox"); param != "" {

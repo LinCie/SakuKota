@@ -20,6 +20,7 @@ const (
 	CodeInvalidCategoryID    = "INVALID_CATEGORY_ID"
 	CodeCategoryNotFound     = "CATEGORY_NOT_FOUND"
 	CodeInvalidLimit         = "INVALID_LIMIT"
+	CodeInvalidOffset        = "INVALID_OFFSET"
 	CodeInvalidBBox          = "INVALID_BBOX"
 
 	CodeSubDistrictExists = "SUB_DISTRICT_EXISTS"

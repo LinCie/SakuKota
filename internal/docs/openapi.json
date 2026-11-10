@@ -239,11 +239,17 @@
             "in": "query",
             "description": "Return at most this many places, lowest IDs first. total still counts every match.",
             "schema": { "type": "integer", "minimum": 1 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Skip this many places, lowest IDs first, before limit applies. Use it with limit to page through the places. total still counts every match.",
+            "schema": { "type": "integer", "minimum": 0, "default": 0 }
           }
         ],
         "responses": {
           "200": {
-            "description": "Places retrieved successfully, with the number of matches before the limit. An empty result returns an empty places array and a total of 0.",
+            "description": "Places retrieved successfully, with the number of matches before the offset and limit. An empty result returns an empty places array and a total of 0.",
             "content": {
               "application/json": {
                 "schema": {
@@ -260,7 +266,7 @@
                         },
                         "total": {
                           "type": "integer",
-                          "description": "Places matching the filters, including those cut off by limit."
+                          "description": "Places matching the filters, including those skipped by offset or cut off by limit."
                         }
                       }
                     }
@@ -270,7 +276,7 @@
             }
           },
           "400": {
-            "description": "sub_district_id or category_id is not a valid positive integer, limit is not a positive integer, or bbox is not four valid coordinates (invalid_sub_district_id, invalid_category_id, invalid_limit, invalid_bbox).",
+            "description": "sub_district_id or category_id is not a valid positive integer, limit is not a positive integer, offset is not a non-negative integer, or bbox is not four valid coordinates (invalid_sub_district_id, invalid_category_id, invalid_limit, invalid_offset, invalid_bbox).",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },

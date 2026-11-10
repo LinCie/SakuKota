@@ -28,7 +28,7 @@ export type Place = {
   category: Category;
 };
 
-/** The places matching a filter, with how many match before the limit. */
+/** The places matching a filter, with how many match before the offset and limit. */
 export type PlacePage = {
   places: Place[];
   total: number;
