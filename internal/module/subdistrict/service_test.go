@@ -19,10 +19,6 @@ import (
 // family is one emoji made of five code points: man, ZWJ, woman, ZWJ, girl.
 const family = "\U0001F468\u200D\U0001F469\u200D\U0001F467"
 
-func ptr[T any](v T) *T {
-	return &v
-}
-
 // createSubDistrict runs Service.Create for sd. It returns the sub-district the
 // repository was asked to store, or nil if storage was never reached.
 func createSubDistrict(t *testing.T, sd *subdistrict.SubDistrict) (*subdistrict.SubDistrict, error) {
@@ -129,12 +125,12 @@ func TestService_Create_OptionalFieldLimits(t *testing.T) {
 		in      subdistrict.SubDistrict
 		wantErr error // nil means the sub-district is accepted
 	}{
-		{name: "estimated daily spending of zero", in: subdistrict.SubDistrict{EstimatedDailySpending: ptr(0.0)}},
-		{name: "estimated daily spending with cents", in: subdistrict.SubDistrict{EstimatedDailySpending: ptr(1500000.5)}},
-		{name: "largest estimated daily spending", in: subdistrict.SubDistrict{EstimatedDailySpending: ptr(99999999.99)}},
-		{name: "negative estimated daily spending", in: subdistrict.SubDistrict{EstimatedDailySpending: ptr(-0.01)},
+		{name: "estimated daily spending of zero", in: subdistrict.SubDistrict{EstimatedDailySpending: new(0.0)}},
+		{name: "estimated daily spending with cents", in: subdistrict.SubDistrict{EstimatedDailySpending: new(1500000.5)}},
+		{name: "largest estimated daily spending", in: subdistrict.SubDistrict{EstimatedDailySpending: new(99999999.99)}},
+		{name: "negative estimated daily spending", in: subdistrict.SubDistrict{EstimatedDailySpending: new(-0.01)},
 			wantErr: subdistrict.ErrInvalidEstimatedDailySpending},
-		{name: "estimated daily spending too large for DECIMAL(10,2)", in: subdistrict.SubDistrict{EstimatedDailySpending: ptr(100000000.0)},
+		{name: "estimated daily spending too large for DECIMAL(10,2)", in: subdistrict.SubDistrict{EstimatedDailySpending: new(100000000.0)},
 			wantErr: subdistrict.ErrInvalidEstimatedDailySpending},
 	}
 
@@ -174,8 +170,8 @@ func TestService_OptionalText(t *testing.T) {
 		input string
 		want  *string
 	}{
-		{name: "surrounding whitespace is removed", input: "  Banjir 2020\n", want: ptr("Banjir 2020")},
-		{name: "inner spacing is kept", input: "Banjir  2020", want: ptr("Banjir  2020")},
+		{name: "surrounding whitespace is removed", input: "  Banjir 2020\n", want: new("Banjir 2020")},
+		{name: "inner spacing is kept", input: "Banjir  2020", want: new("Banjir  2020")},
 		{name: "blank is stored as absent", input: " \t\n ", want: nil},
 	}
 
@@ -220,9 +216,9 @@ func TestService_Create_StoresFieldsAsSent(t *testing.T) {
 		{name: "every field set", in: subdistrict.SubDistrict{
 			Name:                   "Menteng",
 			Slug:                   "menteng",
-			FloodHistory:           ptr("Banjir tahunan"),
-			SafetyCrimeInformation: ptr("Aman di siang hari"),
-			EstimatedDailySpending: ptr(1500000.5),
+			FloodHistory:           new("Banjir tahunan"),
+			SafetyCrimeInformation: new("Aman di siang hari"),
+			EstimatedDailySpending: new(1500000.5),
 		}},
 		{name: "only name and slug", in: subdistrict.SubDistrict{Name: "Menteng", Slug: "menteng"}},
 	}
@@ -279,11 +275,11 @@ func savedMenteng() *subdistrict.SubDistrict {
 		ID:                     7,
 		Name:                   "Menteng",
 		Slug:                   "menteng",
-		FloodHistory:           ptr("Banjir 2020"),
-		SafetyCrimeInformation: ptr("Aman di siang hari"),
-		EstimatedDailySpending: ptr(1500000.5),
-		ImageKey:               ptr(oldImageKey),
-		StaticMapImageKey:      ptr(oldStaticMapKey),
+		FloodHistory:           new("Banjir 2020"),
+		SafetyCrimeInformation: new("Aman di siang hari"),
+		EstimatedDailySpending: new(1500000.5),
+		ImageKey:               new(oldImageKey),
+		StaticMapImageKey:      new(oldStaticMapKey),
 	}
 }
 
@@ -293,9 +289,9 @@ func mentengInput() *subdistrict.SubDistrict {
 	return &subdistrict.SubDistrict{
 		Name:                   "Menteng",
 		Slug:                   "menteng",
-		FloodHistory:           ptr("Banjir 2020"),
-		SafetyCrimeInformation: ptr("Aman di siang hari"),
-		EstimatedDailySpending: ptr(1500000.5),
+		FloodHistory:           new("Banjir 2020"),
+		SafetyCrimeInformation: new("Aman di siang hari"),
+		EstimatedDailySpending: new(1500000.5),
 	}
 }
 
@@ -368,17 +364,17 @@ func TestService_Update_Fields(t *testing.T) {
 			change: func(sd *subdistrict.SubDistrict) { sd.Slug = "  menteng-atas " },
 			want:   func(sd *subdistrict.SubDistrict) { sd.Slug = "menteng-atas" }},
 		{name: "flood history is replaced",
-			change: func(sd *subdistrict.SubDistrict) { sd.FloodHistory = ptr("Banjir 2024") },
-			want:   func(sd *subdistrict.SubDistrict) { sd.FloodHistory = ptr("Banjir 2024") }},
+			change: func(sd *subdistrict.SubDistrict) { sd.FloodHistory = new("Banjir 2024") },
+			want:   func(sd *subdistrict.SubDistrict) { sd.FloodHistory = new("Banjir 2024") }},
 		{name: "safety information is replaced",
-			change: func(sd *subdistrict.SubDistrict) { sd.SafetyCrimeInformation = ptr("Rawan malam") },
-			want:   func(sd *subdistrict.SubDistrict) { sd.SafetyCrimeInformation = ptr("Rawan malam") }},
+			change: func(sd *subdistrict.SubDistrict) { sd.SafetyCrimeInformation = new("Rawan malam") },
+			want:   func(sd *subdistrict.SubDistrict) { sd.SafetyCrimeInformation = new("Rawan malam") }},
 		{name: "estimated daily spending is replaced",
-			change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(750000.25) },
-			want:   func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(750000.25) }},
+			change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = new(750000.25) },
+			want:   func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = new(750000.25) }},
 		{name: "estimated daily spending of zero is allowed",
-			change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(0.0) },
-			want:   func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(0.0) }},
+			change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = new(0.0) },
+			want:   func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = new(0.0) }},
 		{name: "absent nullable fields are cleared",
 			change: func(sd *subdistrict.SubDistrict) {
 				sd.FloodHistory, sd.SafetyCrimeInformation, sd.EstimatedDailySpending = nil, nil, nil
@@ -423,9 +419,9 @@ func TestService_Update_Rejected(t *testing.T) {
 		{name: "name of 101 characters", change: func(sd *subdistrict.SubDistrict) { sd.Name = strings.Repeat("a", 101) }, wantErr: subdistrict.ErrInvalidName},
 		{name: "empty slug", change: func(sd *subdistrict.SubDistrict) { sd.Slug = "" }, wantErr: subdistrict.ErrInvalidSlug},
 		{name: "slug of 101 characters", change: func(sd *subdistrict.SubDistrict) { sd.Slug = strings.Repeat("a", 101) }, wantErr: subdistrict.ErrInvalidSlug},
-		{name: "negative estimated daily spending", change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(-0.01) },
+		{name: "negative estimated daily spending", change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = new(-0.01) },
 			wantErr: subdistrict.ErrInvalidEstimatedDailySpending},
-		{name: "estimated daily spending too large for DECIMAL(10,2)", change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = ptr(100000000.0) },
+		{name: "estimated daily spending too large for DECIMAL(10,2)", change: func(sd *subdistrict.SubDistrict) { sd.EstimatedDailySpending = new(100000000.0) },
 			wantErr: subdistrict.ErrInvalidEstimatedDailySpending},
 	}
 
@@ -633,7 +629,7 @@ func TestService_SetImage(t *testing.T) {
 					sc.setKey(existing, nil)
 				}
 				updated := savedMenteng()
-				sc.setKey(updated, ptr(sc.newKey))
+				sc.setKey(updated, new(sc.newKey))
 
 				gomock.InOrder(
 					repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(existing, nil),

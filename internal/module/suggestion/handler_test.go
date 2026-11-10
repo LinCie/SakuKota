@@ -138,10 +138,10 @@ func linSuggestion() suggestion.Suggestion {
 		SubDistrictID: 1,
 		CategoryID:    2,
 		Name:          "Warung Bu Ani",
-		Address:       ptr("Jl. Sabang 12"),
+		Address:       new("Jl. Sabang 12"),
 		Location:      postgis.MustPoint(106.8, -6.2),
 		Attributes:    json.RawMessage(`{"halal":true}`),
-		Note:          ptr("Murah, porsi besar"),
+		Note:          new("Murah, porsi besar"),
 		Status:        suggestion.StatusPending,
 		CreatedAt:     time.Date(2026, 10, 4, 12, 30, 0, 0, time.UTC),
 		User:          suggestion.Author{ID: 7, Name: "Lin"},
@@ -174,9 +174,9 @@ const linSuggestionJSON = `{
 func linApproved() suggestion.Suggestion {
 	s := linSuggestion()
 	s.Status = suggestion.StatusApproved
-	s.PlaceID = ptr(int64(42))
-	s.ReviewedBy = ptr(int64(99))
-	s.ReviewedAt = ptr(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))
+	s.PlaceID = new(int64(42))
+	s.ReviewedBy = new(int64(99))
+	s.ReviewedAt = new(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))
 	return s
 }
 
@@ -204,9 +204,9 @@ const linApprovedJSON = `{
 func linRejected() suggestion.Suggestion {
 	s := linSuggestion()
 	s.Status = suggestion.StatusRejected
-	s.RejectionReason = ptr("Sudah tutup")
-	s.ReviewedBy = ptr(int64(99))
-	s.ReviewedAt = ptr(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))
+	s.RejectionReason = new("Sudah tutup")
+	s.ReviewedBy = new(int64(99))
+	s.ReviewedAt = new(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))
 	return s
 }
 
@@ -312,12 +312,12 @@ func TestHandler_CreateSuggestion_PassesSuggestionToService(t *testing.T) {
 			want: &suggestion.Suggestion{
 				UserID: 7, SubDistrictID: 1, CategoryID: 2, Name: "Warung Bu Ani",
 				Location:            postgis.MustPoint(106.8, -6.2),
-				Address:             ptr("Jl. Sabang 12"),
-				OperatingHours:      ptr("07:00-21:00"),
-				EstimatedPriceRange: ptr("Rp15.000-30.000"),
-				ShortDescription:    ptr("Masakan Padang"),
+				Address:             new("Jl. Sabang 12"),
+				OperatingHours:      new("07:00-21:00"),
+				EstimatedPriceRange: new("Rp15.000-30.000"),
+				ShortDescription:    new("Masakan Padang"),
 				Attributes:          json.RawMessage(`{"halal":true}`),
-				Note:                ptr("Murah, porsi besar"),
+				Note:                new("Murah, porsi besar"),
 			},
 		},
 		{
@@ -326,7 +326,7 @@ func TestHandler_CreateSuggestion_PassesSuggestionToService(t *testing.T) {
 				`"location":{"type":"Point","coordinates":[106.8,-6.2]},"note":"  Murah  "}`,
 			want: &suggestion.Suggestion{
 				UserID: 7, SubDistrictID: 1, CategoryID: 2, Name: "  Warung Bu Ani  ",
-				Location: postgis.MustPoint(106.8, -6.2), Note: ptr("  Murah  "),
+				Location: postgis.MustPoint(106.8, -6.2), Note: new("  Murah  "),
 			},
 		},
 		{
@@ -368,7 +368,7 @@ func TestHandler_CreateSuggestion_PassesSuggestionToService(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().Create(gomock.Any(), tc.want).Return(ptr(linSuggestion()), nil)
+			svc.EXPECT().Create(gomock.Any(), tc.want).Return(new(linSuggestion()), nil)
 
 			rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/suggestions", tc.body, 7))
 			require.Equal(t, http.StatusCreated, rec.Code, "body: %s", rec.Body)
@@ -411,7 +411,7 @@ func TestHandler_CreateSuggestion_MapsServiceErrors(t *testing.T) {
 
 func TestHandler_CreateSuggestion_Success(t *testing.T) {
 	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(ptr(linSuggestion()), nil)
+	svc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(new(linSuggestion()), nil)
 
 	rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/suggestions", minimalBody, 7))
 	assertData(t, rec, http.StatusCreated, linSuggestionJSON)
@@ -593,7 +593,7 @@ func TestHandler_GetSuggestion_MapsServiceErrors(t *testing.T) {
 
 func TestHandler_GetSuggestion_Success(t *testing.T) {
 	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(ptr(linSuggestion()), nil)
+	svc.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(new(linSuggestion()), nil)
 
 	rec := serve(t, newRouter(svc), adminRequest(t, http.MethodGet, "/suggestions/3", "", 99))
 	assertData(t, rec, http.StatusOK, linSuggestionJSON)
@@ -679,10 +679,10 @@ func TestHandler_ApproveSuggestion_PassesPlaceToService(t *testing.T) {
 			want: &place.Place{
 				Name: "Warung Bu Ani", SubDistrictID: 1, CategoryID: 2,
 				Location:            postgis.MustPoint(106.8, -6.2),
-				Address:             ptr("Jl. Sabang 12"),
-				OperatingHours:      ptr("07:00-21:00"),
-				EstimatedPriceRange: ptr("Rp15.000-30.000"),
-				ShortDescription:    ptr("Masakan Padang"),
+				Address:             new("Jl. Sabang 12"),
+				OperatingHours:      new("07:00-21:00"),
+				EstimatedPriceRange: new("Rp15.000-30.000"),
+				ShortDescription:    new("Masakan Padang"),
 				Attributes:          json.RawMessage(`{"halal":true}`),
 			},
 		},
@@ -706,7 +706,7 @@ func TestHandler_ApproveSuggestion_PassesPlaceToService(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// The suggestion comes from the path and the reviewer from the token.
 			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().Approve(gomock.Any(), int64(3), int64(99), tc.want).Return(ptr(linApproved()), nil)
+			svc.EXPECT().Approve(gomock.Any(), int64(3), int64(99), tc.want).Return(new(linApproved()), nil)
 
 			rec := serve(t, newRouter(svc), adminRequest(t, http.MethodPost, "/suggestions/3/approve", tc.body, 99))
 			require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body)
@@ -751,7 +751,7 @@ func TestHandler_ApproveSuggestion_MapsServiceErrors(t *testing.T) {
 
 func TestHandler_ApproveSuggestion_Success(t *testing.T) {
 	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().Approve(gomock.Any(), int64(3), int64(99), gomock.Any()).Return(ptr(linApproved()), nil)
+	svc.EXPECT().Approve(gomock.Any(), int64(3), int64(99), gomock.Any()).Return(new(linApproved()), nil)
 
 	rec := serve(t, newRouter(svc), adminRequest(t, http.MethodPost, "/suggestions/3/approve", approveBody, 99))
 	assertData(t, rec, http.StatusOK, linApprovedJSON)
@@ -810,18 +810,18 @@ func TestHandler_RejectSuggestion_PassesReasonToService(t *testing.T) {
 		body string
 		want *string
 	}{
-		{name: "reason", body: `{"reason":"Sudah tutup"}`, want: ptr("Sudah tutup")},
-		{name: "reason is passed on untrimmed", body: `{"reason":"  Sudah tutup  "}`, want: ptr("  Sudah tutup  ")},
+		{name: "reason", body: `{"reason":"Sudah tutup"}`, want: new("Sudah tutup")},
+		{name: "reason is passed on untrimmed", body: `{"reason":"  Sudah tutup  "}`, want: new("  Sudah tutup  ")},
 		{name: "no reason", body: `{}`, want: nil},
 		{name: "null reason", body: `{"reason":null}`, want: nil},
-		{name: "unknown keys are ignored", body: `{"reason":"Sudah tutup","status":"approved"}`, want: ptr("Sudah tutup")},
+		{name: "unknown keys are ignored", body: `{"reason":"Sudah tutup","status":"approved"}`, want: new("Sudah tutup")},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// The suggestion comes from the path and the reviewer from the token.
 			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().Reject(gomock.Any(), int64(3), int64(99), tc.want).Return(ptr(linRejected()), nil)
+			svc.EXPECT().Reject(gomock.Any(), int64(3), int64(99), tc.want).Return(new(linRejected()), nil)
 
 			rec := serve(t, newRouter(svc), adminRequest(t, http.MethodPost, "/suggestions/3/reject", tc.body, 99))
 			require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body)
@@ -855,7 +855,7 @@ func TestHandler_RejectSuggestion_MapsServiceErrors(t *testing.T) {
 
 func TestHandler_RejectSuggestion_Success(t *testing.T) {
 	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().Reject(gomock.Any(), int64(3), int64(99), gomock.Any()).Return(ptr(linRejected()), nil)
+	svc.EXPECT().Reject(gomock.Any(), int64(3), int64(99), gomock.Any()).Return(new(linRejected()), nil)
 
 	rec := serve(t, newRouter(svc), adminRequest(t, http.MethodPost, "/suggestions/3/reject", `{"reason":"Sudah tutup"}`, 99))
 	assertData(t, rec, http.StatusOK, linRejectedJSON)

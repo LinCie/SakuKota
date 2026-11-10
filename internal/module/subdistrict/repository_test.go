@@ -63,18 +63,18 @@ func TestRepository_Create(t *testing.T) {
 		got, err := repo.Create(ctx, &subdistrict.SubDistrict{
 			Name:                   "Menteng",
 			Slug:                   "menteng",
-			FloodHistory:           ptr("Banjir 2020"),
-			SafetyCrimeInformation: ptr("Aman"),
-			EstimatedDailySpending: ptr(75000.5),
+			FloodHistory:           new("Banjir 2020"),
+			SafetyCrimeInformation: new("Aman"),
+			EstimatedDailySpending: new(75000.5),
 		})
 
 		require.NoError(t, err)
 		assert.NotZero(t, got.ID)
 		assert.Equal(t, "Menteng", got.Name)
 		assert.Equal(t, "menteng", got.Slug)
-		assert.Equal(t, ptr("Banjir 2020"), got.FloodHistory)
-		assert.Equal(t, ptr("Aman"), got.SafetyCrimeInformation)
-		assert.Equal(t, ptr(75000.5), got.EstimatedDailySpending)
+		assert.Equal(t, new("Banjir 2020"), got.FloodHistory)
+		assert.Equal(t, new("Aman"), got.SafetyCrimeInformation)
+		assert.Equal(t, new(75000.5), got.EstimatedDailySpending)
 		assert.Nil(t, got.ImageKey)
 		assert.Nil(t, got.StaticMapImageKey)
 
@@ -181,18 +181,18 @@ func TestRepository_Update(t *testing.T) {
 			ID:                     created.ID,
 			Name:                   "New",
 			Slug:                   "new",
-			FloodHistory:           ptr("Banjir"),
-			SafetyCrimeInformation: ptr("Aman"),
-			EstimatedDailySpending: ptr(50000.0),
+			FloodHistory:           new("Banjir"),
+			SafetyCrimeInformation: new("Aman"),
+			EstimatedDailySpending: new(50000.0),
 		})
 
 		require.NoError(t, err)
 		assert.Equal(t, created.ID, got.ID)
 		assert.Equal(t, "New", got.Name)
 		assert.Equal(t, "new", got.Slug)
-		assert.Equal(t, ptr("Banjir"), got.FloodHistory)
-		assert.Equal(t, ptr("Aman"), got.SafetyCrimeInformation)
-		assert.Equal(t, ptr(50000.0), got.EstimatedDailySpending)
+		assert.Equal(t, new("Banjir"), got.FloodHistory)
+		assert.Equal(t, new("Aman"), got.SafetyCrimeInformation)
+		assert.Equal(t, new(50000.0), got.EstimatedDailySpending)
 
 		stored, err := repo.GetSubDistrict(ctx, created.ID)
 		require.NoError(t, err)
@@ -202,7 +202,7 @@ func TestRepository_Update(t *testing.T) {
 	t.Run("clears optional fields that are nil", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, &subdistrict.SubDistrict{
-			Name: "Menteng", Slug: "menteng", FloodHistory: ptr("Banjir"), EstimatedDailySpending: ptr(1.0),
+			Name: "Menteng", Slug: "menteng", FloodHistory: new("Banjir"), EstimatedDailySpending: new(1.0),
 		})
 
 		got, err := repo.Update(ctx, &subdistrict.SubDistrict{ID: created.ID, Name: "Menteng", Slug: "menteng"})
@@ -223,8 +223,8 @@ func TestRepository_Update(t *testing.T) {
 		got, err := repo.Update(ctx, &subdistrict.SubDistrict{ID: created.ID, Name: "Renamed", Slug: "renamed"})
 
 		require.NoError(t, err)
-		assert.Equal(t, ptr("photo.jpg"), got.ImageKey)
-		assert.Equal(t, ptr("map.png"), got.StaticMapImageKey)
+		assert.Equal(t, new("photo.jpg"), got.ImageKey)
+		assert.Equal(t, new("map.png"), got.StaticMapImageKey)
 	})
 
 	t.Run("accepts the sub-district's own name and slug, even in another case", func(t *testing.T) {
@@ -363,8 +363,8 @@ func TestRepository_SetImageKey(t *testing.T) {
 			wantMap    *string
 			wantQueued string
 		}{
-			{subdistrict.SlotImage, ptr("new.jpg"), ptr("map.png"), "photo.jpg"},
-			{subdistrict.SlotStaticMap, ptr("photo.jpg"), ptr("new.jpg"), "map.png"},
+			{subdistrict.SlotImage, new("new.jpg"), new("map.png"), "photo.jpg"},
+			{subdistrict.SlotStaticMap, new("photo.jpg"), new("new.jpg"), "map.png"},
 		}
 		for _, tt := range tests {
 			t.Run(string(tt.slot), func(t *testing.T) {
@@ -397,7 +397,7 @@ func TestRepository_SetImageKey(t *testing.T) {
 		got, err := repo.SetImageKey(ctx, created.ID, subdistrict.SlotImage, "photo.jpg")
 
 		require.NoError(t, err)
-		assert.Equal(t, ptr("photo.jpg"), got.ImageKey)
+		assert.Equal(t, new("photo.jpg"), got.ImageKey)
 		assert.Empty(t, pgtest.QueuedKeys(t, testDB))
 	})
 

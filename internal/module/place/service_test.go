@@ -408,10 +408,6 @@ func TestService_Create_Storage(t *testing.T) {
 // Updating and deleting places
 // -----------------------------------------------------------------------------
 
-func ptr[T any](v T) *T {
-	return &v
-}
-
 // savedKopi is the stored place that updates start from: a Kopi in Menteng
 // with every optional field set.
 func savedKopi() *place.Place {
@@ -420,11 +416,11 @@ func savedKopi() *place.Place {
 		SubDistrictID:       1,
 		CategoryID:          2,
 		Name:                "Kopi Senja",
-		Address:             ptr("Jl. Sudirman 9"),
+		Address:             new("Jl. Sudirman 9"),
 		Location:            postgis.MustPoint(106.8, -6.2),
-		OperatingHours:      ptr("08:00-17:00"),
-		EstimatedPriceRange: ptr("Rp20.000-50.000"),
-		ShortDescription:    ptr("Kopi tubruk"),
+		OperatingHours:      new("08:00-17:00"),
+		EstimatedPriceRange: new("Rp20.000-50.000"),
+		ShortDescription:    new("Kopi tubruk"),
 		Attributes:          json.RawMessage(`{"halal":true,"seats":12}`),
 		Category:            place.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
 	}
@@ -451,11 +447,11 @@ func kopiInput() *place.Place {
 		SubDistrictID:       1,
 		CategoryID:          2,
 		Name:                "Kopi Senja",
-		Address:             ptr("Jl. Sudirman 9"),
+		Address:             new("Jl. Sudirman 9"),
 		Location:            postgis.MustPoint(106.8, -6.2),
-		OperatingHours:      ptr("08:00-17:00"),
-		EstimatedPriceRange: ptr("Rp20.000-50.000"),
-		ShortDescription:    ptr("Kopi tubruk"),
+		OperatingHours:      new("08:00-17:00"),
+		EstimatedPriceRange: new("Rp20.000-50.000"),
+		ShortDescription:    new("Kopi tubruk"),
 		Attributes:          json.RawMessage(`{"halal":true,"seats":12}`),
 	}
 }
@@ -491,8 +487,8 @@ func TestService_Update_Fields(t *testing.T) {
 			change: func(p *place.Place) { p.Name = "  Kopi Baru\t" },
 			want:   func(p *place.Place) { p.Name = "Kopi Baru" }},
 		{name: "address is replaced",
-			change: func(p *place.Place) { p.Address = ptr("Jl. Kemang 2") },
-			want:   func(p *place.Place) { p.Address = ptr("Jl. Kemang 2") }},
+			change: func(p *place.Place) { p.Address = new("Jl. Kemang 2") },
+			want:   func(p *place.Place) { p.Address = new("Jl. Kemang 2") }},
 		{name: "location is replaced",
 			change: func(p *place.Place) { p.Location = postgis.MustPoint(106.85, -6.18) },
 			want:   func(p *place.Place) { p.Location = postgis.MustPoint(106.85, -6.18) }},
@@ -863,7 +859,7 @@ func TestService_Create_OptionalText(t *testing.T) {
 		input string
 		want  *string
 	}{
-		{name: "surrounding whitespace is removed", input: "  Jl. Sudirman  ", want: ptr("Jl. Sudirman")},
+		{name: "surrounding whitespace is removed", input: "  Jl. Sudirman  ", want: new("Jl. Sudirman")},
 		{name: "blank is stored as absent", input: " \t\n ", want: nil},
 	}
 
@@ -923,7 +919,7 @@ func TestService_Update_OptionalText(t *testing.T) {
 			want    *string
 			wantErr error
 		}{
-			{name: "surrounding whitespace is removed", input: "  Jl. Sudirman  ", want: ptr("Jl. Sudirman")},
+			{name: "surrounding whitespace is removed", input: "  Jl. Sudirman  ", want: new("Jl. Sudirman")},
 			{name: "blank is stored as absent", input: " \t\n ", want: nil},
 		}
 		if f.limit > 0 {
@@ -1048,7 +1044,7 @@ func TestService_SetImage(t *testing.T) {
 		oldKey *string
 	}{
 		{name: "first image", oldKey: nil},
-		{name: "replaces the previous image", oldKey: ptr(oldKey)},
+		{name: "replaces the previous image", oldKey: new(oldKey)},
 	}
 
 	for _, tc := range tests {
@@ -1056,7 +1052,7 @@ func TestService_SetImage(t *testing.T) {
 			// The repository queues the previous image for deletion, so the
 			// service must not delete it itself.
 			repo, images := newMocks(t)
-			updated := withImage(ptr(imageKey))
+			updated := withImage(new(imageKey))
 
 			gomock.InOrder(
 				repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(withImage(tc.oldKey), nil),
@@ -1113,7 +1109,7 @@ func TestService_SetImage_PromoteFailure(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Nothing may be stored, and the old image is kept.
 			repo, images := newMocks(t)
-			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(withImage(ptr(oldKey)), nil)
+			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(withImage(new(oldKey)), nil)
 			images.EXPECT().Promote(gomock.Any(), "places/7", uploadKey).Return("", tc.promoteErr)
 
 			_, err := place.NewService(repo, images).SetImage(context.Background(), 7, uploadKey)
@@ -1140,7 +1136,7 @@ func TestService_SetImage_StoreFailure(t *testing.T) {
 			// The promoted image is removed, and the old image is kept.
 			repo, images := newMocks(t)
 			gomock.InOrder(
-				repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(withImage(ptr(oldKey)), nil),
+				repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(withImage(new(oldKey)), nil),
 				images.EXPECT().Promote(gomock.Any(), "places/7", uploadKey).Return(imageKey, nil),
 				repo.EXPECT().SetImageKey(gomock.Any(), int64(7), imageKey).Return(nil, tc.setErr),
 				images.EXPECT().Delete(gomock.Any(), imageKey).Return(tc.deleteErr),

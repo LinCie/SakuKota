@@ -99,11 +99,11 @@ func TestRepository_Create(t *testing.T) {
 			SubDistrictID:       subDistrictID,
 			CategoryID:          laundryID,
 			Name:                "Laundry Bersih",
-			Address:             ptr("Jl. Sudirman 1"),
+			Address:             new("Jl. Sudirman 1"),
 			Location:            postgis.MustPoint(106.82, -6.2),
-			OperatingHours:      ptr("08:00-20:00"),
-			EstimatedPriceRange: ptr("Rp5.000-Rp10.000"),
-			ShortDescription:    ptr("Cuci kilat"),
+			OperatingHours:      new("08:00-20:00"),
+			EstimatedPriceRange: new("Rp5.000-Rp10.000"),
+			ShortDescription:    new("Cuci kilat"),
 			Attributes:          json.RawMessage(`{"service_type": "Swalayan"}`),
 		})
 		require.NoError(t, err)
@@ -112,10 +112,10 @@ func TestRepository_Create(t *testing.T) {
 		assert.Equal(t, subDistrictID, got.SubDistrictID)
 		assert.Equal(t, laundryID, got.CategoryID)
 		assert.Equal(t, "Laundry Bersih", got.Name)
-		assert.Equal(t, ptr("Jl. Sudirman 1"), got.Address)
-		assert.Equal(t, ptr("08:00-20:00"), got.OperatingHours)
-		assert.Equal(t, ptr("Rp5.000-Rp10.000"), got.EstimatedPriceRange)
-		assert.Equal(t, ptr("Cuci kilat"), got.ShortDescription)
+		assert.Equal(t, new("Jl. Sudirman 1"), got.Address)
+		assert.Equal(t, new("08:00-20:00"), got.OperatingHours)
+		assert.Equal(t, new("Rp5.000-Rp10.000"), got.EstimatedPriceRange)
+		assert.Equal(t, new("Cuci kilat"), got.ShortDescription)
 		assert.JSONEq(t, `{"service_type": "Swalayan"}`, string(got.Attributes))
 		require.NotNil(t, got.Location)
 		assert.InDelta(t, 106.82, got.Location.X(), 1e-9)
@@ -215,18 +215,18 @@ func TestRepository_GetMany(t *testing.T) {
 	laundry, tailor, pharmacy := categoryID(t, "laundry"), categoryID(t, "tailor"), categoryID(t, "pharmacy")
 
 	laundryPlace := newPlace(setiabudi, laundry, "Laundry Bersih")
-	laundryPlace.Address = ptr("Jl. Sudirman 1")
-	laundryPlace.ShortDescription = ptr("Cuci kilat")
+	laundryPlace.Address = new("Jl. Sudirman 1")
+	laundryPlace.ShortDescription = new("Cuci kilat")
 	laundryPlace.Location = postgis.MustPoint(106.82, -6.20)
 	mustCreate(t, repo, laundryPlace)
 
 	tailorPlace := newPlace(setiabudi, tailor, "Penjahit Maju")
-	tailorPlace.Address = ptr("Jl. Thamrin 2")
+	tailorPlace.Address = new("Jl. Thamrin 2")
 	tailorPlace.Location = postgis.MustPoint(106.84, -6.21)
 	mustCreate(t, repo, tailorPlace)
 
 	pharmacyPlace := newPlace(menteng, pharmacy, "Apotek Sehat")
-	pharmacyPlace.ShortDescription = ptr("Diskon 100% obat")
+	pharmacyPlace.ShortDescription = new("Diskon 100% obat")
 	pharmacyPlace.Location = postgis.MustPoint(106.90, -6.30)
 	mustCreate(t, repo, pharmacyPlace)
 
@@ -512,11 +512,11 @@ func TestRepository_Update(t *testing.T) {
 			SubDistrictID:       menteng,
 			CategoryID:          tailorID,
 			Name:                "New",
-			Address:             ptr("Jl. Baru"),
+			Address:             new("Jl. Baru"),
 			Location:            postgis.MustPoint(106.9, -6.3),
-			OperatingHours:      ptr("24 jam"),
-			EstimatedPriceRange: ptr("Rp1"),
-			ShortDescription:    ptr("Baru"),
+			OperatingHours:      new("24 jam"),
+			EstimatedPriceRange: new("Rp1"),
+			ShortDescription:    new("Baru"),
 			Attributes:          json.RawMessage(`{"specialty": "Permak"}`),
 		})
 		require.NoError(t, err)
@@ -525,10 +525,10 @@ func TestRepository_Update(t *testing.T) {
 		assert.Equal(t, menteng, got.SubDistrictID)
 		assert.Equal(t, tailorID, got.CategoryID)
 		assert.Equal(t, "New", got.Name)
-		assert.Equal(t, ptr("Jl. Baru"), got.Address)
-		assert.Equal(t, ptr("24 jam"), got.OperatingHours)
-		assert.Equal(t, ptr("Rp1"), got.EstimatedPriceRange)
-		assert.Equal(t, ptr("Baru"), got.ShortDescription)
+		assert.Equal(t, new("Jl. Baru"), got.Address)
+		assert.Equal(t, new("24 jam"), got.OperatingHours)
+		assert.Equal(t, new("Rp1"), got.EstimatedPriceRange)
+		assert.Equal(t, new("Baru"), got.ShortDescription)
 		assert.JSONEq(t, `{"specialty": "Permak"}`, string(got.Attributes))
 		require.NotNil(t, got.Location)
 		assert.InDelta(t, 106.9, got.Location.X(), 1e-9)
@@ -542,7 +542,7 @@ func TestRepository_Update(t *testing.T) {
 	t.Run("clears optional fields that are nil", func(t *testing.T) {
 		repo := newRepository(t)
 		p := newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry")
-		p.Address = ptr("Jl. Lama")
+		p.Address = new("Jl. Lama")
 		p.Location = postgis.MustPoint(106.8, -6.2)
 		created := mustCreate(t, repo, p)
 
@@ -567,7 +567,7 @@ func TestRepository_Update(t *testing.T) {
 		assert.Equal(t, "Renamed", got.Name)
 		assert.Equal(t, 2, got.RatingCount)
 		assert.Equal(t, 9, got.RatingSum)
-		assert.Equal(t, ptr("places/1.jpg"), got.ImageKey)
+		assert.Equal(t, new("places/1.jpg"), got.ImageKey)
 	})
 
 	t.Run("returns ErrPlaceNotFound for an unknown id", func(t *testing.T) {
@@ -700,13 +700,13 @@ func TestRepository_SetImageKey(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, created.ID, got.ID)
-		assert.Equal(t, ptr("places/1.jpg"), got.ImageKey)
+		assert.Equal(t, new("places/1.jpg"), got.ImageKey)
 		assert.Equal(t, "laundry", got.Category.Slug)
 		assert.Empty(t, queuedKeys(t), "a first image replaces nothing")
 
 		stored, err := repo.GetPlace(ctx, created.ID)
 		require.NoError(t, err)
-		assert.Equal(t, ptr("places/1.jpg"), stored.ImageKey)
+		assert.Equal(t, new("places/1.jpg"), stored.ImageKey)
 	})
 
 	t.Run("queues the image it replaces", func(t *testing.T) {
@@ -718,7 +718,7 @@ func TestRepository_SetImageKey(t *testing.T) {
 		got, err := repo.SetImageKey(ctx, created.ID, "places/new.jpg")
 
 		require.NoError(t, err)
-		assert.Equal(t, ptr("places/new.jpg"), got.ImageKey)
+		assert.Equal(t, new("places/new.jpg"), got.ImageKey)
 		assert.Equal(t, []string{"places/old.jpg"}, queuedKeys(t))
 	})
 
@@ -731,7 +731,7 @@ func TestRepository_SetImageKey(t *testing.T) {
 		got, err := repo.SetImageKey(ctx, created.ID, "places/1.jpg")
 
 		require.NoError(t, err)
-		assert.Equal(t, ptr("places/1.jpg"), got.ImageKey)
+		assert.Equal(t, new("places/1.jpg"), got.ImageKey)
 		assert.Empty(t, queuedKeys(t))
 	})
 

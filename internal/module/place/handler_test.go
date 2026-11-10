@@ -544,11 +544,11 @@ func TestHandler_PutPlace_PassesPlaceToService(t *testing.T) {
 				SubDistrictID:       2,
 				CategoryID:          3,
 				Name:                "  Kopi Senja  ",
-				Address:             ptr("Jl. Sudirman 9"),
+				Address:             new("Jl. Sudirman 9"),
 				Location:            postgis.MustPoint(106.8, -6.2),
-				OperatingHours:      ptr("08:00-17:00"),
-				EstimatedPriceRange: ptr("Rp20.000-50.000"),
-				ShortDescription:    ptr("Kopi tubruk"),
+				OperatingHours:      new("08:00-17:00"),
+				EstimatedPriceRange: new("Rp20.000-50.000"),
+				ShortDescription:    new("Kopi tubruk"),
 				Attributes:          json.RawMessage(`{"contact":"0812"}`),
 			}},
 		{name: "left-out keys are passed as absent",
@@ -744,7 +744,7 @@ func TestHandler_GetPlace_Success(t *testing.T) {
 		SubDistrictID: 1,
 		CategoryID:    2,
 		Name:          "Kopi Senja",
-		Address:       ptr("Jl. Sudirman 9"),
+		Address:       new("Jl. Sudirman 9"),
 		Location:      postgis.MustPoint(106.8, -6.2),
 		Attributes:    json.RawMessage(`{"halal":true}`),
 		Category:      place.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
@@ -891,7 +891,7 @@ func TestHandler_GetPlace_ImageURL(t *testing.T) {
 		ID:         3,
 		Name:       "Kopi Senja",
 		Attributes: json.RawMessage(`{}`),
-		ImageKey:   ptr("places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"),
+		ImageKey:   new("places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"),
 	}, nil)
 
 	rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/places/3", ""))
@@ -1039,7 +1039,7 @@ func TestHandler_SetImage_Success(t *testing.T) {
 		SubDistrictID: 1,
 		Name:          "Kopi Senja",
 		Attributes:    json.RawMessage(`{}`),
-		ImageKey:      ptr("places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"),
+		ImageKey:      new("places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"),
 		Category:      place.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
 	}, nil)
 

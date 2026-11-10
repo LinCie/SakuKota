@@ -19,10 +19,6 @@ import (
 	"rantau-go/internal/pkg/postgis"
 )
 
-func ptr[T any](v T) *T {
-	return &v
-}
-
 // noPlaces returns a place service that fails the test if it is used.
 func noPlaces(t *testing.T) *mock.MockPlaceService {
 	t.Helper()
@@ -210,11 +206,11 @@ func TestService_Create_OptionalText(t *testing.T) {
 		want  *string
 	}{
 		{name: "absent stays absent", input: nil, want: nil},
-		{name: "surrounding spaces are removed", input: ptr("  Jl. Sabang 12  "), want: ptr("Jl. Sabang 12")},
-		{name: "tabs and newlines are removed", input: ptr("\tJl. Sabang 12\n"), want: ptr("Jl. Sabang 12")},
-		{name: "inner line breaks are kept", input: ptr("Murah.\nPorsi besar."), want: ptr("Murah.\nPorsi besar.")},
-		{name: "empty is stored as absent", input: ptr(""), want: nil},
-		{name: "blank is stored as absent", input: ptr(" \t\n "), want: nil},
+		{name: "surrounding spaces are removed", input: new("  Jl. Sabang 12  "), want: new("Jl. Sabang 12")},
+		{name: "tabs and newlines are removed", input: new("\tJl. Sabang 12\n"), want: new("Jl. Sabang 12")},
+		{name: "inner line breaks are kept", input: new("Murah.\nPorsi besar."), want: new("Murah.\nPorsi besar.")},
+		{name: "empty is stored as absent", input: new(""), want: nil},
+		{name: "blank is stored as absent", input: new(" \t\n "), want: nil},
 	}
 
 	for _, f := range fields {
@@ -298,7 +294,7 @@ func TestService_Create_NoteLength(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			s := submitted()
-			s.Note = ptr(tc.note)
+			s.Note = new(tc.note)
 
 			stored, err := createSuggestion(t, s)
 			require.ErrorIs(t, err, tc.wantErr)
@@ -350,10 +346,10 @@ func TestService_Create_StartsPending(t *testing.T) {
 	// A user cannot submit a suggestion that is already reviewed.
 	s := submitted()
 	s.Status = suggestion.StatusApproved
-	s.RejectionReason = ptr("Tutup")
-	s.PlaceID = ptr(int64(42))
-	s.ReviewedBy = ptr(int64(99))
-	s.ReviewedAt = ptr(time.Date(2026, 10, 4, 12, 30, 0, 0, time.UTC))
+	s.RejectionReason = new("Tutup")
+	s.PlaceID = new(int64(42))
+	s.ReviewedBy = new(int64(99))
+	s.ReviewedAt = new(time.Date(2026, 10, 4, 12, 30, 0, 0, time.UTC))
 
 	stored, err := createSuggestion(t, s)
 	require.NoError(t, err)
@@ -527,9 +523,9 @@ func pending() *suggestion.Suggestion {
 func approved() *suggestion.Suggestion {
 	s := pending()
 	s.Status = suggestion.StatusApproved
-	s.PlaceID = ptr(int64(42))
-	s.ReviewedBy = ptr(adminID)
-	s.ReviewedAt = ptr(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))
+	s.PlaceID = new(int64(42))
+	s.ReviewedBy = new(adminID)
+	s.ReviewedAt = new(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))
 	return s
 }
 
@@ -537,9 +533,9 @@ func approved() *suggestion.Suggestion {
 func rejected() *suggestion.Suggestion {
 	s := pending()
 	s.Status = suggestion.StatusRejected
-	s.RejectionReason = ptr("Sudah tutup")
-	s.ReviewedBy = ptr(adminID)
-	s.ReviewedAt = ptr(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))
+	s.RejectionReason = new("Sudah tutup")
+	s.ReviewedBy = new(adminID)
+	s.ReviewedAt = new(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))
 	return s
 }
 
@@ -550,7 +546,7 @@ func finalPlace() *place.Place {
 		SubDistrictID: 1,
 		CategoryID:    2,
 		Name:          "Warung Bu Ani",
-		Address:       ptr("Jl. Sabang 12"),
+		Address:       new("Jl. Sabang 12"),
 		Location:      postgis.MustPoint(106.8, -6.2),
 		Attributes:    json.RawMessage(`{"halal":true}`),
 	}
@@ -700,13 +696,13 @@ func TestService_Reject_Reason(t *testing.T) {
 		want   *string
 	}{
 		{name: "absent reason stays absent", reason: nil, want: nil},
-		{name: "surrounding spaces are removed", reason: ptr("  Sudah tutup  "), want: ptr("Sudah tutup")},
-		{name: "inner line breaks are kept", reason: ptr("Sudah tutup.\nPindah."), want: ptr("Sudah tutup.\nPindah.")},
-		{name: "empty reason is stored as absent", reason: ptr(""), want: nil},
-		{name: "blank reason is stored as absent", reason: ptr(" \t\n "), want: nil},
-		{name: "exactly 1000 characters", reason: ptr(thousand), want: ptr(thousand)},
-		{name: "1000 multibyte characters", reason: ptr(strings.Repeat("é", 1000)), want: ptr(strings.Repeat("é", 1000))},
-		{name: "surrounding spaces do not count toward the limit", reason: ptr(" " + thousand + " "), want: ptr(thousand)},
+		{name: "surrounding spaces are removed", reason: new("  Sudah tutup  "), want: new("Sudah tutup")},
+		{name: "inner line breaks are kept", reason: new("Sudah tutup.\nPindah."), want: new("Sudah tutup.\nPindah.")},
+		{name: "empty reason is stored as absent", reason: new(""), want: nil},
+		{name: "blank reason is stored as absent", reason: new(" \t\n "), want: nil},
+		{name: "exactly 1000 characters", reason: new(thousand), want: new(thousand)},
+		{name: "1000 multibyte characters", reason: new(strings.Repeat("é", 1000)), want: new(strings.Repeat("é", 1000))},
+		{name: "surrounding spaces do not count toward the limit", reason: new(" " + thousand + " "), want: new(thousand)},
 	}
 
 	for _, tc := range tests {
@@ -748,7 +744,7 @@ func TestService_Reject_ReasonTooLong(t *testing.T) {
 			// No expectations: a too long reason must never reach storage.
 			repo := mock.NewMockRepository(gomock.NewController(t))
 
-			_, err := suggestion.NewService(repo, noPlaces(t)).Reject(context.Background(), 3, adminID, ptr(tc.reason))
+			_, err := suggestion.NewService(repo, noPlaces(t)).Reject(context.Background(), 3, adminID, new(tc.reason))
 			require.ErrorIs(t, err, suggestion.ErrReasonTooLong)
 		})
 	}
@@ -774,7 +770,7 @@ func TestService_Reject_Storage(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().Reject(gomock.Any(), int64(3), adminID, gomock.Any()).Return(want, tc.rejectErr)
 
-			got, err := suggestion.NewService(repo, noPlaces(t)).Reject(context.Background(), 3, adminID, ptr("Sudah tutup"))
+			got, err := suggestion.NewService(repo, noPlaces(t)).Reject(context.Background(), 3, adminID, new("Sudah tutup"))
 			require.ErrorIs(t, err, tc.rejectErr)
 			if tc.rejectErr == nil {
 				assert.Same(t, want, got, "want the rejected suggestion")

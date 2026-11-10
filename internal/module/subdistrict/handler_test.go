@@ -112,9 +112,9 @@ func TestHandler_GetSubDistricts_ResponseShape(t *testing.T) {
 		{
 			name: "every field is listed, unset ones as null",
 			subDistricts: []subdistrict.SubDistrict{
-				{ID: 1, Name: "Menteng", Slug: "menteng", FloodHistory: ptr("Banjir 2020"),
-					EstimatedDailySpending: ptr(1500000.5), ImageKey: ptr("subdistricts/1/image/a.webp"),
-					StaticMapImageKey: ptr("subdistricts/1/static-map/a.png")},
+				{ID: 1, Name: "Menteng", Slug: "menteng", FloodHistory: new("Banjir 2020"),
+					EstimatedDailySpending: new(1500000.5), ImageKey: new("subdistricts/1/image/a.webp"),
+					StaticMapImageKey: new("subdistricts/1/static-map/a.png")},
 				{ID: 2, Name: "Kemang", Slug: "kemang"},
 			},
 			want: `[
@@ -194,7 +194,7 @@ func TestHandler_GetSubDistrict_Success(t *testing.T) {
 		ID:           3,
 		Name:         "Menteng",
 		Slug:         "menteng",
-		FloodHistory: ptr("Banjir 2020"),
+		FloodHistory: new("Banjir 2020"),
 	}, nil)
 
 	rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/subdistricts/3", ""))
@@ -290,8 +290,8 @@ func TestHandler_CreateSubDistrict_Success(t *testing.T) {
 	want := subdistrict.SubDistrict{
 		Name:                   "Menteng",
 		Slug:                   "menteng",
-		FloodHistory:           ptr("Banjir 2020"),
-		EstimatedDailySpending: ptr(1500000.5),
+		FloodHistory:           new("Banjir 2020"),
+		EstimatedDailySpending: new(1500000.5),
 	}
 	assert.Equal(t, want, *got, "a client-sent id or unknown key reached the service")
 
@@ -474,9 +474,9 @@ func TestHandler_PutSubDistrict_PassesSubDistrictToService(t *testing.T) {
 			want: &subdistrict.SubDistrict{
 				Name:                   "  Menteng Atas  ",
 				Slug:                   "menteng-atas",
-				FloodHistory:           ptr("Banjir 2024"),
-				SafetyCrimeInformation: ptr("Aman"),
-				EstimatedDailySpending: ptr(750000.25),
+				FloodHistory:           new("Banjir 2024"),
+				SafetyCrimeInformation: new("Aman"),
+				EstimatedDailySpending: new(750000.25),
 			}},
 		{name: "null and left-out keys are passed as absent",
 			body: `{"name":"Menteng","slug":"menteng","flood_history":null}`,
@@ -534,7 +534,7 @@ func TestHandler_PutSubDistrict_Success(t *testing.T) {
 		ID:                3,
 		Name:              "Menteng Atas",
 		Slug:              "menteng",
-		StaticMapImageKey: ptr("subdistricts/3/static-map/a.png"),
+		StaticMapImageKey: new("subdistricts/3/static-map/a.png"),
 	}, nil)
 
 	rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/3", `{"name":"Menteng Atas","slug":"menteng"}`))
@@ -759,8 +759,8 @@ func TestHandler_SetImage_Success(t *testing.T) {
 				ID:                3,
 				Name:              "Menteng",
 				Slug:              "menteng",
-				ImageKey:          ptr("subdistricts/3/image/a.png"),
-				StaticMapImageKey: ptr("subdistricts/3/static-map/a.png"),
+				ImageKey:          new("subdistricts/3/image/a.png"),
+				StaticMapImageKey: new("subdistricts/3/static-map/a.png"),
 			}, nil)
 
 			rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/3/"+hs.path,

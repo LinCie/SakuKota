@@ -14,10 +14,6 @@ import (
 	"rantau-go/internal/module/review/mock"
 )
 
-func ptr[T any](v T) *T {
-	return &v
-}
-
 // createReview runs Service.Create for r. It returns the review the repository
 // was asked to store, or nil if storage was never reached.
 func createReview(t *testing.T, r *review.Review) (*review.Review, error) {
@@ -79,14 +75,14 @@ func TestService_Create_Comment(t *testing.T) {
 		want    *string
 	}{
 		{name: "absent comment stays absent", comment: nil, want: nil},
-		{name: "surrounding spaces are removed", comment: ptr("  Murah, porsi besar  "), want: ptr("Murah, porsi besar")},
-		{name: "tabs and newlines are removed", comment: ptr("\tMurah\n"), want: ptr("Murah")},
-		{name: "inner line breaks are kept", comment: ptr("Murah.\nPorsi besar."), want: ptr("Murah.\nPorsi besar.")},
-		{name: "empty comment is stored as absent", comment: ptr(""), want: nil},
-		{name: "blank comment is stored as absent", comment: ptr(" \t\n "), want: nil},
-		{name: "exactly 1000 characters", comment: ptr(thousand), want: ptr(thousand)},
-		{name: "1000 multi-byte characters", comment: ptr(thousandMultiByte), want: ptr(thousandMultiByte)},
-		{name: "surrounding spaces do not count toward the limit", comment: ptr(" " + thousand + " "), want: ptr(thousand)},
+		{name: "surrounding spaces are removed", comment: new("  Murah, porsi besar  "), want: new("Murah, porsi besar")},
+		{name: "tabs and newlines are removed", comment: new("\tMurah\n"), want: new("Murah")},
+		{name: "inner line breaks are kept", comment: new("Murah.\nPorsi besar."), want: new("Murah.\nPorsi besar.")},
+		{name: "empty comment is stored as absent", comment: new(""), want: nil},
+		{name: "blank comment is stored as absent", comment: new(" \t\n "), want: nil},
+		{name: "exactly 1000 characters", comment: new(thousand), want: new(thousand)},
+		{name: "1000 multi-byte characters", comment: new(thousandMultiByte), want: new(thousandMultiByte)},
+		{name: "surrounding spaces do not count toward the limit", comment: new(" " + thousand + " "), want: new(thousand)},
 	}
 
 	for _, tc := range tests {
@@ -116,7 +112,7 @@ func TestService_Create_CommentTooLong(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			stored, err := createReview(t, &review.Review{PlaceID: 3, UserID: 7, Rating: 4, Comment: ptr(tc.comment)})
+			stored, err := createReview(t, &review.Review{PlaceID: 3, UserID: 7, Rating: 4, Comment: new(tc.comment)})
 			require.ErrorIs(t, err, review.ErrCommentTooLong)
 			require.Nil(t, stored, "too long comment reached storage")
 		})

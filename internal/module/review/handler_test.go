@@ -108,7 +108,7 @@ func linReview() review.Review {
 		PlaceID:   3,
 		UserID:    7,
 		Rating:    4,
-		Comment:   ptr("Murah, porsi besar"),
+		Comment:   new("Murah, porsi besar"),
 		CreatedAt: time.Date(2026, 10, 4, 12, 30, 0, 0, time.UTC),
 		User:      review.Author{ID: 7, Name: "Lin"},
 	}
@@ -280,12 +280,12 @@ func TestHandler_CreateReview_PassesReviewToService(t *testing.T) {
 		{
 			name: "rating and comment",
 			body: `{"rating":4,"comment":"Murah"}`,
-			want: &review.Review{PlaceID: 3, UserID: 7, Rating: 4, Comment: ptr("Murah")},
+			want: &review.Review{PlaceID: 3, UserID: 7, Rating: 4, Comment: new("Murah")},
 		},
 		{
 			name: "comment is passed on untrimmed",
 			body: `{"rating":4,"comment":"  Murah  "}`,
-			want: &review.Review{PlaceID: 3, UserID: 7, Rating: 4, Comment: ptr("  Murah  ")},
+			want: &review.Review{PlaceID: 3, UserID: 7, Rating: 4, Comment: new("  Murah  ")},
 		},
 		{
 			name: "rating only",
@@ -307,7 +307,7 @@ func TestHandler_CreateReview_PassesReviewToService(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := mock.NewMockService(gomock.NewController(t))
-			svc.EXPECT().Create(gomock.Any(), tc.want).Return(ptr(linReview()), nil)
+			svc.EXPECT().Create(gomock.Any(), tc.want).Return(new(linReview()), nil)
 
 			rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/places/3/reviews", tc.body, 7))
 			require.Equal(t, http.StatusCreated, rec.Code, "body: %s", rec.Body)
@@ -342,7 +342,7 @@ func TestHandler_CreateReview_MapsServiceErrors(t *testing.T) {
 
 func TestHandler_CreateReview_Success(t *testing.T) {
 	svc := mock.NewMockService(gomock.NewController(t))
-	svc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(ptr(linReview()), nil)
+	svc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(new(linReview()), nil)
 
 	rec := serve(t, newRouter(svc), authRequest(t, http.MethodPost, "/places/3/reviews",
 		`{"rating":4,"comment":"Murah, porsi besar"}`, 7))
