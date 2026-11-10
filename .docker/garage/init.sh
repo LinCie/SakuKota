@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sets up the local Garage node started by `docker compose up -d garage`: the
+# Sets up the local Garage node started by `docker compose up -d garage` (or `podman compose`): the
 # cluster layout, the API's access key, and the public image bucket with its
 # CORS and lifecycle rules. Safe to run again. The key owns the bucket so that it
 # can set those rules.
@@ -10,13 +10,15 @@ set -euo pipefail
 : "${STORAGE_SECRET_ACCESS_KEY:?STORAGE_SECRET_ACCESS_KEY is required}"
 CORS_ALLOWED_ORIGIN="${CORS_ALLOWED_ORIGIN:-http://localhost:5173}"
 
+engine="${CONTAINER_ENGINE:-docker}"
+
 garage() {
-	docker compose exec -T garage /garage "$@"
+	"$engine" compose exec -T garage /garage "$@"
 }
 
-container="$(docker compose ps -q garage)"
+container="$("$engine" compose ps -q garage)"
 if [ -z "$container" ]; then
-	echo "garage is not running; start it with: docker compose up -d garage" >&2
+	echo "garage is not running; start it with: $engine compose up -d garage" >&2
 	exit 1
 fi
 
@@ -39,7 +41,7 @@ garage bucket website --allow "$STORAGE_BUCKET"
 
 # The AWS CLI runs in garage's network namespace, so the S3 API is on localhost.
 aws() {
-	docker run --rm --network "container:$container" \
+	"$engine" run --rm --network "container:$container" \
 		-e AWS_ACCESS_KEY_ID="$STORAGE_ACCESS_KEY_ID" \
 		-e AWS_SECRET_ACCESS_KEY="$STORAGE_SECRET_ACCESS_KEY" \
 		-e AWS_DEFAULT_REGION=garage \

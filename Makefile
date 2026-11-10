@@ -6,6 +6,9 @@ DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/rantaugo?sslmode=dis
 MIGRATIONS_DIR ?= migrations
 # Pass everything from .env (JWT_SECRET, PORT, ...) on to the commands below.
 .EXPORT_ALL_VARIABLES:
+# Set CONTAINER_ENGINE=podman (in .env or the environment) to use Podman.
+CONTAINER_ENGINE ?= docker
+COMPOSE ?= $(CONTAINER_ENGINE) compose
 GOOSE := go run github.com/pressly/goose/v3/cmd/goose@v3.28.0
 
 dev-backend:
@@ -33,16 +36,16 @@ build:
 	go build -o ./bin/api ./cmd/api
 
 postgres-up:
-	docker compose up -d postgres
+	$(COMPOSE) up -d postgres
 
 postgres-down:
-	docker compose down
+	$(COMPOSE) down
 
 redis-up:
-	docker compose up -d redis
+	$(COMPOSE) up -d redis
 
 storage-up:
-	docker compose up -d garage
+	$(COMPOSE) up -d garage
 
 storage-init:
 	bash .docker/garage/init.sh
@@ -73,7 +76,7 @@ migration:
 	@test -n "$(name)" || (echo "usage: make migration name=create_users" && exit 1)
 	$(GOOSE) -dir "$(MIGRATIONS_DIR)" postgres "$(DATABASE_URL)" create "$(name)" sql
 
-# Unit tests. They need no database or Docker.
+# Unit tests. They need no database or container engine.
 test:
 	go test ./...
 
