@@ -1,4 +1,4 @@
-.PHONY: dev dev-backend dev-frontend start build postgres-up postgres-down redis-up storage-up storage-init cleanup migrate-up migrate-down migrate-status migrate-version migrate-reset migration seed
+.PHONY: dev dev-backend dev-frontend start build postgres-up postgres-down redis-up storage-up storage-init cleanup migrate-up migrate-down migrate-status migrate-version migrate-reset migration seed test test-integration
 
 -include .env
 
@@ -72,3 +72,12 @@ seed:
 migration:
 	@test -n "$(name)" || (echo "usage: make migration name=create_users" && exit 1)
 	$(GOOSE) -dir "$(MIGRATIONS_DIR)" postgres "$(DATABASE_URL)" create "$(name)" sql
+
+# Unit tests. They need no database or Docker.
+test:
+	go test ./...
+
+# Unit tests plus the repository tests, which start a PostgreSQL container with
+# testcontainers, so Docker must be running.
+test-integration:
+	go test -tags integration ./...

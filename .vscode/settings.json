@@ -1,0 +1,1 @@
+{ "gopls": { "build.buildFlags": ["-tags=integration"] } }
