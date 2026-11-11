@@ -1,7 +1,7 @@
 import { createFileRoute, Navigate, redirect } from "@tanstack/react-router";
 
 import { useSession } from "~/features/auth/hooks";
-import { getSession } from "~/features/auth/session";
+import { getSession, restoreSession } from "~/features/auth/session";
 import { ensurePlaceData, usePlaceData } from "~/features/places/queries";
 import {
   SuggestError,
@@ -13,7 +13,8 @@ import {
 } from "~/features/suggestions/queries";
 
 export const Route = createFileRoute("/usulan")({
-  beforeLoad: ({ location }) => {
+  beforeLoad: async ({ location }) => {
+    await restoreSession();
     const session = getSession();
     if (!session) {
       throw redirect({

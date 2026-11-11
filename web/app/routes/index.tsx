@@ -67,6 +67,8 @@ export const Route = createFileRoute("/")({
     bbox,
   }),
   loader: async ({ context: { queryClient }, deps }) => {
+    // The map needs Leaflet; fetch it alongside the data instead of after.
+    void import("leaflet");
     const [categories, subDistricts] = await Promise.all([
       queryClient.query({ ...categoriesQuery(), staleTime: "static" }),
       queryClient.query({ ...subDistrictsQuery(), staleTime: "static" }),

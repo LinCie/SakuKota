@@ -81,6 +81,18 @@ export function refreshSession(): Promise<boolean> {
   return refreshing;
 }
 
+let restoring: Promise<boolean> | null = null;
+
+/**
+ * Restores the session from the refresh cookie once per page load. Startup
+ * begins it without waiting, so the first render isn't blocked; route guards
+ * await it before reading the session.
+ */
+export function restoreSession(): Promise<boolean> {
+  restoring ??= refreshSession();
+  return restoring;
+}
+
 async function withRefreshLock(
   callback: () => Promise<boolean>,
 ): Promise<boolean> {

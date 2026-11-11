@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { AuthShell } from "~/features/auth/components/auth-shell";
-import { getSession } from "~/features/auth/session";
+import { getSession, restoreSession } from "~/features/auth/session";
 
 type AuthSearch = {
   /** Where to go after signing in: the page the visitor came from. */
@@ -21,7 +21,8 @@ export const Route = createFileRoute("/_auth")({
   validateSearch: (search: Record<string, unknown>): AuthSearch => ({
     kembali: returnPath(search.kembali),
   }),
-  beforeLoad: ({ search }) => {
+  beforeLoad: async ({ search }) => {
+    await restoreSession();
     if (getSession()) {
       throw redirect({ href: search.kembali ?? "/", replace: true });
     }

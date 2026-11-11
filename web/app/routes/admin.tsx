@@ -2,10 +2,11 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { AdminRouteError } from "~/features/admin/components/admin-route-error";
 import { AdminShell } from "~/features/admin/components/admin-shell";
-import { getSession } from "~/features/auth/session";
+import { getSession, restoreSession } from "~/features/auth/session";
 
 export const Route = createFileRoute("/admin")({
-  beforeLoad: ({ location }) => {
+  beforeLoad: async ({ location }) => {
+    await restoreSession();
     if (!getSession()) {
       throw redirect({
         to: "/masuk",

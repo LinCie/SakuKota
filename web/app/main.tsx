@@ -3,7 +3,11 @@ import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { getAccessToken, refreshSession } from "~/features/auth/session";
+import {
+  getAccessToken,
+  refreshSession,
+  restoreSession,
+} from "~/features/auth/session";
 import { setAuthHandlers } from "~/shared/api";
 
 import { routeTree } from "./routeTree.gen";
@@ -40,10 +44,10 @@ declare module "@tanstack/react-router" {
 }
 
 // Plug the session into the shared API client. The session is kept in memory
-// only, so restore it from the refresh cookie before the first render; route
-// guards and the header then see the user.
+// only, so restore it from the refresh cookie. Rendering doesn't wait for it:
+// the header updates when it lands, and route guards await it.
 setAuthHandlers({ getAccessToken, refresh: refreshSession });
-await refreshSession();
+void restoreSession();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
