@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 
 import { useSession } from "~/features/auth/hooks";
 import { cn } from "~/shared/cn";
@@ -12,7 +12,11 @@ import { formatLocalDate } from "~/shared/format";
 
 import { usePlaceReviews } from "../queries";
 import { RatingStars } from "./rating-stars";
-import { ReviewForm } from "./review-form";
+
+// The form pulls in zod and TanStack Form, so it loads only when shown.
+const ReviewForm = lazy(() =>
+  import("./review-form").then((module) => ({ default: module.ReviewForm })),
+);
 
 /**
  * A place's reviews under its menu board, newest first. Signed-in users who
@@ -45,7 +49,9 @@ export function PlaceReviews({ placeId }: { placeId: number }) {
     writer = reviewed ? (
       <p className="text-ink-soft text-sm">Kamu sudah mengulas tempat ini.</p>
     ) : (
-      <ReviewForm placeId={placeId} />
+      <Suspense fallback={null}>
+        <ReviewForm placeId={placeId} />
+      </Suspense>
     );
   }
 
