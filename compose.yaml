@@ -1,7 +1,7 @@
 services:
   postgres:
     build:
-      context: ./.docker/postgres
+      context: ./docker/postgres
       dockerfile: Dockerfile
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-rantaugo}
@@ -37,14 +37,14 @@ services:
       - "3900:3900"
       - "3902:3902"
     volumes:
-      - ./.docker/garage/garage.toml:/etc/garage.toml:ro
+      - ./docker/garage/garage.toml:/etc/garage.toml:ro
       - garage_meta:/var/lib/garage/meta
       - garage_data:/var/lib/garage/data
 
   init:
     build:
       context: .
-      dockerfile: .docker/backend/Dockerfile
+      dockerfile: docker/backend/Dockerfile
       target: init
     env_file: .env
     environment:
@@ -53,7 +53,7 @@ services:
       CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:8081}
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:-ab585f3faae621737dbe043edb29dfe69a95d3194d76218cda428e47c2f25338}
     volumes:
-      - ./.docker/garage/garage.toml:/etc/garage.toml:ro
+      - ./docker/garage/garage.toml:/etc/garage.toml:ro
       # The Garage CLI reads the node key from here.
       - garage_meta:/var/lib/garage/meta:ro
     depends_on:
@@ -65,7 +65,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: .docker/backend/Dockerfile
+      dockerfile: docker/backend/Dockerfile
     env_file: .env
     environment:
       # .env points at localhost for running the API on the host.
@@ -83,7 +83,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: .docker/frontend/Dockerfile
+      dockerfile: docker/frontend/Dockerfile
     ports:
       - "${WEB_PORT:-8081}:8080"
     depends_on:

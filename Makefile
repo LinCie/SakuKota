@@ -48,7 +48,7 @@ storage-up:
 	$(COMPOSE) up -d garage
 
 storage-init:
-	bash .docker/garage/init.sh
+	bash docker/garage/init.sh
 
 # Delete one batch of storage objects queued for deletion.
 cleanup:

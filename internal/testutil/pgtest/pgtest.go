@@ -22,7 +22,7 @@ import (
 	"rantau-go/internal/database"
 )
 
-// image provides PostgreSQL with PostGIS, like .docker/postgres/Dockerfile.
+// image provides PostgreSQL with PostGIS, like docker/postgres/Dockerfile.
 const image = "postgis/postgis:17-3.5"
 
 // keptTables hold data that migrations or extensions insert. Reset leaves them
