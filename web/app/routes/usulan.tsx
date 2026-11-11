@@ -2,10 +2,7 @@ import { createFileRoute, Navigate, redirect } from "@tanstack/react-router";
 
 import { useSession } from "~/features/auth/hooks";
 import { getSession } from "~/features/auth/session";
-import {
-  ensurePlaceData,
-  usePlaceData,
-} from "~/features/places/load-place-data";
+import { ensurePlaceData, usePlaceData } from "~/features/places/queries";
 import { SuggestPage } from "~/features/suggestions/pages/suggest-page";
 import {
   mySuggestionsQuery,

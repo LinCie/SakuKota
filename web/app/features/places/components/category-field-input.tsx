@@ -8,7 +8,7 @@ import {
   FieldMessage,
   SelectControl,
 } from "~/shared/components/field";
-import { rangeOf, textOf, type AttributeValue } from "../attribute-values";
+import { rangeOf, textOf, type AttributeValue } from "../values";
 import type { CategoryField } from "../types";
 
 type CategoryFieldInputProps = {

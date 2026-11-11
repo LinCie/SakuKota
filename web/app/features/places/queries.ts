@@ -1,6 +1,7 @@
 import {
   infiniteQueryOptions,
   queryOptions,
+  type QueryClient,
   useMutation,
   useQueryClient,
   useSuspenseInfiniteQuery,
@@ -19,6 +20,10 @@ import {
   type GetPlacesParams,
   type PlaceRequest,
 } from "./api";
+import {
+  subDistrictsQuery,
+  useSubDistricts,
+} from "~/features/subdistricts/queries";
 import { uploadImage } from "~/shared/image-upload";
 
 import type { PlacePage } from "./types";
@@ -106,6 +111,25 @@ export function usePlace(id: number) {
 
 export function useCategories() {
   return useSuspenseQuery(categoriesQuery());
+}
+
+/** Loads everything the places pages need, for route loaders. */
+export async function ensurePlaceData(queryClient: QueryClient) {
+  await Promise.all([
+    queryClient.query({ ...categoriesQuery(), staleTime: "static" }),
+    queryClient.query({ ...subDistrictsQuery(), staleTime: "static" }),
+    queryClient.query({ ...placesQuery(), staleTime: "static" }),
+  ]);
+}
+
+/** Everything the places pages need: the places, their kecamatan, and categories with fields. */
+export function usePlaceData() {
+  const { data: categories } = useCategories();
+  const { data: subDistricts } = useSubDistricts();
+  const {
+    data: { places },
+  } = usePlaces();
+  return { categories, subDistricts, places };
 }
 
 // -----------------------------------------------------------------------------

@@ -14,7 +14,7 @@ import { useDisclosure } from "~/shared/hooks";
 import { toastManager } from "~/shared/toast-manager";
 import { writeErrorMessage } from "~/shared/write-error";
 
-import { attributeValue } from "../attribute-format";
+import { attributeValue } from "../components/attribute-value";
 import type { CategoryDetail, Place } from "../types";
 import { CategoryBadge } from "../components/category-sign";
 import { PlaceFormDrawer } from "../components/place-form-drawer";

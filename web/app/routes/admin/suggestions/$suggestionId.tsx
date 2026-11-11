@@ -2,10 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { AdminRouteError } from "~/features/admin/components/admin-route-error";
 import { AdminDetailSkeleton } from "~/features/admin/components/admin-skeletons";
-import {
-  ensurePlaceData,
-  usePlaceData,
-} from "~/features/places/load-place-data";
+import { ensurePlaceData, usePlaceData } from "~/features/places/queries";
 import { SuggestionDetailPage } from "~/features/suggestions/pages/suggestion-detail-page";
 import { suggestionQuery, useSuggestion } from "~/features/suggestions/queries";
 

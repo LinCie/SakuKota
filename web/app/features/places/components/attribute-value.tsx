@@ -4,18 +4,7 @@ import type { ReactNode } from "react";
 import { orMissing } from "~/shared/components/missing-slot";
 import { formatDate, formatNumber } from "~/shared/format";
 
-import type { CategoryField, Place } from "./types";
-
-export function isRange(value: unknown): value is { min: number; max: number } {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "min" in value &&
-    "max" in value &&
-    typeof value.min === "number" &&
-    typeof value.max === "number"
-  );
-}
+import { isRange, type CategoryField, type Place } from "../types";
 
 /**
  * Renders a custom field value by its data type, or null when the value is

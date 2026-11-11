@@ -1,44 +1,19 @@
-import type { SubDistrict } from "~/features/subdistricts/types";
 import { orNull } from "~/shared/text";
 
 import type { PlaceRequest } from "./api";
-import { isRange } from "./attribute-format";
 import {
-  buildAttributes,
+  isBlank,
   parseNumber,
+  rangeOf,
+  textOf,
   type AttributeValues,
-} from "./attribute-values";
-import type { CategoryField, Place } from "./types";
+  type PlaceValues,
+} from "./values";
+import { isRange, type CategoryField, type Place } from "./types";
 
-/** The place form's values, as typed. */
-export type PlaceValues = {
-  subDistrictId: string;
-  categoryId: string;
-  name: string;
-  lat: string;
-  lng: string;
-  address: string;
-  operatingHours: string;
-  priceRange: string;
-  description: string;
-  attributes: AttributeValues;
-};
-
-export function emptyPlaceValues(subDistricts: SubDistrict[]): PlaceValues {
-  return {
-    // A single kecamatan is the only choice, so pick it.
-    subDistrictId: subDistricts.length === 1 ? String(subDistricts[0].id) : "",
-    categoryId: "",
-    name: "",
-    lat: "",
-    lng: "",
-    address: "",
-    operatingHours: "",
-    priceRange: "",
-    description: "",
-    attributes: {},
-  };
-}
+// -----------------------------------------------------------------------------
+// API → form values
+// -----------------------------------------------------------------------------
 
 /** A place as form values, reading its custom fields by their data type. */
 export function placeToValues(
@@ -98,6 +73,10 @@ export function attributesToValues(
   return values;
 }
 
+// -----------------------------------------------------------------------------
+// Form values → API
+// -----------------------------------------------------------------------------
+
 /** The request body for creating or replacing a place. */
 export function toPlaceRequest(
   values: PlaceValues,
@@ -117,4 +96,38 @@ export function toPlaceRequest(
     short_description: orNull(values.description),
     attributes: buildAttributes(fields, values.attributes),
   };
+}
+
+/** The request's `attributes`: filled custom fields only, typed per field. */
+function buildAttributes(
+  fields: CategoryField[],
+  values: AttributeValues,
+): Record<string, unknown> {
+  const attributes: Record<string, unknown> = {};
+
+  for (const field of fields) {
+    const value = values[field.key];
+    if (isBlank(value, field)) continue;
+
+    switch (field.data_type) {
+      case "number":
+        attributes[field.key] = parseNumber(textOf(value));
+        break;
+      case "boolean":
+        attributes[field.key] = textOf(value) === "true";
+        break;
+      case "range": {
+        const range = rangeOf(value);
+        attributes[field.key] = {
+          min: parseNumber(range.min),
+          max: parseNumber(range.max),
+        };
+        break;
+      }
+      default:
+        attributes[field.key] = textOf(value).trim();
+    }
+  }
+
+  return attributes;
 }

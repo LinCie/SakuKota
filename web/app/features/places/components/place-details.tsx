@@ -10,7 +10,7 @@ import {
   menuButtonClass,
   StackedRow,
 } from "~/shared/components/menu-board";
-import { attributeValue } from "../attribute-format";
+import { attributeValue } from "./attribute-value";
 import type { CategoryField, Place } from "../types";
 import { CategoryBadge } from "./category-sign";
 

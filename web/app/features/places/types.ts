@@ -51,6 +51,18 @@ export type Category = {
   color: CategoryColor;
 };
 
+/** Whether an attribute value is a range, as the backend stores a `range` field. */
+export function isRange(value: unknown): value is { min: number; max: number } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "min" in value &&
+    "max" in value &&
+    typeof value.min === "number" &&
+    typeof value.max === "number"
+  );
+}
+
 /** A category with the custom fields its places carry. */
 export type CategoryDetail = Category & {
   fields: CategoryField[];

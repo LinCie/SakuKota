@@ -1,8 +1,8 @@
 import { useForm } from "@tanstack/react-form";
 
 import { PlaceForm } from "~/features/places/components/place-form";
-import type { PlaceValues } from "~/features/places/place-values";
 import type { CategoryDetail, Place } from "~/features/places/types";
+import type { PlaceValues } from "~/features/places/values";
 import type { SubDistrict } from "~/features/subdistricts/types";
 import { TextAreaField } from "~/shared/components/field";
 import { FormAlert } from "~/shared/components/form-alert";
@@ -13,11 +13,9 @@ import { toastManager } from "~/shared/toast-manager";
 import { hasErrorCode, writeErrorMessage } from "~/shared/write-error";
 
 import { useCreateSuggestion } from "../queries";
+import { toSuggestionRequest } from "../mappers";
 import { suggestionSchema } from "../schemas";
-import {
-  emptySuggestionValues,
-  toSuggestionRequest,
-} from "../suggestion-values";
+import { emptySuggestionValues } from "../values";
 
 const FORM_ID = "suggestion-form";
 

@@ -1,7 +1,7 @@
 import { useForm, useSelector } from "@tanstack/react-form";
 
 import { PlaceForm } from "~/features/places/components/place-form";
-import { toPlaceRequest } from "~/features/places/place-values";
+import { toPlaceRequest } from "~/features/places/mappers";
 import { placeSchema } from "~/features/places/schemas";
 import type { CategoryDetail, Place } from "~/features/places/types";
 import type { SubDistrict } from "~/features/subdistricts/types";
@@ -11,7 +11,7 @@ import { toastManager } from "~/shared/toast-manager";
 import { hasErrorCode, writeErrorMessage } from "~/shared/write-error";
 
 import { useApproveSuggestion } from "../queries";
-import { suggestionToPlaceValues } from "../suggestion-values";
+import { suggestionToPlaceValues } from "../mappers";
 import type { Suggestion } from "../types";
 
 const FORM_ID = "approve-suggestion-form";

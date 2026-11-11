@@ -6,14 +6,11 @@ import { FormDrawer } from "~/shared/components/form-drawer";
 import { toastManager } from "~/shared/toast-manager";
 import { writeErrorMessage } from "~/shared/write-error";
 
-import {
-  emptyPlaceValues,
-  placeToValues,
-  toPlaceRequest,
-} from "../place-values";
+import { placeToValues, toPlaceRequest } from "../mappers";
 import { useCreatePlace, useUpdatePlace } from "../queries";
 import { placeSchema } from "../schemas";
 import type { CategoryDetail, Place } from "../types";
+import { emptyPlaceValues } from "../values";
 import { PlaceForm } from "./place-form";
 
 type PlaceFormDrawerProps = {

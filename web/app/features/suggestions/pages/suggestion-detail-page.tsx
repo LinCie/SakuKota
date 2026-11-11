@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Check, X } from "lucide-react";
 
-import { formatAttribute } from "~/features/places/attribute-format";
+import { formatAttribute } from "~/features/places/components/attribute-value";
 import { CategoryBadge } from "~/features/places/components/category-sign";
 import type { CategoryDetail, Place } from "~/features/places/types";
 import type { SubDistrict } from "~/features/subdistricts/types";

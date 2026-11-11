@@ -13,10 +13,9 @@ import { FormSection } from "~/shared/components/form-section";
 import { useCurrentPosition } from "~/shared/hooks";
 import type { AppFormApi } from "~/shared/form-api";
 
-import { attributeErrors, parseNumber } from "../attribute-values";
-import { validCoordinate } from "../schemas";
-import type { PlaceValues } from "../place-values";
+import { attributeErrors, validCoordinate } from "../schemas";
 import type { CategoryDetail, Place } from "../types";
+import { parseNumber, type PlaceValues } from "../values";
 import { CategoryFieldInput } from "./category-field-input";
 import { LocationPicker, type Pin } from "./location-picker";
 

@@ -5,9 +5,10 @@ import { AdminDetailSkeleton } from "~/features/admin/components/admin-skeletons
 import { PlaceDetailPage } from "~/features/places/pages/place-detail-page";
 import {
   ensurePlaceData,
+  placeQuery,
+  usePlace,
   usePlaceData,
-} from "~/features/places/load-place-data";
-import { placeQuery, usePlace } from "~/features/places/queries";
+} from "~/features/places/queries";
 
 export const Route = createFileRoute("/admin/places/$placeId")({
   loader: ({ context: { queryClient }, params }) =>

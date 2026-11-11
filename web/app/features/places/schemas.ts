@@ -1,6 +1,56 @@
 import { z } from "zod";
 
-import { parseNumber, type AttributeValues } from "./attribute-values";
+import type { CategoryField } from "./types";
+import {
+  isBlank,
+  parseNumber,
+  rangeOf,
+  textOf,
+  type AttributeValues,
+} from "./values";
+
+// Mirrors the backend's rules (internal/module/place/service.go).
+
+// -----------------------------------------------------------------------------
+// Custom fields
+// -----------------------------------------------------------------------------
+
+/** Error messages by field key; empty when every custom field is valid. */
+export function attributeErrors(
+  fields: CategoryField[],
+  values: AttributeValues,
+): Record<string, string> {
+  const errors: Record<string, string> = {};
+
+  for (const field of fields) {
+    const value = values[field.key];
+
+    if (isBlank(value, field)) {
+      if (field.required) errors[field.key] = "Wajib diisi.";
+      continue;
+    }
+
+    if (
+      field.data_type === "number" &&
+      Number.isNaN(parseNumber(textOf(value)))
+    ) {
+      errors[field.key] = "Isi dengan angka.";
+    }
+
+    if (field.data_type === "range") {
+      const range = rangeOf(value);
+      const min = parseNumber(range.min);
+      const max = parseNumber(range.max);
+      if (Number.isNaN(min) || Number.isNaN(max)) {
+        errors[field.key] = "Isi batas bawah dan batas atas dengan angka.";
+      } else if (min > max) {
+        errors[field.key] = "Batas bawah tidak boleh melebihi batas atas.";
+      }
+    }
+  }
+
+  return errors;
+}
 
 // -----------------------------------------------------------------------------
 // Place form
