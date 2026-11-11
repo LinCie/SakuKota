@@ -5,6 +5,7 @@ import { AccountControl } from "~/features/auth/components/account-control";
 import type { CategoryDetail, Place } from "~/features/places/types";
 import type { SubDistrict } from "~/features/subdistricts/types";
 import { cn } from "~/shared/cn";
+import { ErrorBoard } from "~/shared/components/error-board";
 import { menuButtonClass } from "~/shared/components/menu-board";
 import { Toaster } from "~/shared/components/toaster";
 import { Wordmark } from "~/shared/components/wordmark";
@@ -96,5 +97,12 @@ export function SuggestPage({
         </main>
       </div>
     </Toaster>
+  );
+}
+
+/** Shown when the suggest page's data fails to load. */
+export function SuggestError() {
+  return (
+    <ErrorBoard title="Halaman usulan belum bisa dimuat." href="/usulan" />
   );
 }

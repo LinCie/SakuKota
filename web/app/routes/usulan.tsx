@@ -3,12 +3,14 @@ import { createFileRoute, Navigate, redirect } from "@tanstack/react-router";
 import { useSession } from "~/features/auth/hooks";
 import { getSession } from "~/features/auth/session";
 import { ensurePlaceData, usePlaceData } from "~/features/places/queries";
-import { SuggestPage } from "~/features/suggestions/pages/suggest-page";
+import {
+  SuggestError,
+  SuggestPage,
+} from "~/features/suggestions/pages/suggest-page";
 import {
   mySuggestionsQuery,
   useMySuggestions,
 } from "~/features/suggestions/queries";
-import { ErrorBoard } from "~/shared/components/error-board";
 
 export const Route = createFileRoute("/usulan")({
   beforeLoad: ({ location }) => {
@@ -46,10 +48,4 @@ function SuggestRoute() {
 function SuggestContent({ userId }: { userId: number }) {
   const { data: suggestions } = useMySuggestions(userId);
   return <SuggestPage suggestions={suggestions} {...usePlaceData()} />;
-}
-
-function SuggestError() {
-  return (
-    <ErrorBoard title="Halaman usulan belum bisa dimuat." href="/usulan" />
-  );
 }
