@@ -33,6 +33,7 @@ const queries = [
 export default function () {
   const query = queries[Math.floor(Math.random() * queries.length)];
   const res = http.get(`${BASE_URL}/v1/places${query}`, {
+    headers: { "Accept-Encoding": "gzip" },
     tags: { name: "GET /v1/places" },
   });
   check(res, {
