@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"rantau-go/internal/config"
-	"rantau-go/internal/module/users"
+	"rantau-go/internal/module/user"
 	"rantau-go/internal/pkg/httpx"
 	"rantau-go/internal/pkg/jwt"
 	"rantau-go/internal/router"
@@ -86,7 +86,6 @@ func testConfig() config.Config {
 		JWTSecret:          "0123456789abcdef0123456789abcdef",
 		JWTExpiry:          5 * time.Minute,
 		RefreshTokenExpiry: time.Hour,
-		CORSAllowedOrigin:  "http://localhost",
 		Storage: config.StorageConfig{
 			Endpoint:        endpoint,
 			PublicEndpoint:  endpoint,
@@ -109,10 +108,10 @@ func newRouter(t *testing.T) http.Handler {
 	raw, err := sql.Open("pgx", "postgres://nobody@127.0.0.1:1/none?sslmode=disable&connect_timeout=1")
 	require.NoError(t, err, "open database")
 	db := sqlx.NewDb(raw, "pgx")
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
-	t.Cleanup(func() { rdb.Close() })
+	t.Cleanup(func() { _ = rdb.Close() })
 
 	return router.NewRouter(db, rdb, testConfig())
 }
@@ -190,7 +189,7 @@ func TestRouter_EveryRouteHasADeclaredAccess(t *testing.T) {
 
 func TestRouter_Access(t *testing.T) {
 	h := newRouter(t)
-	user, admin := token(t, "user"), token(t, users.RoleAdmin)
+	user, admin := token(t, "user"), token(t, user.RoleAdmin)
 
 	for key, level := range routeAccess {
 		t.Run(key, func(t *testing.T) {

@@ -1,7 +1,6 @@
 package place
 
 import (
-	"encoding/json"
 	"errors"
 	"math"
 	"net/http"
@@ -32,13 +31,12 @@ func NewHandler(service Service, imageURL func(key string) string) *Handler {
 // -----------------------------------------------------------------------------
 
 func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
-	var req *PlaceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+	req, ok := httpx.DecodeJSON[PlaceRequest](w, r)
+	if !ok {
 		return
 	}
 
-	p, err := h.service.Create(r.Context(), toPlace(*req))
+	p, err := h.service.Create(r.Context(), ToPlace(*req))
 	if err != nil {
 		respondPlaceError(w, err)
 		return
@@ -56,9 +54,8 @@ func (h *Handler) CreateImageUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req *ImageUploadRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+	req, ok := httpx.DecodeJSON[storage.ImageUploadRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -68,7 +65,7 @@ func (h *Handler) CreateImageUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toImageUploadResponse(upload))
+	httpx.RespondJSON(w, http.StatusOK, storage.ToImageUploadResponse(upload))
 }
 
 // GetPlaces lists places, optionally filtered by `sub_district_id`,
@@ -206,14 +203,12 @@ func (h *Handler) PutPlace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// A body of null decodes to a nil pointer and is rejected with the others.
-	var req *PlaceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+	req, ok := httpx.DecodeJSON[PlaceRequest](w, r)
+	if !ok {
 		return
 	}
 
-	p, err := h.service.Update(r.Context(), id, toPlace(*req))
+	p, err := h.service.Update(r.Context(), id, ToPlace(*req))
 	if err != nil {
 		respondPlaceError(w, err)
 		return
@@ -251,9 +246,8 @@ func (h *Handler) SetImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req *SetImageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+	req, ok := httpx.DecodeJSON[storage.SetImageRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -298,10 +292,7 @@ func respondImageError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrPlaceNotFound):
 		httpx.RespondError(w, http.StatusNotFound, httpx.CodePlaceNotFound, err.Error())
-	case errors.Is(err, storage.ErrInvalidImageType),
-		errors.Is(err, storage.ErrImageTooLarge),
-		errors.Is(err, storage.ErrImageNotUploaded),
-		errors.Is(err, storage.ErrInvalidImageKey):
+	case storage.IsInvalidImage(err):
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 	default:
 		httpx.RespondInternalError(w)

@@ -2,10 +2,8 @@ package place
 
 import (
 	"encoding/json"
-	"time"
 
 	"rantau-go/internal/pkg/postgis"
-	"rantau-go/internal/storage"
 )
 
 // PlaceRequest is the API payload for creating a Place or replacing one. An
@@ -40,26 +38,6 @@ type PlaceResponse struct {
 	// ImageURL is where the place's image is served, or null if it has none.
 	ImageURL *string          `json:"image_url"`
 	Category CategoryResponse `json:"category"`
-}
-
-// ImageUploadRequest is the API payload for requesting an image upload.
-type ImageUploadRequest struct {
-	ContentType string `json:"content_type"`
-}
-
-// ImageUploadResponse is a presigned upload the client sends the image with.
-// The client then confirms it by sending UploadKey to SetImage.
-type ImageUploadResponse struct {
-	UploadKey string            `json:"upload_key"`
-	UploadURL string            `json:"upload_url"`
-	Method    string            `json:"method"`
-	Headers   map[string]string `json:"headers"`
-	ExpiresAt time.Time         `json:"expires_at"`
-}
-
-// SetImageRequest is the API payload for confirming an uploaded image.
-type SetImageRequest struct {
-	UploadKey string `json:"upload_key"`
 }
 
 // PlacePageResponse is the API representation of the places matching a
@@ -107,7 +85,8 @@ type CategoryFieldResponse struct {
 // Conversions
 // -----------------------------------------------------------------------------
 
-func toPlace(req PlaceRequest) *Place {
+// ToPlace converts the payload into the Place it describes.
+func ToPlace(req PlaceRequest) *Place {
 	return &Place{
 		SubDistrictID:       req.SubDistrictID,
 		CategoryID:          req.CategoryID,
@@ -165,16 +144,6 @@ func toPlaceResponses(places []Place, imageURL func(key string) string) []PlaceR
 	}
 
 	return responses
-}
-
-func toImageUploadResponse(u storage.Upload) ImageUploadResponse {
-	return ImageUploadResponse{
-		UploadKey: u.Key,
-		UploadURL: u.URL,
-		Method:    u.Method,
-		Headers:   u.Headers,
-		ExpiresAt: u.ExpiresAt,
-	}
 }
 
 func toCategoryResponse(c Category) CategoryResponse {

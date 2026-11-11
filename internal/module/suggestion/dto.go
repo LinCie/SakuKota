@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"time"
 
-	"rantau-go/internal/module/place"
 	"rantau-go/internal/pkg/postgis"
 )
 
@@ -22,20 +21,6 @@ type CreateSuggestionRequest struct {
 	// Attributes is a JSON object keyed by the category's field keys.
 	Attributes json.RawMessage `json:"attributes"`
 	Note       *string         `json:"note"`
-}
-
-// ApproveSuggestionRequest is the API payload for approving a suggestion. It
-// is the place the admin creates from the suggestion, in the shape of a place.
-type ApproveSuggestionRequest struct {
-	SubDistrictID       int64           `json:"sub_district_id"`
-	CategoryID          int64           `json:"category_id"`
-	Name                string          `json:"name"`
-	Address             *string         `json:"address"`
-	Location            *postgis.Point  `json:"location"`
-	OperatingHours      *string         `json:"operating_hours"`
-	EstimatedPriceRange *string         `json:"estimated_price_range"`
-	ShortDescription    *string         `json:"short_description"`
-	Attributes          json.RawMessage `json:"attributes"`
 }
 
 // RejectSuggestionRequest is the API payload for rejecting a suggestion.
@@ -89,20 +74,6 @@ func toSuggestion(userID int64, req CreateSuggestionRequest) *Suggestion {
 		ShortDescription:    req.ShortDescription,
 		Attributes:          req.Attributes,
 		Note:                req.Note,
-	}
-}
-
-func toPlace(req ApproveSuggestionRequest) *place.Place {
-	return &place.Place{
-		SubDistrictID:       req.SubDistrictID,
-		CategoryID:          req.CategoryID,
-		Name:                req.Name,
-		Address:             req.Address,
-		Location:            req.Location,
-		OperatingHours:      req.OperatingHours,
-		EstimatedPriceRange: req.EstimatedPriceRange,
-		ShortDescription:    req.ShortDescription,
-		Attributes:          req.Attributes,
 	}
 }
 

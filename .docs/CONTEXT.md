@@ -4,7 +4,7 @@
 > backend is *specified to do*. Update it only after a VERIFICATION phase
 > completes (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-09. Updated after the Redis refresh-token store was added (see the change log).
+> - Last updated: 2026-11-11. Updated after the review cleanup pass (see the change log).
 > - Status: verified. All Go tests pass. The web app was not changed or re-checked in this pass.
 
 ## Contents
@@ -113,7 +113,7 @@ These rules apply to every HTTP module unless §6 says otherwise.
   INVALID_<RESOURCE>_ID`, and the service is never called.
 - **`INVALID_BODY` vs `VALIDATION_ERROR`.** A body that cannot be decoded
   returns `400 INVALID_BODY`. That covers an empty body, malformed JSON, a body
-  that is not an object (array or `null`), wrong JSON types, a non-Point
+  that is not an object (array or `null`), data after the object, wrong JSON types, a non-Point
   GeoJSON, or coordinates outside WGS84 (lat > 90, lon > 180). A body that
   decodes but breaks a business rule returns `400 VALIDATION_ERROR`. Requests
   with invalid bodies never reach the service. The rule applies to every JSON
@@ -197,7 +197,8 @@ The test router posts to `/v1/auth`, and the refresh cookie path is
   points, so `é` counts as 1. The password is stored as an argon2id hash.
   Invalid input (including a password under 8 or over 128 characters) returns
   `400 VALIDATION_ERROR` and never reaches storage. A duplicate email returns `409 EMAIL_TAKEN`. Success returns
-  `201` with the user, never the password.
+  `201` with the user, never the password. The user object is `{id, name,
+  email, role, created_at, updated_at}`, where `role` is `user` or `admin`.
 - **Login.** The email is normalized before lookup. An unknown email and a wrong
   password both return `401 INVALID_CREDENTIALS`, and neither sets a cookie. A
   password over 128 characters returns `INVALID_CREDENTIALS` without reading
@@ -222,7 +223,7 @@ The test router posts to `/v1/auth`, and the refresh cookie path is
   service is not called. If revocation fails, the response is 500 but the
   cookie is still cleared. A revoked token can no longer refresh.
 
-### 6.2 Users (`internal/module/users`)
+### 6.2 Users (`internal/module/user`)
 
 This is a service only, with no HTTP handler. It offers `Create`, `GetByEmail`,
 and `GetUser`, which pass repository results and errors (`ErrEmailTaken`,
@@ -263,8 +264,8 @@ no ratings. `image_url` is the storage public URL of the image key, or `null`.
   category. Every create validation failure returns `400 VALIDATION_ERROR`,
   including an unknown sub-district or category.
 - **List (`GET /places`).** Returns `{places, total}`, where `total` counts all
-  matches **before** `limit`. Places are ordered by ascending id, and `limit`
-  keeps the lowest ids. Filters combine with AND, and an empty parameter counts
+  matches **before** `offset` and `limit`. Places are ordered by ascending id;
+  `offset` skips the lowest ids and `limit` keeps the lowest of the rest. Filters combine with AND, and an empty parameter counts
   as absent.
   - `sub_district_id`: a positive int64. An unknown id returns `404
     SUB_DISTRICT_NOT_FOUND`.
@@ -278,6 +279,7 @@ no ratings. `image_url` is the storage public URL of the image key, or `null`.
     one above 1000, is replaced by 1000, so no list is unbounded. `total` still
     counts every match, so a client can tell when the list was cut off. This
     includes requests that the web map sends without a limit.
+  - `offset`: a non-negative integer, otherwise `INVALID_OFFSET`.
   - `bbox=west,south,east,north`: four finite numbers with lon in ±180, lat in
     ±90, `west ≤ east`, and `south ≤ north`, otherwise `INVALID_BBOX`. Edges
     count as inside, and places without a location are excluded. A GiST index
@@ -521,7 +523,7 @@ runs one batch and exits, so it must be scheduled.
 | `INVALID_BODY` | 400 | Every JSON endpoint (undecodable or wrongly-typed body) |
 | `VALIDATION_ERROR` | 400 | Business-rule violations: names, passwords, attributes, locations, ratings, lengths, unknown referenced sub-district or category on writes, and image type, key, size, or upload errors |
 | `INVALID_PLACE_ID` / `INVALID_SUB_DISTRICT_ID` / `INVALID_CATEGORY_ID` / `INVALID_SUGGESTION_ID` | 400 | Bad path id, or a bad list filter for places |
-| `INVALID_LIMIT` / `INVALID_BBOX` | 400 | `GET /places` |
+| `INVALID_LIMIT` / `INVALID_OFFSET` / `INVALID_BBOX` | 400 | `GET /places` |
 | `INVALID_STATUS` | 400 | `GET /suggestions` |
 | `UNAUTHORIZED` | 401 | A missing, malformed, expired, or otherwise invalid access token, or no authenticated user in the request context |
 | `FORBIDDEN` | 403 | A valid token whose role is not allowed on an admin-only route |
@@ -574,8 +576,8 @@ These are observations, not decisions. Raise them in PLANNING before relying on
 them.
 
 - **No tests cover:** middleware beyond what the router test exercises
-  (`WithAuth` edge cases, recovery, CORS, the request-body cap), `config`,
-  `httpx`, `postgis`, `database`, `cmd/*` (API, migrate, seed), seed data, the
+  (`WithAuth` edge cases, recovery, the request-body cap), `config`,
+  `httpx` (except `DecodeJSON`), `postgis`, `database`, `cmd/*` (API, migrate, seed), seed data, the
   SQL in the repositories, and the set of categories and fields that the
   migrations define (including the category list order).
 - **Specified but untested** (changed in the 2026-11-09 hardening pass, so they
@@ -593,6 +595,17 @@ them.
     cancellation, so a dropped request still removes the orphan.
   - Every command logs through `slog`, and the `log` package and chi's request
     log share its format.
+- **Specified but untested** (changed in the 2026-11-11 cleanup pass):
+  - The API sends no CORS headers: the web app reaches it through a
+    same-origin proxy (Vite in development, the web container in production).
+    `CORS_ALLOWED_ORIGIN` only sets the image bucket's CORS rule.
+  - `cmd/cleanup` needs only `DATABASE_URL` and the `STORAGE_*` settings.
+    `cmd/migrate` and `cmd/seed` require `DATABASE_URL` and no longer fall back
+    to a default (the Makefile still supplies one).
+  - Migrations add a `CHECK` that `CATEGORY_FIELDS.data_type` is one of the six
+    field types, and give `PLACE_SUGGESTIONS` the `PLACES` column limits
+    (`address` 255, `operating_hours` 255, `estimated_price_range` 100) and its
+    attributes-is-an-object `CHECK`.
 - **Refresh-token storage.** Tests use `auth.NewMemoryRefreshStore()`. The API
   uses `auth.NewRedisRefreshStore` (keys `auth:refresh:<hash>`, expiry set by
   Redis, `Consume` is an atomic `GETDEL`, so it needs Redis 6.2+), so sessions
@@ -625,3 +638,4 @@ them.
 | 2026-11-09 | Verification update | Update routes changed from `PATCH` to `PUT`: an update takes the same body as create and replaces every editable field, so absent nullable fields are cleared and `{}` or a `null` required field is a `400 VALIDATION_ERROR`. The partial-update type `httpx.Optional` was removed |
 | 2026-11-09 | Verification update | Hardening pass. Route access (public, signed-in, admin) is now tested against the real router; `403 FORBIDDEN` added to the catalogue; the access-token rules (HS256, issuer, expiry) are tested; passwords are 8 to 128 code points, with an over-long login returning `INVALID_CREDENTIALS`, and at most 4 hashes run at once; `GET /places` limit defaults to and is capped at 1000; expired refresh tokens are swept from the in-memory store; the privacy rule now allows the caller's own email in auth responses; production paths (`/v1/places/categories`) recorded in §9; untested hardening (body cap, timeouts, env checks, indexes, role `CHECK`, logging) listed in §10 |
 | 2026-11-09 | Update | Production refresh tokens moved from process memory to Redis (`auth.NewRedisRefreshStore`); `cmd/api` pings Redis at startup and exits early on a bad `REDIS_URL`. Untested against a real Redis, so recorded in §10 only |
+| 2026-11-11 | Verification update | Review cleanup pass. Every JSON body goes through `httpx.DecodeJSON`, which also rejects data after the object (`INVALID_BODY`); auth user objects include `role`; `GET /places` `offset` and `INVALID_OFFSET` recorded (already tested); a category field with an unknown data type fails as a server error rather than `ErrInvalidAttributes`; `internal/module/users` renamed to `internal/module/user`; untested changes (no API CORS, per-command config, new migration checks) listed in §10 |

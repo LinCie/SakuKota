@@ -12,6 +12,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"rantau-go/internal/database"
+	"rantau-go/internal/pkg/postgis"
 )
 
 // Repository defines the persistence operations required by the service.
@@ -432,8 +433,8 @@ func placeWhere(filter PlaceFilter) (string, []any) {
 
 	if b := filter.Bounds; b != nil {
 		conditions = append(conditions, fmt.Sprintf(
-			"p.location && ST_MakeEnvelope(%s, %s, %s, %s, 4326)",
-			arg(b.MinLng), arg(b.MinLat), arg(b.MaxLng), arg(b.MaxLat),
+			"p.location && ST_MakeEnvelope(%s, %s, %s, %s, %d)",
+			arg(b.MinLng), arg(b.MinLat), arg(b.MaxLng), arg(b.MaxLat), postgis.SRID,
 		))
 	}
 

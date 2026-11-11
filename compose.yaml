@@ -72,7 +72,6 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-rantaugo}?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       STORAGE_ENDPOINT: http://garage:3900
-      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:8081}
     depends_on:
       postgres:
         condition: service_healthy

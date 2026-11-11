@@ -1,6 +1,6 @@
 //go:build integration
 
-package users_test
+package user_test
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"rantau-go/internal/module/users"
+	"rantau-go/internal/module/user"
 	"rantau-go/internal/testutil/pgtest"
 )
 
@@ -35,10 +35,10 @@ func TestMain(m *testing.M) {
 }
 
 // newRepository returns a repository over an emptied database.
-func newRepository(t *testing.T) users.Repository {
+func newRepository(t *testing.T) user.Repository {
 	t.Helper()
 	pgtest.Reset(t, testDB)
-	return users.NewPostgresRepository(testDB)
+	return user.NewPostgresRepository(testDB)
 }
 
 func TestRepository_Create(t *testing.T) {
@@ -47,7 +47,7 @@ func TestRepository_Create(t *testing.T) {
 	t.Run("stores the user and returns its generated fields", func(t *testing.T) {
 		repo := newRepository(t)
 
-		got, err := repo.Create(ctx, &users.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "$2a$hash"})
+		got, err := repo.Create(ctx, &user.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "$2a$hash"})
 
 		require.NoError(t, err)
 		assert.NotZero(t, got.ID)
@@ -66,9 +66,9 @@ func TestRepository_Create(t *testing.T) {
 	t.Run("gives each user its own id", func(t *testing.T) {
 		repo := newRepository(t)
 
-		first, err := repo.Create(ctx, &users.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "h"})
+		first, err := repo.Create(ctx, &user.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "h"})
 		require.NoError(t, err)
-		second, err := repo.Create(ctx, &users.User{Name: "Budi", Email: "budi@example.com", PasswordHash: "h"})
+		second, err := repo.Create(ctx, &user.User{Name: "Budi", Email: "budi@example.com", PasswordHash: "h"})
 		require.NoError(t, err)
 
 		assert.Less(t, first.ID, second.ID)
@@ -76,12 +76,12 @@ func TestRepository_Create(t *testing.T) {
 
 	t.Run("returns ErrEmailTaken for a registered email", func(t *testing.T) {
 		repo := newRepository(t)
-		_, err := repo.Create(ctx, &users.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "h"})
+		_, err := repo.Create(ctx, &user.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "h"})
 		require.NoError(t, err)
 
-		got, err := repo.Create(ctx, &users.User{Name: "Other Ana", Email: "ana@example.com", PasswordHash: "h2"})
+		got, err := repo.Create(ctx, &user.User{Name: "Other Ana", Email: "ana@example.com", PasswordHash: "h2"})
 
-		assert.ErrorIs(t, err, users.ErrEmailTaken)
+		assert.ErrorIs(t, err, user.ErrEmailTaken)
 		assert.Nil(t, got)
 	})
 }
@@ -91,9 +91,9 @@ func TestRepository_GetByEmail(t *testing.T) {
 
 	t.Run("returns the user with the email", func(t *testing.T) {
 		repo := newRepository(t)
-		_, err := repo.Create(ctx, &users.User{Name: "Budi", Email: "budi@example.com", PasswordHash: "h"})
+		_, err := repo.Create(ctx, &user.User{Name: "Budi", Email: "budi@example.com", PasswordHash: "h"})
 		require.NoError(t, err)
-		ana, err := repo.Create(ctx, &users.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "h"})
+		ana, err := repo.Create(ctx, &user.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "h"})
 		require.NoError(t, err)
 
 		got, err := repo.GetByEmail(ctx, "ana@example.com")
@@ -107,7 +107,7 @@ func TestRepository_GetByEmail(t *testing.T) {
 
 		got, err := repo.GetByEmail(ctx, "nobody@example.com")
 
-		assert.ErrorIs(t, err, users.ErrNotFound)
+		assert.ErrorIs(t, err, user.ErrNotFound)
 		assert.Nil(t, got)
 	})
 }
@@ -117,7 +117,7 @@ func TestRepository_GetUser(t *testing.T) {
 
 	t.Run("returns the user with the id", func(t *testing.T) {
 		repo := newRepository(t)
-		ana, err := repo.Create(ctx, &users.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "h"})
+		ana, err := repo.Create(ctx, &user.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "h"})
 		require.NoError(t, err)
 
 		got, err := repo.GetUser(ctx, ana.ID)
@@ -128,15 +128,15 @@ func TestRepository_GetUser(t *testing.T) {
 
 	t.Run("reads the role of an admin", func(t *testing.T) {
 		repo := newRepository(t)
-		ana, err := repo.Create(ctx, &users.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "h"})
+		ana, err := repo.Create(ctx, &user.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "h"})
 		require.NoError(t, err)
-		_, err = testDB.Exec(`UPDATE USERS SET role = $2 WHERE id = $1`, ana.ID, users.RoleAdmin)
+		_, err = testDB.Exec(`UPDATE USERS SET role = $2 WHERE id = $1`, ana.ID, user.RoleAdmin)
 		require.NoError(t, err)
 
 		got, err := repo.GetUser(ctx, ana.ID)
 
 		require.NoError(t, err)
-		assert.Equal(t, users.RoleAdmin, got.Role)
+		assert.Equal(t, user.RoleAdmin, got.Role)
 	})
 
 	t.Run("returns ErrNotFound for an unknown id", func(t *testing.T) {
@@ -144,7 +144,7 @@ func TestRepository_GetUser(t *testing.T) {
 
 		got, err := repo.GetUser(ctx, 999)
 
-		assert.ErrorIs(t, err, users.ErrNotFound)
+		assert.ErrorIs(t, err, user.ErrNotFound)
 		assert.Nil(t, got)
 	})
 }

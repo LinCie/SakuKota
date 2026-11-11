@@ -2,21 +2,19 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"log/slog"
 	"os"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+
+	"rantau-go/internal/config"
+	"rantau-go/internal/database"
 )
 
-const (
-	defaultDatabaseURL   = "postgres://postgres:postgres@localhost:5432/rantaugo?sslmode=disable"
-	defaultMigrationsDir = "migrations"
-)
+const defaultMigrationsDir = "migrations"
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
@@ -25,37 +23,41 @@ func main() {
 		log.Fatalf("usage: %s {up|down|status|reset|version}", os.Args[0])
 	}
 
-	databaseURL := getenv("DATABASE_URL", defaultDatabaseURL)
-	migrationsDir := getenv("MIGRATIONS_DIR", defaultMigrationsDir)
+	databaseURL, err := config.DatabaseURL()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	migrationsDir := os.Getenv("MIGRATIONS_DIR")
+	if migrationsDir == "" {
+		migrationsDir = defaultMigrationsDir
+	}
 
 	if err := goose.SetDialect("postgres"); err != nil {
 		log.Fatal(err)
 	}
 
-	db, err := sql.Open("pgx", databaseURL)
-	if err != nil {
-		log.Fatalf("open database: %v", err)
-	}
-	defer db.Close()
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
-		log.Fatalf("connect to database: %v", err)
+
+	db, err := database.NewPostgresDB(ctx, databaseURL)
+	if err != nil {
+		log.Fatalf("create database connection: %v", err)
 	}
+	defer func() { _ = db.Close() }()
 
 	var migrationErr error
 	switch os.Args[1] {
 	case "up":
-		migrationErr = goose.UpContext(ctx, db, migrationsDir)
+		migrationErr = goose.UpContext(ctx, db.DB, migrationsDir)
 	case "down":
-		migrationErr = goose.DownContext(ctx, db, migrationsDir)
+		migrationErr = goose.DownContext(ctx, db.DB, migrationsDir)
 	case "status":
-		migrationErr = goose.StatusContext(ctx, db, migrationsDir)
+		migrationErr = goose.StatusContext(ctx, db.DB, migrationsDir)
 	case "reset":
-		migrationErr = goose.ResetContext(ctx, db, migrationsDir)
+		migrationErr = goose.ResetContext(ctx, db.DB, migrationsDir)
 	case "version":
-		migrationErr = goose.VersionContext(ctx, db, migrationsDir)
+		migrationErr = goose.VersionContext(ctx, db.DB, migrationsDir)
 	default:
 		migrationErr = fmt.Errorf("unknown command %q", os.Args[1])
 	}
@@ -63,11 +65,4 @@ func main() {
 	if migrationErr != nil {
 		log.Fatal(migrationErr)
 	}
-}
-
-func getenv(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return fallback
 }

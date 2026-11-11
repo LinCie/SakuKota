@@ -1,4 +1,4 @@
-package users_test
+package user_test
 
 import (
 	"context"
@@ -9,18 +9,18 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/module/users"
-	"rantau-go/internal/module/users/mock"
+	"rantau-go/internal/module/user"
+	"rantau-go/internal/module/user/mock"
 )
 
 const testEmail = "ana@example.com"
 
 var errBoom = errors.New("boom")
 
-func newService(t *testing.T) (users.Service, *mock.MockRepository) {
+func newService(t *testing.T) (user.Service, *mock.MockRepository) {
 	t.Helper()
 	repo := mock.NewMockRepository(gomock.NewController(t))
-	return users.NewService(repo), repo
+	return user.NewService(repo), repo
 }
 
 // -----------------------------------------------------------------------------
@@ -29,8 +29,8 @@ func newService(t *testing.T) (users.Service, *mock.MockRepository) {
 
 func TestService_Create_ReturnsCreatedUser(t *testing.T) {
 	svc, repo := newService(t)
-	in := &users.User{Name: "Ana", Email: testEmail, PasswordHash: "hash"}
-	want := &users.User{ID: 1, Name: "Ana", Email: testEmail, PasswordHash: "hash", Role: "user"}
+	in := &user.User{Name: "Ana", Email: testEmail, PasswordHash: "hash"}
+	want := &user.User{ID: 1, Name: "Ana", Email: testEmail, PasswordHash: "hash", Role: "user"}
 	repo.EXPECT().Create(gomock.Any(), in).Return(want, nil)
 
 	got, err := svc.Create(context.Background(), in)
@@ -39,12 +39,12 @@ func TestService_Create_ReturnsCreatedUser(t *testing.T) {
 }
 
 func TestService_Create_PropagatesErrors(t *testing.T) {
-	for _, want := range []error{users.ErrEmailTaken, errBoom} {
+	for _, want := range []error{user.ErrEmailTaken, errBoom} {
 		t.Run(want.Error(), func(t *testing.T) {
 			svc, repo := newService(t)
 			repo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, want)
 
-			_, err := svc.Create(context.Background(), &users.User{Name: "Ana", Email: testEmail})
+			_, err := svc.Create(context.Background(), &user.User{Name: "Ana", Email: testEmail})
 			assert.ErrorIs(t, err, want)
 		})
 	}
@@ -56,7 +56,7 @@ func TestService_Create_PropagatesErrors(t *testing.T) {
 
 func TestService_GetByEmail_ReturnsUser(t *testing.T) {
 	svc, repo := newService(t)
-	want := &users.User{ID: 7, Email: testEmail}
+	want := &user.User{ID: 7, Email: testEmail}
 	repo.EXPECT().GetByEmail(gomock.Any(), testEmail).Return(want, nil)
 
 	got, err := svc.GetByEmail(context.Background(), testEmail)
@@ -65,7 +65,7 @@ func TestService_GetByEmail_ReturnsUser(t *testing.T) {
 }
 
 func TestService_GetByEmail_PropagatesErrors(t *testing.T) {
-	for _, want := range []error{users.ErrNotFound, errBoom} {
+	for _, want := range []error{user.ErrNotFound, errBoom} {
 		t.Run(want.Error(), func(t *testing.T) {
 			svc, repo := newService(t)
 			repo.EXPECT().GetByEmail(gomock.Any(), testEmail).Return(nil, want)
@@ -82,7 +82,7 @@ func TestService_GetByEmail_PropagatesErrors(t *testing.T) {
 
 func TestService_GetUser_ReturnsUser(t *testing.T) {
 	svc, repo := newService(t)
-	want := &users.User{ID: 7, Email: testEmail}
+	want := &user.User{ID: 7, Email: testEmail}
 	repo.EXPECT().GetUser(gomock.Any(), int64(7)).Return(want, nil)
 
 	got, err := svc.GetUser(context.Background(), 7)
@@ -91,7 +91,7 @@ func TestService_GetUser_ReturnsUser(t *testing.T) {
 }
 
 func TestService_GetUser_PropagatesErrors(t *testing.T) {
-	for _, want := range []error{users.ErrNotFound, errBoom} {
+	for _, want := range []error{user.ErrNotFound, errBoom} {
 		t.Run(want.Error(), func(t *testing.T) {
 			svc, repo := newService(t)
 			repo.EXPECT().GetUser(gomock.Any(), int64(7)).Return(nil, want)

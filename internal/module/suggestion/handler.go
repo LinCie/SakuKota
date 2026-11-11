@@ -1,7 +1,6 @@
 package suggestion
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -35,9 +34,8 @@ func (h *Handler) CreateSuggestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req *CreateSuggestionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+	req, ok := httpx.DecodeJSON[CreateSuggestionRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -115,13 +113,13 @@ func (h *Handler) ApproveSuggestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req *ApproveSuggestionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+	// The body is the place to create, in the shape of POST /places.
+	req, ok := httpx.DecodeJSON[place.PlaceRequest](w, r)
+	if !ok {
 		return
 	}
 
-	approved, err := h.service.Approve(r.Context(), id, adminID, toPlace(*req))
+	approved, err := h.service.Approve(r.Context(), id, adminID, place.ToPlace(*req))
 	if err != nil {
 		respondError(w, err)
 		return
@@ -146,9 +144,8 @@ func (h *Handler) RejectSuggestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req *RejectSuggestionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+	req, ok := httpx.DecodeJSON[RejectSuggestionRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -184,15 +181,8 @@ func respondError(w http.ResponseWriter, err error) {
 		errors.Is(err, ErrReasonTooLong),
 		errors.Is(err, ErrSubDistrictNotFound),
 		errors.Is(err, ErrCategoryNotFound),
-		errors.Is(err, place.ErrInvalidName),
-		errors.Is(err, place.ErrNameTooLong),
-		errors.Is(err, place.ErrAddressTooLong),
-		errors.Is(err, place.ErrOperatingHoursTooLong),
-		errors.Is(err, place.ErrEstimatedPriceRangeTooLong),
 		errors.Is(err, place.ErrInvalidLocation),
-		errors.Is(err, place.ErrInvalidAttributes),
-		errors.Is(err, place.ErrSubDistrictNotFound),
-		errors.Is(err, place.ErrCategoryNotFound):
+		errors.Is(err, place.ErrInvalidAttributes):
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 	default:
 		httpx.RespondInternalError(w)

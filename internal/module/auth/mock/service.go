@@ -12,7 +12,7 @@ package mock
 import (
 	context "context"
 	auth "rantau-go/internal/module/auth"
-	users "rantau-go/internal/module/users"
+	user "rantau-go/internal/module/user"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -43,10 +43,10 @@ func (m *MockService) EXPECT() *MockServiceMockRecorder {
 }
 
 // Login mocks base method.
-func (m *MockService) Login(ctx context.Context, email, password string) (*users.User, *auth.Tokens, error) {
+func (m *MockService) Login(ctx context.Context, email, password string) (*user.User, *auth.Tokens, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Login", ctx, email, password)
-	ret0, _ := ret[0].(*users.User)
+	ret0, _ := ret[0].(*user.User)
 	ret1, _ := ret[1].(*auth.Tokens)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
@@ -73,10 +73,10 @@ func (mr *MockServiceMockRecorder) Logout(ctx, refreshToken any) *gomock.Call {
 }
 
 // Refresh mocks base method.
-func (m *MockService) Refresh(ctx context.Context, refreshToken string) (*users.User, *auth.Tokens, error) {
+func (m *MockService) Refresh(ctx context.Context, refreshToken string) (*user.User, *auth.Tokens, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Refresh", ctx, refreshToken)
-	ret0, _ := ret[0].(*users.User)
+	ret0, _ := ret[0].(*user.User)
 	ret1, _ := ret[1].(*auth.Tokens)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
@@ -89,10 +89,10 @@ func (mr *MockServiceMockRecorder) Refresh(ctx, refreshToken any) *gomock.Call {
 }
 
 // Register mocks base method.
-func (m *MockService) Register(ctx context.Context, u *users.User, password string) (*users.User, error) {
+func (m *MockService) Register(ctx context.Context, u *user.User, password string) (*user.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Register", ctx, u, password)
-	ret0, _ := ret[0].(*users.User)
+	ret0, _ := ret[0].(*user.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

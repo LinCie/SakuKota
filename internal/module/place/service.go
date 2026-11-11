@@ -99,7 +99,7 @@ func (s *service) Delete(ctx context.Context, id int64) error {
 
 // validate normalizes p and checks it against its category's fields.
 func (s *service) validate(ctx context.Context, p *Place) error {
-	name, err := normalizePlaceName(p.Name)
+	name, err := NormalizeName(p.Name)
 	if err != nil {
 		return err
 	}
@@ -164,8 +164,8 @@ func imagePrefix(id int64) string {
 	return "places/" + strconv.FormatInt(id, 10)
 }
 
-// normalizePlaceName trims name and checks it against the length of PLACES.name.
-func normalizePlaceName(name string) (string, error) {
+// NormalizeName trims name and checks it against the length of PLACES.name.
+func NormalizeName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	switch {
 	case name == "":
@@ -301,6 +301,10 @@ func validateAttribute(f CategoryField, value any) error {
 		if _, err := time.Parse(time.DateOnly, date); !ok || err != nil {
 			return fmt.Errorf("%w: %q must be a date in YYYY-MM-DD format", ErrInvalidAttributes, f.Key)
 		}
+	default:
+		// CATEGORY_FIELDS allows only the types above, so this is a server
+		// fault, not the client's.
+		return fmt.Errorf("place: field %q has unknown data type %q", f.Key, f.DataType)
 	}
 
 	return nil

@@ -2,8 +2,8 @@ package review
 
 import (
 	"context"
-	"strings"
-	"unicode/utf8"
+
+	"rantau-go/internal/pkg/text"
 )
 
 // Service defines the operations required by the handler.
@@ -37,9 +37,9 @@ func (s *service) Create(ctx context.Context, r *Review) (*Review, error) {
 		return nil, ErrInvalidRating
 	}
 
-	comment, err := normalizeComment(r.Comment)
-	if err != nil {
-		return nil, err
+	comment, ok := text.TrimOptionalMax(r.Comment, maxCommentLength)
+	if !ok {
+		return nil, ErrCommentTooLong
 	}
 	r.Comment = comment
 
@@ -48,22 +48,4 @@ func (s *service) Create(ctx context.Context, r *Review) (*Review, error) {
 
 func (s *service) GetByPlace(ctx context.Context, placeID int64) ([]Review, error) {
 	return s.repo.GetByPlace(ctx, placeID)
-}
-
-// normalizeComment trims the comment and checks its length. A missing or blank
-// comment becomes nil.
-func normalizeComment(comment *string) (*string, error) {
-	if comment == nil {
-		return nil, nil
-	}
-
-	trimmed := strings.TrimSpace(*comment)
-	switch {
-	case trimmed == "":
-		return nil, nil
-	case utf8.RuneCountInString(trimmed) > maxCommentLength:
-		return nil, ErrCommentTooLong
-	}
-
-	return &trimmed, nil
 }

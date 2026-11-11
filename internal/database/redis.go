@@ -1,15 +1,13 @@
-package cache
+package database
 
 import (
 	"context"
 
-	"rantau-go/internal/config"
-
 	"github.com/redis/go-redis/v9"
 )
 
-func NewRedisCache(ctx context.Context, cfg config.Config) (*redis.Client, error) {
-	opt, err := redis.ParseURL(cfg.RedisURL)
+func NewRedisClient(ctx context.Context, redisURL string) (*redis.Client, error) {
+	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
 		return nil, err
 	}
@@ -17,7 +15,7 @@ func NewRedisCache(ctx context.Context, cfg config.Config) (*redis.Client, error
 	client := redis.NewClient(opt)
 
 	if err := client.Ping(ctx).Err(); err != nil {
-		client.Close()
+		_ = client.Close()
 		return nil, err
 	}
 

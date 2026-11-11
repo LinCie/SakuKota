@@ -20,7 +20,6 @@ type Config struct {
 	JWTExpiry          time.Duration
 	RefreshTokenExpiry time.Duration
 	CookieSecure       bool
-	CORSAllowedOrigin  string
 	Storage            StorageConfig
 }
 
@@ -39,10 +38,21 @@ type StorageConfig struct {
 	SecretAccessKey string
 }
 
-func NewConfig() (Config, error) {
+// DatabaseURL returns DATABASE_URL, which every command requires.
+func DatabaseURL() (string, error) {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
-		return Config{}, errors.New("DATABASE_URL is required")
+		return "", errors.New("DATABASE_URL is required")
+	}
+
+	return databaseURL, nil
+}
+
+// NewConfig reads the configuration of the API server.
+func NewConfig() (Config, error) {
+	databaseURL, err := DatabaseURL()
+	if err != nil {
+		return Config{}, err
 	}
 
 	redisURL := os.Getenv("REDIS_URL")
@@ -53,8 +63,8 @@ func NewConfig() (Config, error) {
 	port := 8080
 	if value := os.Getenv("PORT"); value != "" {
 		parsedPort, err := strconv.Atoi(value)
-		if err != nil {
-			return Config{}, err
+		if err != nil || parsedPort <= 0 {
+			return Config{}, errors.New("PORT must be a positive integer")
 		}
 		port = parsedPort
 	}
@@ -97,12 +107,7 @@ func NewConfig() (Config, error) {
 		cookieSecure = b
 	}
 
-	corsAllowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
-	if corsAllowedOrigin == "" {
-		corsAllowedOrigin = "http://localhost:5173"
-	}
-
-	storage, err := newStorageConfig()
+	storage, err := NewStorageConfig()
 	if err != nil {
 		return Config{}, err
 	}
@@ -115,12 +120,12 @@ func NewConfig() (Config, error) {
 		JWTExpiry:          jwtExpiry,
 		RefreshTokenExpiry: refreshTokenExpiry,
 		CookieSecure:       cookieSecure,
-		CORSAllowedOrigin:  corsAllowedOrigin,
 		Storage:            storage,
 	}, nil
 }
 
-func newStorageConfig() (StorageConfig, error) {
+// NewStorageConfig reads the location of the image bucket.
+func NewStorageConfig() (StorageConfig, error) {
 	storage := StorageConfig{
 		Endpoint:        os.Getenv("STORAGE_ENDPOINT"),
 		PublicEndpoint:  os.Getenv("STORAGE_PUBLIC_ENDPOINT"),

@@ -4,8 +4,7 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// Module wires up the subdistrict module's repository, service, and
-// handler, and exposes a mux serving its routes.
+// Module wires up the subdistrict module's repository, service, and handler.
 type Module struct {
 	Service Service
 	Handler *Handler

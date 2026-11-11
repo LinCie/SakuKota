@@ -13,10 +13,10 @@ var openAPIJSON []byte
 
 func Scalar(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write(scalarHTML)
+	_, _ = w.Write(scalarHTML)
 }
 
 func OpenAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(openAPIJSON)
+	_, _ = w.Write(openAPIJSON)
 }

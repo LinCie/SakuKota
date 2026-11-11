@@ -10,7 +10,6 @@ import (
 	"os"
 	"time"
 
-	"rantau-go/internal/cache"
 	"rantau-go/internal/config"
 	"rantau-go/internal/database"
 	"rantau-go/internal/router"
@@ -30,13 +29,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("create database connection: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
-	rdb, err := cache.NewRedisCache(context.Background(), cfg)
+	rdb, err := database.NewRedisClient(context.Background(), cfg.RedisURL)
 	if err != nil {
 		log.Fatalf("create redis connection: %v", err)
 	}
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	// Profiling is opt-in and served apart from the API, which has write
 	// timeouts that would cut off long profiles.

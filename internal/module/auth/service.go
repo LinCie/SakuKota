@@ -12,7 +12,7 @@ import (
 	"unicode/utf8"
 
 	"rantau-go/internal/config"
-	"rantau-go/internal/module/users"
+	"rantau-go/internal/module/user"
 	"rantau-go/internal/pkg/jwt"
 )
 
@@ -20,21 +20,21 @@ import (
 //
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
 type Service interface {
-	Register(ctx context.Context, u *users.User, password string) (*users.User, error)
-	Login(ctx context.Context, email, password string) (*users.User, *Tokens, error)
-	Refresh(ctx context.Context, refreshToken string) (*users.User, *Tokens, error)
+	Register(ctx context.Context, u *user.User, password string) (*user.User, error)
+	Login(ctx context.Context, email, password string) (*user.User, *Tokens, error)
+	Refresh(ctx context.Context, refreshToken string) (*user.User, *Tokens, error)
 	Logout(ctx context.Context, refreshToken string) error
 }
 
 type service struct {
 	cfg   config.Config
-	users users.Service
+	users user.Service
 	store RefreshStore
 	// hashSlots holds one token per running password hash.
 	hashSlots chan struct{}
 }
 
-func NewService(cfg config.Config, userService users.Service, store RefreshStore) Service {
+func NewService(cfg config.Config, userService user.Service, store RefreshStore) Service {
 	return &service{
 		cfg:       cfg,
 		users:     userService,
@@ -47,7 +47,7 @@ func NewService(cfg config.Config, userService users.Service, store RefreshStore
 // service
 // -----------------------------------------------------------------------------
 
-func (s *service) Register(ctx context.Context, u *users.User, password string) (*users.User, error) {
+func (s *service) Register(ctx context.Context, u *user.User, password string) (*user.User, error) {
 	u.Name = strings.TrimSpace(u.Name)
 	switch {
 	case u.Name == "":
@@ -83,7 +83,7 @@ func (s *service) Register(ctx context.Context, u *users.User, password string) 
 	return s.users.Create(ctx, u)
 }
 
-func (s *service) Login(ctx context.Context, email, password string) (*users.User, *Tokens, error) {
+func (s *service) Login(ctx context.Context, email, password string) (*user.User, *Tokens, error) {
 	// No stored password is this long, so there is nothing to verify.
 	if utf8.RuneCountInString(password) > maxPasswordLength {
 		return nil, nil, ErrInvalidCredentials
@@ -91,7 +91,7 @@ func (s *service) Login(ctx context.Context, email, password string) (*users.Use
 
 	u, err := s.users.GetByEmail(ctx, normalizeEmail(email))
 	if err != nil {
-		if errors.Is(err, users.ErrNotFound) {
+		if errors.Is(err, user.ErrNotFound) {
 			return nil, nil, ErrInvalidCredentials
 		}
 		return nil, nil, err
@@ -115,7 +115,7 @@ func (s *service) Login(ctx context.Context, email, password string) (*users.Use
 
 // Refresh exchanges a valid refresh token for the user and a new token pair.
 // The old refresh token is consumed, so it cannot be reused.
-func (s *service) Refresh(ctx context.Context, refreshToken string) (*users.User, *Tokens, error) {
+func (s *service) Refresh(ctx context.Context, refreshToken string) (*user.User, *Tokens, error) {
 	userID, err := s.store.Consume(ctx, hashToken(refreshToken))
 	if err != nil {
 		return nil, nil, err
@@ -124,7 +124,7 @@ func (s *service) Refresh(ctx context.Context, refreshToken string) (*users.User
 	// Reload the user so the new access token reflects their current role.
 	u, err := s.users.GetUser(ctx, userID)
 	if err != nil {
-		if errors.Is(err, users.ErrNotFound) {
+		if errors.Is(err, user.ErrNotFound) {
 			return nil, nil, ErrInvalidRefreshToken
 		}
 		return nil, nil, err
@@ -142,7 +142,7 @@ func (s *service) Logout(ctx context.Context, refreshToken string) error {
 	return s.store.Delete(ctx, hashToken(refreshToken))
 }
 
-func (s *service) issueTokens(ctx context.Context, u *users.User) (*Tokens, error) {
+func (s *service) issueTokens(ctx context.Context, u *user.User) (*Tokens, error) {
 	accessToken, err := jwt.GenerateToken(s.cfg, u.ID, u.Role)
 	if err != nil {
 		return nil, err

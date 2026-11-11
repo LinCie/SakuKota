@@ -47,7 +47,7 @@ func Start(ctx context.Context) (db *sqlx.DB, stop func(), err error) {
 
 	stop = func() {
 		if db != nil {
-			db.Close()
+			_ = db.Close()
 		}
 		stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -81,7 +81,7 @@ func migrate(ctx context.Context, url string) error {
 	if err != nil {
 		return fmt.Errorf("pgtest: open: %w", err)
 	}
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	if err := goose.SetDialect("postgres"); err != nil {
 		return fmt.Errorf("pgtest: goose dialect: %w", err)

@@ -19,7 +19,7 @@ type errorResponse struct {
 func RespondJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(dataResponse{Data: data})
+	_ = json.NewEncoder(w).Encode(dataResponse{Data: data})
 }
 
 // RespondError writes a JSON error response with the given status code,
@@ -27,7 +27,7 @@ func RespondJSON(w http.ResponseWriter, status int, data any) {
 func RespondError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(errorResponse{Code: code, Message: message})
+	_ = json.NewEncoder(w).Encode(errorResponse{Code: code, Message: message})
 }
 
 // RespondInternalError writes a generic 500 response, so storage details stay

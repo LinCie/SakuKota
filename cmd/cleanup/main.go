@@ -17,20 +17,25 @@ import (
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
-	cfg, err := config.NewConfig()
+	databaseURL, err := config.DatabaseURL()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	storageCfg, err := config.NewStorageConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	ctx := context.Background()
 
-	db, err := database.NewPostgresDB(ctx, cfg.DatabaseURL)
+	db, err := database.NewPostgresDB(ctx, databaseURL)
 	if err != nil {
 		log.Fatalf("create database connection: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
-	module := storagecleanup.NewModule(db, storage.NewS3(cfg.Storage))
+	module := storagecleanup.NewModule(db, storage.NewS3(storageCfg))
 	if err := module.Service.Run(ctx); err != nil {
 		log.Fatalf("clean up storage: %v", err)
 	}

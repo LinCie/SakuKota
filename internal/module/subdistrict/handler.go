@@ -1,7 +1,6 @@
 package subdistrict
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -30,9 +29,8 @@ func NewHandler(service Service, imageURL func(key string) string) *Handler {
 
 // CreateSubDistrict stores the sub-district given in the body.
 func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
-	var req *SubDistrictRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+	req, ok := httpx.DecodeJSON[SubDistrictRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -55,9 +53,8 @@ func (h *Handler) CreateImageUpload(slot ImageSlot) http.HandlerFunc {
 			return
 		}
 
-		var req *ImageUploadRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+		req, ok := httpx.DecodeJSON[storage.ImageUploadRequest](w, r)
+		if !ok {
 			return
 		}
 
@@ -67,7 +64,7 @@ func (h *Handler) CreateImageUpload(slot ImageSlot) http.HandlerFunc {
 			return
 		}
 
-		httpx.RespondJSON(w, http.StatusOK, toImageUploadResponse(upload))
+		httpx.RespondJSON(w, http.StatusOK, storage.ToImageUploadResponse(upload))
 	}
 }
 
@@ -111,10 +108,8 @@ func (h *Handler) PutSubDistrict(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// A body of null decodes to a nil pointer and is rejected with the others.
-	var req *SubDistrictRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+	req, ok := httpx.DecodeJSON[SubDistrictRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -160,9 +155,8 @@ func (h *Handler) SetImage(slot ImageSlot) http.HandlerFunc {
 			return
 		}
 
-		var req *SetImageRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+		req, ok := httpx.DecodeJSON[storage.SetImageRequest](w, r)
+		if !ok {
 			return
 		}
 
@@ -181,10 +175,7 @@ func respondImageError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrSubDistrictNotFound):
 		httpx.RespondError(w, http.StatusNotFound, httpx.CodeSubDistrictNotFound, err.Error())
-	case errors.Is(err, storage.ErrInvalidImageType),
-		errors.Is(err, storage.ErrImageTooLarge),
-		errors.Is(err, storage.ErrImageNotUploaded),
-		errors.Is(err, storage.ErrInvalidImageKey):
+	case storage.IsInvalidImage(err):
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 	default:
 		httpx.RespondInternalError(w)

@@ -11,7 +11,7 @@ package mock
 
 import (
 	context "context"
-	users "rantau-go/internal/module/users"
+	user "rantau-go/internal/module/user"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -42,10 +42,10 @@ func (m *MockService) EXPECT() *MockServiceMockRecorder {
 }
 
 // Create mocks base method.
-func (m *MockService) Create(ctx context.Context, u *users.User) (*users.User, error) {
+func (m *MockService) Create(ctx context.Context, u *user.User) (*user.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Create", ctx, u)
-	ret0, _ := ret[0].(*users.User)
+	ret0, _ := ret[0].(*user.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -57,10 +57,10 @@ func (mr *MockServiceMockRecorder) Create(ctx, u any) *gomock.Call {
 }
 
 // GetByEmail mocks base method.
-func (m *MockService) GetByEmail(ctx context.Context, email string) (*users.User, error) {
+func (m *MockService) GetByEmail(ctx context.Context, email string) (*user.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetByEmail", ctx, email)
-	ret0, _ := ret[0].(*users.User)
+	ret0, _ := ret[0].(*user.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -72,10 +72,10 @@ func (mr *MockServiceMockRecorder) GetByEmail(ctx, email any) *gomock.Call {
 }
 
 // GetUser mocks base method.
-func (m *MockService) GetUser(ctx context.Context, id int64) (*users.User, error) {
+func (m *MockService) GetUser(ctx context.Context, id int64) (*user.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetUser", ctx, id)
-	ret0, _ := ret[0].(*users.User)
+	ret0, _ := ret[0].(*user.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

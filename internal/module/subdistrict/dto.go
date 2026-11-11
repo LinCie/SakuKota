@@ -1,11 +1,5 @@
 package subdistrict
 
-import (
-	"time"
-
-	"rantau-go/internal/storage"
-)
-
 // SubDistrictRequest is the API payload for creating a SubDistrict or
 // replacing one. An update sends every field: keys left out are cleared.
 type SubDistrictRequest struct {
@@ -28,26 +22,6 @@ type SubDistrictResponse struct {
 	// served, or null for an image it does not have.
 	ImageURL          *string `json:"image_url"`
 	StaticMapImageURL *string `json:"static_map_image_url"`
-}
-
-// ImageUploadRequest is the API payload for requesting an image upload.
-type ImageUploadRequest struct {
-	ContentType string `json:"content_type"`
-}
-
-// ImageUploadResponse is a presigned upload the client sends the image with.
-// The client then confirms it by sending UploadKey to SetImage.
-type ImageUploadResponse struct {
-	UploadKey string            `json:"upload_key"`
-	UploadURL string            `json:"upload_url"`
-	Method    string            `json:"method"`
-	Headers   map[string]string `json:"headers"`
-	ExpiresAt time.Time         `json:"expires_at"`
-}
-
-// SetImageRequest is the API payload for confirming an uploaded image.
-type SetImageRequest struct {
-	UploadKey string `json:"upload_key"`
 }
 
 // -----------------------------------------------------------------------------
@@ -94,14 +68,4 @@ func toSubDistrictResponses(subDistricts []SubDistrict, imageURL func(key string
 	}
 
 	return responses
-}
-
-func toImageUploadResponse(u storage.Upload) ImageUploadResponse {
-	return ImageUploadResponse{
-		UploadKey: u.Key,
-		UploadURL: u.URL,
-		Method:    u.Method,
-		Headers:   u.Headers,
-		ExpiresAt: u.ExpiresAt,
-	}
 }

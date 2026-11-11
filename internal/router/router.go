@@ -16,19 +16,21 @@ import (
 	"rantau-go/internal/module/review"
 	"rantau-go/internal/module/subdistrict"
 	"rantau-go/internal/module/suggestion"
-	"rantau-go/internal/module/users"
+	"rantau-go/internal/module/user"
 	"rantau-go/internal/storage"
 )
 
-func NewRouter(db *sqlx.DB, cache *redis.Client, cfg config.Config) http.Handler {
+func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 	r := chi.NewRouter()
 
+	// Logger comes before Recoverer so a recovered panic is logged as a 500.
+	// The web app reaches the API through a same-origin proxy, so no CORS
+	// headers are needed.
 	r.Use(
-		chimiddleware.Recoverer,
 		chimiddleware.Logger,
+		chimiddleware.Recoverer,
 		chimiddleware.StripSlashes,
 		middleware.WithMaxBody(),
-		middleware.WithCORS(cfg),
 	)
 
 	r.Get("/docs", docs.Scalar)
@@ -36,8 +38,8 @@ func NewRouter(db *sqlx.DB, cache *redis.Client, cfg config.Config) http.Handler
 
 	images := storage.NewImages(storage.NewS3(cfg.Storage), cfg.Storage.PublicURL)
 
-	usersModule := users.NewModule(db)
-	authModule := auth.NewModule(cfg, usersModule.Service, cache)
+	userModule := user.NewModule(db)
+	authModule := auth.NewModule(cfg, userModule.Service, rdb)
 	placeModule := place.NewModule(db, images)
 	reviewModule := review.NewModule(db)
 	subdistrictModule := subdistrict.NewModule(db, images)
@@ -60,7 +62,7 @@ func NewRouter(db *sqlx.DB, cache *redis.Client, cfg config.Config) http.Handler
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.WithAuth(cfg))
-				r.Use(middleware.Guard([]string{users.RoleAdmin}))
+				r.Use(middleware.Guard([]string{user.RoleAdmin}))
 
 				// POST /v1/places
 				r.Post("/", placeModule.Handler.CreatePlace)
@@ -112,7 +114,7 @@ func NewRouter(db *sqlx.DB, cache *redis.Client, cfg config.Config) http.Handler
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.WithAuth(cfg))
-				r.Use(middleware.Guard([]string{users.RoleAdmin}))
+				r.Use(middleware.Guard([]string{user.RoleAdmin}))
 
 				// GET /v1/suggestions
 				r.Get("/", suggestionModule.Handler.GetSuggestions)
@@ -137,7 +139,7 @@ func NewRouter(db *sqlx.DB, cache *redis.Client, cfg config.Config) http.Handler
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.WithAuth(cfg))
-				r.Use(middleware.Guard([]string{users.RoleAdmin}))
+				r.Use(middleware.Guard([]string{user.RoleAdmin}))
 
 				// POST /v1/subdistricts
 				r.Post("/", subdistrictModule.Handler.CreateSubDistrict)

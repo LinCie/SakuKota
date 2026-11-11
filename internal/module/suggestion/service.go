@@ -3,8 +3,6 @@ package suggestion
 import (
 	"context"
 	"encoding/json"
-	"strings"
-	"unicode/utf8"
 
 	"rantau-go/internal/module/place"
 	"rantau-go/internal/pkg/postgis"
@@ -56,7 +54,7 @@ func NewService(repo Repository, places PlaceService) Service {
 // -----------------------------------------------------------------------------
 
 func (s *service) Create(ctx context.Context, sg *Suggestion) (*Suggestion, error) {
-	name, err := normalizeName(sg.Name)
+	name, err := place.NormalizeName(sg.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -70,24 +68,24 @@ func (s *service) Create(ctx context.Context, sg *Suggestion) (*Suggestion, erro
 		return nil, err
 	}
 
-	address, err := trimOptionalWithLimit(sg.Address, place.MaxAddressLength, ErrAddressTooLong)
-	if err != nil {
-		return nil, err
+	address, ok := text.TrimOptionalMax(sg.Address, place.MaxAddressLength)
+	if !ok {
+		return nil, ErrAddressTooLong
 	}
 
-	operatingHours, err := trimOptionalWithLimit(sg.OperatingHours, place.MaxOperatingHoursLength, ErrOperatingHoursTooLong)
-	if err != nil {
-		return nil, err
+	operatingHours, ok := text.TrimOptionalMax(sg.OperatingHours, place.MaxOperatingHoursLength)
+	if !ok {
+		return nil, ErrOperatingHoursTooLong
 	}
 
-	estimatedPriceRange, err := trimOptionalWithLimit(sg.EstimatedPriceRange, place.MaxEstimatedPriceRangeLength, ErrEstimatedPriceRangeTooLong)
-	if err != nil {
-		return nil, err
+	estimatedPriceRange, ok := text.TrimOptionalMax(sg.EstimatedPriceRange, place.MaxEstimatedPriceRangeLength)
+	if !ok {
+		return nil, ErrEstimatedPriceRangeTooLong
 	}
 
-	note, err := trimOptionalWithLimit(sg.Note, maxNoteLength, ErrNoteTooLong)
-	if err != nil {
-		return nil, err
+	note, ok := text.TrimOptionalMax(sg.Note, maxNoteLength)
+	if !ok {
+		return nil, ErrNoteTooLong
 	}
 
 	// Only the submitted fields are stored, so the suggestion starts pending
@@ -162,36 +160,12 @@ func (s *service) Approve(ctx context.Context, id, adminID int64, p *place.Place
 }
 
 func (s *service) Reject(ctx context.Context, id, adminID int64, reason *string) (*Suggestion, error) {
-	trimmed, err := trimOptionalWithLimit(reason, maxReasonLength, ErrReasonTooLong)
-	if err != nil {
-		return nil, err
+	trimmed, ok := text.TrimOptionalMax(reason, maxReasonLength)
+	if !ok {
+		return nil, ErrReasonTooLong
 	}
 
 	return s.repo.Reject(ctx, id, adminID, trimmed)
-}
-
-// normalizeName trims name and checks it against the length of PLACE_SUGGESTIONS.name.
-func normalizeName(name string) (string, error) {
-	name = strings.TrimSpace(name)
-	switch {
-	case name == "":
-		return "", ErrInvalidName
-	case utf8.RuneCountInString(name) > place.MaxNameLength:
-		return "", ErrNameTooLong
-	}
-
-	return name, nil
-}
-
-// trimOptionalWithLimit trims value and stores blank text as nil. It reports
-// tooLong if what is left is longer than limit characters.
-func trimOptionalWithLimit(value *string, limit int, tooLong error) (*string, error) {
-	trimmed, ok := text.TrimOptionalMax(value, limit)
-	if !ok {
-		return nil, tooLong
-	}
-
-	return trimmed, nil
 }
 
 // normalizeAttributes checks that raw is a JSON object and returns it as sent.

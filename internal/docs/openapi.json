@@ -276,7 +276,7 @@
             }
           },
           "400": {
-            "description": "sub_district_id or category_id is not a valid positive integer, limit is not a positive integer, offset is not a non-negative integer, or bbox is not four valid coordinates (invalid_sub_district_id, invalid_category_id, invalid_limit, invalid_offset, invalid_bbox).",
+            "description": "sub_district_id or category_id is not a valid positive integer, limit is not a positive integer, offset is not a non-negative integer, or bbox is not four valid coordinates (INVALID_SUB_DISTRICT_ID, INVALID_CATEGORY_ID, INVALID_LIMIT, INVALID_OFFSET, INVALID_BBOX).",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
@@ -1839,11 +1839,12 @@
       },
       "User": {
         "type": "object",
-        "required": ["id", "name", "email", "created_at", "updated_at"],
+        "required": ["id", "name", "email", "role", "created_at", "updated_at"],
         "properties": {
           "id": { "type": "integer", "format": "int64" },
           "name": { "type": "string" },
           "email": { "type": "string", "format": "email" },
+          "role": { "type": "string", "enum": ["user", "admin"] },
           "created_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" }
         }

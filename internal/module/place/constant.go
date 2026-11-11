@@ -1,7 +1,7 @@
 package place
 
-// Data types a CategoryField can have. They are validated by the service, not
-// the database, so adding one needs no migration.
+// Data types a CategoryField can have. A CHECK on CATEGORY_FIELDS.data_type
+// allows exactly these, so adding one needs a migration as well.
 const (
 	FieldTypeText    = "text"
 	FieldTypeNumber  = "number"

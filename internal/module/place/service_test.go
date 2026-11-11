@@ -315,6 +315,22 @@ func TestService_Create_BlankAttributeRejected(t *testing.T) {
 	}
 }
 
+func TestService_Create_UnknownDataTypeIsNotAClientError(t *testing.T) {
+	// A field type the service does not know is a fault in the category
+	// definition, so it is not reported as invalid attributes.
+	category := &place.Category{ID: 4, Fields: []place.CategoryField{
+		{Key: "color", Label: "Color", DataType: "colour"},
+	}}
+
+	stored, err := createPlace(t, category, &place.Place{
+		Name: "Toko", SubDistrictID: 1, CategoryID: 4,
+		Attributes: json.RawMessage(`{"color":"red"}`),
+	})
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, place.ErrInvalidAttributes)
+	assert.Nil(t, stored, "place reached storage")
+}
+
 func TestService_Create_Location(t *testing.T) {
 	tests := []struct {
 		name     string

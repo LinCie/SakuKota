@@ -74,7 +74,7 @@ func (r *postgresRepository) Create(ctx context.Context, s *Suggestion) (*Sugges
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if _, err := tx.ExecContext(ctx, `SELECT 1 FROM USERS WHERE id = $1 FOR UPDATE`, s.UserID); err != nil {
 		return nil, err

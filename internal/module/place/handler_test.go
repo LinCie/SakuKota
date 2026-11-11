@@ -455,6 +455,8 @@ func TestHandler_PutPlace(t *testing.T) {
 			{name: "truncated JSON", target: "/places/1", body: `{"name":"Kopi"`, wantCode: "INVALID_BODY"},
 			{name: "body is an array", target: "/places/1", body: `[]`, wantCode: "INVALID_BODY"},
 			{name: "body is null", target: "/places/1", body: `null`, wantCode: "INVALID_BODY"},
+			{name: "data after the object", target: "/places/1", body: valid + ` trailing`, wantCode: "INVALID_BODY"},
+			{name: "two objects", target: "/places/1", body: valid + valid, wantCode: "INVALID_BODY"},
 			{name: "name is a number", target: "/places/1", body: `{"name":5,"sub_district_id":1,"category_id":2}`, wantCode: "INVALID_BODY"},
 			{name: "sub_district_id is a string", target: "/places/1", body: `{"name":"Kopi","sub_district_id":"one","category_id":2}`, wantCode: "INVALID_BODY"},
 			{name: "location is a line", target: "/places/1",

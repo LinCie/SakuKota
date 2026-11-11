@@ -2,17 +2,15 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	_ "embed"
 	"log"
 	"log/slog"
 	"os"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"rantau-go/internal/config"
+	"rantau-go/internal/database"
 )
-
-const defaultDatabaseURL = "postgres://postgres:postgres@localhost:5432/rantaugo?sslmode=disable"
 
 //go:embed seed.sql
 var seedSQL string
@@ -20,20 +18,19 @@ var seedSQL string
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
-	databaseURL := getenv("DATABASE_URL", defaultDatabaseURL)
-
-	db, err := sql.Open("pgx", databaseURL)
+	databaseURL, err := config.DatabaseURL()
 	if err != nil {
-		log.Fatalf("open database: %v", err)
+		log.Fatal(err)
 	}
-	defer db.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := db.PingContext(ctx); err != nil {
-		log.Fatalf("connect to database: %v", err)
+	db, err := database.NewPostgresDB(ctx, databaseURL)
+	if err != nil {
+		log.Fatalf("create database connection: %v", err)
 	}
+	defer func() { _ = db.Close() }()
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -50,11 +47,4 @@ func main() {
 	}
 
 	log.Println("seeds applied")
-}
-
-func getenv(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return fallback
 }

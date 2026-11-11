@@ -1,10 +1,10 @@
-package users
+package user
 
 import (
 	"github.com/jmoiron/sqlx"
 )
 
-// Module wires up the users module's repository and service.
+// Module wires up the user module's repository and service.
 type Module struct {
 	Service Service
 }

@@ -1,7 +1,6 @@
 package review
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -40,9 +39,8 @@ func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req *CreateReviewRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+	req, ok := httpx.DecodeJSON[CreateReviewRequest](w, r)
+	if !ok {
 		return
 	}
 

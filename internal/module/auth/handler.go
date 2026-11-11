@@ -1,12 +1,11 @@
 package auth
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
 	"rantau-go/internal/config"
-	"rantau-go/internal/module/users"
+	"rantau-go/internal/module/user"
 	"rantau-go/internal/pkg/httpx"
 )
 
@@ -27,9 +26,8 @@ func NewHandler(cfg config.Config, service Service) *Handler {
 // -----------------------------------------------------------------------------
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
-	var req *RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+	req, ok := httpx.DecodeJSON[RegisterRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -43,7 +41,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 			errors.Is(err, ErrWeakPassword),
 			errors.Is(err, ErrPasswordTooLong):
 			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
-		case errors.Is(err, users.ErrEmailTaken):
+		case errors.Is(err, user.ErrEmailTaken):
 			httpx.RespondError(w, http.StatusConflict, httpx.CodeEmailTaken, err.Error())
 		default:
 			httpx.RespondInternalError(w)
@@ -55,9 +53,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	var req *LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req == nil {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBody, "invalid request body")
+	req, ok := httpx.DecodeJSON[LoginRequest](w, r)
+	if !ok {
 		return
 	}
 
