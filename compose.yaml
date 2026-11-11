@@ -12,7 +12,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d rantaugo"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-rantaugo}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -50,7 +50,7 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-rantaugo}?sslmode=disable
       STORAGE_ENDPOINT: http://garage:3900
-      CORS_ALLOWED_ORIGIN: http://localhost:${WEB_PORT:-8081}
+      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:8081}
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:-ab585f3faae621737dbe043edb29dfe69a95d3194d76218cda428e47c2f25338}
     volumes:
       - ./.docker/garage/garage.toml:/etc/garage.toml:ro
@@ -72,7 +72,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-rantaugo}?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       STORAGE_ENDPOINT: http://garage:3900
-      CORS_ALLOWED_ORIGIN: http://localhost:${WEB_PORT:-8081}
+      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:8081}
     depends_on:
       postgres:
         condition: service_healthy
