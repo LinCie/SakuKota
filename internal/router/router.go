@@ -73,11 +73,14 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 				// DELETE /v1/places/{id}
 				r.Delete("/{id}", placeModule.Handler.DeletePlace)
 
-				// POST /v1/places/{id}/image/upload-url
-				r.Post("/{id}/image/upload-url", placeModule.Handler.CreateImageUpload)
+				// POST /v1/places/{id}/medias/upload-url
+				r.Post("/{id}/medias/upload-url", placeModule.Handler.CreateMediaUpload)
 
-				// PUT /v1/places/{id}/image
-				r.Put("/{id}/image", placeModule.Handler.SetImage)
+				// POST /v1/places/{id}/medias
+				r.Post("/{id}/medias", placeModule.Handler.AddMedia)
+
+				// DELETE /v1/places/{id}/medias/{mediaId}
+				r.Delete("/{id}/medias/{mediaId}", placeModule.Handler.DeleteMedia)
 			})
 
 			r.Route("/{id}/reviews", func(r chi.Router) {
@@ -150,17 +153,20 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 				// DELETE /v1/subdistricts/{id}
 				r.Delete("/{id}", subdistrictModule.Handler.DeleteSubDistrict)
 
-				// POST /v1/subdistricts/{id}/image/upload-url
-				r.Post("/{id}/image/upload-url", subdistrictModule.Handler.CreateImageUpload(subdistrict.SlotImage))
+				// POST /v1/subdistricts/{id}/medias/upload-url
+				r.Post("/{id}/medias/upload-url", subdistrictModule.Handler.CreateImageUpload(subdistrict.SlotMedias))
 
-				// PUT /v1/subdistricts/{id}/image
-				r.Put("/{id}/image", subdistrictModule.Handler.SetImage(subdistrict.SlotImage))
+				// POST /v1/subdistricts/{id}/medias
+				r.Post("/{id}/medias", subdistrictModule.Handler.AddMedia)
+
+				// DELETE /v1/subdistricts/{id}/medias/{mediaId}
+				r.Delete("/{id}/medias/{mediaId}", subdistrictModule.Handler.DeleteMedia)
 
 				// POST /v1/subdistricts/{id}/static-map/upload-url
 				r.Post("/{id}/static-map/upload-url", subdistrictModule.Handler.CreateImageUpload(subdistrict.SlotStaticMap))
 
 				// PUT /v1/subdistricts/{id}/static-map
-				r.Put("/{id}/static-map", subdistrictModule.Handler.SetImage(subdistrict.SlotStaticMap))
+				r.Put("/{id}/static-map", subdistrictModule.Handler.SetStaticMap)
 			})
 		})
 	})

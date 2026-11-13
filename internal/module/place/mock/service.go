@@ -42,6 +42,21 @@ func (m *MockService) EXPECT() *MockServiceMockRecorder {
 	return m.recorder
 }
 
+// AddMedia mocks base method.
+func (m *MockService) AddMedia(ctx context.Context, id int64, uploadKey string) (*place.Place, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddMedia", ctx, id, uploadKey)
+	ret0, _ := ret[0].(*place.Place)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddMedia indicates an expected call of AddMedia.
+func (mr *MockServiceMockRecorder) AddMedia(ctx, id, uploadKey any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMedia", reflect.TypeOf((*MockService)(nil).AddMedia), ctx, id, uploadKey)
+}
+
 // Create mocks base method.
 func (m *MockService) Create(ctx context.Context, p *place.Place) (*place.Place, error) {
 	m.ctrl.T.Helper()
@@ -69,6 +84,20 @@ func (m *MockService) Delete(ctx context.Context, id int64) error {
 func (mr *MockServiceMockRecorder) Delete(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockService)(nil).Delete), ctx, id)
+}
+
+// DeleteMedia mocks base method.
+func (m *MockService) DeleteMedia(ctx context.Context, id, mediaID int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteMedia", ctx, id, mediaID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteMedia indicates an expected call of DeleteMedia.
+func (mr *MockServiceMockRecorder) DeleteMedia(ctx, id, mediaID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMedia", reflect.TypeOf((*MockService)(nil).DeleteMedia), ctx, id, mediaID)
 }
 
 // GetCategories mocks base method.
@@ -132,34 +161,19 @@ func (mr *MockServiceMockRecorder) GetPlace(ctx, id any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlace", reflect.TypeOf((*MockService)(nil).GetPlace), ctx, id)
 }
 
-// ImageUploadURL mocks base method.
-func (m *MockService) ImageUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error) {
+// MediaUploadURL mocks base method.
+func (m *MockService) MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ImageUploadURL", ctx, id, contentType)
+	ret := m.ctrl.Call(m, "MediaUploadURL", ctx, id, contentType)
 	ret0, _ := ret[0].(storage.Upload)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ImageUploadURL indicates an expected call of ImageUploadURL.
-func (mr *MockServiceMockRecorder) ImageUploadURL(ctx, id, contentType any) *gomock.Call {
+// MediaUploadURL indicates an expected call of MediaUploadURL.
+func (mr *MockServiceMockRecorder) MediaUploadURL(ctx, id, contentType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ImageUploadURL", reflect.TypeOf((*MockService)(nil).ImageUploadURL), ctx, id, contentType)
-}
-
-// SetImage mocks base method.
-func (m *MockService) SetImage(ctx context.Context, id int64, uploadKey string) (*place.Place, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetImage", ctx, id, uploadKey)
-	ret0, _ := ret[0].(*place.Place)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// SetImage indicates an expected call of SetImage.
-func (mr *MockServiceMockRecorder) SetImage(ctx, id, uploadKey any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetImage", reflect.TypeOf((*MockService)(nil).SetImage), ctx, id, uploadKey)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MediaUploadURL", reflect.TypeOf((*MockService)(nil).MediaUploadURL), ctx, id, contentType)
 }
 
 // Update mocks base method.

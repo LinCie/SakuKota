@@ -12,6 +12,7 @@ package mock
 import (
 	context "context"
 	place "rantau-go/internal/module/place"
+	storage "rantau-go/internal/storage"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -41,6 +42,21 @@ func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 	return m.recorder
 }
 
+// AddMedia mocks base method.
+func (m_2 *MockRepository) AddMedia(ctx context.Context, id int64, m storage.Media) (*place.Place, error) {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "AddMedia", ctx, id, m)
+	ret0, _ := ret[0].(*place.Place)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddMedia indicates an expected call of AddMedia.
+func (mr *MockRepositoryMockRecorder) AddMedia(ctx, id, m any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMedia", reflect.TypeOf((*MockRepository)(nil).AddMedia), ctx, id, m)
+}
+
 // Create mocks base method.
 func (m *MockRepository) Create(ctx context.Context, p *place.Place) (*place.Place, error) {
 	m.ctrl.T.Helper()
@@ -68,6 +84,20 @@ func (m *MockRepository) Delete(ctx context.Context, id int64) error {
 func (mr *MockRepositoryMockRecorder) Delete(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockRepository)(nil).Delete), ctx, id)
+}
+
+// DeleteMedia mocks base method.
+func (m *MockRepository) DeleteMedia(ctx context.Context, id, mediaID int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteMedia", ctx, id, mediaID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteMedia indicates an expected call of DeleteMedia.
+func (mr *MockRepositoryMockRecorder) DeleteMedia(ctx, id, mediaID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMedia", reflect.TypeOf((*MockRepository)(nil).DeleteMedia), ctx, id, mediaID)
 }
 
 // GetCategories mocks base method.
@@ -129,21 +159,6 @@ func (m *MockRepository) GetPlace(ctx context.Context, id int64) (*place.Place, 
 func (mr *MockRepositoryMockRecorder) GetPlace(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlace", reflect.TypeOf((*MockRepository)(nil).GetPlace), ctx, id)
-}
-
-// SetImageKey mocks base method.
-func (m *MockRepository) SetImageKey(ctx context.Context, id int64, key string) (*place.Place, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetImageKey", ctx, id, key)
-	ret0, _ := ret[0].(*place.Place)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// SetImageKey indicates an expected call of SetImageKey.
-func (mr *MockRepositoryMockRecorder) SetImageKey(ctx, id, key any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetImageKey", reflect.TypeOf((*MockRepository)(nil).SetImageKey), ctx, id, key)
 }
 
 // Update mocks base method.

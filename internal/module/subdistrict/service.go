@@ -22,9 +22,13 @@ type Service interface {
 	Delete(ctx context.Context, id int64) error
 	// ImageUploadURL returns an upload for a new image in the sub-district's slot.
 	ImageUploadURL(ctx context.Context, id int64, slot ImageSlot, contentType string) (storage.Upload, error)
-	// SetImage makes the uploaded image the sub-district's image in slot,
+	// AddMedia adds the uploaded image to the sub-district's medias.
+	AddMedia(ctx context.Context, id int64, uploadKey string) (*SubDistrict, error)
+	// DeleteMedia removes the media from the sub-district's medias.
+	DeleteMedia(ctx context.Context, id, mediaID int64) error
+	// SetStaticMap makes the uploaded image the sub-district's static map,
 	// replacing any previous one.
-	SetImage(ctx context.Context, id int64, slot ImageSlot, uploadKey string) (*SubDistrict, error)
+	SetStaticMap(ctx context.Context, id int64, uploadKey string) (*SubDistrict, error)
 }
 
 type service struct {
@@ -70,8 +74,8 @@ func (s *service) Update(ctx context.Context, id int64, sd *SubDistrict) (*SubDi
 	return s.repo.Update(ctx, sd)
 }
 
-// Delete removes the sub-district. The repository queues its images for
-// deletion.
+// Delete removes the sub-district. The repository queues its medias and
+// static map for deletion.
 func (s *service) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
 }
@@ -85,23 +89,42 @@ func (s *service) ImageUploadURL(ctx context.Context, id int64, slot ImageSlot, 
 	return s.images.PresignUpload(ctx, imagePrefix(id, slot), contentType)
 }
 
-// SetImage promotes the upload and stores it as the sub-district's image in
-// slot. The repository queues the previous image for deletion. If the promoted
-// image cannot be stored, its delete is attempted once and a failure is
+// AddMedia promotes the upload and adds it to the sub-district's medias.
+func (s *service) AddMedia(ctx context.Context, id int64, uploadKey string) (*SubDistrict, error) {
+	return s.storeImage(ctx, id, SlotMedias, uploadKey, s.repo.AddMedia)
+}
+
+// DeleteMedia removes the media from the sub-district. The repository queues
+// its image for deletion.
+func (s *service) DeleteMedia(ctx context.Context, id, mediaID int64) error {
+	return s.repo.DeleteMedia(ctx, id, mediaID)
+}
+
+// SetStaticMap promotes the upload and stores it as the sub-district's static
+// map. The repository queues the previous static map for deletion.
+func (s *service) SetStaticMap(ctx context.Context, id int64, uploadKey string) (*SubDistrict, error) {
+	return s.storeImage(ctx, id, SlotStaticMap, uploadKey, s.repo.SetStaticMap)
+}
+
+// storeImage promotes the upload to slot and stores it with store. If the
+// promoted image cannot be stored, for example because the sub-district
+// already has storage.MaxMedias, its delete is attempted once and a failure is
 // ignored: it only leaves an unused object behind.
-func (s *service) SetImage(ctx context.Context, id int64, slot ImageSlot, uploadKey string) (*SubDistrict, error) {
+func (s *service) storeImage(ctx context.Context, id int64, slot ImageSlot, uploadKey string,
+	store func(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error),
+) (*SubDistrict, error) {
 	if _, err := s.repo.GetSubDistrict(ctx, id); err != nil {
 		return nil, err
 	}
 
-	key, err := s.images.Promote(ctx, imagePrefix(id, slot), uploadKey)
+	promoted, err := s.images.Promote(ctx, imagePrefix(id, slot), uploadKey)
 	if err != nil {
 		return nil, err
 	}
 
-	updated, err := s.repo.SetImageKey(ctx, id, slot, key)
+	updated, err := store(ctx, id, promoted)
 	if err != nil {
-		_ = s.images.Delete(context.WithoutCancel(ctx), key)
+		_ = s.images.Delete(context.WithoutCancel(ctx), promoted.Key)
 		return nil, err
 	}
 

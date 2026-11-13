@@ -13,6 +13,7 @@ import (
 
 	"rantau-go/internal/database"
 	"rantau-go/internal/pkg/postgis"
+	"rantau-go/internal/storage"
 )
 
 // Repository defines the persistence operations required by the service.
@@ -25,11 +26,17 @@ type Repository interface {
 	GetCategory(ctx context.Context, id int64) (*Category, error)
 	GetPlace(ctx context.Context, id int64) (*Place, error)
 	Update(ctx context.Context, p *Place) (*Place, error)
-	// Delete removes the place and queues its image, if any, for deletion. It
-	// returns ErrPlaceNotFound if there is no such place.
+	// Delete removes the place and its medias, and queues their images for
+	// deletion. It returns ErrPlaceNotFound if there is no such place.
 	Delete(ctx context.Context, id int64) error
-	// SetImageKey stores key as the place's image and returns the place.
-	SetImageKey(ctx context.Context, id int64, key string) (*Place, error)
+	// AddMedia stores m at the place's lowest free position and returns the
+	// place. It returns ErrPlaceNotFound, or storage.ErrMediaLimitReached if
+	// the place already has storage.MaxMedias.
+	AddMedia(ctx context.Context, id int64, m storage.Media) (*Place, error)
+	// DeleteMedia removes the place's media, queues its image for deletion, and
+	// shifts the later medias down to close the gap. It returns
+	// storage.ErrMediaNotFound if the place has no such media.
+	DeleteMedia(ctx context.Context, id, mediaID int64) error
 }
 
 type postgresRepository struct {
@@ -53,7 +60,7 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 // match the nested Place.Category fields.
 const placeColumns = `p.id, p.sub_district_id, p.category_id, p.name, p.address,
 	p.location, p.operating_hours, p.estimated_price_range, p.short_description,
-	p.attributes, p.rating_count, p.rating_sum, p.image_key,
+	p.attributes, p.rating_count, p.rating_sum,
 	c.id AS "category.id", c.name AS "category.name", c.slug AS "category.slug",
 	c.code AS "category.code", c.label AS "category.label", c.color AS "category.color"`
 
@@ -62,7 +69,7 @@ const placeColumns = `p.id, p.sub_district_id, p.category_id, p.name, p.address,
 // category and selected with placeColumns.
 const placeRowColumns = `id, sub_district_id, category_id, name, address,
 	location, operating_hours, estimated_price_range, short_description,
-	attributes, rating_count, rating_sum, image_key`
+	attributes, rating_count, rating_sum`
 
 // Create inserts the place and returns it joined with its category.
 func (r *postgresRepository) Create(ctx context.Context, p *Place) (*Place, error) {
@@ -95,7 +102,7 @@ func (r *postgresRepository) Create(ctx context.Context, p *Place) (*Place, erro
 		return nil, mapForeignKeyError(err)
 	}
 
-	return &created, nil
+	return r.withMedias(ctx, created)
 }
 
 // GetMany returns the places matching the filter and the number of matches
@@ -121,6 +128,10 @@ func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([
 
 	places := make([]Place, 0)
 	if err := r.db.SelectContext(ctx, &places, query, pageArgs...); err != nil {
+		return nil, 0, err
+	}
+
+	if err := r.attachMedias(ctx, places); err != nil {
 		return nil, 0, err
 	}
 
@@ -182,7 +193,7 @@ func (r *postgresRepository) GetCategory(ctx context.Context, id int64) (*Catego
 	return &categories[0], nil
 }
 
-// GetPlace returns the place with its category, or ErrPlaceNotFound.
+// GetPlace returns the place with its category and medias, or ErrPlaceNotFound.
 func (r *postgresRepository) GetPlace(ctx context.Context, id int64) (*Place, error) {
 	var p Place
 
@@ -202,7 +213,7 @@ func (r *postgresRepository) GetPlace(ctx context.Context, id int64) (*Place, er
 		return nil, err
 	}
 
-	return &p, nil
+	return r.withMedias(ctx, p)
 }
 
 // Update stores the place's fields and returns it joined with its category.
@@ -241,23 +252,26 @@ func (r *postgresRepository) Update(ctx context.Context, p *Place) (*Place, erro
 		return nil, mapForeignKeyError(err)
 	}
 
-	return &updated, nil
+	return r.withMedias(ctx, updated)
 }
 
-// Delete removes the place and queues its image for deletion, or returns
-// ErrPlaceNotFound if there is no such place.
+// Delete removes the place with its medias and queues their images for
+// deletion, or returns ErrPlaceNotFound if there is no such place.
 func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
 	var deleted int
 
 	err := r.db.GetContext(
 		ctx,
 		&deleted,
-		`WITH deleted AS (
-			DELETE FROM PLACES WHERE id = $1 RETURNING image_key
+		`WITH medias AS (
+			DELETE FROM MEDIAS
+			WHERE id IN (SELECT media_id FROM PLACE_MEDIAS WHERE place_id = $1)
+			RETURNING key
+		), deleted AS (
+			DELETE FROM PLACES WHERE id = $1 RETURNING id
 		), queued AS (
 			INSERT INTO STORAGE_DELETIONS (key)
-			SELECT image_key FROM deleted
-			WHERE image_key IS NOT NULL
+			SELECT key FROM medias
 			ON CONFLICT (key) DO NOTHING
 		)
 		SELECT COUNT(*) FROM deleted`,
@@ -316,39 +330,19 @@ func (r *postgresRepository) checkFilterTargets(ctx context.Context, filter Plac
 	return nil
 }
 
-// SetImageKey stores key as the place's image and returns the place joined
-// with its category, or ErrPlaceNotFound. A previous image with another key is
-// queued for deletion. The row is locked while its previous key is read, so a
-// concurrent replace cannot leave an image unqueued.
-func (r *postgresRepository) SetImageKey(ctx context.Context, id int64, key string) (*Place, error) {
-	var updated Place
+// AddMedia stores m at the place's lowest free position and returns the
+// place, or ErrPlaceNotFound or storage.ErrMediaLimitReached. The place row is
+// locked while a free position is chosen, so concurrent adds cannot take the
+// same position or exceed the limit.
+func (r *postgresRepository) AddMedia(ctx context.Context, id int64, m storage.Media) (*Place, error) {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
 
-	err := r.db.GetContext(
-		ctx,
-		&updated,
-		`WITH previous AS (
-			SELECT id AS place_id, image_key AS previous_key
-			FROM PLACES
-			WHERE id = $1
-			FOR UPDATE
-		), updated AS (
-			UPDATE PLACES
-			SET image_key = $2
-			FROM previous
-			WHERE id = previous.place_id
-			RETURNING `+placeRowColumns+`
-		), queued AS (
-			INSERT INTO STORAGE_DELETIONS (key)
-			SELECT previous_key FROM previous
-			WHERE previous_key IS NOT NULL AND previous_key <> $2
-			ON CONFLICT (key) DO NOTHING
-		)
-		SELECT `+placeColumns+`
-		FROM updated p
-		JOIN CATEGORIES c ON c.id = p.category_id`,
-		id,
-		key,
-	)
+	var locked int64
+	err = tx.GetContext(ctx, &locked, `SELECT id FROM PLACES WHERE id = $1 FOR NO KEY UPDATE`, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrPlaceNotFound
@@ -356,7 +350,160 @@ func (r *postgresRepository) SetImageKey(ctx context.Context, id int64, key stri
 		return nil, err
 	}
 
-	return &updated, nil
+	var position *int
+	err = tx.GetContext(
+		ctx,
+		&position,
+		`SELECT MIN(free) FROM generate_series(1, $2::int) AS free
+		WHERE free NOT IN (SELECT position FROM PLACE_MEDIAS WHERE place_id = $1)`,
+		id,
+		storage.MaxMedias,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if position == nil {
+		return nil, storage.ErrMediaLimitReached
+	}
+
+	_, err = tx.ExecContext(
+		ctx,
+		`WITH media AS (
+			INSERT INTO MEDIAS (key, content_type, size_bytes)
+			VALUES ($2, $3, $4)
+			RETURNING id
+		)
+		INSERT INTO PLACE_MEDIAS (place_id, media_id, position)
+		SELECT $1, id, $5 FROM media`,
+		id,
+		m.Key,
+		m.ContentType,
+		m.Size,
+		*position,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return r.GetPlace(ctx, id)
+}
+
+// DeleteMedia removes the place's media, queues its image for deletion, and
+// shifts the later medias down to close the gap, or returns
+// storage.ErrMediaNotFound. The place row is locked so a concurrent add cannot
+// pick a position while the others move.
+func (r *postgresRepository) DeleteMedia(ctx context.Context, id, mediaID int64) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var locked int64
+	err = tx.GetContext(ctx, &locked, `SELECT id FROM PLACES WHERE id = $1 FOR NO KEY UPDATE`, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return storage.ErrMediaNotFound
+		}
+		return err
+	}
+
+	var position *int
+	err = tx.GetContext(
+		ctx,
+		&position,
+		`WITH deleted AS (
+			DELETE FROM MEDIAS m
+			USING PLACE_MEDIAS pm
+			WHERE pm.media_id = m.id AND pm.place_id = $1 AND m.id = $2
+			RETURNING m.key, pm.position
+		), queued AS (
+			INSERT INTO STORAGE_DELETIONS (key)
+			SELECT key FROM deleted
+			ON CONFLICT (key) DO NOTHING
+		)
+		SELECT MAX(position) FROM deleted`,
+		id,
+		mediaID,
+	)
+	if err != nil {
+		return err
+	}
+	if position == nil {
+		return storage.ErrMediaNotFound
+	}
+
+	_, err = tx.ExecContext(
+		ctx,
+		`UPDATE PLACE_MEDIAS SET position = position - 1 WHERE place_id = $1 AND position > $2`,
+		id,
+		*position,
+	)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// withMedias returns p with its medias attached.
+func (r *postgresRepository) withMedias(ctx context.Context, p Place) (*Place, error) {
+	places := []Place{p}
+	if err := r.attachMedias(ctx, places); err != nil {
+		return nil, err
+	}
+
+	return &places[0], nil
+}
+
+// attachMedias loads the medias of every given place in one query and assigns
+// them, in position order, to each place's Medias field.
+func (r *postgresRepository) attachMedias(ctx context.Context, places []Place) error {
+	if len(places) == 0 {
+		return nil
+	}
+
+	placeIDs := make([]int64, 0, len(places))
+	for _, p := range places {
+		placeIDs = append(placeIDs, p.ID)
+	}
+
+	var rows []struct {
+		PlaceID int64 `db:"place_id"`
+		storage.Media
+	}
+
+	err := r.db.SelectContext(
+		ctx,
+		&rows,
+		`SELECT pm.place_id, m.id, m.key, m.content_type, m.size_bytes, pm.position
+		FROM PLACE_MEDIAS pm
+		JOIN MEDIAS m ON m.id = pm.media_id
+		WHERE pm.place_id = ANY($1)
+		ORDER BY pm.place_id, pm.position`,
+		placeIDs,
+	)
+	if err != nil {
+		return err
+	}
+
+	mediasByPlace := make(map[int64][]storage.Media, len(places))
+	for _, row := range rows {
+		mediasByPlace[row.PlaceID] = append(mediasByPlace[row.PlaceID], row.Media)
+	}
+
+	for i := range places {
+		places[i].Medias = mediasByPlace[places[i].ID]
+		if places[i].Medias == nil {
+			places[i].Medias = make([]storage.Media, 0)
+		}
+	}
+
+	return nil
 }
 
 // attachFields loads the fields of every given category in one query and

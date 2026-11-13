@@ -38,6 +38,11 @@ export type DeletePlaceErrorCode =
 export type CreatePlaceErrorCode = AdminWriteErrorCode | "VALIDATION_ERROR";
 export type PlaceImageErrorCode =
   ImageErrorCode | "INVALID_PLACE_ID" | "PLACE_NOT_FOUND";
+export type DeletePlaceMediaErrorCode =
+  | AdminWriteErrorCode
+  | "INVALID_PLACE_ID"
+  | "INVALID_MEDIA_ID"
+  | "MEDIA_NOT_FOUND";
 
 export type GetPlacesParams = {
   /** Filters places to one sub-district, matching the `sub_district_id` query param. */
@@ -126,26 +131,38 @@ export async function deletePlace(id: number): Promise<void> {
 }
 
 /** Admin only. Presigns an upload of a new image of the place. */
-export async function requestPlaceImageUpload(
+export async function requestPlaceMediaUpload(
   id: number,
   contentType: string,
 ): Promise<ImageUpload> {
   return unwrap(
     await apiPost<ImageUpload, PlaceImageErrorCode>(
-      `places/${id}/image/upload-url`,
+      `places/${id}/medias/upload-url`,
       { json: { content_type: contentType } },
     ),
   );
 }
 
-/** Admin only. Makes the uploaded image the place's image. */
-export async function setPlaceImage(
+/** Admin only. Adds the uploaded image to the place's medias. */
+export async function addPlaceMedia(
   id: number,
   uploadKey: string,
 ): Promise<Place> {
   return unwrap(
-    await apiPut<Place, PlaceImageErrorCode>(`places/${id}/image`, {
+    await apiPost<Place, PlaceImageErrorCode>(`places/${id}/medias`, {
       json: { upload_key: uploadKey },
     }),
+  );
+}
+
+/** Admin only. */
+export async function deletePlaceMedia(
+  id: number,
+  mediaId: number,
+): Promise<void> {
+  unwrap(
+    await apiDelete<void, DeletePlaceMediaErrorCode>(
+      `places/${id}/medias/${mediaId}`,
+    ),
   );
 }

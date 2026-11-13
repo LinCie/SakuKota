@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef } from "react";
 
-import { ImageFrame } from "~/shared/components/image-frame";
+import { MediaGallery } from "~/shared/components/media-gallery";
 import { MissingSlot } from "~/shared/components/missing-slot";
 import { InfoSection } from "~/shared/components/menu-board";
 import { formatRupiah } from "~/shared/format";
@@ -70,8 +70,8 @@ export function KecamatanBoard({
 
       <div className="flex flex-col gap-4 p-4 sm:p-5">
         <InfoSection icon={ImageIcon} title="Foto kecamatan">
-          <ImageFrame
-            src={subDistrict.image_url}
+          <MediaGallery
+            medias={subDistrict.medias}
             alt={`Foto Kecamatan ${subDistrict.name}`}
             missing="Foto tidak tersedia"
             aspect="aspect-8/5"

@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -15,6 +16,9 @@ const (
 	MaxImageSize = 5 << 20
 	// UploadTTL is how long a presigned upload stays valid.
 	UploadTTL = 5 * time.Minute
+	// MaxMedias is the most medias a place or sub-district can have. The
+	// position CHECKs of PLACE_MEDIAS and SUB_DISTRICT_MEDIAS match it.
+	MaxMedias = 10
 )
 
 var (
@@ -22,6 +26,9 @@ var (
 	ErrImageTooLarge    = errors.New("image must be 5 MB or smaller")
 	ErrImageNotUploaded = errors.New("image has not been uploaded")
 	ErrInvalidImageKey  = errors.New("invalid upload key")
+
+	ErrMediaNotFound     = errors.New("media not found")
+	ErrMediaLimitReached = fmt.Errorf("at most %d medias are allowed", MaxMedias)
 )
 
 // imageTypes maps the extension of each allowed image type to its content type.
@@ -40,6 +47,16 @@ var uploadName = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 type Upload struct {
 	Key string
 	PresignedUpload
+}
+
+// Media is a stored image: a MEDIAS row, and its position when it is linked
+// to a place or sub-district.
+type Media struct {
+	ID          int64  `db:"id"`
+	Key         string `db:"key"`
+	ContentType string `db:"content_type"`
+	Size        int64  `db:"size_bytes"`
+	Position    int    `db:"position"`
 }
 
 // Images stores images uploaded directly by clients. An image is uploaded
@@ -78,36 +95,37 @@ func (i *Images) PresignUpload(ctx context.Context, prefix, contentType string) 
 }
 
 // Promote checks that uploadKey was presigned for prefix and holds an allowed
-// image, then moves it to {prefix}/{uuid}.{ext} and returns that key.
-func (i *Images) Promote(ctx context.Context, prefix, uploadKey string) (string, error) {
+// image, then moves it to {prefix}/{uuid}.{ext} and returns the moved image's
+// key, content type, and size.
+func (i *Images) Promote(ctx context.Context, prefix, uploadKey string) (Media, error) {
 	name, ok := strings.CutPrefix(uploadKey, uploadDir(prefix))
 	match := uploadName.FindStringSubmatch(name)
 	if !ok || match == nil {
-		return "", ErrInvalidImageKey
+		return Media{}, ErrInvalidImageKey
 	}
 
 	info, err := i.store.Stat(ctx, uploadKey)
 	if errors.Is(err, ErrObjectNotFound) {
-		return "", ErrImageNotUploaded
+		return Media{}, ErrImageNotUploaded
 	}
 	if err != nil {
-		return "", err
+		return Media{}, err
 	}
 
 	// The upload is deleted once it is rejected or copied. Uploads expire
 	// anyway, so a failed delete is ignored.
 	if err := checkImage(info, imageTypes[match[1]]); err != nil {
 		_ = i.store.Delete(ctx, uploadKey)
-		return "", err
+		return Media{}, err
 	}
 
 	key := prefix + "/" + name
 	if err := i.store.Copy(ctx, uploadKey, key); err != nil {
-		return "", err
+		return Media{}, err
 	}
 	_ = i.store.Delete(ctx, uploadKey)
 
-	return key, nil
+	return Media{Key: key, ContentType: info.ContentType, Size: info.Size}, nil
 }
 
 func (i *Images) Delete(ctx context.Context, key string) error {

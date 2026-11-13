@@ -23,6 +23,10 @@ const (
 	CodeInvalidOffset        = "INVALID_OFFSET"
 	CodeInvalidBBox          = "INVALID_BBOX"
 
+	CodeInvalidMediaID    = "INVALID_MEDIA_ID"
+	CodeMediaNotFound     = "MEDIA_NOT_FOUND"
+	CodeMediaLimitReached = "MEDIA_LIMIT_REACHED"
+
 	CodeSubDistrictExists = "SUB_DISTRICT_EXISTS"
 	CodeSubDistrictInUse  = "SUB_DISTRICT_IN_USE"
 

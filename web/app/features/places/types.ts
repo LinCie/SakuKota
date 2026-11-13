@@ -1,3 +1,5 @@
+import type { Media } from "~/shared/image-upload";
+
 // -----------------------------------------------------------------------------
 // Types (see internal/module/place/dto.go and internal/pkg/postgis/point.go)
 // -----------------------------------------------------------------------------
@@ -23,8 +25,8 @@ export type Place = {
   /** Mean star rating of the place's reviews; null before the first review. */
   rating_average: number | null;
   rating_count: number;
-  /** Public URL of the place's image; null if it has none. */
-  image_url: string | null;
+  /** The place's images in position order; empty if it has none. */
+  medias: Media[];
   category: Category;
 };
 

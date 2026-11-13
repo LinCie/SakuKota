@@ -42,6 +42,21 @@ func (m *MockService) EXPECT() *MockServiceMockRecorder {
 	return m.recorder
 }
 
+// AddMedia mocks base method.
+func (m *MockService) AddMedia(ctx context.Context, id int64, uploadKey string) (*subdistrict.SubDistrict, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddMedia", ctx, id, uploadKey)
+	ret0, _ := ret[0].(*subdistrict.SubDistrict)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddMedia indicates an expected call of AddMedia.
+func (mr *MockServiceMockRecorder) AddMedia(ctx, id, uploadKey any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMedia", reflect.TypeOf((*MockService)(nil).AddMedia), ctx, id, uploadKey)
+}
+
 // Create mocks base method.
 func (m *MockService) Create(ctx context.Context, sd *subdistrict.SubDistrict) (*subdistrict.SubDistrict, error) {
 	m.ctrl.T.Helper()
@@ -69,6 +84,20 @@ func (m *MockService) Delete(ctx context.Context, id int64) error {
 func (mr *MockServiceMockRecorder) Delete(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockService)(nil).Delete), ctx, id)
+}
+
+// DeleteMedia mocks base method.
+func (m *MockService) DeleteMedia(ctx context.Context, id, mediaID int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteMedia", ctx, id, mediaID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteMedia indicates an expected call of DeleteMedia.
+func (mr *MockServiceMockRecorder) DeleteMedia(ctx, id, mediaID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMedia", reflect.TypeOf((*MockService)(nil).DeleteMedia), ctx, id, mediaID)
 }
 
 // GetMany mocks base method.
@@ -116,19 +145,19 @@ func (mr *MockServiceMockRecorder) ImageUploadURL(ctx, id, slot, contentType any
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ImageUploadURL", reflect.TypeOf((*MockService)(nil).ImageUploadURL), ctx, id, slot, contentType)
 }
 
-// SetImage mocks base method.
-func (m *MockService) SetImage(ctx context.Context, id int64, slot subdistrict.ImageSlot, uploadKey string) (*subdistrict.SubDistrict, error) {
+// SetStaticMap mocks base method.
+func (m *MockService) SetStaticMap(ctx context.Context, id int64, uploadKey string) (*subdistrict.SubDistrict, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetImage", ctx, id, slot, uploadKey)
+	ret := m.ctrl.Call(m, "SetStaticMap", ctx, id, uploadKey)
 	ret0, _ := ret[0].(*subdistrict.SubDistrict)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// SetImage indicates an expected call of SetImage.
-func (mr *MockServiceMockRecorder) SetImage(ctx, id, slot, uploadKey any) *gomock.Call {
+// SetStaticMap indicates an expected call of SetStaticMap.
+func (mr *MockServiceMockRecorder) SetStaticMap(ctx, id, uploadKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetImage", reflect.TypeOf((*MockService)(nil).SetImage), ctx, id, slot, uploadKey)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStaticMap", reflect.TypeOf((*MockService)(nil).SetStaticMap), ctx, id, uploadKey)
 }
 
 // Update mocks base method.

@@ -45,9 +45,9 @@ func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusCreated, toPlaceResponse(*p, h.imageURL))
 }
 
-// CreateImageUpload returns a presigned upload for a new image of the place
+// CreateMediaUpload returns a presigned upload for a new media of the place
 // given by the `id` path parameter.
-func (h *Handler) CreateImageUpload(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreateMediaUpload(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
@@ -59,7 +59,7 @@ func (h *Handler) CreateImageUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upload, err := h.service.ImageUploadURL(r.Context(), id, req.ContentType)
+	upload, err := h.service.MediaUploadURL(r.Context(), id, req.ContentType)
 	if err != nil {
 		respondImageError(w, err)
 		return
@@ -237,9 +237,9 @@ func (h *Handler) DeletePlace(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// SetImage makes the uploaded image the image of the place given by the `id`
-// path parameter.
-func (h *Handler) SetImage(w http.ResponseWriter, r *http.Request) {
+// AddMedia adds the uploaded image to the medias of the place given by the
+// `id` path parameter.
+func (h *Handler) AddMedia(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
@@ -251,13 +251,40 @@ func (h *Handler) SetImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p, err := h.service.SetImage(r.Context(), id, req.UploadKey)
+	p, err := h.service.AddMedia(r.Context(), id, req.UploadKey)
 	if err != nil {
 		respondImageError(w, err)
 		return
 	}
 
 	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.imageURL))
+}
+
+// DeleteMedia deletes the media given by the `mediaId` path parameter from the
+// place given by the `id` path parameter.
+func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
+	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
+		return
+	}
+
+	mediaID, ok := httpx.ParseID(chi.URLParam(r, "mediaId"))
+	if !ok {
+		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidMediaID, "invalid media_id")
+		return
+	}
+
+	if err := h.service.DeleteMedia(r.Context(), id, mediaID); err != nil {
+		if errors.Is(err, storage.ErrMediaNotFound) {
+			httpx.RespondError(w, http.StatusNotFound, httpx.CodeMediaNotFound, err.Error())
+			return
+		}
+		httpx.RespondInternalError(w)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // parseBoundingBox parses "west,south,east,north" in degrees. It reports false
@@ -287,13 +314,15 @@ func parseBoundingBox(param string) (*BoundingBox, bool) {
 	return &b, true
 }
 
-// respondImageError writes the response for an error from uploading a place's image.
+// respondImageError writes the response for an error from uploading a place's media.
 func respondImageError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrPlaceNotFound):
 		httpx.RespondError(w, http.StatusNotFound, httpx.CodePlaceNotFound, err.Error())
 	case storage.IsInvalidImage(err):
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
+	case errors.Is(err, storage.ErrMediaLimitReached):
+		httpx.RespondError(w, http.StatusConflict, httpx.CodeMediaLimitReached, err.Error())
 	default:
 		httpx.RespondInternalError(w)
 	}

@@ -151,7 +151,8 @@ func TestImages_Promote(t *testing.T) {
 
 			got, err := images.Promote(context.Background(), "places/7", uploadKey)
 			require.NoError(t, err)
-			assert.Equal(t, promotedKey, got)
+			assert.Equal(t, storage.Media{Key: promotedKey, ContentType: "image/webp", Size: tc.size}, got,
+				"the promoted media should carry the new key and the stored type and size")
 		})
 	}
 }

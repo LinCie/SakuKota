@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"rantau-go/internal/pkg/postgis"
+	"rantau-go/internal/storage"
 )
 
 // Place represents a row in the PLACES table, joined with its category.
@@ -24,11 +25,12 @@ type Place struct {
 	Attributes json.RawMessage `db:"attributes"`
 	// RatingCount and RatingSum total the ratings of the place's reviews. The
 	// review module keeps them up to date; place updates never change them.
-	RatingCount int `db:"rating_count"`
-	RatingSum   int `db:"rating_sum"`
-	// ImageKey is the storage key of the place's image, or nil if it has none.
-	ImageKey *string  `db:"image_key"`
-	Category Category `db:"category"`
+	RatingCount int      `db:"rating_count"`
+	RatingSum   int      `db:"rating_sum"`
+	Category    Category `db:"category"`
+	// Medias are the place's images in position order. The repository loads
+	// them separately, so they are never nil once read.
+	Medias []storage.Media `db:"-"`
 }
 
 // PlaceFilter narrows the places returned by GetMany. Zero values apply no filter.

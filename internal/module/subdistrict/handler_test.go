@@ -32,10 +32,11 @@ func newRouter(svc subdistrict.Service) http.Handler {
 		r.Post("/", h.CreateSubDistrict)
 		r.Put("/{id}", h.PutSubDistrict)
 		r.Delete("/{id}", h.DeleteSubDistrict)
-		r.Post("/{id}/image/upload-url", h.CreateImageUpload(subdistrict.SlotImage))
-		r.Put("/{id}/image", h.SetImage(subdistrict.SlotImage))
+		r.Post("/{id}/medias/upload-url", h.CreateImageUpload(subdistrict.SlotMedias))
+		r.Post("/{id}/medias", h.AddMedia)
+		r.Delete("/{id}/medias/{mediaId}", h.DeleteMedia)
 		r.Post("/{id}/static-map/upload-url", h.CreateImageUpload(subdistrict.SlotStaticMap))
-		r.Put("/{id}/static-map", h.SetImage(subdistrict.SlotStaticMap))
+		r.Put("/{id}/static-map", h.SetStaticMap)
 	})
 	return r
 }
@@ -112,18 +113,22 @@ func TestHandler_GetSubDistricts(t *testing.T) {
 				name: "every field is listed, unset ones as null",
 				subDistricts: []subdistrict.SubDistrict{
 					{ID: 1, Name: "Menteng", Slug: "menteng", FloodHistory: new("Banjir 2020"),
-						EstimatedDailySpending: new(1500000.5), ImageKey: new("subdistricts/1/image/a.webp"),
+						EstimatedDailySpending: new(1500000.5),
+						Medias: []storage.Media{
+							{ID: 4, Key: "subdistricts/1/medias/a.webp", ContentType: "image/webp", Size: 2048, Position: 1},
+						},
 						StaticMapImageKey: new("subdistricts/1/static-map/a.png")},
 					{ID: 2, Name: "Kemang", Slug: "kemang"},
 				},
 				want: `[
 					{"id": 1, "name": "Menteng", "slug": "menteng", "flood_history": "Banjir 2020",
 					 "safety_crime_information": null, "estimated_daily_spending": 1500000.5,
-					 "image_url": "https://img.test/subdistricts/1/image/a.webp",
+					 "medias": [{"id": 4, "url": "https://img.test/subdistricts/1/medias/a.webp",
+					             "content_type": "image/webp", "size": 2048, "position": 1}],
 					 "static_map_image_url": "https://img.test/subdistricts/1/static-map/a.png"},
 					{"id": 2, "name": "Kemang", "slug": "kemang", "flood_history": null,
 					 "safety_crime_information": null, "estimated_daily_spending": null,
-					 "image_url": null, "static_map_image_url": null}
+					 "medias": [], "static_map_image_url": null}
 				]`,
 			},
 		}
@@ -202,7 +207,7 @@ func TestHandler_GetSubDistrict(t *testing.T) {
 			"flood_history": "Banjir 2020",
 			"safety_crime_information": null,
 			"estimated_daily_spending": null,
-			"image_url": null,
+			"medias": [],
 			"static_map_image_url": null
 		}`)
 	})
@@ -297,7 +302,7 @@ func TestHandler_CreateSubDistrict(t *testing.T) {
 			"flood_history": "Banjir 2020",
 			"safety_crime_information": null,
 			"estimated_daily_spending": 1500000.5,
-			"image_url": null,
+			"medias": [],
 			"static_map_image_url": null
 		}`)
 	})
@@ -538,7 +543,7 @@ func TestHandler_PutSubDistrict(t *testing.T) {
 			"flood_history": null,
 			"safety_crime_information": null,
 			"estimated_daily_spending": null,
-			"image_url": null,
+			"medias": [],
 			"static_map_image_url": "https://img.test/subdistricts/3/static-map/a.png"
 		}`)
 	})
@@ -609,7 +614,7 @@ var handlerSlots = []struct {
 	slot subdistrict.ImageSlot
 	path string
 }{
-	{slot: subdistrict.SlotImage, path: "image"},
+	{slot: subdistrict.SlotMedias, path: "medias"},
 	{slot: subdistrict.SlotStaticMap, path: "static-map"},
 }
 
@@ -656,9 +661,9 @@ func TestHandler_CreateImageUpload(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				svc := mock.NewMockService(gomock.NewController(t))
-				svc.EXPECT().ImageUploadURL(gomock.Any(), int64(3), subdistrict.SlotImage, "image/gif").Return(storage.Upload{}, tc.err)
+				svc.EXPECT().ImageUploadURL(gomock.Any(), int64(3), subdistrict.SlotMedias, "image/gif").Return(storage.Upload{}, tc.err)
 
-				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/subdistricts/3/image/upload-url", `{"content_type":"image/gif"}`))
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/subdistricts/3/medias/upload-url", `{"content_type":"image/gif"}`))
 				assertError(t, rec, tc.wantStatus, tc.wantCode)
 			})
 		}
@@ -691,31 +696,124 @@ func TestHandler_CreateImageUpload(t *testing.T) {
 	})
 }
 
-func TestHandler_SetImage(t *testing.T) {
+// storedImage is a sub-district with a media and a static map, and its JSON.
+var storedImage = &subdistrict.SubDistrict{
+	ID:   3,
+	Name: "Menteng",
+	Slug: "menteng",
+	Medias: []storage.Media{
+		{ID: 9, Key: "subdistricts/3/medias/a.png", ContentType: "image/png", Size: 1024, Position: 1},
+	},
+	StaticMapImageKey: new("subdistricts/3/static-map/a.png"),
+}
+
+const storedImageJSON = `{
+	"id": 3,
+	"name": "Menteng",
+	"slug": "menteng",
+	"flood_history": null,
+	"safety_crime_information": null,
+	"estimated_daily_spending": null,
+	"medias": [{"id": 9, "url": "https://img.test/subdistricts/3/medias/a.png", "content_type": "image/png", "size": 1024, "position": 1}],
+	"static_map_image_url": "https://img.test/subdistricts/3/static-map/a.png"
+}`
+
+// uploadErrors are the service errors from storing an upload, with their responses.
+var uploadErrors = []struct {
+	name       string
+	err        error
+	wantStatus int
+	wantCode   string
+}{
+	{name: "unknown sub-district", err: subdistrict.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
+	{name: "invalid upload key", err: storage.ErrInvalidImageKey, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+	{name: "image not uploaded", err: storage.ErrImageNotUploaded, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+	{name: "image type not allowed", err: storage.ErrInvalidImageType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+	{name: "image too large", err: storage.ErrImageTooLarge, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+	{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
+}
+
+// invalidUploadRequests are requests to store an upload that must never reach
+// the service.
+var invalidUploadRequests = []struct {
+	name     string
+	id       string
+	body     string
+	wantCode string
+}{
+	{name: "sub-district id is not a number", id: "abc", body: `{"upload_key":"k"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
+	{name: "sub-district id is negative", id: "-1", body: `{"upload_key":"k"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
+	{name: "body is not JSON", id: "3", body: `upload_key=k`, wantCode: "INVALID_BODY"},
+	{name: "body is null", id: "3", body: `null`, wantCode: "INVALID_BODY"},
+	{name: "body is an array", id: "3", body: `[]`, wantCode: "INVALID_BODY"},
+}
+
+func TestHandler_AddMedia(t *testing.T) {
 	t.Run("rejects invalid requests", func(t *testing.T) {
+		for _, tc := range invalidUploadRequests {
+			t.Run(tc.name, func(t *testing.T) {
+				svc := mock.NewMockService(gomock.NewController(t))
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/subdistricts/"+tc.id+"/medias", tc.body))
+				assertError(t, rec, http.StatusBadRequest, tc.wantCode)
+			})
+		}
+	})
+
+	t.Run("maps the media limit", func(t *testing.T) {
+		svc := mock.NewMockService(gomock.NewController(t))
+		svc.EXPECT().AddMedia(gomock.Any(), int64(3), "uploads/subdistricts/3/medias/a.png").Return(nil, storage.ErrMediaLimitReached)
+
+		rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/subdistricts/3/medias",
+			`{"upload_key":"uploads/subdistricts/3/medias/a.png"}`))
+		assertError(t, rec, http.StatusConflict, "MEDIA_LIMIT_REACHED")
+	})
+
+	t.Run("maps service errors", func(t *testing.T) {
+		for _, tc := range uploadErrors {
+			t.Run(tc.name, func(t *testing.T) {
+				svc := mock.NewMockService(gomock.NewController(t))
+				svc.EXPECT().AddMedia(gomock.Any(), int64(3), "uploads/subdistricts/3/medias/a.png").Return(nil, tc.err)
+
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/subdistricts/3/medias",
+					`{"upload_key":"uploads/subdistricts/3/medias/a.png"}`))
+				assertError(t, rec, tc.wantStatus, tc.wantCode)
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		svc := mock.NewMockService(gomock.NewController(t))
+		svc.EXPECT().AddMedia(gomock.Any(), int64(3), "uploads/subdistricts/3/medias/a.png").Return(storedImage, nil)
+
+		rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/subdistricts/3/medias",
+			`{"upload_key":"uploads/subdistricts/3/medias/a.png"}`))
+		assertData(t, rec, http.StatusOK, storedImageJSON)
+	})
+}
+
+func TestHandler_DeleteMedia(t *testing.T) {
+	t.Run("rejects invalid ids", func(t *testing.T) {
 		tests := []struct {
 			name     string
-			id       string
-			body     string
+			target   string
 			wantCode string
 		}{
-			{name: "sub-district id is not a number", id: "abc", body: `{"upload_key":"k"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
-			{name: "sub-district id is negative", id: "-1", body: `{"upload_key":"k"}`, wantCode: "INVALID_SUB_DISTRICT_ID"},
-			{name: "body is not JSON", id: "3", body: `upload_key=k`, wantCode: "INVALID_BODY"},
-			{name: "body is null", id: "3", body: `null`, wantCode: "INVALID_BODY"},
-			{name: "body is an array", id: "3", body: `[]`, wantCode: "INVALID_BODY"},
+			{name: "sub-district id is not a number", target: "/subdistricts/abc/medias/5", wantCode: "INVALID_SUB_DISTRICT_ID"},
+			{name: "sub-district id is zero", target: "/subdistricts/0/medias/5", wantCode: "INVALID_SUB_DISTRICT_ID"},
+			{name: "media id is not a number", target: "/subdistricts/3/medias/abc", wantCode: "INVALID_MEDIA_ID"},
+			{name: "media id is fractional", target: "/subdistricts/3/medias/1.5", wantCode: "INVALID_MEDIA_ID"},
+			{name: "media id is zero", target: "/subdistricts/3/medias/0", wantCode: "INVALID_MEDIA_ID"},
+			{name: "media id is negative", target: "/subdistricts/3/medias/-1", wantCode: "INVALID_MEDIA_ID"},
+			{name: "media id overflows 64 bits", target: "/subdistricts/3/medias/99999999999999999999", wantCode: "INVALID_MEDIA_ID"},
 		}
 
-		for _, hs := range handlerSlots {
-			for _, tc := range tests {
-				t.Run(hs.path+"/"+tc.name, func(t *testing.T) {
-					// No expectations: an invalid request must never reach the service.
-					svc := mock.NewMockService(gomock.NewController(t))
-					target := "/subdistricts/" + tc.id + "/" + hs.path
-					rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, target, tc.body))
-					assertError(t, rec, http.StatusBadRequest, tc.wantCode)
-				})
-			}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				// No expectations: an invalid id must never reach the service.
+				svc := mock.NewMockService(gomock.NewController(t))
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodDelete, tc.target, ""))
+				assertError(t, rec, http.StatusBadRequest, tc.wantCode)
+			})
 		}
 	})
 
@@ -726,18 +824,47 @@ func TestHandler_SetImage(t *testing.T) {
 			wantStatus int
 			wantCode   string
 		}{
-			{name: "unknown sub-district", err: subdistrict.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
-			{name: "invalid upload key", err: storage.ErrInvalidImageKey, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "image not uploaded", err: storage.ErrImageNotUploaded, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "image type not allowed", err: storage.ErrInvalidImageType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "image too large", err: storage.ErrImageTooLarge, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "unknown media", err: storage.ErrMediaNotFound, wantStatus: http.StatusNotFound, wantCode: "MEDIA_NOT_FOUND"},
 			{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 		}
 
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				svc := mock.NewMockService(gomock.NewController(t))
-				svc.EXPECT().SetImage(gomock.Any(), int64(3), subdistrict.SlotStaticMap, "uploads/subdistricts/3/static-map/a.png").Return(nil, tc.err)
+				svc.EXPECT().DeleteMedia(gomock.Any(), int64(3), int64(5)).Return(tc.err)
+
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodDelete, "/subdistricts/3/medias/5", ""))
+				assertError(t, rec, tc.wantStatus, tc.wantCode)
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		svc := mock.NewMockService(gomock.NewController(t))
+		svc.EXPECT().DeleteMedia(gomock.Any(), int64(3), int64(5)).Return(nil)
+
+		rec := serve(t, newRouter(svc), jsonRequest(http.MethodDelete, "/subdistricts/3/medias/5", ""))
+		require.Equal(t, http.StatusNoContent, rec.Code, "body: %s", rec.Body)
+		assert.Empty(t, rec.Body.String(), "body should be empty")
+	})
+}
+
+func TestHandler_SetStaticMap(t *testing.T) {
+	t.Run("rejects invalid requests", func(t *testing.T) {
+		for _, tc := range invalidUploadRequests {
+			t.Run(tc.name, func(t *testing.T) {
+				svc := mock.NewMockService(gomock.NewController(t))
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/"+tc.id+"/static-map", tc.body))
+				assertError(t, rec, http.StatusBadRequest, tc.wantCode)
+			})
+		}
+	})
+
+	t.Run("maps service errors", func(t *testing.T) {
+		for _, tc := range uploadErrors {
+			t.Run(tc.name, func(t *testing.T) {
+				svc := mock.NewMockService(gomock.NewController(t))
+				svc.EXPECT().SetStaticMap(gomock.Any(), int64(3), "uploads/subdistricts/3/static-map/a.png").Return(nil, tc.err)
 
 				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/3/static-map",
 					`{"upload_key":"uploads/subdistricts/3/static-map/a.png"}`))
@@ -747,30 +874,11 @@ func TestHandler_SetImage(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		for _, hs := range handlerSlots {
-			t.Run(hs.path, func(t *testing.T) {
-				svc := mock.NewMockService(gomock.NewController(t))
-				svc.EXPECT().SetImage(gomock.Any(), int64(3), hs.slot, "uploads/subdistricts/3/"+hs.path+"/a.png").Return(&subdistrict.SubDistrict{
-					ID:                3,
-					Name:              "Menteng",
-					Slug:              "menteng",
-					ImageKey:          new("subdistricts/3/image/a.png"),
-					StaticMapImageKey: new("subdistricts/3/static-map/a.png"),
-				}, nil)
+		svc := mock.NewMockService(gomock.NewController(t))
+		svc.EXPECT().SetStaticMap(gomock.Any(), int64(3), "uploads/subdistricts/3/static-map/a.png").Return(storedImage, nil)
 
-				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/3/"+hs.path,
-					`{"upload_key":"uploads/subdistricts/3/`+hs.path+`/a.png"}`))
-				assertData(t, rec, http.StatusOK, `{
-					"id": 3,
-					"name": "Menteng",
-					"slug": "menteng",
-					"flood_history": null,
-					"safety_crime_information": null,
-					"estimated_daily_spending": null,
-					"image_url": "https://img.test/subdistricts/3/image/a.png",
-					"static_map_image_url": "https://img.test/subdistricts/3/static-map/a.png"
-				}`)
-			})
-		}
+		rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/3/static-map",
+			`{"upload_key":"uploads/subdistricts/3/static-map/a.png"}`))
+		assertData(t, rec, http.StatusOK, storedImageJSON)
 	})
 }

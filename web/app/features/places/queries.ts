@@ -9,13 +9,14 @@ import {
 } from "@tanstack/react-query";
 
 import {
+  addPlaceMedia,
   createPlace,
   deletePlace,
+  deletePlaceMedia,
   getCategories,
   getPlace,
   getPlaces,
-  requestPlaceImageUpload,
-  setPlaceImage,
+  requestPlaceMediaUpload,
   updatePlace,
   type GetPlacesParams,
   type PlaceRequest,
@@ -144,16 +145,25 @@ export function useCreatePlace() {
   });
 }
 
-/** Uploads `file` and makes it the place's image. */
-export function useUploadPlaceImage() {
+/** Uploads `file` and adds it to the place's medias. */
+export function useAddPlaceMedia() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, file }: { id: number; file: File }) => {
       const uploadKey = await uploadImage(file, (contentType) =>
-        requestPlaceImageUpload(id, contentType),
+        requestPlaceMediaUpload(id, contentType),
       );
-      return setPlaceImage(id, uploadKey);
+      return addPlaceMedia(id, uploadKey);
     },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: placeKeys.all }),
+  });
+}
+
+export function useDeletePlaceMedia() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, mediaId }: { id: number; mediaId: number }) =>
+      deletePlaceMedia(id, mediaId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: placeKeys.all }),
   });
 }

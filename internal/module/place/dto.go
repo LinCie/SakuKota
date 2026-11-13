@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"rantau-go/internal/pkg/postgis"
+	"rantau-go/internal/storage"
 )
 
 // PlaceRequest is the API payload for creating a Place or replacing one. An
@@ -35,9 +36,9 @@ type PlaceResponse struct {
 	// RatingAverage is the mean star rating, or null before the first review.
 	RatingAverage *float64 `json:"rating_average"`
 	RatingCount   int      `json:"rating_count"`
-	// ImageURL is where the place's image is served, or null if it has none.
-	ImageURL *string          `json:"image_url"`
-	Category CategoryResponse `json:"category"`
+	// Medias are the place's images in position order, or [] if it has none.
+	Medias   []storage.MediaResponse `json:"medias"`
+	Category CategoryResponse        `json:"category"`
 }
 
 // PlacePageResponse is the API representation of the places matching a
@@ -100,14 +101,8 @@ func ToPlace(req PlaceRequest) *Place {
 	}
 }
 
-// toPlaceResponse converts p, turning its image key into a URL with imageURL.
+// toPlaceResponse converts p, turning its media keys into URLs with imageURL.
 func toPlaceResponse(p Place, imageURL func(key string) string) PlaceResponse {
-	var image *string
-	if p.ImageKey != nil {
-		url := imageURL(*p.ImageKey)
-		image = &url
-	}
-
 	return PlaceResponse{
 		ID:                  p.ID,
 		SubDistrictID:       p.SubDistrictID,
@@ -120,7 +115,7 @@ func toPlaceResponse(p Place, imageURL func(key string) string) PlaceResponse {
 		Attributes:          p.Attributes,
 		RatingAverage:       ratingAverage(p.RatingCount, p.RatingSum),
 		RatingCount:         p.RatingCount,
-		ImageURL:            image,
+		Medias:              storage.ToMediaResponses(p.Medias, imageURL),
 		Category:            toCategoryResponse(p.Category),
 	}
 }

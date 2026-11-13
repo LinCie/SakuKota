@@ -404,7 +404,7 @@
         "tags": ["Places"],
         "operationId": "updatePlace",
         "summary": "Replace a place",
-        "description": "Replaces a place's editable fields. Requires the admin role. Send every field: nullable fields left out or sent as null are cleared. The attributes are validated against the category's fields. The place's rating and image are kept.",
+        "description": "Replaces a place's editable fields. Requires the admin role. Send every field: nullable fields left out or sent as null are cleared. The attributes are validated against the category's fields. The place's rating and medias are kept.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -517,12 +517,12 @@
         }
       }
     },
-    "/v1/places/{id}/image/upload-url": {
+    "/v1/places/{id}/medias/upload-url": {
       "post": {
         "tags": ["Places"],
-        "operationId": "createPlaceImageUpload",
-        "summary": "Request a place image upload",
-        "description": "Returns a presigned URL for uploading a new image of the place straight to storage. Requires the admin role. Send the image as the body of a request with the returned method and headers before expires_at (5 minutes), then confirm it with PUT /v1/places/{id}/image. Unconfirmed uploads are deleted after a day.",
+        "operationId": "createPlaceMediaUpload",
+        "summary": "Request a place media upload",
+        "description": "Returns a presigned URL for uploading a new image of the place straight to storage. Requires the admin role. Send the image as the body of a request with the returned method and headers before expires_at (5 minutes), then confirm it with POST /v1/places/{id}/medias. Unconfirmed uploads are deleted after a day.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -557,7 +557,7 @@
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
                 "examples": {
-                  "invalidPlaceId": {
+                  "invalidId": {
                     "value": { "code": "INVALID_PLACE_ID", "message": "invalid place_id" }
                   },
                   "invalidBody": {
@@ -588,12 +588,12 @@
         }
       }
     },
-    "/v1/places/{id}/image": {
-      "put": {
+    "/v1/places/{id}/medias": {
+      "post": {
         "tags": ["Places"],
-        "operationId": "setPlaceImage",
-        "summary": "Set a place's image",
-        "description": "Confirms an uploaded image and makes it the place's image, replacing the previous one. Requires the admin role. The upload must have been requested for this place, and the image must be a JPEG, PNG, or WebP of at most 5 MB whose type matches the one it was requested for.",
+        "operationId": "addPlaceMedia",
+        "summary": "Add a place media",
+        "description": "Confirms an uploaded image and adds it to the place's medias at the lowest free position (1 to 10). Requires the admin role. A place has at most 10 medias. The upload must have been requested for this place's medias, and the image must be a JPEG, PNG, or WebP of at most 5 MB whose type matches the one it was requested for.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -617,7 +617,7 @@
         },
         "responses": {
           "200": {
-            "description": "Image set successfully.",
+            "description": "Media added successfully.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/PlaceResponse" }
@@ -625,12 +625,12 @@
             }
           },
           "400": {
-            "description": "The place ID is invalid, the body is malformed, the upload key is not one requested for this place, nothing was uploaded under it, or the image is too large or of the wrong type.",
+            "description": "The place ID is invalid, the body is malformed, the upload key is not one requested for this place's medias, nothing was uploaded under it, or the image is too large or of the wrong type.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
                 "examples": {
-                  "invalidPlaceId": {
+                  "invalidId": {
                     "value": { "code": "INVALID_PLACE_ID", "message": "invalid place_id" }
                   },
                   "invalidBody": {
@@ -653,6 +653,79 @@
                 "example": {
                   "code": "PLACE_NOT_FOUND",
                   "message": "place not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The place already has 10 medias.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "MEDIA_LIMIT_REACHED",
+                  "message": "at most 10 medias are allowed"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/places/{id}/medias/{mediaId}": {
+      "delete": {
+        "tags": ["Places"],
+        "operationId": "deletePlaceMedia",
+        "summary": "Delete a place media",
+        "description": "Removes the media from the place and deletes its image. The other medias keep their positions. Requires the admin role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Place ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          },
+          {
+            "name": "mediaId",
+            "in": "path",
+            "required": true,
+            "description": "Media ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Media deleted successfully. No response body."
+          },
+          "400": {
+            "description": "The place ID or the media ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidId": {
+                    "value": { "code": "INVALID_PLACE_ID", "message": "invalid place_id" }
+                  },
+                  "invalidMediaId": {
+                    "value": { "code": "INVALID_MEDIA_ID", "message": "invalid media_id" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The place has no such media.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "MEDIA_NOT_FOUND",
+                  "message": "media not found"
                 }
               }
             }
@@ -1394,7 +1467,7 @@
         "tags": ["Sub-districts"],
         "operationId": "updateSubDistrict",
         "summary": "Replace a sub-district",
-        "description": "Replaces a sub-district's editable fields. Requires the admin role. Send every field: nullable fields left out or sent as null are cleared. The sub-district's images are kept.",
+        "description": "Replaces a sub-district's editable fields. Requires the admin role. Send every field: nullable fields left out or sent as null are cleared. The sub-district's medias and static map are kept.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -1529,12 +1602,12 @@
         }
       }
     },
-    "/v1/subdistricts/{id}/image/upload-url": {
+    "/v1/subdistricts/{id}/medias/upload-url": {
       "post": {
         "tags": ["Sub-districts"],
-        "operationId": "createSubDistrictImageUpload",
-        "summary": "Request a sub-district image upload",
-        "description": "Returns a presigned URL for uploading a new image of the sub-district straight to storage. Requires the admin role. Send the image as the body of a request with the returned method and headers before expires_at (5 minutes), then confirm it with PUT /v1/subdistricts/{id}/image. Unconfirmed uploads are deleted after a day.",
+        "operationId": "createSubDistrictMediaUpload",
+        "summary": "Request a sub-district media upload",
+        "description": "Returns a presigned URL for uploading a new image of the sub-district straight to storage. Requires the admin role. Send the image as the body of a request with the returned method and headers before expires_at (5 minutes), then confirm it with POST /v1/subdistricts/{id}/medias. Unconfirmed uploads are deleted after a day.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -1550,7 +1623,7 @@
           "content": {
             "application/json": {
               "schema": { "$ref": "#/components/schemas/ImageUploadRequest" },
-              "example": { "content_type": "image/png" }
+              "example": { "content_type": "image/webp" }
             }
           }
         },
@@ -1569,7 +1642,7 @@
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
                 "examples": {
-                  "invalidSubDistrictId": {
+                  "invalidId": {
                     "value": { "code": "INVALID_SUB_DISTRICT_ID", "message": "invalid sub_district_id" }
                   },
                   "invalidBody": {
@@ -1600,12 +1673,12 @@
         }
       }
     },
-    "/v1/subdistricts/{id}/image": {
-      "put": {
+    "/v1/subdistricts/{id}/medias": {
+      "post": {
         "tags": ["Sub-districts"],
-        "operationId": "setSubDistrictImage",
-        "summary": "Set a sub-district's image",
-        "description": "Confirms an uploaded image and makes it the sub-district's image, replacing the previous one. Requires the admin role. The upload must have been requested for this sub-district's image, and the image must be a JPEG, PNG, or WebP of at most 5 MB whose type matches the one it was requested for.",
+        "operationId": "addSubDistrictMedia",
+        "summary": "Add a sub-district media",
+        "description": "Confirms an uploaded image and adds it to the sub-district's medias at the lowest free position (1 to 10). Requires the admin role. A sub-district has at most 10 medias. The upload must have been requested for this sub-district's medias, and the image must be a JPEG, PNG, or WebP of at most 5 MB whose type matches the one it was requested for.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -1622,14 +1695,14 @@
             "application/json": {
               "schema": { "$ref": "#/components/schemas/SetImageRequest" },
               "example": {
-                "upload_key": "uploads/subdistricts/1/image/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.png"
+                "upload_key": "uploads/subdistricts/1/medias/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Image set successfully.",
+            "description": "Media added successfully.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/SubDistrictResponse" }
@@ -1637,12 +1710,12 @@
             }
           },
           "400": {
-            "description": "The sub-district ID is invalid, the body is malformed, the upload key is not one requested for this image, nothing was uploaded under it, or the image is too large or of the wrong type.",
+            "description": "The sub-district ID is invalid, the body is malformed, the upload key is not one requested for this sub-district's medias, nothing was uploaded under it, or the image is too large or of the wrong type.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
                 "examples": {
-                  "invalidSubDistrictId": {
+                  "invalidId": {
                     "value": { "code": "INVALID_SUB_DISTRICT_ID", "message": "invalid sub_district_id" }
                   },
                   "invalidBody": {
@@ -1665,6 +1738,79 @@
                 "example": {
                   "code": "SUB_DISTRICT_NOT_FOUND",
                   "message": "sub-district not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The sub-district already has 10 medias.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "MEDIA_LIMIT_REACHED",
+                  "message": "at most 10 medias are allowed"
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/subdistricts/{id}/medias/{mediaId}": {
+      "delete": {
+        "tags": ["Sub-districts"],
+        "operationId": "deleteSubDistrictMedia",
+        "summary": "Delete a sub-district media",
+        "description": "Removes the media from the sub-district and deletes its image. The other medias keep their positions. Requires the admin role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Sub-district ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          },
+          {
+            "name": "mediaId",
+            "in": "path",
+            "required": true,
+            "description": "Media ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Media deleted successfully. No response body."
+          },
+          "400": {
+            "description": "The sub-district ID or the media ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidId": {
+                    "value": { "code": "INVALID_SUB_DISTRICT_ID", "message": "invalid sub_district_id" }
+                  },
+                  "invalidMediaId": {
+                    "value": { "code": "INVALID_MEDIA_ID", "message": "invalid media_id" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The sub-district has no such media.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": {
+                  "code": "MEDIA_NOT_FOUND",
+                  "message": "media not found"
                 }
               }
             }
@@ -1938,7 +2084,7 @@
           "attributes",
           "rating_average",
           "rating_count",
-          "image_url",
+          "medias",
           "category"
         ],
         "properties": {
@@ -1967,10 +2113,10 @@
             "type": "integer",
             "description": "Number of reviews of the place."
           },
-          "image_url": {
-            "type": ["string", "null"],
-            "format": "uri",
-            "description": "Public URL of the place's image; null if it has none."
+          "medias": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Media" },
+            "description": "The place's images in position order; empty if it has none."
           },
           "category": { "$ref": "#/components/schemas/CategorySummary" }
         }
@@ -2033,6 +2179,33 @@
           "upload_key": {
             "type": "string",
             "description": "upload_key returned when the upload was requested."
+          }
+        }
+      },
+      "Media": {
+        "type": "object",
+        "required": ["id", "url", "content_type", "size", "position"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Public URL of the image."
+          },
+          "content_type": {
+            "type": "string",
+            "enum": ["image/jpeg", "image/png", "image/webp"]
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Size of the image in bytes."
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Position of the image among its owner's medias."
           }
         }
       },
@@ -2145,7 +2318,7 @@
           "flood_history",
           "safety_crime_information",
           "estimated_daily_spending",
-          "image_url",
+          "medias",
           "static_map_image_url"
         ],
         "properties": {
@@ -2155,10 +2328,10 @@
           "flood_history": { "type": ["string", "null"] },
           "safety_crime_information": { "type": ["string", "null"] },
           "estimated_daily_spending": { "type": ["number", "null"] },
-          "image_url": {
-            "type": ["string", "null"],
-            "format": "uri",
-            "description": "Public URL of the sub-district's image; null if it has none."
+          "medias": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Media" },
+            "description": "The sub-district's images in position order; empty if it has none."
           },
           "static_map_image_url": {
             "type": ["string", "null"],

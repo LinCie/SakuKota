@@ -1,3 +1,5 @@
+import type { Media } from "~/shared/image-upload";
+
 // -----------------------------------------------------------------------------
 // Types (see internal/module/subdistrict/dto.go)
 // -----------------------------------------------------------------------------
@@ -9,7 +11,8 @@ export type SubDistrict = {
   flood_history: string | null;
   safety_crime_information: string | null;
   estimated_daily_spending: number | null;
-  /** Public URLs of the sub-district's images; null for one it does not have. */
-  image_url: string | null;
+  /** The sub-district's images in position order; empty if it has none. */
+  medias: Media[];
+  /** Public URL of the sub-district's static map; null if it has none. */
   static_map_image_url: string | null;
 };

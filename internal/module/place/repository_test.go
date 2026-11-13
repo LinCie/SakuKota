@@ -5,8 +5,10 @@ package place_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/jmoiron/sqlx"
@@ -15,6 +17,7 @@ import (
 
 	"rantau-go/internal/module/place"
 	"rantau-go/internal/pkg/postgis"
+	"rantau-go/internal/storage"
 	"rantau-go/internal/testutil/pgtest"
 )
 
@@ -122,7 +125,8 @@ func TestRepository_Create(t *testing.T) {
 		assert.InDelta(t, -6.2, got.Location.Y(), 1e-9)
 		assert.Equal(t, 0, got.RatingCount)
 		assert.Equal(t, 0, got.RatingSum)
-		assert.Nil(t, got.ImageKey)
+		assert.NotNil(t, got.Medias, "a new place has an empty media list")
+		assert.Empty(t, got.Medias)
 
 		assert.Equal(t, laundryID, got.Category.ID)
 		assert.Equal(t, "laundry", got.Category.Slug)
@@ -577,12 +581,11 @@ func TestRepository_Update(t *testing.T) {
 		assert.Nil(t, got.Location)
 	})
 
-	t.Run("keeps the ratings and the image", func(t *testing.T) {
+	t.Run("keeps the ratings and the medias", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
-		_, err := repo.SetImageKey(ctx, created.ID, "places/1.jpg")
-		require.NoError(t, err)
-		_, err = testDB.Exec(`UPDATE PLACES SET rating_count = 2, rating_sum = 9 WHERE id = $1`, created.ID)
+		m := mustAddMedia(t, repo, created.ID, "places/1.jpg")
+		_, err := testDB.Exec(`UPDATE PLACES SET rating_count = 2, rating_sum = 9 WHERE id = $1`, created.ID)
 		require.NoError(t, err)
 
 		got, err := repo.Update(ctx, newPlaceWithID(created, "Renamed"))
@@ -591,7 +594,7 @@ func TestRepository_Update(t *testing.T) {
 		assert.Equal(t, "Renamed", got.Name)
 		assert.Equal(t, 2, got.RatingCount)
 		assert.Equal(t, 9, got.RatingSum)
-		assert.Equal(t, new("places/1.jpg"), got.ImageKey)
+		assert.Equal(t, []storage.Media{m}, got.Medias)
 	})
 
 	t.Run("returns ErrPlaceNotFound for an unknown id", func(t *testing.T) {
@@ -656,26 +659,33 @@ func TestRepository_Delete(t *testing.T) {
 
 		_, err := repo.GetPlace(ctx, created.ID)
 		assert.ErrorIs(t, err, place.ErrPlaceNotFound)
-		assert.Empty(t, queuedKeys(t), "a place without an image queues nothing")
+		assert.Empty(t, queuedKeys(t), "a place without medias queues nothing")
 	})
 
-	t.Run("queues the image for deletion", func(t *testing.T) {
+	t.Run("removes the medias and queues their images for deletion", func(t *testing.T) {
 		repo := newRepository(t)
-		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
-		_, err := repo.SetImageKey(ctx, created.ID, "places/1.jpg")
-		require.NoError(t, err)
+		subDistrictID := insertSubDistrict(t, "Setiabudi")
+		laundryID := categoryID(t, "laundry")
+		created := mustCreate(t, repo, newPlace(subDistrictID, laundryID, "Laundry"))
+		kept := mustCreate(t, repo, newPlace(subDistrictID, laundryID, "Kept"))
+		mustAddMedia(t, repo, created.ID, "places/1/a.jpg")
+		mustAddMedia(t, repo, created.ID, "places/1/b.jpg")
+		keptMedia := mustAddMedia(t, repo, kept.ID, "places/2/a.jpg")
 
 		require.NoError(t, repo.Delete(ctx, created.ID))
 
-		assert.Equal(t, []string{"places/1.jpg"}, queuedKeys(t))
+		assert.ElementsMatch(t, []string{"places/1/a.jpg", "places/1/b.jpg"}, queuedKeys(t))
+		assert.Equal(t, 1, storedMediaCount(t), "only the other place's media is left")
+		stored, err := repo.GetPlace(ctx, kept.ID)
+		require.NoError(t, err)
+		assert.Equal(t, []storage.Media{keptMedia}, stored.Medias)
 	})
 
 	t.Run("tolerates an image that is already queued", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
-		_, err := repo.SetImageKey(ctx, created.ID, "places/1.jpg")
-		require.NoError(t, err)
-		_, err = testDB.Exec(`INSERT INTO STORAGE_DELETIONS (key) VALUES ('places/1.jpg')`)
+		mustAddMedia(t, repo, created.ID, "places/1.jpg")
+		_, err := testDB.Exec(`INSERT INTO STORAGE_DELETIONS (key) VALUES ('places/1.jpg')`)
 		require.NoError(t, err)
 
 		require.NoError(t, repo.Delete(ctx, created.ID))
@@ -713,73 +723,252 @@ func TestRepository_Delete(t *testing.T) {
 	})
 }
 
-func TestRepository_SetImageKey(t *testing.T) {
+// newMedia returns a promoted image to store under key.
+func newMedia(key string) storage.Media {
+	return storage.Media{Key: key, ContentType: "image/webp", Size: 2048}
+}
+
+// mustAddMedia stores an image under key for the place and returns it.
+func mustAddMedia(t *testing.T, repo place.Repository, placeID int64, key string) storage.Media {
+	t.Helper()
+
+	got, err := repo.AddMedia(context.Background(), placeID, newMedia(key))
+	require.NoError(t, err)
+
+	for _, m := range got.Medias {
+		if m.Key == key {
+			return m
+		}
+	}
+	require.FailNow(t, "the added media is missing", "key %q", key)
+	return storage.Media{}
+}
+
+// mediaKeys returns the keys of medias, in order.
+func mediaKeys(medias []storage.Media) []string {
+	out := make([]string, 0, len(medias))
+	for _, m := range medias {
+		out = append(out, m.Key)
+	}
+
+	return out
+}
+
+// mediaPositions returns the positions of medias, in order.
+func mediaPositions(medias []storage.Media) []int {
+	out := make([]int, 0, len(medias))
+	for _, m := range medias {
+		out = append(out, m.Position)
+	}
+
+	return out
+}
+
+// storedMediaCount returns the number of MEDIAS rows.
+func storedMediaCount(t *testing.T) int {
+	t.Helper()
+
+	var count int
+	require.NoError(t, testDB.Get(&count, `SELECT COUNT(*) FROM MEDIAS`))
+	return count
+}
+
+func TestRepository_AddMedia(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("stores the key and returns the place with its category", func(t *testing.T) {
+	t.Run("stores the media at the first position and returns the place", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
 
-		got, err := repo.SetImageKey(ctx, created.ID, "places/1.jpg")
+		got, err := repo.AddMedia(ctx, created.ID, newMedia("places/1/a.webp"))
 
 		require.NoError(t, err)
 		assert.Equal(t, created.ID, got.ID)
-		assert.Equal(t, new("places/1.jpg"), got.ImageKey)
 		assert.Equal(t, "laundry", got.Category.Slug)
-		assert.Empty(t, queuedKeys(t), "a first image replaces nothing")
+		require.Len(t, got.Medias, 1)
+		assert.NotZero(t, got.Medias[0].ID)
+		assert.Equal(t, "places/1/a.webp", got.Medias[0].Key)
+		assert.Equal(t, "image/webp", got.Medias[0].ContentType)
+		assert.Equal(t, int64(2048), got.Medias[0].Size)
+		assert.Equal(t, 1, got.Medias[0].Position)
+		assert.Empty(t, queuedKeys(t), "adding a media replaces nothing")
 
 		stored, err := repo.GetPlace(ctx, created.ID)
 		require.NoError(t, err)
-		assert.Equal(t, new("places/1.jpg"), stored.ImageKey)
+		assert.Equal(t, got, stored)
 	})
 
-	t.Run("queues the image it replaces", func(t *testing.T) {
+	t.Run("adds each media after the last, in position order", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
-		_, err := repo.SetImageKey(ctx, created.ID, "places/old.jpg")
-		require.NoError(t, err)
+		mustAddMedia(t, repo, created.ID, "places/1/a.webp")
+		mustAddMedia(t, repo, created.ID, "places/1/b.webp")
 
-		got, err := repo.SetImageKey(ctx, created.ID, "places/new.jpg")
+		got, err := repo.AddMedia(ctx, created.ID, newMedia("places/1/c.webp"))
 
 		require.NoError(t, err)
-		assert.Equal(t, new("places/new.jpg"), got.ImageKey)
-		assert.Equal(t, []string{"places/old.jpg"}, queuedKeys(t))
+		assert.Equal(t, []string{"places/1/a.webp", "places/1/b.webp", "places/1/c.webp"}, mediaKeys(got.Medias))
+		assert.Equal(t, []int{1, 2, 3}, mediaPositions(got.Medias))
 	})
 
-	t.Run("does not queue the key it keeps", func(t *testing.T) {
+	t.Run("appends after the remaining medias once one is deleted", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
-		_, err := repo.SetImageKey(ctx, created.ID, "places/1.jpg")
-		require.NoError(t, err)
+		mustAddMedia(t, repo, created.ID, "places/1/a.webp")
+		removed := mustAddMedia(t, repo, created.ID, "places/1/b.webp")
+		mustAddMedia(t, repo, created.ID, "places/1/c.webp")
+		require.NoError(t, repo.DeleteMedia(ctx, created.ID, removed.ID))
 
-		got, err := repo.SetImageKey(ctx, created.ID, "places/1.jpg")
+		got, err := repo.AddMedia(ctx, created.ID, newMedia("places/1/d.webp"))
 
 		require.NoError(t, err)
-		assert.Equal(t, new("places/1.jpg"), got.ImageKey)
-		assert.Empty(t, queuedKeys(t))
+		assert.Equal(t, []string{"places/1/a.webp", "places/1/c.webp", "places/1/d.webp"}, mediaKeys(got.Medias))
+		assert.Equal(t, []int{1, 2, 3}, mediaPositions(got.Medias))
 	})
 
-	t.Run("tolerates a replaced image that is already queued", func(t *testing.T) {
+	t.Run("returns ErrMediaLimitReached once the place has the most medias", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
-		_, err := repo.SetImageKey(ctx, created.ID, "places/old.jpg")
-		require.NoError(t, err)
-		_, err = testDB.Exec(`INSERT INTO STORAGE_DELETIONS (key) VALUES ('places/old.jpg')`)
-		require.NoError(t, err)
+		for i := range storage.MaxMedias {
+			mustAddMedia(t, repo, created.ID, fmt.Sprintf("places/1/%d.webp", i))
+		}
 
-		_, err = repo.SetImageKey(ctx, created.ID, "places/new.jpg")
+		got, err := repo.AddMedia(ctx, created.ID, newMedia("places/1/extra.webp"))
 
+		assert.ErrorIs(t, err, storage.ErrMediaLimitReached)
+		assert.Nil(t, got)
+		assert.Equal(t, storage.MaxMedias, storedMediaCount(t), "the extra media must not be stored")
+	})
+
+	t.Run("keeps the limit under concurrent adds", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
+		const attempts = storage.MaxMedias + 4
+
+		errs := make([]error, attempts)
+		var wg sync.WaitGroup
+		for i := range attempts {
+			wg.Go(func() {
+				_, errs[i] = repo.AddMedia(ctx, created.ID, newMedia(fmt.Sprintf("places/1/%d.webp", i)))
+			})
+		}
+		wg.Wait()
+
+		added, limited := 0, 0
+		for _, err := range errs {
+			switch {
+			case err == nil:
+				added++
+			case errors.Is(err, storage.ErrMediaLimitReached):
+				limited++
+			default:
+				t.Errorf("unexpected error: %v", err)
+			}
+		}
+		assert.Equal(t, storage.MaxMedias, added)
+		assert.Equal(t, attempts-storage.MaxMedias, limited)
+
+		stored, err := repo.GetPlace(ctx, created.ID)
 		require.NoError(t, err)
-		assert.Equal(t, []string{"places/old.jpg"}, queuedKeys(t))
+		assert.Equal(t, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, mediaPositions(stored.Medias))
 	})
 
 	t.Run("returns ErrPlaceNotFound for an unknown id", func(t *testing.T) {
 		repo := newRepository(t)
 
-		got, err := repo.SetImageKey(ctx, 999, "places/1.jpg")
+		got, err := repo.AddMedia(ctx, 999, newMedia("places/1/a.webp"))
 
 		assert.ErrorIs(t, err, place.ErrPlaceNotFound)
 		assert.Nil(t, got)
+		assert.Zero(t, storedMediaCount(t))
+	})
+}
+
+func TestRepository_DeleteMedia(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("removes the media and queues its image for deletion", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
+		mustAddMedia(t, repo, created.ID, "places/1/a.webp")
+		removed := mustAddMedia(t, repo, created.ID, "places/1/b.webp")
+		mustAddMedia(t, repo, created.ID, "places/1/c.webp")
+
+		require.NoError(t, repo.DeleteMedia(ctx, created.ID, removed.ID))
+
+		stored, err := repo.GetPlace(ctx, created.ID)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"places/1/a.webp", "places/1/c.webp"}, mediaKeys(stored.Medias))
+		assert.Equal(t, []int{1, 2}, mediaPositions(stored.Medias), "the later medias shift down")
+		assert.Equal(t, 2, storedMediaCount(t))
+		assert.Equal(t, []string{"places/1/b.webp"}, queuedKeys(t))
+	})
+
+	t.Run("tolerates an image that is already queued", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
+		removed := mustAddMedia(t, repo, created.ID, "places/1/a.webp")
+		_, err := testDB.Exec(`INSERT INTO STORAGE_DELETIONS (key) VALUES ('places/1/a.webp')`)
+		require.NoError(t, err)
+
+		require.NoError(t, repo.DeleteMedia(ctx, created.ID, removed.ID))
+
+		assert.Equal(t, []string{"places/1/a.webp"}, queuedKeys(t))
+	})
+
+	t.Run("returns ErrMediaNotFound for a media of another place", func(t *testing.T) {
+		repo := newRepository(t)
+		subDistrictID := insertSubDistrict(t, "Setiabudi")
+		laundryID := categoryID(t, "laundry")
+		owner := mustCreate(t, repo, newPlace(subDistrictID, laundryID, "Owner"))
+		other := mustCreate(t, repo, newPlace(subDistrictID, laundryID, "Other"))
+		m := mustAddMedia(t, repo, owner.ID, "places/1/a.webp")
+
+		err := repo.DeleteMedia(ctx, other.ID, m.ID)
+
+		assert.ErrorIs(t, err, storage.ErrMediaNotFound)
+		assert.Equal(t, 1, storedMediaCount(t), "the media must be kept")
 		assert.Empty(t, queuedKeys(t))
 	})
+
+	t.Run("returns ErrMediaNotFound for an unknown media or place", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
+		m := mustAddMedia(t, repo, created.ID, "places/1/a.webp")
+
+		assert.ErrorIs(t, repo.DeleteMedia(ctx, created.ID, 999), storage.ErrMediaNotFound)
+		assert.ErrorIs(t, repo.DeleteMedia(ctx, 999, m.ID), storage.ErrMediaNotFound)
+		assert.Equal(t, 1, storedMediaCount(t))
+	})
+
+	t.Run("returns ErrMediaNotFound the second time", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
+		m := mustAddMedia(t, repo, created.ID, "places/1/a.webp")
+		require.NoError(t, repo.DeleteMedia(ctx, created.ID, m.ID))
+
+		assert.ErrorIs(t, repo.DeleteMedia(ctx, created.ID, m.ID), storage.ErrMediaNotFound)
+	})
+}
+
+func TestRepository_GetMany_Medias(t *testing.T) {
+	ctx := context.Background()
+	repo := newRepository(t)
+	subDistrictID := insertSubDistrict(t, "Setiabudi")
+	laundryID := categoryID(t, "laundry")
+	first := mustCreate(t, repo, newPlace(subDistrictID, laundryID, "First"))
+	second := mustCreate(t, repo, newPlace(subDistrictID, laundryID, "Second"))
+	mustCreate(t, repo, newPlace(subDistrictID, laundryID, "Without medias"))
+	mustAddMedia(t, repo, first.ID, "places/1/a.webp")
+	mustAddMedia(t, repo, second.ID, "places/2/a.webp")
+	mustAddMedia(t, repo, first.ID, "places/1/b.webp")
+
+	got, _, err := repo.GetMany(ctx, place.PlaceFilter{})
+
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	assert.Equal(t, []string{"places/1/a.webp", "places/1/b.webp"}, mediaKeys(got[0].Medias))
+	assert.Equal(t, []string{"places/2/a.webp"}, mediaKeys(got[1].Medias))
+	assert.NotNil(t, got[2].Medias, "a place without medias has an empty list")
+	assert.Empty(t, got[2].Medias)
 }

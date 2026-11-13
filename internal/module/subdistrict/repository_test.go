@@ -4,8 +4,10 @@ package subdistrict_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/jmoiron/sqlx"
@@ -13,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"rantau-go/internal/module/subdistrict"
+	"rantau-go/internal/storage"
 	"rantau-go/internal/testutil/pgtest"
 )
 
@@ -75,7 +78,8 @@ func TestRepository_Create(t *testing.T) {
 		assert.Equal(t, new("Banjir 2020"), got.FloodHistory)
 		assert.Equal(t, new("Aman"), got.SafetyCrimeInformation)
 		assert.Equal(t, new(75000.5), got.EstimatedDailySpending)
-		assert.Nil(t, got.ImageKey)
+		assert.NotNil(t, got.Medias, "a new sub-district has an empty media list")
+		assert.Empty(t, got.Medias)
 		assert.Nil(t, got.StaticMapImageKey)
 
 		stored, err := repo.GetSubDistrict(ctx, got.ID)
@@ -215,15 +219,13 @@ func TestRepository_Update(t *testing.T) {
 	t.Run("keeps the images", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
-		_, err := repo.SetImageKey(ctx, created.ID, subdistrict.SlotImage, "photo.jpg")
-		require.NoError(t, err)
-		_, err = repo.SetImageKey(ctx, created.ID, subdistrict.SlotStaticMap, "map.png")
-		require.NoError(t, err)
+		m := mustAddMedia(t, repo, created.ID, "photo.jpg")
+		mustSetStaticMap(t, repo, created.ID, "map.png")
 
 		got, err := repo.Update(ctx, &subdistrict.SubDistrict{ID: created.ID, Name: "Renamed", Slug: "renamed"})
 
 		require.NoError(t, err)
-		assert.Equal(t, new("photo.jpg"), got.ImageKey)
+		assert.Equal(t, []storage.Media{m}, got.Medias)
 		assert.Equal(t, new("map.png"), got.StaticMapImageKey)
 	})
 
@@ -284,58 +286,59 @@ func TestRepository_Delete(t *testing.T) {
 		assert.Empty(t, pgtest.QueuedKeys(t, testDB), "no images, nothing queued")
 	})
 
-	t.Run("queues both images for deletion", func(t *testing.T) {
+	t.Run("removes the medias and the static map and queues their images", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
-		_, err := repo.SetImageKey(ctx, created.ID, subdistrict.SlotImage, "photo.jpg")
-		require.NoError(t, err)
-		_, err = repo.SetImageKey(ctx, created.ID, subdistrict.SlotStaticMap, "map.png")
-		require.NoError(t, err)
+		kept := mustCreate(t, repo, newSubDistrict("Kemang", "kemang"))
+		mustAddMedia(t, repo, created.ID, "a.jpg")
+		mustAddMedia(t, repo, created.ID, "b.jpg")
+		mustSetStaticMap(t, repo, created.ID, "map.png")
+		mustAddMedia(t, repo, kept.ID, "kept.jpg")
+		mustSetStaticMap(t, repo, kept.ID, "kept-map.png")
 
 		require.NoError(t, repo.Delete(ctx, created.ID))
 
-		assert.Equal(t, []string{"map.png", "photo.jpg"}, pgtest.QueuedKeys(t, testDB))
+		assert.Equal(t, []string{"a.jpg", "b.jpg", "map.png"}, pgtest.QueuedKeys(t, testDB))
+		assert.ElementsMatch(t, []string{"kept.jpg", "kept-map.png"}, storedMediaKeys(t), "only the other sub-district's images are left")
 	})
 
-	t.Run("queues only the image it has", func(t *testing.T) {
+	t.Run("queues only the static map when it has no medias", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
-		_, err := repo.SetImageKey(ctx, created.ID, subdistrict.SlotStaticMap, "map.png")
-		require.NoError(t, err)
+		mustSetStaticMap(t, repo, created.ID, "map.png")
 
 		require.NoError(t, repo.Delete(ctx, created.ID))
 
 		assert.Equal(t, []string{"map.png"}, pgtest.QueuedKeys(t, testDB))
 	})
 
-	t.Run("tolerates images that are already queued or share a key", func(t *testing.T) {
+	t.Run("tolerates images that are already queued", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
-		_, err := repo.SetImageKey(ctx, created.ID, subdistrict.SlotImage, "same.png")
-		require.NoError(t, err)
-		_, err = repo.SetImageKey(ctx, created.ID, subdistrict.SlotStaticMap, "same.png")
-		require.NoError(t, err)
-		_, err = testDB.Exec(`INSERT INTO STORAGE_DELETIONS (key) VALUES ('same.png')`)
+		mustAddMedia(t, repo, created.ID, "photo.png")
+		_, err := testDB.Exec(`INSERT INTO STORAGE_DELETIONS (key) VALUES ('photo.png')`)
 		require.NoError(t, err)
 
 		require.NoError(t, repo.Delete(ctx, created.ID))
 
-		assert.Equal(t, []string{"same.png"}, pgtest.QueuedKeys(t, testDB))
+		assert.Equal(t, []string{"photo.png"}, pgtest.QueuedKeys(t, testDB))
 	})
 
 	t.Run("returns ErrSubDistrictInUse while places reference it, and keeps everything", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
-		_, err := repo.SetImageKey(ctx, created.ID, subdistrict.SlotImage, "photo.jpg")
-		require.NoError(t, err)
+		m := mustAddMedia(t, repo, created.ID, "photo.jpg")
+		mustSetStaticMap(t, repo, created.ID, "map.png")
 		pgtest.InsertPlace(t, testDB, created.ID, pgtest.CategoryID(t, testDB, "laundry"), "Laundry")
 
-		err = repo.Delete(ctx, created.ID)
+		err := repo.Delete(ctx, created.ID)
 
 		assert.ErrorIs(t, err, subdistrict.ErrSubDistrictInUse)
-		_, err = repo.GetSubDistrict(ctx, created.ID)
-		assert.NoError(t, err)
-		assert.Empty(t, pgtest.QueuedKeys(t, testDB), "the image is still in use")
+		stored, err := repo.GetSubDistrict(ctx, created.ID)
+		require.NoError(t, err)
+		assert.Equal(t, []storage.Media{m}, stored.Medias)
+		assert.Equal(t, new("map.png"), stored.StaticMapImageKey)
+		assert.Empty(t, pgtest.QueuedKeys(t, testDB), "the images are still in use")
 	})
 
 	t.Run("returns ErrSubDistrictNotFound for an unknown id", func(t *testing.T) {
@@ -353,101 +356,311 @@ func TestRepository_Delete(t *testing.T) {
 	})
 }
 
-func TestRepository_SetImageKey(t *testing.T) {
+// newMedia returns a promoted image to store under key.
+func newMedia(key string) storage.Media {
+	return storage.Media{Key: key, ContentType: "image/webp", Size: 2048}
+}
+
+// mustAddMedia stores an image under key for the sub-district and returns it.
+func mustAddMedia(t *testing.T, repo subdistrict.Repository, id int64, key string) storage.Media {
+	t.Helper()
+
+	got, err := repo.AddMedia(context.Background(), id, newMedia(key))
+	require.NoError(t, err)
+
+	for _, m := range got.Medias {
+		if m.Key == key {
+			return m
+		}
+	}
+	require.FailNow(t, "the added media is missing", "key %q", key)
+	return storage.Media{}
+}
+
+// mustSetStaticMap stores an image under key as the sub-district's static map.
+func mustSetStaticMap(t *testing.T, repo subdistrict.Repository, id int64, key string) {
+	t.Helper()
+
+	_, err := repo.SetStaticMap(context.Background(), id, newMedia(key))
+	require.NoError(t, err)
+}
+
+// mediaKeys returns the keys of medias, in order.
+func mediaKeys(medias []storage.Media) []string {
+	out := make([]string, 0, len(medias))
+	for _, m := range medias {
+		out = append(out, m.Key)
+	}
+
+	return out
+}
+
+// mediaPositions returns the positions of medias, in order.
+func mediaPositions(medias []storage.Media) []int {
+	out := make([]int, 0, len(medias))
+	for _, m := range medias {
+		out = append(out, m.Position)
+	}
+
+	return out
+}
+
+// storedMediaKeys returns the keys of every MEDIAS row, sorted.
+func storedMediaKeys(t *testing.T) []string {
+	t.Helper()
+
+	keys := make([]string, 0)
+	require.NoError(t, testDB.Select(&keys, `SELECT key FROM MEDIAS ORDER BY key`))
+	return keys
+}
+
+func TestRepository_AddMedia(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("stores the key in the slot and leaves the other slot alone", func(t *testing.T) {
-		tests := []struct {
-			slot       subdistrict.ImageSlot
-			wantImage  *string
-			wantMap    *string
-			wantQueued string
-		}{
-			{subdistrict.SlotImage, new("new.jpg"), new("map.png"), "photo.jpg"},
-			{subdistrict.SlotStaticMap, new("photo.jpg"), new("new.jpg"), "map.png"},
+	t.Run("stores the media at the first position and returns the sub-district", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+
+		got, err := repo.AddMedia(ctx, created.ID, newMedia("subdistricts/1/medias/a.webp"))
+
+		require.NoError(t, err)
+		assert.Equal(t, created.ID, got.ID)
+		require.Len(t, got.Medias, 1)
+		assert.NotZero(t, got.Medias[0].ID)
+		assert.Equal(t, "subdistricts/1/medias/a.webp", got.Medias[0].Key)
+		assert.Equal(t, "image/webp", got.Medias[0].ContentType)
+		assert.Equal(t, int64(2048), got.Medias[0].Size)
+		assert.Equal(t, 1, got.Medias[0].Position)
+		assert.Nil(t, got.StaticMapImageKey, "the static map is not touched")
+		assert.Empty(t, pgtest.QueuedKeys(t, testDB))
+
+		stored, err := repo.GetSubDistrict(ctx, created.ID)
+		require.NoError(t, err)
+		assert.Equal(t, got, stored)
+	})
+
+	t.Run("appends after the remaining medias once one is deleted", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+		mustAddMedia(t, repo, created.ID, "a.webp")
+		removed := mustAddMedia(t, repo, created.ID, "b.webp")
+		mustAddMedia(t, repo, created.ID, "c.webp")
+		require.NoError(t, repo.DeleteMedia(ctx, created.ID, removed.ID))
+
+		got, err := repo.AddMedia(ctx, created.ID, newMedia("d.webp"))
+
+		require.NoError(t, err)
+		assert.Equal(t, []string{"a.webp", "c.webp", "d.webp"}, mediaKeys(got.Medias))
+		assert.Equal(t, []int{1, 2, 3}, mediaPositions(got.Medias))
+	})
+
+	t.Run("returns ErrMediaLimitReached once the sub-district has the most medias", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+		for i := range storage.MaxMedias {
+			mustAddMedia(t, repo, created.ID, fmt.Sprintf("%d.webp", i))
 		}
-		for _, tt := range tests {
-			t.Run(string(tt.slot), func(t *testing.T) {
-				repo := newRepository(t)
-				created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
-				_, err := repo.SetImageKey(ctx, created.ID, subdistrict.SlotImage, "photo.jpg")
-				require.NoError(t, err)
-				_, err = repo.SetImageKey(ctx, created.ID, subdistrict.SlotStaticMap, "map.png")
-				require.NoError(t, err)
 
-				got, err := repo.SetImageKey(ctx, created.ID, tt.slot, "new.jpg")
+		got, err := repo.AddMedia(ctx, created.ID, newMedia("extra.webp"))
 
-				require.NoError(t, err)
-				assert.Equal(t, created.ID, got.ID)
-				assert.Equal(t, tt.wantImage, got.ImageKey)
-				assert.Equal(t, tt.wantMap, got.StaticMapImageKey)
-				assert.Equal(t, []string{tt.wantQueued}, pgtest.QueuedKeys(t, testDB), "only the replaced image is queued")
+		assert.ErrorIs(t, err, storage.ErrMediaLimitReached)
+		assert.Nil(t, got)
+		assert.Len(t, storedMediaKeys(t), storage.MaxMedias, "the extra media must not be stored")
+	})
 
-				stored, err := repo.GetSubDistrict(ctx, created.ID)
-				require.NoError(t, err)
-				assert.Equal(t, got, stored)
+	t.Run("keeps the limit under concurrent adds", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+		const attempts = storage.MaxMedias + 4
+
+		errs := make([]error, attempts)
+		var wg sync.WaitGroup
+		for i := range attempts {
+			wg.Go(func() {
+				_, errs[i] = repo.AddMedia(ctx, created.ID, newMedia(fmt.Sprintf("%d.webp", i)))
 			})
 		}
-	})
+		wg.Wait()
 
-	t.Run("queues nothing for a first image", func(t *testing.T) {
-		repo := newRepository(t)
-		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+		added, limited := 0, 0
+		for _, err := range errs {
+			switch {
+			case err == nil:
+				added++
+			case errors.Is(err, storage.ErrMediaLimitReached):
+				limited++
+			default:
+				t.Errorf("unexpected error: %v", err)
+			}
+		}
+		assert.Equal(t, storage.MaxMedias, added)
+		assert.Equal(t, attempts-storage.MaxMedias, limited)
 
-		got, err := repo.SetImageKey(ctx, created.ID, subdistrict.SlotImage, "photo.jpg")
-
+		stored, err := repo.GetSubDistrict(ctx, created.ID)
 		require.NoError(t, err)
-		assert.Equal(t, new("photo.jpg"), got.ImageKey)
-		assert.Empty(t, pgtest.QueuedKeys(t, testDB))
-	})
-
-	t.Run("does not queue the key it keeps", func(t *testing.T) {
-		repo := newRepository(t)
-		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
-		_, err := repo.SetImageKey(ctx, created.ID, subdistrict.SlotImage, "photo.jpg")
-		require.NoError(t, err)
-
-		_, err = repo.SetImageKey(ctx, created.ID, subdistrict.SlotImage, "photo.jpg")
-
-		require.NoError(t, err)
-		assert.Empty(t, pgtest.QueuedKeys(t, testDB))
-	})
-
-	t.Run("tolerates a replaced image that is already queued", func(t *testing.T) {
-		repo := newRepository(t)
-		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
-		_, err := repo.SetImageKey(ctx, created.ID, subdistrict.SlotImage, "old.jpg")
-		require.NoError(t, err)
-		_, err = testDB.Exec(`INSERT INTO STORAGE_DELETIONS (key) VALUES ('old.jpg')`)
-		require.NoError(t, err)
-
-		_, err = repo.SetImageKey(ctx, created.ID, subdistrict.SlotImage, "new.jpg")
-
-		require.NoError(t, err)
-		assert.Equal(t, []string{"old.jpg"}, pgtest.QueuedKeys(t, testDB))
+		assert.Equal(t, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, mediaPositions(stored.Medias))
 	})
 
 	t.Run("returns ErrSubDistrictNotFound for an unknown id", func(t *testing.T) {
 		repo := newRepository(t)
 
-		got, err := repo.SetImageKey(ctx, 999, subdistrict.SlotImage, "photo.jpg")
+		got, err := repo.AddMedia(ctx, 999, newMedia("a.webp"))
 
 		assert.ErrorIs(t, err, subdistrict.ErrSubDistrictNotFound)
 		assert.Nil(t, got)
+		assert.Empty(t, storedMediaKeys(t))
+	})
+}
+
+func TestRepository_DeleteMedia(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("removes the media and queues its image for deletion", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+		mustAddMedia(t, repo, created.ID, "a.webp")
+		removed := mustAddMedia(t, repo, created.ID, "b.webp")
+		mustAddMedia(t, repo, created.ID, "c.webp")
+
+		require.NoError(t, repo.DeleteMedia(ctx, created.ID, removed.ID))
+
+		stored, err := repo.GetSubDistrict(ctx, created.ID)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"a.webp", "c.webp"}, mediaKeys(stored.Medias))
+		assert.Equal(t, []int{1, 2}, mediaPositions(stored.Medias), "the later medias shift down")
+		assert.Equal(t, []string{"a.webp", "c.webp"}, storedMediaKeys(t))
+		assert.Equal(t, []string{"b.webp"}, pgtest.QueuedKeys(t, testDB))
+	})
+
+	t.Run("tolerates an image that is already queued", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+		removed := mustAddMedia(t, repo, created.ID, "a.webp")
+		_, err := testDB.Exec(`INSERT INTO STORAGE_DELETIONS (key) VALUES ('a.webp')`)
+		require.NoError(t, err)
+
+		require.NoError(t, repo.DeleteMedia(ctx, created.ID, removed.ID))
+
+		assert.Equal(t, []string{"a.webp"}, pgtest.QueuedKeys(t, testDB))
+	})
+
+	t.Run("returns ErrMediaNotFound for a media of another sub-district", func(t *testing.T) {
+		repo := newRepository(t)
+		owner := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+		other := mustCreate(t, repo, newSubDistrict("Kemang", "kemang"))
+		m := mustAddMedia(t, repo, owner.ID, "a.webp")
+
+		err := repo.DeleteMedia(ctx, other.ID, m.ID)
+
+		assert.ErrorIs(t, err, storage.ErrMediaNotFound)
+		assert.Equal(t, []string{"a.webp"}, storedMediaKeys(t), "the media must be kept")
 		assert.Empty(t, pgtest.QueuedKeys(t, testDB))
 	})
 
-	t.Run("rejects an unknown slot and changes nothing", func(t *testing.T) {
+	t.Run("returns ErrMediaNotFound for the static map", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+		mustSetStaticMap(t, repo, created.ID, "map.png")
+		var staticMapID int64
+		require.NoError(t, testDB.Get(&staticMapID, `SELECT id FROM MEDIAS WHERE key = 'map.png'`))
 
-		got, err := repo.SetImageKey(ctx, created.ID, "banner", "banner.jpg")
+		err := repo.DeleteMedia(ctx, created.ID, staticMapID)
 
-		assert.Error(t, err)
-		assert.NotErrorIs(t, err, subdistrict.ErrSubDistrictNotFound)
-		assert.Nil(t, got)
+		assert.ErrorIs(t, err, storage.ErrMediaNotFound)
 		stored, err := repo.GetSubDistrict(ctx, created.ID)
 		require.NoError(t, err)
-		assert.Equal(t, created, stored)
+		assert.Equal(t, new("map.png"), stored.StaticMapImageKey)
 	})
+
+	t.Run("returns ErrMediaNotFound for an unknown media or sub-district", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+		m := mustAddMedia(t, repo, created.ID, "a.webp")
+
+		assert.ErrorIs(t, repo.DeleteMedia(ctx, created.ID, 999), storage.ErrMediaNotFound)
+		assert.ErrorIs(t, repo.DeleteMedia(ctx, 999, m.ID), storage.ErrMediaNotFound)
+		assert.Equal(t, []string{"a.webp"}, storedMediaKeys(t))
+	})
+}
+
+func TestRepository_SetStaticMap(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("stores the static map and leaves the medias alone", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+		m := mustAddMedia(t, repo, created.ID, "photo.webp")
+
+		got, err := repo.SetStaticMap(ctx, created.ID, newMedia("map.png"))
+
+		require.NoError(t, err)
+		assert.Equal(t, created.ID, got.ID)
+		assert.Equal(t, new("map.png"), got.StaticMapImageKey)
+		assert.Equal(t, []storage.Media{m}, got.Medias)
+		assert.Empty(t, pgtest.QueuedKeys(t, testDB), "a first static map replaces nothing")
+
+		stored, err := repo.GetSubDistrict(ctx, created.ID)
+		require.NoError(t, err)
+		assert.Equal(t, got, stored)
+	})
+
+	t.Run("removes and queues the static map it replaces", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+		mustSetStaticMap(t, repo, created.ID, "old.png")
+
+		got, err := repo.SetStaticMap(ctx, created.ID, newMedia("new.png"))
+
+		require.NoError(t, err)
+		assert.Equal(t, new("new.png"), got.StaticMapImageKey)
+		assert.Equal(t, []string{"new.png"}, storedMediaKeys(t))
+		assert.Equal(t, []string{"old.png"}, pgtest.QueuedKeys(t, testDB))
+	})
+
+	t.Run("tolerates a replaced image that is already queued", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+		mustSetStaticMap(t, repo, created.ID, "old.png")
+		_, err := testDB.Exec(`INSERT INTO STORAGE_DELETIONS (key) VALUES ('old.png')`)
+		require.NoError(t, err)
+
+		_, err = repo.SetStaticMap(ctx, created.ID, newMedia("new.png"))
+
+		require.NoError(t, err)
+		assert.Equal(t, []string{"old.png"}, pgtest.QueuedKeys(t, testDB))
+	})
+
+	t.Run("returns ErrSubDistrictNotFound for an unknown id", func(t *testing.T) {
+		repo := newRepository(t)
+
+		got, err := repo.SetStaticMap(ctx, 999, newMedia("map.png"))
+
+		assert.ErrorIs(t, err, subdistrict.ErrSubDistrictNotFound)
+		assert.Nil(t, got)
+		assert.Empty(t, storedMediaKeys(t))
+		assert.Empty(t, pgtest.QueuedKeys(t, testDB))
+	})
+}
+
+func TestRepository_GetMany_Medias(t *testing.T) {
+	ctx := context.Background()
+	repo := newRepository(t)
+	first := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+	second := mustCreate(t, repo, newSubDistrict("Kemang", "kemang"))
+	mustCreate(t, repo, newSubDistrict("Tebet", "tebet"))
+	mustAddMedia(t, repo, first.ID, "1/a.webp")
+	mustAddMedia(t, repo, second.ID, "2/a.webp")
+	mustAddMedia(t, repo, first.ID, "1/b.webp")
+	mustSetStaticMap(t, repo, second.ID, "2/map.png")
+
+	got, err := repo.GetMany(ctx)
+
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	assert.Equal(t, []string{"1/a.webp", "1/b.webp"}, mediaKeys(got[0].Medias))
+	assert.Nil(t, got[0].StaticMapImageKey)
+	assert.Equal(t, []string{"2/a.webp"}, mediaKeys(got[1].Medias))
+	assert.Equal(t, new("2/map.png"), got[1].StaticMapImageKey)
+	assert.NotNil(t, got[2].Medias, "a sub-district without medias has an empty list")
+	assert.Empty(t, got[2].Medias)
 }

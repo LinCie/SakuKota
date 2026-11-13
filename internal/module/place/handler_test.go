@@ -33,8 +33,9 @@ func newRouter(svc place.Service) http.Handler {
 		r.Get("/{id}", h.GetPlace)
 		r.Put("/{id}", h.PutPlace)
 		r.Delete("/{id}", h.DeletePlace)
-		r.Post("/{id}/image/upload-url", h.CreateImageUpload)
-		r.Put("/{id}/image", h.SetImage)
+		r.Post("/{id}/medias/upload-url", h.CreateMediaUpload)
+		r.Post("/{id}/medias", h.AddMedia)
+		r.Delete("/{id}/medias/{mediaId}", h.DeleteMedia)
 	})
 	r.Route("/categories", func(r chi.Router) {
 		r.Get("/", h.GetCategories)
@@ -242,7 +243,7 @@ func TestHandler_GetPlaces(t *testing.T) {
 			"attributes": {},
 			"rating_average": null,
 			"rating_count": 0,
-			"image_url": null,
+			"medias": [],
 			"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 		}]}`)
 	})
@@ -382,7 +383,7 @@ func TestHandler_CreatePlace(t *testing.T) {
 			"attributes": {},
 			"rating_average": null,
 			"rating_count": 0,
-			"image_url": null,
+			"medias": [],
 			"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 		}`)
 	})
@@ -572,7 +573,7 @@ func TestHandler_PutPlace(t *testing.T) {
 			"attributes": {},
 			"rating_average": null,
 			"rating_count": 0,
-			"image_url": null,
+			"medias": [],
 			"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 		}`)
 	})
@@ -713,7 +714,7 @@ func TestHandler_GetPlace(t *testing.T) {
 			"attributes": {"halal": true},
 			"rating_average": null,
 			"rating_count": 0,
-			"image_url": null,
+			"medias": [],
 			"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 		}`)
 	})
@@ -755,24 +756,29 @@ func TestHandler_GetPlace(t *testing.T) {
 		}
 	})
 
-	t.Run("image url", func(t *testing.T) {
+	t.Run("medias", func(t *testing.T) {
 		svc := mock.NewMockService(gomock.NewController(t))
 		svc.EXPECT().GetPlace(gomock.Any(), int64(3)).Return(&place.Place{
 			ID:         3,
 			Name:       "Kopi Senja",
 			Attributes: json.RawMessage(`{}`),
-			ImageKey:   new("places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"),
+			Medias: []storage.Media{
+				{ID: 8, Key: "places/3/a.webp", ContentType: "image/webp", Size: 2048, Position: 1},
+				{ID: 5, Key: "places/3/b.png", ContentType: "image/png", Size: 1024, Position: 2},
+			},
 		}, nil)
 
 		rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/places/3", ""))
 		require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body)
 
 		var got struct {
-			ImageURL *string `json:"image_url"`
+			Medias json.RawMessage `json:"medias"`
 		}
 		require.NoError(t, json.Unmarshal(responseData(t, rec), &got), "decode")
-		require.NotNil(t, got.ImageURL, "image_url is missing")
-		assert.Equal(t, "https://img.test/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp", *got.ImageURL)
+		assert.JSONEq(t, `[
+			{"id": 8, "url": "https://img.test/places/3/a.webp", "content_type": "image/webp", "size": 2048, "position": 1},
+			{"id": 5, "url": "https://img.test/places/3/b.png", "content_type": "image/png", "size": 1024, "position": 2}
+		]`, string(got.Medias))
 	})
 }
 
@@ -859,10 +865,10 @@ func TestHandler_GetCategory(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// POST /places/{id}/image/upload-url
+// POST /places/{id}/medias/upload-url
 // -----------------------------------------------------------------------------
 
-func TestHandler_CreateImageUpload(t *testing.T) {
+func TestHandler_CreateMediaUpload(t *testing.T) {
 	t.Run("rejects invalid requests", func(t *testing.T) {
 		tests := []struct {
 			name     string
@@ -870,11 +876,11 @@ func TestHandler_CreateImageUpload(t *testing.T) {
 			body     string
 			wantCode string
 		}{
-			{name: "place id is not a number", target: "/places/abc/image/upload-url", body: `{"content_type":"image/png"}`, wantCode: "INVALID_PLACE_ID"},
-			{name: "place id is zero", target: "/places/0/image/upload-url", body: `{"content_type":"image/png"}`, wantCode: "INVALID_PLACE_ID"},
-			{name: "body is not JSON", target: "/places/3/image/upload-url", body: `content_type=image/png`, wantCode: "INVALID_BODY"},
-			{name: "body is null", target: "/places/3/image/upload-url", body: `null`, wantCode: "INVALID_BODY"},
-			{name: "body is an array", target: "/places/3/image/upload-url", body: `[]`, wantCode: "INVALID_BODY"},
+			{name: "place id is not a number", target: "/places/abc/medias/upload-url", body: `{"content_type":"image/png"}`, wantCode: "INVALID_PLACE_ID"},
+			{name: "place id is zero", target: "/places/0/medias/upload-url", body: `{"content_type":"image/png"}`, wantCode: "INVALID_PLACE_ID"},
+			{name: "body is not JSON", target: "/places/3/medias/upload-url", body: `content_type=image/png`, wantCode: "INVALID_BODY"},
+			{name: "body is null", target: "/places/3/medias/upload-url", body: `null`, wantCode: "INVALID_BODY"},
+			{name: "body is an array", target: "/places/3/medias/upload-url", body: `[]`, wantCode: "INVALID_BODY"},
 		}
 
 		for _, tc := range tests {
@@ -902,9 +908,9 @@ func TestHandler_CreateImageUpload(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				svc := mock.NewMockService(gomock.NewController(t))
-				svc.EXPECT().ImageUploadURL(gomock.Any(), int64(3), "image/gif").Return(storage.Upload{}, tc.err)
+				svc.EXPECT().MediaUploadURL(gomock.Any(), int64(3), "image/gif").Return(storage.Upload{}, tc.err)
 
-				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/places/3/image/upload-url", `{"content_type":"image/gif"}`))
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/places/3/medias/upload-url", `{"content_type":"image/gif"}`))
 				assertError(t, rec, tc.wantStatus, tc.wantCode)
 			})
 		}
@@ -912,7 +918,7 @@ func TestHandler_CreateImageUpload(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		svc := mock.NewMockService(gomock.NewController(t))
-		svc.EXPECT().ImageUploadURL(gomock.Any(), int64(3), "image/webp").Return(storage.Upload{
+		svc.EXPECT().MediaUploadURL(gomock.Any(), int64(3), "image/webp").Return(storage.Upload{
 			Key: "uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp",
 			PresignedUpload: storage.PresignedUpload{
 				URL:       "http://localhost:3900/rantau-images/uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp?X-Amz-Signature=abc",
@@ -922,7 +928,7 @@ func TestHandler_CreateImageUpload(t *testing.T) {
 			},
 		}, nil)
 
-		rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/places/3/image/upload-url", `{"content_type":"image/webp"}`))
+		rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/places/3/medias/upload-url", `{"content_type":"image/webp"}`))
 		assertData(t, rec, http.StatusOK, `{
 			"upload_key": "uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp",
 			"upload_url": "http://localhost:3900/rantau-images/uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp?X-Amz-Signature=abc",
@@ -934,10 +940,10 @@ func TestHandler_CreateImageUpload(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// PUT /places/{id}/image
+// POST /places/{id}/medias
 // -----------------------------------------------------------------------------
 
-func TestHandler_SetImage(t *testing.T) {
+func TestHandler_AddMedia(t *testing.T) {
 	t.Run("rejects invalid requests", func(t *testing.T) {
 		tests := []struct {
 			name     string
@@ -945,18 +951,18 @@ func TestHandler_SetImage(t *testing.T) {
 			body     string
 			wantCode string
 		}{
-			{name: "place id is not a number", target: "/places/abc/image", body: `{"upload_key":"k"}`, wantCode: "INVALID_PLACE_ID"},
-			{name: "place id is negative", target: "/places/-1/image", body: `{"upload_key":"k"}`, wantCode: "INVALID_PLACE_ID"},
-			{name: "body is not JSON", target: "/places/3/image", body: `upload_key=k`, wantCode: "INVALID_BODY"},
-			{name: "body is null", target: "/places/3/image", body: `null`, wantCode: "INVALID_BODY"},
-			{name: "body is an array", target: "/places/3/image", body: `[]`, wantCode: "INVALID_BODY"},
+			{name: "place id is not a number", target: "/places/abc/medias", body: `{"upload_key":"k"}`, wantCode: "INVALID_PLACE_ID"},
+			{name: "place id is negative", target: "/places/-1/medias", body: `{"upload_key":"k"}`, wantCode: "INVALID_PLACE_ID"},
+			{name: "body is not JSON", target: "/places/3/medias", body: `upload_key=k`, wantCode: "INVALID_BODY"},
+			{name: "body is null", target: "/places/3/medias", body: `null`, wantCode: "INVALID_BODY"},
+			{name: "body is an array", target: "/places/3/medias", body: `[]`, wantCode: "INVALID_BODY"},
 		}
 
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				// No expectations: an invalid request must never reach the service.
 				svc := mock.NewMockService(gomock.NewController(t))
-				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, tc.target, tc.body))
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, tc.target, tc.body))
 				assertError(t, rec, http.StatusBadRequest, tc.wantCode)
 			})
 		}
@@ -974,15 +980,16 @@ func TestHandler_SetImage(t *testing.T) {
 			{name: "image not uploaded", err: storage.ErrImageNotUploaded, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "image type not allowed", err: storage.ErrInvalidImageType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "image too large", err: storage.ErrImageTooLarge, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "place already has the most medias", err: storage.ErrMediaLimitReached, wantStatus: http.StatusConflict, wantCode: "MEDIA_LIMIT_REACHED"},
 			{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 		}
 
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				svc := mock.NewMockService(gomock.NewController(t))
-				svc.EXPECT().SetImage(gomock.Any(), int64(3), "uploads/places/3/x.webp").Return(nil, tc.err)
+				svc.EXPECT().AddMedia(gomock.Any(), int64(3), "uploads/places/3/x.webp").Return(nil, tc.err)
 
-				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/places/3/image", `{"upload_key":"uploads/places/3/x.webp"}`))
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/places/3/medias", `{"upload_key":"uploads/places/3/x.webp"}`))
 				assertError(t, rec, tc.wantStatus, tc.wantCode)
 			})
 		}
@@ -990,16 +997,18 @@ func TestHandler_SetImage(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		svc := mock.NewMockService(gomock.NewController(t))
-		svc.EXPECT().SetImage(gomock.Any(), int64(3), "uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp").Return(&place.Place{
+		svc.EXPECT().AddMedia(gomock.Any(), int64(3), "uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp").Return(&place.Place{
 			ID:            3,
 			SubDistrictID: 1,
 			Name:          "Kopi Senja",
 			Attributes:    json.RawMessage(`{}`),
-			ImageKey:      new("places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"),
-			Category:      place.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
+			Medias: []storage.Media{
+				{ID: 9, Key: "places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp", ContentType: "image/webp", Size: 2048, Position: 1},
+			},
+			Category: place.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
 		}, nil)
 
-		rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/places/3/image",
+		rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/places/3/medias",
 			`{"upload_key":"uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"}`))
 		assertData(t, rec, http.StatusOK, `{
 			"id": 3,
@@ -1013,9 +1022,78 @@ func TestHandler_SetImage(t *testing.T) {
 			"attributes": {},
 			"rating_average": null,
 			"rating_count": 0,
-			"image_url": "https://img.test/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp",
+			"medias": [{
+				"id": 9,
+				"url": "https://img.test/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp",
+				"content_type": "image/webp",
+				"size": 2048,
+				"position": 1
+			}],
 			"category": {"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}
 		}`)
+	})
+}
+
+// -----------------------------------------------------------------------------
+// DELETE /places/{id}/medias/{mediaId}
+// -----------------------------------------------------------------------------
+
+func TestHandler_DeleteMedia(t *testing.T) {
+	t.Run("rejects invalid ids", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			target   string
+			wantCode string
+		}{
+			{name: "place id is not a number", target: "/places/abc/medias/5", wantCode: "INVALID_PLACE_ID"},
+			{name: "place id is zero", target: "/places/0/medias/5", wantCode: "INVALID_PLACE_ID"},
+			{name: "media id is not a number", target: "/places/3/medias/abc", wantCode: "INVALID_MEDIA_ID"},
+			{name: "media id is fractional", target: "/places/3/medias/1.5", wantCode: "INVALID_MEDIA_ID"},
+			{name: "media id is zero", target: "/places/3/medias/0", wantCode: "INVALID_MEDIA_ID"},
+			{name: "media id is negative", target: "/places/3/medias/-1", wantCode: "INVALID_MEDIA_ID"},
+			{name: "media id overflows 64 bits", target: "/places/3/medias/99999999999999999999", wantCode: "INVALID_MEDIA_ID"},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				// No expectations: an invalid id must never reach the service.
+				svc := mock.NewMockService(gomock.NewController(t))
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodDelete, tc.target, ""))
+				assertError(t, rec, http.StatusBadRequest, tc.wantCode)
+			})
+		}
+	})
+
+	t.Run("maps service errors", func(t *testing.T) {
+		tests := []struct {
+			name       string
+			err        error
+			wantStatus int
+			wantCode   string
+		}{
+			{name: "unknown media", err: storage.ErrMediaNotFound, wantStatus: http.StatusNotFound, wantCode: "MEDIA_NOT_FOUND"},
+			{name: "wrapped unknown media", err: fmt.Errorf("delete: %w", storage.ErrMediaNotFound), wantStatus: http.StatusNotFound, wantCode: "MEDIA_NOT_FOUND"},
+			{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				svc := mock.NewMockService(gomock.NewController(t))
+				svc.EXPECT().DeleteMedia(gomock.Any(), int64(3), int64(5)).Return(tc.err)
+
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodDelete, "/places/3/medias/5", ""))
+				assertError(t, rec, tc.wantStatus, tc.wantCode)
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		svc := mock.NewMockService(gomock.NewController(t))
+		svc.EXPECT().DeleteMedia(gomock.Any(), int64(3), int64(5)).Return(nil)
+
+		rec := serve(t, newRouter(svc), jsonRequest(http.MethodDelete, "/places/3/medias/5", ""))
+		require.Equal(t, http.StatusNoContent, rec.Code, "body: %s", rec.Body)
+		assert.Empty(t, rec.Body.String(), "body should be empty")
 	})
 }
 

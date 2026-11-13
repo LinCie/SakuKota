@@ -4,8 +4,9 @@
 > backend is *specified to do*. Update it only after a VERIFICATION phase
 > completes (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-11. Updated after the review cleanup pass (see the change log).
-> - Status: verified. All Go tests pass. The web app was not changed or re-checked in this pass.
+> - Last updated: 2026-11-13. Updated after the multiple-image (medias) pass (see the change log).
+> - Status: verified. All Go tests pass and the API was checked by hand. The web app has not been
+>   updated for medias yet, so its image views and the place image upload are broken until it is.
 
 ## Contents
 
@@ -80,7 +81,7 @@ MoSCoW scope agreed with the mentor in Week 3:
 | Tier | Feature | Backend status (per tests) |
 | ---- | ------- | -------------------------- |
 | Must | Interactive survival map and essential pins | Delivered: places API with filters, bbox, limit, total |
-| Must | Kecamatan dropdown and info modal (flood, safety/crime, daily spending, static map image) | Delivered: sub-districts API with uploaded images |
+| Must | Kecamatan dropdown and info modal (flood, safety/crime, daily spending, static map image) | Delivered: sub-districts API with up to 10 uploaded images and one static map |
 | Must | Category filter and search | Delivered: `category_id` (any of several), `q` |
 | Should | Basic admin verification panel | Backend delivered: admin review of suggestions; create/update/delete for places and sub-districts, all admin-only (route access is tested, see §5) |
 | Could | Place suggestion form | Delivered: suggestions with a pending limit |
@@ -89,8 +90,9 @@ MoSCoW scope agreed with the mentor in Week 3:
 | Won't | Kost listings | Not present (keep it that way) |
 
 Also delivered, beyond the docs: authentication with JWT access tokens and
-rotating refresh cookies, image uploads to S3-compatible storage (Garage), and
-a durable cleanup queue for deleting stored objects.
+rotating refresh cookies, up to 10 images per place and per sub-district
+uploaded to S3-compatible storage (Garage), and a durable cleanup queue for
+deleting stored objects.
 
 Every user story in the docs is a Must Have. The Should and Could features have
 **no user stories or acceptance criteria in the docs**. Their requirements exist
@@ -172,10 +174,12 @@ These rules apply to every HTTP module unless §6 says otherwise.
   - *Any signed-in user:* `POST /v1/places/{id}/reviews`, `POST /v1/suggestions`,
     `GET /v1/suggestions/mine`.
   - *Admin only:* `POST /v1/places`, `PUT` and `DELETE /v1/places/{id}`, the
-    place image routes (`.../image/upload-url`, `.../image`), `GET
-    /v1/suggestions`, `GET /v1/suggestions/{id}`, `.../approve`, `.../reject`,
-    `POST /v1/subdistricts`, `PUT` and `DELETE /v1/subdistricts/{id}`, and the
-    sub-district `image` and `static-map` routes.
+    place media routes (`POST .../medias/upload-url`, `POST .../medias`,
+    `DELETE .../medias/{mediaId}`), `GET /v1/suggestions`, `GET
+    /v1/suggestions/{id}`, `.../approve`, `.../reject`, `POST /v1/subdistricts`,
+    `PUT` and `DELETE /v1/subdistricts/{id}`, the same three sub-district media
+    routes, and the sub-district `static-map` routes (`POST
+    .../static-map/upload-url`, `PUT .../static-map`).
 - **Privacy.** The only place a user's email appears is the caller's own user
   object in the register, login, and refresh responses. No other response
   exposes user emails. A nested author appears as `{"id", "name"}`. Password
@@ -234,10 +238,13 @@ to `"user"`.
 
 **Place response:** `id, sub_district_id, name, address, location,
 operating_hours, estimated_price_range, short_description, attributes,
-rating_average, rating_count, image_url, category{id,name,slug,code,label,color}`.
+rating_average, rating_count, medias, category{id,name,slug,code,label,color}`.
 Missing optional values are `null` and attributes default to `{}`.
 `rating_average` is `rating_sum / rating_count`, or `null` when the place has
-no ratings. `image_url` is the storage public URL of the image key, or `null`.
+no ratings. `medias` is the place's images ordered by position, each
+`{id, url, content_type, size, position}` with `url` the storage public URL of
+its key; a place without images has `[]`. Lists and single reads return
+`medias` alike.
 
 - **Name.** Required, trimmed, at most 150 code points (`ErrInvalidName`,
   `ErrNameTooLong`). Names may repeat, even in the same district and
@@ -295,22 +302,33 @@ no ratings. `image_url` is the storage public URL of the image key, or `null`.
   - Unknown category or sub-district returns `400 VALIDATION_ERROR`. An unknown
     place returns `404` when the body is valid; validation runs before the place
     is looked up.
-  - Edits keep the rating and the image.
+  - Edits keep the rating and the medias.
 - **Delete (`DELETE /places/{id}`).** Returns `204`, and a second delete
-  returns `404`. If the place had an image, the **repository queues its key in
-  `STORAGE_DELETIONS`** and the service does not delete it directly. The
+  returns `404`. The place's medias are deleted with it and the **repository
+  queues their keys in `STORAGE_DELETIONS`** in the same statement; the
+  service deletes nothing directly. Other places' medias are untouched. The
   place's reviews are deleted with it. Approved suggestions that point to the
   place keep their status, with `place_id = null`.
-- **Image.**
-  - `POST /places/{id}/image/upload-url {content_type}` presigns an upload
+- **Medias.** A place has at most `storage.MaxMedias` (10) images, each a
+  `MEDIAS` row linked through `PLACE_MEDIAS` at a position 1–10.
+  - `POST /places/{id}/medias/upload-url {content_type}` presigns an upload
     under `places/{id}` and returns `{upload_key, upload_url, method, headers,
     expires_at}`. An unknown place returns 404 before anything is presigned.
-  - `PUT /places/{id}/image {upload_key}` promotes the upload, then stores the
-    key. The repository queues the previous key for deletion; setting the same
-    key again queues nothing.
-  - If storing the key fails after promotion, the promoted object is deleted
-    (best effort, failures ignored) and the old image is kept.
+  - `POST /places/{id}/medias {upload_key}` promotes the upload, stores the
+    media at the **lowest free position**, and returns `200` with the place.
+    The place row is locked while the position is chosen, so concurrent adds
+    never share a position or exceed the limit (14 concurrent adds: exactly
+    10 succeed).
+  - An 11th media returns `409 MEDIA_LIMIT_REACHED` and stores nothing.
+  - If storing fails after promotion (including the limit), the promoted
+    object is deleted (best effort, failures ignored).
+  - `DELETE /places/{id}/medias/{mediaId}` returns `204`, deletes the media,
+    and queues its key in `STORAGE_DELETIONS`. The other medias keep their
+    positions, and the next add fills the gap. A media of another place, an
+    unknown media, or an unknown place returns `404 MEDIA_NOT_FOUND`; an
+    invalid media id returns `400 INVALID_MEDIA_ID`.
   - Promotion and type errors return `400 VALIDATION_ERROR`.
+  - There is no reorder endpoint.
 - **Categories.** `GET /categories` and `GET /categories/{id}` (served in
   production at `/v1/places/categories` and `/v1/places/categories/{id}`, see §9) return
   `{id,name,slug,code,label,color,fields[]}`. `fields` is always an array,
@@ -367,9 +385,10 @@ no ratings. `image_url` is the storage public URL of the image key, or `null`.
 ### 6.5 Sub-districts / kecamatan (`internal/module/subdistrict`)
 
 **Response:** `id, name, slug, flood_history, safety_crime_information,
-estimated_daily_spending, image_url, static_map_image_url`. Both URLs are
-derived from stored image keys. `static_map_image_url` is **not** writable: the
-server ignores it in create and update bodies.
+estimated_daily_spending, medias, static_map_image_url`. `medias` has the same
+shape and ordering as a place's (`[]` when there are none).
+`static_map_image_url` is the public URL of the static map's key, or `null`; it
+is **not** writable: the server ignores it in create and update bodies.
 
 - **Validation.** The name is trimmed and must have 1–100 code points;
   violations return `ErrInvalidName`, which covers both blank and too long. The
@@ -388,23 +407,31 @@ server ignores it in create and update bodies.
 - **Update (`PUT /subdistricts/{id}`).** The body has the same shape and
   validation as `POST /subdistricts`. `flood_history`,
   `safety_crime_information`, and `estimated_daily_spending` are nullable, and
-  are cleared when absent or `null`. Images are kept.
+  are cleared when absent or `null`. The medias and static map are kept.
 - **Delete.**
   - A sub-district that places still reference returns `409
     SUB_DISTRICT_IN_USE` and is not deleted.
   - Suggestions do **not** block deletion; they are deleted with the
     sub-district.
-  - The repository **queues the deleted images in `STORAGE_DELETIONS`** in the
-    same statement, and the service deletes nothing directly. The cleanup worker
-    removes the objects.
-- **Images.** There are two slots: `image` (stored under
-  `subdistricts/{id}/image`) and `static-map` (stored under
-  `subdistricts/{id}/static-map`). Each slot has
-  `POST /subdistricts/{id}/<slot>/upload-url` and `PUT /subdistricts/{id}/<slot>`.
-  Setting an image promotes the upload and stores the key in the same statement
-  that queues the previous key in `STORAGE_DELETIONS`; setting the same key again
-  queues nothing. The other slot is never touched. If
-  storing the key fails, the promoted object is deleted.
+  - The medias and the static map are deleted with it, and the repository
+    **queues their keys in `STORAGE_DELETIONS`** in the same statement; the
+    service deletes nothing directly. The cleanup worker removes the objects.
+    A sub-district that is still in use keeps all its images and queues
+    nothing.
+- **Medias.** The same rules and routes as place medias, under
+  `/subdistricts/{id}/medias` (stored under `subdistricts/{id}/medias`, linked
+  through `SUB_DISTRICT_MEDIAS`): presign, add at the lowest free position up
+  to 10 (`409 MEDIA_LIMIT_REACHED`), and delete (`404 MEDIA_NOT_FOUND`,
+  `400 INVALID_MEDIA_ID`). The static map is not a media: deleting its id
+  through the media route returns `404 MEDIA_NOT_FOUND`. Adding a media never
+  touches the static map.
+- **Static map.** One image, stored under `subdistricts/{id}/static-map`, with
+  `POST /subdistricts/{id}/static-map/upload-url` and
+  `PUT /subdistricts/{id}/static-map {upload_key}`. Setting it stores a new
+  `MEDIAS` row, points `SUB_DISTRICTS.static_map_media_id` at it, and removes
+  the previous static map row and queues its key, in one locked transaction.
+  The medias are never touched. If storing fails, the promoted object is
+  deleted.
 
 ### 6.6 Suggestions (`internal/module/suggestion`)
 
@@ -488,7 +515,13 @@ read, approve, and reject them. The admin role check happens in the API router.
      extension, returns `ErrInvalidImageType`. In these rejected cases the
      upload is deleted (best effort).
   4. Otherwise the object is copied to `{prefix}/{name}`, the upload is deleted
-     (failures ignored), and the new key is returned.
+     (failures ignored), and a `Media` with the new key and the stored content
+     type and size is returned.
+- **Media.** `Media{ID, Key, ContentType, Size, Position}` is a `MEDIAS` row
+  (`key` unique, `content_type`, `size_bytes`). `ToMediaResponses` turns medias
+  into `{id, url, content_type, size, position}` in order and never returns
+  `nil`, so no medias encode as `[]`. `MaxMedias` is 10, matching the
+  position `CHECK`s of `PLACE_MEDIAS` and `SUB_DISTRICT_MEDIAS`.
 - **PublicURL** is `base + "/" + key`; a trailing slash on the base is
   tolerated.
 - **S3 adapter** (Garage locally and in tests). `Stat` returns size and content
@@ -498,8 +531,9 @@ read, approve, and reject them. The admin role check happens in the API router.
 ### 6.8 Storage cleanup queue (`internal/module/storagecleanup`)
 
 The `STORAGE_DELETIONS` table has columns `key`, `attempts`, `next_attempt_at`,
-and `last_error`. Images enter the queue when a place's or a sub-district's image
-is deleted or replaced, and when a place or sub-district is deleted. `cmd/cleanup`
+and `last_error`. Images enter the queue when a place or sub-district media is
+deleted, when a sub-district's static map is replaced, and when a place or
+sub-district is deleted. `cmd/cleanup`
 runs one batch and exits, so it must be scheduled.
 
 - **`Run`** claims up to 100 due rows and deletes each object.
@@ -522,14 +556,16 @@ runs one batch and exits, so it must be scheduled.
 | ---- | ------ | --------- |
 | `INVALID_BODY` | 400 | Every JSON endpoint (undecodable or wrongly-typed body) |
 | `VALIDATION_ERROR` | 400 | Business-rule violations: names, passwords, attributes, locations, ratings, lengths, unknown referenced sub-district or category on writes, and image type, key, size, or upload errors |
-| `INVALID_PLACE_ID` / `INVALID_SUB_DISTRICT_ID` / `INVALID_CATEGORY_ID` / `INVALID_SUGGESTION_ID` | 400 | Bad path id, or a bad list filter for places |
+| `INVALID_PLACE_ID` / `INVALID_SUB_DISTRICT_ID` / `INVALID_CATEGORY_ID` / `INVALID_SUGGESTION_ID` / `INVALID_MEDIA_ID` | 400 | Bad path id, or a bad list filter for places |
 | `INVALID_LIMIT` / `INVALID_OFFSET` / `INVALID_BBOX` | 400 | `GET /places` |
 | `INVALID_STATUS` | 400 | `GET /suggestions` |
 | `UNAUTHORIZED` | 401 | A missing, malformed, expired, or otherwise invalid access token, or no authenticated user in the request context |
 | `FORBIDDEN` | 403 | A valid token whose role is not allowed on an admin-only route |
 | `INVALID_CREDENTIALS` / `INVALID_REFRESH_TOKEN` | 401 | Auth |
 | `PLACE_NOT_FOUND` / `SUB_DISTRICT_NOT_FOUND` / `CATEGORY_NOT_FOUND` / `SUGGESTION_NOT_FOUND` | 404 | Unknown resource in the path. For `GET /places`, also unknown filter ids |
+| `MEDIA_NOT_FOUND` | 404 | Deleting a media its place or sub-district does not have |
 | `EMAIL_TAKEN` / `SUB_DISTRICT_EXISTS` / `SUB_DISTRICT_IN_USE` / `ALREADY_REVIEWED` | 409 | Conflicts (`ALREADY_REVIEWED` covers both reviews and suggestions) |
+| `MEDIA_LIMIT_REACHED` | 409 | Adding an 11th media to a place or sub-district |
 | `TOO_MANY_PENDING_SUGGESTIONS` | 429 | Suggestion pending limit |
 | `INTERNAL_ERROR` | 500 | Anything unexpected, with no details |
 
@@ -557,8 +593,8 @@ When they disagree, the tests win. The docs record the history:
   replaced: a place has one `category_id`, and categories define typed custom
   fields stored as `attributes`.
 - **Kecamatan info is folded into `SUB_DISTRICTS`** (Week 8). The ERD's
-  `static_map_image_url` text column is now an uploaded image key. A second
-  general `image` slot was added.
+  `static_map_image_url` text column is now an uploaded image (a `MEDIAS` row).
+  Up to 10 general images (medias) were added.
 - **Coordinates.** The ERD's lat/lng columns became one PostGIS
   `GEOMETRY(Point, 4326)`. The API uses GeoJSON.
 - **Paths and error codes.** Week 9–10 reports list `/places/`,
@@ -612,6 +648,14 @@ them.
   survive a restart and are shared between instances. The API pings Redis at
   startup and exits if `REDIS_URL` is invalid or unreachable. None of this is
   tested: no test runs against a real Redis.
+- **Medias, known gaps.**
+  - If a media add commits at the moment its place or sub-district is
+    deleted, that media row and its object can be left behind without being
+    queued for deletion.
+  - Media positions cannot be reordered, and a deleted media leaves a gap
+    until the next add fills it.
+  - `MEDIAS` has no owner type: a row belongs to whichever link (or static
+    map) references it.
 - **Unspecified values:** `UploadTTL`, `MaxImageSize`, how and when the
   cleanup worker runs, and how long access tokens last in production.
 - **Unspecified behaviors:** review editing or deletion; a "current user" endpoint; listing users.
@@ -638,4 +682,5 @@ them.
 | 2026-11-09 | Verification update | Update routes changed from `PATCH` to `PUT`: an update takes the same body as create and replaces every editable field, so absent nullable fields are cleared and `{}` or a `null` required field is a `400 VALIDATION_ERROR`. The partial-update type `httpx.Optional` was removed |
 | 2026-11-09 | Verification update | Hardening pass. Route access (public, signed-in, admin) is now tested against the real router; `403 FORBIDDEN` added to the catalogue; the access-token rules (HS256, issuer, expiry) are tested; passwords are 8 to 128 code points, with an over-long login returning `INVALID_CREDENTIALS`, and at most 4 hashes run at once; `GET /places` limit defaults to and is capped at 1000; expired refresh tokens are swept from the in-memory store; the privacy rule now allows the caller's own email in auth responses; production paths (`/v1/places/categories`) recorded in §9; untested hardening (body cap, timeouts, env checks, indexes, role `CHECK`, logging) listed in §10 |
 | 2026-11-09 | Update | Production refresh tokens moved from process memory to Redis (`auth.NewRedisRefreshStore`); `cmd/api` pings Redis at startup and exits early on a bad `REDIS_URL`. Untested against a real Redis, so recorded in §10 only |
+| 2026-11-13 | Verification update | Multiple images (medias). New `MEDIAS`, `PLACE_MEDIAS`, and `SUB_DISTRICT_MEDIAS` tables replace `PLACES.image_key` and `SUB_DISTRICTS.image_key`; the static map is `SUB_DISTRICTS.static_map_media_id`. Places and sub-districts take up to 10 medias through `POST .../medias/upload-url`, `POST .../medias`, and `DELETE .../medias/{mediaId}` (`INVALID_MEDIA_ID`, `MEDIA_NOT_FOUND`, `MEDIA_LIMIT_REACHED`); `image_url` became `medias`; the old `/image` routes are gone; `Promote` returns a `Media`. Known gaps listed in §10. The web app is not updated yet |
 | 2026-11-11 | Verification update | Review cleanup pass. Every JSON body goes through `httpx.DecodeJSON`, which also rejects data after the object (`INVALID_BODY`); auth user objects include `role`; `GET /places` `offset` and `INVALID_OFFSET` recorded (already tested); a category field with an unknown data type fails as a server error rather than `ErrInvalidAttributes`; `internal/module/users` renamed to `internal/module/user`; untested changes (no API CORS, per-command config, new migration checks) listed in §10 |

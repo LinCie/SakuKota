@@ -1,5 +1,7 @@
 package subdistrict
 
+import "rantau-go/internal/storage"
+
 // SubDistrictRequest is the API payload for creating a SubDistrict or
 // replacing one. An update sends every field: keys left out are cleared.
 type SubDistrictRequest struct {
@@ -18,9 +20,11 @@ type SubDistrictResponse struct {
 	FloodHistory           *string  `json:"flood_history"`
 	SafetyCrimeInformation *string  `json:"safety_crime_information"`
 	EstimatedDailySpending *float64 `json:"estimated_daily_spending"`
-	// ImageURL and StaticMapImageURL are where the sub-district's images are
-	// served, or null for an image it does not have.
-	ImageURL          *string `json:"image_url"`
+	// Medias are the sub-district's images in position order, or [] if it
+	// has none.
+	Medias []storage.MediaResponse `json:"medias"`
+	// StaticMapImageURL is where the static map is served, or null if the
+	// sub-district has none.
 	StaticMapImageURL *string `json:"static_map_image_url"`
 }
 
@@ -40,12 +44,10 @@ func toSubDistrict(req SubDistrictRequest) *SubDistrict {
 
 // toSubDistrictResponse converts sd, turning its image keys into URLs with imageURL.
 func toSubDistrictResponse(sd SubDistrict, imageURL func(key string) string) SubDistrictResponse {
-	urlOf := func(key *string) *string {
-		if key == nil {
-			return nil
-		}
-		url := imageURL(*key)
-		return &url
+	var staticMap *string
+	if sd.StaticMapImageKey != nil {
+		url := imageURL(*sd.StaticMapImageKey)
+		staticMap = &url
 	}
 
 	return SubDistrictResponse{
@@ -55,8 +57,8 @@ func toSubDistrictResponse(sd SubDistrict, imageURL func(key string) string) Sub
 		FloodHistory:           sd.FloodHistory,
 		SafetyCrimeInformation: sd.SafetyCrimeInformation,
 		EstimatedDailySpending: sd.EstimatedDailySpending,
-		ImageURL:               urlOf(sd.ImageKey),
-		StaticMapImageURL:      urlOf(sd.StaticMapImageKey),
+		Medias:                 storage.ToMediaResponses(sd.Medias, imageURL),
+		StaticMapImageURL:      staticMap,
 	}
 }
 

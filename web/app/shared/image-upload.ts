@@ -18,8 +18,23 @@ export type ImageUpload = {
   expires_at: string;
 };
 
+/** An image of a place or sub-district (see Media in the backend's storage/dto.go). */
+export type Media = {
+  id: number;
+  url: string;
+  content_type: string;
+  /** Size in bytes. */
+  size: number;
+  /** 1 to 10, in display order. */
+  position: number;
+};
+
+/** Most images a place or sub-district can have. */
+export const maxMedias = 10;
+
 /** Error codes for requesting or confirming an image upload. */
-export type ImageErrorCode = AdminWriteErrorCode | "VALIDATION_ERROR";
+export type ImageErrorCode =
+  AdminWriteErrorCode | "VALIDATION_ERROR" | "MEDIA_LIMIT_REACHED";
 
 /** Content types the backend accepts, as an `accept` attribute value. */
 export const imageAccept = "image/jpeg,image/png,image/webp";

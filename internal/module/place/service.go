@@ -28,11 +28,12 @@ type Service interface {
 	// Update replaces the place's editable fields with those of p.
 	Update(ctx context.Context, id int64, p *Place) (*Place, error)
 	Delete(ctx context.Context, id int64) error
-	// ImageUploadURL returns an upload for a new image of the place.
-	ImageUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error)
-	// SetImage makes the uploaded image the place's image, replacing any
-	// previous one.
-	SetImage(ctx context.Context, id int64, uploadKey string) (*Place, error)
+	// MediaUploadURL returns an upload for a new media of the place.
+	MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error)
+	// AddMedia adds the uploaded image to the place's medias.
+	AddMedia(ctx context.Context, id int64, uploadKey string) (*Place, error)
+	// DeleteMedia removes the media from the place's medias.
+	DeleteMedia(ctx context.Context, id, mediaID int64) error
 }
 
 type service struct {
@@ -92,7 +93,7 @@ func (s *service) Update(ctx context.Context, id int64, p *Place) (*Place, error
 	return s.repo.Update(ctx, p)
 }
 
-// Delete removes the place. The repository queues its image for deletion.
+// Delete removes the place. The repository queues its medias for deletion.
 func (s *service) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
 }
@@ -127,8 +128,8 @@ func (s *service) validate(ctx context.Context, p *Place) error {
 	return nil
 }
 
-// ImageUploadURL returns an upload for a new image of the place.
-func (s *service) ImageUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error) {
+// MediaUploadURL returns an upload for a new media of the place.
+func (s *service) MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error) {
 	if _, err := s.repo.GetPlace(ctx, id); err != nil {
 		return storage.Upload{}, err
 	}
@@ -136,27 +137,33 @@ func (s *service) ImageUploadURL(ctx context.Context, id int64, contentType stri
 	return s.images.PresignUpload(ctx, imagePrefix(id), contentType)
 }
 
-// SetImage promotes the upload and stores it as the place's image. The
-// repository queues the previous image for deletion. If the promoted image
-// cannot be stored, its delete is attempted once and a failure is ignored: it
+// AddMedia promotes the upload and adds it to the place's medias. If the
+// promoted image cannot be stored, for example because the place already has
+// storage.MaxMedias, its delete is attempted once and a failure is ignored: it
 // only leaves an unused object behind.
-func (s *service) SetImage(ctx context.Context, id int64, uploadKey string) (*Place, error) {
+func (s *service) AddMedia(ctx context.Context, id int64, uploadKey string) (*Place, error) {
 	if _, err := s.repo.GetPlace(ctx, id); err != nil {
 		return nil, err
 	}
 
-	key, err := s.images.Promote(ctx, imagePrefix(id), uploadKey)
+	promoted, err := s.images.Promote(ctx, imagePrefix(id), uploadKey)
 	if err != nil {
 		return nil, err
 	}
 
-	updated, err := s.repo.SetImageKey(ctx, id, key)
+	updated, err := s.repo.AddMedia(ctx, id, promoted)
 	if err != nil {
-		_ = s.images.Delete(context.WithoutCancel(ctx), key)
+		_ = s.images.Delete(context.WithoutCancel(ctx), promoted.Key)
 		return nil, err
 	}
 
 	return updated, nil
+}
+
+// DeleteMedia removes the media from the place. The repository queues its
+// image for deletion.
+func (s *service) DeleteMedia(ctx context.Context, id, mediaID int64) error {
+	return s.repo.DeleteMedia(ctx, id, mediaID)
 }
 
 // imagePrefix is the storage prefix of the images of place id.

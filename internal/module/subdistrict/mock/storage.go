@@ -71,10 +71,10 @@ func (mr *MockImageStorageMockRecorder) PresignUpload(ctx, prefix, contentType a
 }
 
 // Promote mocks base method.
-func (m *MockImageStorage) Promote(ctx context.Context, prefix, uploadKey string) (string, error) {
+func (m *MockImageStorage) Promote(ctx context.Context, prefix, uploadKey string) (storage.Media, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Promote", ctx, prefix, uploadKey)
-	ret0, _ := ret[0].(string)
+	ret0, _ := ret[0].(storage.Media)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

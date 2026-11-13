@@ -25,6 +25,33 @@ type SetImageRequest struct {
 	UploadKey string `json:"upload_key"`
 }
 
+// MediaResponse is the API representation of a Media.
+type MediaResponse struct {
+	ID          int64  `json:"id"`
+	URL         string `json:"url"`
+	ContentType string `json:"content_type"`
+	Size        int64  `json:"size"`
+	Position    int    `json:"position"`
+}
+
+// ToMediaResponses converts medias in order, turning each key into a URL with
+// imageURL. It never returns nil, so no medias encode as [].
+func ToMediaResponses(medias []Media, imageURL func(key string) string) []MediaResponse {
+	responses := make([]MediaResponse, 0, len(medias))
+
+	for _, m := range medias {
+		responses = append(responses, MediaResponse{
+			ID:          m.ID,
+			URL:         imageURL(m.Key),
+			ContentType: m.ContentType,
+			Size:        m.Size,
+			Position:    m.Position,
+		})
+	}
+
+	return responses
+}
+
 func ToImageUploadResponse(u Upload) ImageUploadResponse {
 	return ImageUploadResponse{
 		UploadKey: u.Key,

@@ -2,7 +2,7 @@ import { ArrowLeft, Star, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { cn } from "~/shared/cn";
-import { ImageFrame } from "~/shared/components/image-frame";
+import { MediaGallery } from "~/shared/components/media-gallery";
 import { MissingSlot, orMissing } from "~/shared/components/missing-slot";
 import { formatNumber, formatRating } from "~/shared/format";
 import {
@@ -81,8 +81,8 @@ export function PlaceDetails({ place, fields, onClose }: PlaceDetailsProps) {
               {place.name}
             </h2>
 
-            <ImageFrame
-              src={place.image_url}
+            <MediaGallery
+              medias={place.medias}
               alt={`Foto ${place.name}`}
               missing="Foto tidak tersedia"
               aspect="aspect-4/3"
