@@ -37,10 +37,14 @@ export type ImageErrorCode =
   AdminWriteErrorCode | "VALIDATION_ERROR" | "MEDIA_LIMIT_REACHED";
 
 /** Content types the backend accepts, as an `accept` attribute value. */
-export const imageAccept = "image/jpeg,image/png,image/webp";
+export const imageAccept =
+  "image/jpeg,image/png,image/webp,video/mp4,video/webm";
 
 /** Largest image the backend accepts, in bytes. */
 const maxImageSize = 5 * 1024 * 1024;
+
+/** Largest video the backend accepts, in bytes. */
+const maxVideoSize = 50 * 1024 * 1024;
 
 /** Thrown when a file is rejected before upload or storage refuses it. */
 export class ImageUploadError extends Error {
@@ -59,9 +63,15 @@ export async function uploadImage(
   presign: (contentType: string) => Promise<ImageUpload>,
 ): Promise<string> {
   if (!imageAccept.split(",").includes(file.type)) {
-    throw new ImageUploadError("Pilih gambar JPEG, PNG, atau WebP.");
+    throw new ImageUploadError(
+      "Pilih gambar JPEG, PNG, atau WebP, atau video MP4 atau WebM.",
+    );
   }
-  if (file.size > maxImageSize) {
+  if (file.type.startsWith("video/")) {
+    if (file.size > maxVideoSize) {
+      throw new ImageUploadError("Ukuran video maksimal 50 MB.");
+    }
+  } else if (file.size > maxImageSize) {
     throw new ImageUploadError("Ukuran gambar maksimal 5 MB.");
   }
 
@@ -75,7 +85,7 @@ export async function uploadImage(
     body: file,
   });
   if (!response.ok) {
-    throw new ImageUploadError("Gambar gagal diunggah. Coba lagi.");
+    throw new ImageUploadError("File gagal diunggah. Coba lagi.");
   }
 
   return upload.upload_key;

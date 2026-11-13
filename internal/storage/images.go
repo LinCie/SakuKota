@@ -14,6 +14,8 @@ import (
 const (
 	// MaxImageSize is the largest image, in bytes, that Promote accepts.
 	MaxImageSize = 5 << 20
+	// MaxVideoSize is the largest video, in bytes, that Promote accepts.
+	MaxVideoSize = 50 << 20
 	// UploadTTL is how long a temporary upload link stays valid.
 	UploadTTL = 5 * time.Minute
 	// MaxMedias is the most photos a place or sub-district can have. The
@@ -22,8 +24,9 @@ const (
 )
 
 var (
-	ErrInvalidImageType = errors.New("image must be JPEG, PNG, or WebP")
+	ErrInvalidImageType = errors.New("file must be a JPEG, PNG, or WebP image, or an MP4 or WebM video")
 	ErrImageTooLarge    = errors.New("image must be 5 MB or smaller")
+	ErrVideoTooLarge    = errors.New("video must be 50 MB or smaller")
 	ErrImageNotUploaded = errors.New("image has not been uploaded")
 	ErrInvalidImageKey  = errors.New("invalid upload key")
 
@@ -38,9 +41,15 @@ var imageTypes = map[string]string{
 	"webp": "image/webp",
 }
 
-// uploadName matches the name of an uploaded image: a lowercase UUID and the
+// videoTypes maps the extension of each allowed video type to its content type.
+var videoTypes = map[string]string{
+	"mp4":  "video/mp4",
+	"webm": "video/webm",
+}
+
+// uploadName matches the name of an uploaded file: a lowercase UUID and the
 // extension of an allowed type.
-var uploadName = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$`)
+var uploadName = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp|mp4|webm)$`)
 
 // Upload is a temporary upload link for a new image, and the key it is stored under
 // until it is promoted.
@@ -114,7 +123,7 @@ func (i *Images) Promote(ctx context.Context, prefix, uploadKey string) (Media, 
 
 	// The upload is deleted once it is rejected or copied. Uploads expire
 	// anyway, so a failed delete is ignored.
-	if err := checkImage(info, imageTypes[match[1]]); err != nil {
+	if err := checkMedia(info, match[1]); err != nil {
 		_ = i.store.Delete(ctx, uploadKey)
 		return Media{}, err
 	}
@@ -143,25 +152,38 @@ func uploadDir(prefix string) string {
 	return "uploads/" + prefix + "/"
 }
 
-// extensionOf returns the extension of an allowed image content type.
+// extensionOf returns the extension of an allowed image or video content type.
 func extensionOf(contentType string) (string, bool) {
-	for ext, t := range imageTypes {
-		if t == contentType {
-			return ext, true
+	for _, types := range []map[string]string{imageTypes, videoTypes} {
+		for ext, t := range types {
+			if t == contentType {
+				return ext, true
+			}
 		}
 	}
 
 	return "", false
 }
 
-// checkImage returns an error unless the stored object is an image of
-// contentType within MaxImageSize.
-func checkImage(info ObjectInfo, contentType string) error {
+// checkMedia returns an error unless the stored object matches the content
+// type of ext and is within the size limit for images or videos.
+func checkMedia(info ObjectInfo, ext string) error {
+	if t, ok := imageTypes[ext]; ok {
+		switch {
+		case info.ContentType != t:
+			return ErrInvalidImageType
+		case info.Size > MaxImageSize:
+			return ErrImageTooLarge
+		}
+
+		return nil
+	}
+
 	switch {
-	case info.ContentType != contentType:
+	case info.ContentType != videoTypes[ext]:
 		return ErrInvalidImageType
-	case info.Size > MaxImageSize:
-		return ErrImageTooLarge
+	case info.Size > MaxVideoSize:
+		return ErrVideoTooLarge
 	}
 
 	return nil

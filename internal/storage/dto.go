@@ -68,6 +68,7 @@ func ToImageUploadResponse(u Upload) ImageUploadResponse {
 func IsInvalidImage(err error) bool {
 	return errors.Is(err, ErrInvalidImageType) ||
 		errors.Is(err, ErrImageTooLarge) ||
+		errors.Is(err, ErrVideoTooLarge) ||
 		errors.Is(err, ErrImageNotUploaded) ||
 		errors.Is(err, ErrInvalidImageKey)
 }

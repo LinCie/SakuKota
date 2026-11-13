@@ -4,7 +4,8 @@
 > backend is *specified to do*. Update it only after a VERIFICATION phase
 > completes (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-13. Updated after the multiple-image (medias) pass (see the change log).
+> - Last updated: 2026-11-13. Updated after the video-upload pass (see the change log).
+>   Verified by the storage and place handler tests; the web app changes are outside the test workflow.
 > - Status: verified. All Go tests pass and the API was checked by hand. The web app has not been
 >   updated for medias yet, so its image views and the place image upload are broken until it is.
 
@@ -497,9 +498,10 @@ read, approve, and reject them. The admin role check happens in the API router.
 
 ### 6.7 Image storage (`internal/storage`)
 
-- **Allowed types.** Exactly `image/jpeg` (`.jpg`), `image/png` (`.png`), and
-  `image/webp` (`.webp`). Content types with parameters are rejected. Any other
-  type returns `ErrInvalidImageType` without touching the store.
+- **Allowed types.** Exactly `image/jpeg` (`.jpg`), `image/png` (`.png`),
+  `image/webp` (`.webp`), `video/mp4` (`.mp4`), and `video/webm` (`.webm`).
+  Content types with parameters are rejected. Any other type (including
+  `video/quicktime`) returns `ErrInvalidImageType` without touching the store.
 - **Presign.** The key is `uploads/{prefix}/{lowercase-uuid}.{ext}` and is
   unique on every call. The URL is a presigned PUT on the **public endpoint**,
   valid for `UploadTTL`. The Content-Type is signed, so uploading with a
@@ -510,9 +512,12 @@ read, approve, and reject them. The admin role check happens in the API router.
      and missing extensions return `ErrInvalidImageKey` without touching the
      store.
   2. If the object is missing, the result is `ErrImageNotUploaded`.
-  3. If the object is larger than `MaxImageSize`, the result is
-     `ErrImageTooLarge`. A disallowed type, or a type that does not match the
-     extension, returns `ErrInvalidImageType`. In these rejected cases the
+  3. If an image is larger than `MaxImageSize` (5 MB), the result is
+     `ErrImageTooLarge`; if a video is larger than `MaxVideoSize` (50 MB), it
+     is `ErrVideoTooLarge`. Both map to `400 VALIDATION_ERROR`. A disallowed
+     type, or a type that does not match the extension (including an image
+     type for a video extension and the reverse), returns
+     `ErrInvalidImageType`. In these rejected cases the
      upload is deleted (best effort).
   4. Otherwise the object is copied to `{prefix}/{name}`, the upload is deleted
      (failures ignored), and a `Media` with the new key and the stored content
@@ -648,6 +653,9 @@ them.
   survive a restart and are shared between instances. The API pings Redis at
   startup and exits if `REDIS_URL` is invalid or unreachable. None of this is
   tested: no test runs against a real Redis.
+- **Video medias, web.** The web app accepts the same five types with the
+  same limits, plays videos with controls in the media card and gallery, and
+  labels the add button "Tambah file". Untested, like the rest of `web/`.
 - **Medias, known gaps.**
   - If a media add commits at the moment its place or sub-district is
     deleted, that media row and its object can be left behind without being
@@ -656,7 +664,7 @@ them.
     until the next add fills it.
   - `MEDIAS` has no owner type: a row belongs to whichever link (or static
     map) references it.
-- **Unspecified values:** `UploadTTL`, `MaxImageSize`, how and when the
+- **Unspecified values:** `UploadTTL`, `MaxImageSize`, `MaxVideoSize`, how and when the
   cleanup worker runs, and how long access tokens last in production.
 - **Unspecified behaviors:** review editing or deletion; a "current user" endpoint; listing users.
 - **Frontend (`web/`)** is outside the backend test workflow. US-01
@@ -684,3 +692,4 @@ them.
 | 2026-11-09 | Update | Production refresh tokens moved from process memory to Redis (`auth.NewRedisRefreshStore`); `cmd/api` pings Redis at startup and exits early on a bad `REDIS_URL`. Untested against a real Redis, so recorded in §10 only |
 | 2026-11-13 | Verification update | Multiple images (medias). New `MEDIAS`, `PLACE_MEDIAS`, and `SUB_DISTRICT_MEDIAS` tables replace `PLACES.image_key` and `SUB_DISTRICTS.image_key`; the static map is `SUB_DISTRICTS.static_map_media_id`. Places and sub-districts take up to 10 medias through `POST .../medias/upload-url`, `POST .../medias`, and `DELETE .../medias/{mediaId}` (`INVALID_MEDIA_ID`, `MEDIA_NOT_FOUND`, `MEDIA_LIMIT_REACHED`); `image_url` became `medias`; the old `/image` routes are gone; `Promote` returns a `Media`. Known gaps listed in §10. The web app is not updated yet |
 | 2026-11-11 | Verification update | Review cleanup pass. Every JSON body goes through `httpx.DecodeJSON`, which also rejects data after the object (`INVALID_BODY`); auth user objects include `role`; `GET /places` `offset` and `INVALID_OFFSET` recorded (already tested); a category field with an unknown data type fails as a server error rather than `ErrInvalidAttributes`; `internal/module/users` renamed to `internal/module/user`; untested changes (no API CORS, per-command config, new migration checks) listed in §10 |
+| 2026-11-13 | Verification update | Video medias. `internal/storage` also allows `video/mp4` and `video/webm` (50 MB `MaxVideoSize`, `ErrVideoTooLarge`, a `400 VALIDATION_ERROR`); §6.7 updated and covered by new storage and place handler tests. The web app change (upload, playback) is untested and noted in §10 |

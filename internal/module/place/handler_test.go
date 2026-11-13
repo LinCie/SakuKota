@@ -980,6 +980,7 @@ func TestHandler_AddMedia(t *testing.T) {
 			{name: "image not uploaded", err: storage.ErrImageNotUploaded, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "image type not allowed", err: storage.ErrInvalidImageType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "image too large", err: storage.ErrImageTooLarge, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "video too large", err: storage.ErrVideoTooLarge, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "place already has the most medias", err: storage.ErrMediaLimitReached, wantStatus: http.StatusConflict, wantCode: "MEDIA_LIMIT_REACHED"},
 			{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 		}

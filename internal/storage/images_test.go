@@ -40,6 +40,8 @@ func TestImages_PresignUpload(t *testing.T) {
 		{contentType: "image/jpeg", wantKey: uploadKeyPattern("jpg")},
 		{contentType: "image/png", wantKey: uploadKeyPattern("png")},
 		{contentType: "image/webp", wantKey: uploadKeyPattern("webp")},
+		{contentType: "video/mp4", wantKey: uploadKeyPattern("mp4")},
+		{contentType: "video/webm", wantKey: uploadKeyPattern("webm")},
 	}
 
 	for _, tc := range tests {
@@ -100,6 +102,8 @@ func TestImages_PresignUpload_RejectedType(t *testing.T) {
 		{name: "SVG", contentType: "image/svg+xml"},
 		{name: "HTML", contentType: "text/html"},
 		{name: "PDF", contentType: "application/pdf"},
+		{name: "QuickTime video", contentType: "video/quicktime"},
+		{name: "video with parameters", contentType: "video/mp4; codecs=avc1"},
 		{name: "allowed type with parameters", contentType: "image/png; charset=utf-8"},
 	}
 
@@ -157,6 +161,36 @@ func TestImages_Promote(t *testing.T) {
 	}
 }
 
+func TestImages_Promote_Video(t *testing.T) {
+	tests := []struct {
+		ext         string
+		contentType string
+	}{
+		{ext: "mp4", contentType: "video/mp4"},
+		{ext: "webm", contentType: "video/webm"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.ext, func(t *testing.T) {
+			const size = storage.MaxVideoSize // larger than an image may be
+			src := "uploads/places/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b." + tc.ext
+			dst := "places/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b." + tc.ext
+
+			images, store := newImages(t)
+			gomock.InOrder(
+				store.EXPECT().Stat(gomock.Any(), src).
+					Return(storage.ObjectInfo{Size: size, ContentType: tc.contentType}, nil),
+				store.EXPECT().Copy(gomock.Any(), src, dst).Return(nil),
+				store.EXPECT().Delete(gomock.Any(), src).Return(nil),
+			)
+
+			got, err := images.Promote(context.Background(), "places/7", src)
+			require.NoError(t, err)
+			assert.Equal(t, storage.Media{Key: dst, ContentType: tc.contentType, Size: size}, got)
+		})
+	}
+}
+
 func TestImages_Promote_InvalidKey(t *testing.T) {
 	const id = "0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b"
 
@@ -173,6 +207,7 @@ func TestImages_Promote_InvalidKey(t *testing.T) {
 		{name: "name is not a UUID", key: "uploads/places/7/photo.webp"},
 		{name: "uppercase UUID", key: "uploads/places/7/0B1E6D4C-3F2A-4B8E-9C7D-5A6F1E2D3C4B.webp"},
 		{name: "extension not allowed", key: "uploads/places/7/" + id + ".gif"},
+		{name: "video extension not allowed", key: "uploads/places/7/" + id + ".mov"},
 		{name: "no extension", key: "uploads/places/7/" + id},
 	}
 
@@ -216,6 +251,41 @@ func TestImages_Promote_RejectedImage(t *testing.T) {
 			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
+}
+
+func TestImages_Promote_RejectedVideo(t *testing.T) {
+	const videoKey = "uploads/places/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.mp4"
+
+	tests := []struct {
+		name    string
+		info    storage.ObjectInfo
+		wantErr error
+	}{
+		{name: "too large", info: storage.ObjectInfo{Size: storage.MaxVideoSize + 1, ContentType: "video/mp4"}, wantErr: storage.ErrVideoTooLarge},
+		{name: "type does not match the extension", info: storage.ObjectInfo{Size: 1024, ContentType: "video/webm"}, wantErr: storage.ErrInvalidImageType},
+		{name: "image type for a video extension", info: storage.ObjectInfo{Size: 1024, ContentType: "image/png"}, wantErr: storage.ErrInvalidImageType},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			images, store := newImages(t)
+			store.EXPECT().Stat(gomock.Any(), videoKey).Return(tc.info, nil)
+			store.EXPECT().Delete(gomock.Any(), videoKey).Return(nil)
+
+			_, err := images.Promote(context.Background(), "places/7", videoKey)
+			require.ErrorIs(t, err, tc.wantErr)
+		})
+	}
+}
+
+func TestImages_Promote_VideoContentTypeForImageExtension(t *testing.T) {
+	images, store := newImages(t)
+	store.EXPECT().Stat(gomock.Any(), uploadKey).
+		Return(storage.ObjectInfo{Size: 1024, ContentType: "video/mp4"}, nil)
+	store.EXPECT().Delete(gomock.Any(), uploadKey).Return(nil)
+
+	_, err := images.Promote(context.Background(), "places/7", uploadKey)
+	require.ErrorIs(t, err, storage.ErrInvalidImageType)
 }
 
 func TestImages_Promote_RejectedImageCleanupFailure(t *testing.T) {

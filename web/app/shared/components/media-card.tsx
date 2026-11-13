@@ -56,6 +56,7 @@ export function MediaCard({
             <li key={media.id} className="flex flex-col gap-2">
               <ImageFrame
                 src={media.url}
+                contentType={media.content_type}
                 alt={`${alt} ${media.position}`}
                 missing={missing}
                 aspect={aspect}
@@ -83,12 +84,12 @@ export function MediaCard({
           onClick={() => inputRef.current?.click()}
         >
           <ImageUp aria-hidden="true" className="size-4" strokeWidth={2.5} />
-          {pending ? "Mengunggah…" : "Tambah gambar"}
+          {pending ? "Mengunggah…" : "Tambah file"}
         </Button>
         <p className="text-ink-soft text-xs">
           {full
-            ? `Sudah ${maxMedias} gambar. Hapus satu untuk menambah.`
-            : `JPEG, PNG, atau WebP, maks. 5 MB. ${medias.length}/${maxMedias} gambar.`}
+            ? `Sudah ${maxMedias} file. Hapus satu untuk menambah.`
+            : `Gambar JPEG, PNG, atau WebP (maks. 5 MB); video MP4 atau WebM (maks. 50 MB). ${medias.length}/${maxMedias} file.`}
         </p>
       </div>
       <input

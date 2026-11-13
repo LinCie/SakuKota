@@ -61,6 +61,7 @@ export function MediaGallery({
     return (
       <ImageFrame
         src={media.url}
+        contentType={media.content_type}
         alt={`${alt} ${media.position}`}
         missing={missing}
         aspect={aspect}
@@ -106,6 +107,7 @@ export function MediaGallery({
               >
                 <ImageFrame
                   src={m.url}
+                  contentType={m.content_type}
                   alt={`${alt} ${m.position}`}
                   missing={missing}
                   aspect={aspect}
