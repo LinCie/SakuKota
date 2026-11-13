@@ -23,6 +23,8 @@ type S3 struct {
 
 var _ ObjectStore = (*S3)(nil)
 
+// NewS3 creates a store client from cfg. Temporary upload links are signed for the
+// public endpoint, which is the host clients reach.
 func NewS3(cfg config.StorageConfig) *S3 {
 	options := func(endpoint string) s3.Options {
 		return s3.Options{
@@ -44,7 +46,7 @@ func NewS3(cfg config.StorageConfig) *S3 {
 // S3
 // -----------------------------------------------------------------------------
 
-// PresignPut signs the upload for cfg.PublicEndpoint, the host clients send it to.
+// PresignPut returns a temporary link that uploads key, signed for the public endpoint clients use.
 func (s *S3) PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (PresignedUpload, error) {
 	expiresAt := time.Now().Add(ttl)
 
@@ -73,6 +75,7 @@ func (s *S3) PresignPut(ctx context.Context, key, contentType string, ttl time.D
 	}, nil
 }
 
+// Stat returns the object's size and type, or ErrObjectNotFound if it is missing.
 func (s *S3) Stat(ctx context.Context, key string) (ObjectInfo, error) {
 	out, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.bucket),

@@ -10,6 +10,8 @@ type Module struct {
 	Handler *Handler
 }
 
+// NewModule builds the place module's repository, service, and handler, linked together.
+// The handler uses images.PublicURL to build photo links.
 func NewModule(db *sqlx.DB, images ImageStorage) *Module {
 	repo := NewPostgresRepository(db)
 	service := NewService(repo, images)

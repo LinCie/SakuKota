@@ -10,15 +10,17 @@ import (
 //
 //go:generate mockgen -source=store.go -destination=mock/store.go -package=mock
 type ObjectStore interface {
-	// PresignPut returns a request that uploads key with contentType until ttl passes.
+	// PresignPut returns a temporary link that uploads key with contentType until ttl passes.
 	PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (PresignedUpload, error)
 	// Stat returns the object's size and type, or ErrObjectNotFound.
 	Stat(ctx context.Context, key string) (ObjectInfo, error)
+	// Copy copies the object at srcKey to dstKey.
 	Copy(ctx context.Context, srcKey, dstKey string) error
+	// Delete removes the object under key.
 	Delete(ctx context.Context, key string) error
 }
 
-// PresignedUpload is a request a client can send to upload an object without
+// PresignedUpload is a temporary link a client can use to upload an object without
 // credentials.
 type PresignedUpload struct {
 	URL    string

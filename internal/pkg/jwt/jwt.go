@@ -19,6 +19,8 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+// GenerateToken signs an access token for the user with the given ID and role.
+// The token expires after cfg.JWTExpiry.
 func GenerateToken(cfg config.Config, userID int64, role string) (string, error) {
 	now := time.Now()
 	claims := Claims{
@@ -34,6 +36,8 @@ func GenerateToken(cfg config.Config, userID int64, role string) (string, error)
 	return token.SignedString([]byte(cfg.JWTSecret))
 }
 
+// ValidateToken checks the signature, issuer, and expiry of t, then returns its claims.
+// Every kind of problem with the token gives the same error.
 func ValidateToken(cfg config.Config, t string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(t, claims, func(*jwt.Token) (any, error) {

@@ -20,6 +20,8 @@ import (
 	"rantau-go/internal/storage"
 )
 
+// NewRouter builds the HTTP router with its middleware, docs routes, and every API route.
+// Routes live under /v1, and protected ones check the token and role first.
 func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 	r := chi.NewRouter()
 

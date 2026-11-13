@@ -13,9 +13,8 @@ import (
 //
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
 type Service interface {
-	// Create stores the suggestion as pending. The name is trimmed and must be
-	// 1 to 150 characters, and the location must lie within Indonesia. Blank
-	// optional text is stored as nil. Attributes must be a JSON object.
+	// Create checks the name, location, and attributes, then saves the suggestion as pending.
+	// Blank optional text is saved as nothing.
 	Create(ctx context.Context, s *Suggestion) (*Suggestion, error)
 	// GetSuggestion returns the suggestion with the given ID.
 	GetSuggestion(ctx context.Context, id int64) (*Suggestion, error)
@@ -33,7 +32,9 @@ type Service interface {
 
 // PlaceService defines the place operations that approving a suggestion requires.
 type PlaceService interface {
+	// Create saves a new place, which approval uses to make a place from a suggestion.
 	Create(ctx context.Context, p *place.Place) (*place.Place, error)
+	// Delete removes the place again, which is used to undo a failed approval.
 	Delete(ctx context.Context, id int64) error
 }
 
@@ -42,6 +43,7 @@ type service struct {
 	places PlaceService
 }
 
+// NewService builds the suggestion service from the repository and the place service.
 func NewService(repo Repository, places PlaceService) Service {
 	return &service{
 		repo:   repo,
@@ -53,6 +55,7 @@ func NewService(repo Repository, places PlaceService) Service {
 // service
 // -----------------------------------------------------------------------------
 
+// Create checks the suggestion's fields, then saves it as pending.
 func (s *service) Create(ctx context.Context, sg *Suggestion) (*Suggestion, error) {
 	name, err := place.NormalizeName(sg.Name)
 	if err != nil {
@@ -106,14 +109,17 @@ func (s *service) Create(ctx context.Context, sg *Suggestion) (*Suggestion, erro
 	})
 }
 
+// GetSuggestion returns the suggestion with the given id.
 func (s *service) GetSuggestion(ctx context.Context, id int64) (*Suggestion, error) {
 	return s.repo.GetSuggestion(ctx, id)
 }
 
+// GetByUser returns the user's suggestions, newest first.
 func (s *service) GetByUser(ctx context.Context, userID int64) ([]Suggestion, error) {
 	return s.repo.GetByUser(ctx, userID)
 }
 
+// GetMany checks the status filter, then returns the matching suggestions.
 func (s *service) GetMany(ctx context.Context, filter SuggestionFilter) ([]Suggestion, error) {
 	switch filter.Status {
 	case "", StatusPending, StatusApproved, StatusRejected:
@@ -124,9 +130,8 @@ func (s *service) GetMany(ctx context.Context, filter SuggestionFilter) ([]Sugge
 	return s.repo.GetMany(ctx, filter)
 }
 
-// Approve creates the place first and then marks the suggestion approved as
-// it. If the suggestion cannot be marked, the place is deleted again so that no
-// place is left without an approved suggestion.
+// Approve creates the place, then marks the suggestion approved as that place.
+// If marking fails, the new place is deleted again, so it is not left unlinked.
 func (s *service) Approve(ctx context.Context, id, adminID int64, p *place.Place) (*Suggestion, error) {
 	// Checked before the suggestion is read: a place without a location is
 	// refused without touching storage.
@@ -159,6 +164,7 @@ func (s *service) Approve(ctx context.Context, id, adminID int64, p *place.Place
 	return approved, nil
 }
 
+// Reject marks a pending suggestion as rejected, after checking the reason's length.
 func (s *service) Reject(ctx context.Context, id, adminID int64, reason *string) (*Suggestion, error) {
 	trimmed, ok := text.TrimOptionalMax(reason, maxReasonLength)
 	if !ok {

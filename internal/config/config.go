@@ -27,8 +27,8 @@ type Config struct {
 type StorageConfig struct {
 	// Endpoint is the S3 API the server calls.
 	Endpoint string
-	// PublicEndpoint is the S3 API that clients upload to. Presigned URLs are
-	// signed for this host.
+	// PublicEndpoint is the S3 API that clients upload to. Temporary upload
+	// links are signed for this host.
 	PublicEndpoint string
 	// PublicURL is the base URL that objects are served from.
 	PublicURL       string
@@ -48,7 +48,8 @@ func DatabaseURL() (string, error) {
 	return databaseURL, nil
 }
 
-// NewConfig reads the configuration of the API server.
+// NewConfig reads all API server settings from environment variables.
+// It returns an error if a required setting is missing or a value is invalid.
 func NewConfig() (Config, error) {
 	databaseURL, err := DatabaseURL()
 	if err != nil {
@@ -124,7 +125,8 @@ func NewConfig() (Config, error) {
 	}, nil
 }
 
-// NewStorageConfig reads the location of the image bucket.
+// NewStorageConfig reads the image bucket settings from environment variables.
+// The public endpoint falls back to the internal one, and the region to garage, when unset.
 func NewStorageConfig() (StorageConfig, error) {
 	storage := StorageConfig{
 		Endpoint:        os.Getenv("STORAGE_ENDPOINT"),

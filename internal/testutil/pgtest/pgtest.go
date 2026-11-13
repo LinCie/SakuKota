@@ -29,11 +29,8 @@ const image = "postgis/postgis:17-3.5"
 // alone.
 var keptTables = []string{"goose_db_version", "categories", "category_fields", "spatial_ref_sys"}
 
-// Start runs a container, applies the migrations, and returns a connection to
-// it. Call stop when the tests are done to remove the container.
-//
-// Start one container per test package (in TestMain) and call Reset between
-// tests; starting one per test would be slow.
+// Start runs a PostgreSQL container with the migrations applied, and returns a connection.
+// Call stop to remove it. Start one per test package, not per test, since starting is slow.
 func Start(ctx context.Context) (db *sqlx.DB, stop func(), err error) {
 	container, err := postgres.Run(ctx, image,
 		postgres.WithDatabase("rantaugo_test"),
@@ -76,6 +73,7 @@ func Start(ctx context.Context) (db *sqlx.DB, stop func(), err error) {
 	return db, stop, nil
 }
 
+// migrate applies every migration in migrations/ to the database at url.
 func migrate(ctx context.Context, url string) error {
 	sqlDB, err := sql.Open("pgx", url)
 	if err != nil {

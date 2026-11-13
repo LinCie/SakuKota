@@ -15,6 +15,7 @@ type Handler struct {
 	service Service
 }
 
+// NewHandler creates a Handler that passes its work to the suggestion service.
 func NewHandler(service Service) *Handler {
 	return &Handler{
 		service: service,
@@ -25,8 +26,8 @@ func NewHandler(service Service) *Handler {
 // Handler
 // -----------------------------------------------------------------------------
 
-// CreateSuggestion stores the authenticated user's suggestion as pending
-// review. It must be served behind middleware.WithAuth.
+// CreateSuggestion saves the logged-in user's suggestion as pending review.
+// The route must sit behind middleware.WithAuth, so the user is known.
 func (h *Handler) CreateSuggestion(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
@@ -48,8 +49,8 @@ func (h *Handler) CreateSuggestion(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusCreated, toSuggestionResponse(*created))
 }
 
-// GetMySuggestions lists the authenticated user's suggestions, newest first.
-// It must be served behind middleware.WithAuth.
+// GetMySuggestions sends back the logged-in user's suggestions, newest first.
+// The route must sit behind middleware.WithAuth, so the user is known.
 func (h *Handler) GetMySuggestions(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
@@ -66,8 +67,8 @@ func (h *Handler) GetMySuggestions(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toSuggestionResponses(suggestions))
 }
 
-// GetSuggestions lists suggestions, optionally filtered by the `status` query
-// parameter, oldest first.
+// GetSuggestions sends back all suggestions, oldest first.
+// If the status query is set, only suggestions with that status are sent.
 func (h *Handler) GetSuggestions(w http.ResponseWriter, r *http.Request) {
 	filter := SuggestionFilter{Status: Status(r.URL.Query().Get("status"))}
 
@@ -80,7 +81,8 @@ func (h *Handler) GetSuggestions(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toSuggestionResponses(suggestions))
 }
 
-// GetSuggestion returns the suggestion given by the `id` path parameter.
+// GetSuggestion sends back the suggestion whose id is in the URL.
+// It sends an error if the id is invalid or the suggestion does not exist.
 func (h *Handler) GetSuggestion(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
@@ -97,9 +99,8 @@ func (h *Handler) GetSuggestion(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toSuggestionResponse(*s))
 }
 
-// ApproveSuggestion creates the place given in the body from the suggestion
-// given by the `id` path parameter, and marks the suggestion approved. It must
-// be served behind middleware.WithAuth.
+// ApproveSuggestion makes the suggestion in the URL a place, using the body as its details.
+// The route must sit behind middleware.WithAuth, so the admin is known.
 func (h *Handler) ApproveSuggestion(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
@@ -128,9 +129,8 @@ func (h *Handler) ApproveSuggestion(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toSuggestionResponse(*approved))
 }
 
-// RejectSuggestion rejects the suggestion given by the `id` path parameter,
-// with the optional reason in the body. It must be served behind
-// middleware.WithAuth.
+// RejectSuggestion marks the suggestion in the URL as rejected, with an optional reason.
+// The route must sit behind middleware.WithAuth, so the admin is known.
 func (h *Handler) RejectSuggestion(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
@@ -158,8 +158,8 @@ func (h *Handler) RejectSuggestion(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toSuggestionResponse(*rejected))
 }
 
-// respondError writes the response for an error from the service. Approving
-// also returns the errors of creating the place, which are validation errors.
+// respondError sends the right error response for a failed service call.
+// Approving can also fail with place errors, which are shown as validation errors.
 func respondError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrSuggestionNotFound):

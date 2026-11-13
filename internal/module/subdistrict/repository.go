@@ -15,25 +15,25 @@ import (
 //
 //go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock
 type Repository interface {
+	// Create saves the sub-district and returns it with its photos and static map.
 	Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error)
+	// GetMany returns every sub-district with its photos and static map.
 	GetMany(ctx context.Context) ([]SubDistrict, error)
+	// GetSubDistrict returns the sub-district with its photos and static map.
 	GetSubDistrict(ctx context.Context, id int64) (*SubDistrict, error)
+	// Update saves the sub-district's details and returns it with its photos and static map.
 	Update(ctx context.Context, sd *SubDistrict) (*SubDistrict, error)
-	// Delete removes the sub-district with its medias and static map, and
-	// queues their images for deletion. It returns ErrSubDistrictNotFound, or
-	// ErrSubDistrictInUse if places still reference it.
+	// Delete removes the sub-district with its photos and static map, and queues their files for deletion.
+	// It returns ErrSubDistrictNotFound, or ErrSubDistrictInUse if places still use it.
 	Delete(ctx context.Context, id int64) error
-	// AddMedia stores m at the sub-district's lowest free position and returns
-	// the sub-district. It returns ErrSubDistrictNotFound, or
-	// storage.ErrMediaLimitReached if it already has storage.MaxMedias.
+	// AddMedia stores the photo in the sub-district's first free slot and returns the sub-district.
+	// It returns ErrSubDistrictNotFound, or ErrMediaLimitReached if the sub-district is already full.
 	AddMedia(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error)
-	// DeleteMedia removes the sub-district's media, queues its image for
-	// deletion, and shifts the later medias down to close the gap. It returns
-	// storage.ErrMediaNotFound if the sub-district has no such media.
+	// DeleteMedia removes the photo and queues its file for deletion.
+	// Later photos move up one slot to close the gap; it returns ErrMediaNotFound if there is no such photo.
 	DeleteMedia(ctx context.Context, id, mediaID int64) error
-	// SetStaticMap stores m as the sub-district's static map and returns the
-	// sub-district. The previous static map is removed and its image queued
-	// for deletion.
+	// SetStaticMap saves the photo as the static map and returns the sub-district.
+	// The previous static map is removed and its file queued for deletion.
 	SetStaticMap(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error)
 }
 
@@ -41,6 +41,7 @@ type postgresRepository struct {
 	db *sqlx.DB
 }
 
+// NewPostgresRepository builds a Repository that stores sub-districts in PostgreSQL.
 func NewPostgresRepository(db *sqlx.DB) Repository {
 	return &postgresRepository{
 		db: db,
@@ -60,8 +61,8 @@ const subDistrictColumns = `sd.id, sd.name, sd.slug, sd.flood_history,
 // staticMapJoin joins the static map of `sd` as `sm`.
 const staticMapJoin = ` LEFT JOIN MEDIAS sm ON sm.id = sd.static_map_media_id`
 
-// Create inserts the sub-district and returns it, or ErrSubDistrictExists if the
-// name or slug is taken.
+// Create inserts the sub-district and returns it with its photos and static map.
+// It returns ErrSubDistrictExists if the name or slug is already taken.
 func (r *postgresRepository) Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error) {
 	var created SubDistrict
 
@@ -91,7 +92,7 @@ func (r *postgresRepository) Create(ctx context.Context, sd *SubDistrict) (*SubD
 	return r.withMedias(ctx, created)
 }
 
-// GetMany returns every sub-district in id order.
+// GetMany returns every sub-district in id order, with its photos and static map.
 func (r *postgresRepository) GetMany(ctx context.Context) ([]SubDistrict, error) {
 	subDistricts := make([]SubDistrict, 0)
 
@@ -131,8 +132,8 @@ func (r *postgresRepository) GetSubDistrict(ctx context.Context, id int64) (*Sub
 	return r.withMedias(ctx, sd)
 }
 
-// Update stores the sub-district's fields and returns it, or
-// ErrSubDistrictNotFound or ErrSubDistrictExists.
+// Update saves the sub-district's details and returns it with its photos and static map.
+// It returns ErrSubDistrictNotFound, or ErrSubDistrictExists if the name or slug is taken.
 func (r *postgresRepository) Update(ctx context.Context, sd *SubDistrict) (*SubDistrict, error) {
 	var updated SubDistrict
 
@@ -167,10 +168,8 @@ func (r *postgresRepository) Update(ctx context.Context, sd *SubDistrict) (*SubD
 	return r.withMedias(ctx, updated)
 }
 
-// Delete removes the sub-district with its medias and static map and queues
-// their images for deletion, or returns ErrSubDistrictNotFound. A sub-district
-// that places reference is not deleted: ErrSubDistrictInUse is returned
-// instead.
+// Delete removes the sub-district with its photos and static map, and queues their files for deletion.
+// It returns ErrSubDistrictNotFound, or ErrSubDistrictInUse if places still use it, and removes nothing.
 func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
 	var deleted int
 
@@ -206,10 +205,8 @@ func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-// AddMedia stores m at the sub-district's lowest free position and returns the
-// sub-district, or ErrSubDistrictNotFound or storage.ErrMediaLimitReached. The
-// sub-district row is locked while a free position is chosen, so concurrent
-// adds cannot take the same position or exceed the limit.
+// AddMedia stores the photo in the sub-district's first free slot and returns the sub-district.
+// It locks the sub-district row so two uploads at once cannot take the same slot or go over the limit.
 func (r *postgresRepository) AddMedia(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -268,10 +265,8 @@ func (r *postgresRepository) AddMedia(ctx context.Context, id int64, m storage.M
 	return r.GetSubDistrict(ctx, id)
 }
 
-// DeleteMedia removes the sub-district's media, queues its image for deletion,
-// and shifts the later medias down to close the gap, or returns
-// storage.ErrMediaNotFound. The sub-district row is locked so a concurrent add
-// cannot pick a position while the others move.
+// DeleteMedia removes the photo, queues its file for deletion, and shifts later photos up one slot.
+// The shift closes the gap, so the next added photo goes to the end, not into the hole.
 func (r *postgresRepository) DeleteMedia(ctx context.Context, id, mediaID int64) error {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -326,10 +321,8 @@ func (r *postgresRepository) DeleteMedia(ctx context.Context, id, mediaID int64)
 	return tx.Commit()
 }
 
-// SetStaticMap stores m as the sub-district's static map and returns the
-// sub-district, or ErrSubDistrictNotFound. The previous static map is removed
-// and its image queued for deletion. The row is locked while the previous
-// static map is read, so a concurrent replace cannot leave an image unqueued.
+// SetStaticMap saves the photo as the static map, removes the old one, and returns the sub-district.
+// It locks the row so two replaces at once cannot leave an old file unqueued.
 func (r *postgresRepository) SetStaticMap(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -338,7 +331,7 @@ func (r *postgresRepository) SetStaticMap(ctx context.Context, id int64, m stora
 	defer func() { _ = tx.Rollback() }()
 
 	var previous *int64
-	err = tx.GetContext(ctx, &previous, `SELECT static_map_media_id FROM SUB_DISTRICTS WHERE id = $1 FOR UPDATE`, id)
+	err = tx.GetContext(ctx, &previous, `SELECT static_map_media_id FROM SUB_DISTRICTS WHERE id = $1 FOR NO KEY UPDATE`, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrSubDistrictNotFound
@@ -388,7 +381,7 @@ func (r *postgresRepository) SetStaticMap(ctx context.Context, id int64, m stora
 	return r.GetSubDistrict(ctx, id)
 }
 
-// withMedias returns sd with its medias attached.
+// withMedias returns sd with its photos attached.
 func (r *postgresRepository) withMedias(ctx context.Context, sd SubDistrict) (*SubDistrict, error) {
 	subDistricts := []SubDistrict{sd}
 	if err := r.attachMedias(ctx, subDistricts); err != nil {
@@ -398,8 +391,8 @@ func (r *postgresRepository) withMedias(ctx context.Context, sd SubDistrict) (*S
 	return &subDistricts[0], nil
 }
 
-// attachMedias loads the medias of every given sub-district in one query and
-// assigns them, in position order, to each sub-district's Medias field.
+// attachMedias loads the photos of all the given sub-districts in one query.
+// Each sub-district gets its photos in position order.
 func (r *postgresRepository) attachMedias(ctx context.Context, subDistricts []SubDistrict) error {
 	if len(subDistricts) == 0 {
 		return nil

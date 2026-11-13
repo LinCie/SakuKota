@@ -17,6 +17,8 @@ type Handler struct {
 	imageURL func(key string) string
 }
 
+// NewHandler creates a Handler that passes its work to the service.
+// imageURL turns a stored image key into a link the browser can open.
 func NewHandler(service Service, imageURL func(key string) string) *Handler {
 	return &Handler{
 		service:  service,
@@ -28,7 +30,8 @@ func NewHandler(service Service, imageURL func(key string) string) *Handler {
 // Handler
 // -----------------------------------------------------------------------------
 
-// CreateSubDistrict stores the sub-district given in the body.
+// CreateSubDistrict reads a new sub-district from the request body and saves it.
+// It sends back the saved sub-district, or an error that says what is wrong.
 func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
 	req, ok := httpx.DecodeJSON[SubDistrictRequest](w, r)
 	if !ok {
@@ -44,8 +47,8 @@ func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusCreated, toSubDistrictResponse(*sd, h.imageURL))
 }
 
-// CreateImageUpload returns a handler that presigns an upload for a new image
-// in slot of the sub-district given by the `id` path parameter.
+// CreateImageUpload returns a handler that gives a temporary upload link for a new image.
+// The image goes in the slot (photo list or static map) of the sub-district in the URL.
 func (h *Handler) CreateImageUpload(slot ImageSlot) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := httpx.ParseID(chi.URLParam(r, "id"))
@@ -69,7 +72,7 @@ func (h *Handler) CreateImageUpload(slot ImageSlot) http.HandlerFunc {
 	}
 }
 
-// GetSubDistricts lists every sub-district in id order.
+// GetSubDistricts sends back every sub-district, in id order.
 func (h *Handler) GetSubDistricts(w http.ResponseWriter, r *http.Request) {
 	subDistricts, err := h.service.GetMany(r.Context())
 	if err != nil {
@@ -80,7 +83,8 @@ func (h *Handler) GetSubDistricts(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponses(subDistricts, h.imageURL))
 }
 
-// GetSubDistrict returns the sub-district given by the `id` path parameter.
+// GetSubDistrict sends back the sub-district whose id is in the URL.
+// If there is no such sub-district, it sends a not-found error.
 func (h *Handler) GetSubDistrict(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
@@ -101,7 +105,8 @@ func (h *Handler) GetSubDistrict(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponse(*sd, h.imageURL))
 }
 
-// PutSubDistrict replaces the sub-district given by the `id` path parameter.
+// PutSubDistrict replaces the sub-district whose id is in the URL with the details in the body.
+// Any field left out of the body is cleared.
 func (h *Handler) PutSubDistrict(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
@@ -123,7 +128,8 @@ func (h *Handler) PutSubDistrict(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponse(*sd, h.imageURL))
 }
 
-// DeleteSubDistrict deletes the sub-district given by the `id` path parameter.
+// DeleteSubDistrict removes the sub-district whose id is in the URL.
+// It sends no content on success, or a not-found or conflict error.
 func (h *Handler) DeleteSubDistrict(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
@@ -146,20 +152,20 @@ func (h *Handler) DeleteSubDistrict(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// AddMedia adds the uploaded image to the medias of the sub-district given by
-// the `id` path parameter.
+// AddMedia attaches an uploaded photo to the sub-district whose id is in the URL.
+// It sends back the updated sub-district.
 func (h *Handler) AddMedia(w http.ResponseWriter, r *http.Request) {
 	h.storeImage(w, r, h.service.AddMedia)
 }
 
-// SetStaticMap makes the uploaded image the static map of the sub-district
-// given by the `id` path parameter.
+// SetStaticMap makes the uploaded image the static map of the sub-district whose id is in the URL.
+// It sends back the updated sub-district.
 func (h *Handler) SetStaticMap(w http.ResponseWriter, r *http.Request) {
 	h.storeImage(w, r, h.service.SetStaticMap)
 }
 
-// storeImage stores the upload in the body for the sub-district given by the
-// `id` path parameter with store, and responds with the sub-district.
+// storeImage reads the upload key from the body and passes it to store for the sub-district in the URL.
+// It sends back the updated sub-district, or the matching error.
 func (h *Handler) storeImage(w http.ResponseWriter, r *http.Request,
 	store func(ctx context.Context, id int64, uploadKey string) (*SubDistrict, error),
 ) {
@@ -183,8 +189,8 @@ func (h *Handler) storeImage(w http.ResponseWriter, r *http.Request,
 	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponse(*sd, h.imageURL))
 }
 
-// DeleteMedia deletes the media given by the `mediaId` path parameter from the
-// sub-district given by the `id` path parameter.
+// DeleteMedia removes the photo mediaId from the sub-district id, both taken from the URL.
+// It sends no content on success, or a not-found error if the photo is missing.
 func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
@@ -210,7 +216,8 @@ func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// respondImageError writes the response for an error from uploading a sub-district's image.
+// respondImageError sends the right error response for a failed image upload or attach.
+// Any unexpected error becomes a generic 500 response.
 func respondImageError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrSubDistrictNotFound):
@@ -224,7 +231,8 @@ func respondImageError(w http.ResponseWriter, err error) {
 	}
 }
 
-// respondSubDistrictError writes the response for an error from creating or updating a sub-district.
+// respondSubDistrictError sends the right error response for a failed create or update.
+// Any unexpected error becomes a generic 500 response.
 func respondSubDistrictError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrSubDistrictNotFound):

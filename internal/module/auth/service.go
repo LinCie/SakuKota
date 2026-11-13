@@ -20,9 +20,14 @@ import (
 //
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
 type Service interface {
+	// Register checks the sign-up details, then saves the user with a hashed password.
 	Register(ctx context.Context, u *user.User, password string) (*user.User, error)
+	// Login checks the email and password, then issues a new pair of tokens.
 	Login(ctx context.Context, email, password string) (*user.User, *Tokens, error)
+	// Refresh trades a refresh token for the user and a new token pair.
+	// The old refresh token stops working.
 	Refresh(ctx context.Context, refreshToken string) (*user.User, *Tokens, error)
+	// Logout revokes a refresh token so it cannot be used again.
 	Logout(ctx context.Context, refreshToken string) error
 }
 
@@ -34,6 +39,7 @@ type service struct {
 	hashSlots chan struct{}
 }
 
+// NewService builds the auth service from the config, the user service, and the refresh store.
 func NewService(cfg config.Config, userService user.Service, store RefreshStore) Service {
 	return &service{
 		cfg:       cfg,
@@ -47,6 +53,7 @@ func NewService(cfg config.Config, userService user.Service, store RefreshStore)
 // service
 // -----------------------------------------------------------------------------
 
+// Register checks the name, email, and password, then saves the user with a hashed password.
 func (s *service) Register(ctx context.Context, u *user.User, password string) (*user.User, error) {
 	u.Name = strings.TrimSpace(u.Name)
 	switch {
@@ -83,6 +90,7 @@ func (s *service) Register(ctx context.Context, u *user.User, password string) (
 	return s.users.Create(ctx, u)
 }
 
+// Login checks the email and password, then issues a new pair of tokens for the user.
 func (s *service) Login(ctx context.Context, email, password string) (*user.User, *Tokens, error) {
 	// No stored password is this long, so there is nothing to verify.
 	if utf8.RuneCountInString(password) > maxPasswordLength {
@@ -138,10 +146,13 @@ func (s *service) Refresh(ctx context.Context, refreshToken string) (*user.User,
 	return u, tokens, nil
 }
 
+// Logout deletes the refresh token, so it cannot be used again.
 func (s *service) Logout(ctx context.Context, refreshToken string) error {
 	return s.store.Delete(ctx, hashToken(refreshToken))
 }
 
+// issueTokens makes a new access token and refresh token for u.
+// The refresh token is saved by its hash, never as it is.
 func (s *service) issueTokens(ctx context.Context, u *user.User) (*Tokens, error) {
 	accessToken, err := jwt.GenerateToken(s.cfg, u.ID, u.Role)
 	if err != nil {
@@ -164,7 +175,7 @@ func (s *service) issueTokens(ctx context.Context, u *user.User) (*Tokens, error
 	}, nil
 }
 
-// hash hashes password once a hash slot is free.
+// hash turns password into an argon2id hash, waiting for a free hash slot first.
 func (s *service) hash(ctx context.Context, password string) (string, error) {
 	release, err := s.acquireHashSlot(ctx)
 	if err != nil {
@@ -175,7 +186,7 @@ func (s *service) hash(ctx context.Context, password string) (string, error) {
 	return hashPassword(password)
 }
 
-// verify checks password against encodedHash once a hash slot is free.
+// verify checks password against encodedHash, waiting for a free hash slot first.
 func (s *service) verify(ctx context.Context, password, encodedHash string) (bool, error) {
 	release, err := s.acquireHashSlot(ctx)
 	if err != nil {
@@ -186,8 +197,8 @@ func (s *service) verify(ctx context.Context, password, encodedHash string) (boo
 	return verifyPassword(password, encodedHash)
 }
 
-// acquireHashSlot waits for a free slot, or for ctx to end, and returns the
-// function that frees the slot.
+// acquireHashSlot waits for a free slot, or for ctx to end.
+// It returns the function that gives the slot back.
 func (s *service) acquireHashSlot(ctx context.Context) (release func(), err error) {
 	select {
 	case s.hashSlots <- struct{}{}:
@@ -197,11 +208,13 @@ func (s *service) acquireHashSlot(ctx context.Context) (release func(), err erro
 	}
 }
 
+// hashToken returns the SHA-256 of token in hex, so raw tokens are never stored.
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
 }
 
+// normalizeEmail trims spaces and lowercases email, so case does not matter when logging in.
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }

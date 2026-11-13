@@ -29,6 +29,7 @@ type AuthorResponse struct {
 // Conversions
 // -----------------------------------------------------------------------------
 
+// toReview builds the review to save from the place, the author, and the request body.
 func toReview(placeID, userID int64, req CreateReviewRequest) *Review {
 	return &Review{
 		PlaceID: placeID,
@@ -38,6 +39,7 @@ func toReview(placeID, userID int64, req CreateReviewRequest) *Review {
 	}
 }
 
+// toReviewResponse turns r into the JSON shape sent to clients.
 func toReviewResponse(r Review) ReviewResponse {
 	return ReviewResponse{
 		ID:        r.ID,
@@ -52,6 +54,7 @@ func toReviewResponse(r Review) ReviewResponse {
 	}
 }
 
+// toReviewResponses turns each review into its response shape.
 func toReviewResponses(reviews []Review) []ReviewResponse {
 	responses := make([]ReviewResponse, 0, len(reviews))
 

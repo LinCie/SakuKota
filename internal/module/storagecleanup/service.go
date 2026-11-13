@@ -19,6 +19,7 @@ type service struct {
 	images ImageStorage
 }
 
+// NewService builds the cleanup service from the queue and the image storage.
 func NewService(repo Repository, images ImageStorage) Service {
 	return &service{
 		repo:   repo,
@@ -47,9 +48,8 @@ func (s *service) Run(ctx context.Context) error {
 	return nil
 }
 
-// delete deletes the object of d and takes it off the queue, or reschedules it
-// if the object cannot be deleted. Only a failure to update the queue is
-// returned.
+// delete removes the object for d, then takes d off the queue.
+// If the object cannot be removed, d is rescheduled and only queue errors are returned.
 func (s *service) delete(ctx context.Context, d Deletion) error {
 	if err := s.images.Delete(ctx, d.Key); err != nil {
 		slog.ErrorContext(ctx, "delete storage object", "key", d.Key, "attempt", d.Attempts+1, "err", err)

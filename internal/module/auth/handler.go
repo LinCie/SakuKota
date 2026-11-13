@@ -14,6 +14,7 @@ type Handler struct {
 	service Service
 }
 
+// NewHandler creates a Handler that reads cookie settings from cfg and passes work to the service.
 func NewHandler(cfg config.Config, service Service) *Handler {
 	return &Handler{
 		cfg:     cfg,
@@ -25,6 +26,8 @@ func NewHandler(cfg config.Config, service Service) *Handler {
 // Handler
 // -----------------------------------------------------------------------------
 
+// Register reads the sign-up body and creates the user.
+// It sends back the new user, or a validation or email-taken error.
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	req, ok := httpx.DecodeJSON[RegisterRequest](w, r)
 	if !ok {
@@ -52,6 +55,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusCreated, toUserResponse(u))
 }
 
+// Login checks the email and password, then sends back the user and an access token.
+// The refresh token goes in a cookie, not in the body.
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	req, ok := httpx.DecodeJSON[LoginRequest](w, r)
 	if !ok {
@@ -72,6 +77,8 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toSessionResponse(u, tokens))
 }
 
+// Refresh trades the refresh token in the cookie for a new session.
+// If the token is missing, used, or expired, the cookie is cleared and it sends 401.
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(refreshCookieName)
 	if err != nil {
@@ -95,6 +102,8 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toSessionResponse(u, tokens))
 }
 
+// Logout revokes the refresh token in the cookie and clears the cookie.
+// The cookie is cleared even if revoking fails.
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	// The browser drops the cookie even if revoking it server-side fails.
 	h.clearRefreshCookie(w)
@@ -113,14 +122,18 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 // Refresh cookie
 // -----------------------------------------------------------------------------
 
+// setRefreshCookie puts token in the refresh cookie, lasting as long as refresh tokens do.
 func (h *Handler) setRefreshCookie(w http.ResponseWriter, token string) {
 	h.writeRefreshCookie(w, token, int(h.cfg.RefreshTokenExpiry.Seconds()))
 }
 
+// clearRefreshCookie expires the refresh cookie, so the browser deletes it.
 func (h *Handler) clearRefreshCookie(w http.ResponseWriter) {
 	h.writeRefreshCookie(w, "", -1)
 }
 
+// writeRefreshCookie sets the refresh cookie to token with the given max age.
+// The cookie is HttpOnly, so page scripts cannot read it, and SameSite=Strict.
 func (h *Handler) writeRefreshCookie(w http.ResponseWriter, token string, maxAge int) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshCookieName,

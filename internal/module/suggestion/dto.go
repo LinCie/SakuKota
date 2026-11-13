@@ -77,6 +77,7 @@ func toSuggestion(userID int64, req CreateSuggestionRequest) *Suggestion {
 	}
 }
 
+// toSuggestionResponse turns s into the JSON shape sent to clients.
 func toSuggestionResponse(s Suggestion) SuggestionResponse {
 	return SuggestionResponse{
 		ID:                  s.ID,
@@ -102,6 +103,7 @@ func toSuggestionResponse(s Suggestion) SuggestionResponse {
 	}
 }
 
+// toSuggestionResponses turns each suggestion into its response shape.
 func toSuggestionResponses(suggestions []Suggestion) []SuggestionResponse {
 	responses := make([]SuggestionResponse, 0, len(suggestions))
 

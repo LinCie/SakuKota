@@ -10,7 +10,7 @@ type ImageUploadRequest struct {
 	ContentType string `json:"content_type"`
 }
 
-// ImageUploadResponse is a presigned upload the client sends the image with.
+// ImageUploadResponse is a temporary upload link the client sends the image with.
 // The client then confirms it by sending UploadKey in a SetImageRequest.
 type ImageUploadResponse struct {
 	UploadKey string            `json:"upload_key"`
@@ -34,8 +34,8 @@ type MediaResponse struct {
 	Position    int    `json:"position"`
 }
 
-// ToMediaResponses converts medias in order, turning each key into a URL with
-// imageURL. It never returns nil, so no medias encode as [].
+// ToMediaResponses turns each photo into its response shape, with its key made into a URL.
+// It never returns nil, so an empty list is sent as [] instead of null.
 func ToMediaResponses(medias []Media, imageURL func(key string) string) []MediaResponse {
 	responses := make([]MediaResponse, 0, len(medias))
 
@@ -52,6 +52,7 @@ func ToMediaResponses(medias []Media, imageURL func(key string) string) []MediaR
 	return responses
 }
 
+// ToImageUploadResponse turns u into the JSON shape sent to the client.
 func ToImageUploadResponse(u Upload) ImageUploadResponse {
 	return ImageUploadResponse{
 		UploadKey: u.Key,
@@ -62,9 +63,8 @@ func ToImageUploadResponse(u Upload) ImageUploadResponse {
 	}
 }
 
-// IsInvalidImage reports whether err rejects the client's image: a disallowed
-// type, a key that was not presigned, a missing upload, or an image that is too
-// large.
+// IsInvalidImage reports whether err means the client's image was refused.
+// That covers a wrong type, a file that is too large, a missing upload, or a bad upload key.
 func IsInvalidImage(err error) bool {
 	return errors.Is(err, ErrInvalidImageType) ||
 		errors.Is(err, ErrImageTooLarge) ||

@@ -6,6 +6,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// NewRedisClient connects to Redis at redisURL and checks that it answers a ping.
+// If the ping fails, the client is closed and the error is returned.
 func NewRedisClient(ctx context.Context, redisURL string) (*redis.Client, error) {
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {

@@ -40,6 +40,7 @@ type UserResponse struct {
 // Conversions
 // -----------------------------------------------------------------------------
 
+// toUser turns the sign-up body into a User. The password is set later.
 func toUser(req RegisterRequest) *user.User {
 	return &user.User{
 		Name:  req.Name,
@@ -47,6 +48,7 @@ func toUser(req RegisterRequest) *user.User {
 	}
 }
 
+// toSessionResponse builds the login or refresh reply from the user and access token.
 func toSessionResponse(u *user.User, t *Tokens) SessionResponse {
 	return SessionResponse{
 		User:        toUserResponse(u),
@@ -54,6 +56,7 @@ func toSessionResponse(u *user.User, t *Tokens) SessionResponse {
 	}
 }
 
+// toUserResponse turns u into the JSON shape sent to clients.
 func toUserResponse(u *user.User) UserResponse {
 	return UserResponse{
 		ID:        u.ID,

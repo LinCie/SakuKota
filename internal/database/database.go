@@ -9,6 +9,8 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// NewPostgresDB opens a PostgreSQL connection pool and checks that the database answers.
+// The pool keeps at most 10 open connections.
 func NewPostgresDB(
 	ctx context.Context,
 	databaseURL string,

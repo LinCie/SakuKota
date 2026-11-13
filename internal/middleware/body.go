@@ -7,7 +7,7 @@ import (
 )
 
 // maxBodyBytes caps a request body. Every JSON endpoint takes small payloads;
-// images go straight to storage through presigned URLs.
+// images go straight to storage through temporary links.
 const maxBodyBytes = 1 << 20
 
 // WithMaxBody limits request bodies to maxBodyBytes. A handler reading more

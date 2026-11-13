@@ -10,6 +10,7 @@ type Module struct {
 	Handler *Handler
 }
 
+// NewModule builds the review module's repository, service, and handler, linked together.
 func NewModule(db *sqlx.DB) *Module {
 	repo := NewPostgresRepository(db)
 	service := NewService(repo)

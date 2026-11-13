@@ -13,6 +13,8 @@ type Module struct {
 	Handler *Handler
 }
 
+// NewModule builds the auth module's refresh store, service, and handler, linked together.
+// Refresh tokens are kept in Redis.
 func NewModule(cfg config.Config, userService user.Service, rdb *redis.Client) *Module {
 	store := NewRedisRefreshStore(rdb)
 	service := NewService(cfg, userService, store)

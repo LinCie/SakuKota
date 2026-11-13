@@ -86,7 +86,7 @@ type CategoryFieldResponse struct {
 // Conversions
 // -----------------------------------------------------------------------------
 
-// ToPlace converts the payload into the Place it describes.
+// ToPlace turns the request body into a Place.
 func ToPlace(req PlaceRequest) *Place {
 	return &Place{
 		SubDistrictID:       req.SubDistrictID,
@@ -101,7 +101,8 @@ func ToPlace(req PlaceRequest) *Place {
 	}
 }
 
-// toPlaceResponse converts p, turning its media keys into URLs with imageURL.
+// toPlaceResponse turns p into the JSON shape sent to clients.
+// Photo keys become full links using imageURL.
 func toPlaceResponse(p Place, imageURL func(key string) string) PlaceResponse {
 	return PlaceResponse{
 		ID:                  p.ID,
@@ -120,8 +121,7 @@ func toPlaceResponse(p Place, imageURL func(key string) string) PlaceResponse {
 	}
 }
 
-// ratingAverage returns the mean of count ratings adding up to sum, or nil
-// when there are none.
+// ratingAverage returns the average star rating, or nil if there are no ratings yet.
 func ratingAverage(count, sum int) *float64 {
 	if count == 0 {
 		return nil
@@ -131,6 +131,7 @@ func ratingAverage(count, sum int) *float64 {
 	return &average
 }
 
+// toPlaceResponses turns each place into its response shape.
 func toPlaceResponses(places []Place, imageURL func(key string) string) []PlaceResponse {
 	responses := make([]PlaceResponse, 0, len(places))
 
@@ -141,6 +142,7 @@ func toPlaceResponses(places []Place, imageURL func(key string) string) []PlaceR
 	return responses
 }
 
+// toCategoryResponse turns c into its response shape.
 func toCategoryResponse(c Category) CategoryResponse {
 	return CategoryResponse{
 		ID:    c.ID,
@@ -152,6 +154,7 @@ func toCategoryResponse(c Category) CategoryResponse {
 	}
 }
 
+// toCategoryDetailResponse turns c and its fields into its response shape.
 func toCategoryDetailResponse(c Category) CategoryDetailResponse {
 	fields := make([]CategoryFieldResponse, 0, len(c.Fields))
 
@@ -170,6 +173,7 @@ func toCategoryDetailResponse(c Category) CategoryDetailResponse {
 	}
 }
 
+// toCategoryDetailResponses turns each category into its response shape.
 func toCategoryDetailResponses(categories []Category) []CategoryDetailResponse {
 	responses := make([]CategoryDetailResponse, 0, len(categories))
 
@@ -180,6 +184,7 @@ func toCategoryDetailResponses(categories []Category) []CategoryDetailResponse {
 	return responses
 }
 
+// toCategoryFieldResponse turns f into its response shape.
 func toCategoryFieldResponse(f CategoryField) CategoryFieldResponse {
 	return CategoryFieldResponse{
 		ID:         f.ID,

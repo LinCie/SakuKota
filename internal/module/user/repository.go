@@ -14,8 +14,11 @@ import (
 //
 //go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock
 type Repository interface {
+	// Create saves a new user and returns it with its generated fields.
 	Create(ctx context.Context, u *User) (*User, error)
+	// GetByEmail returns the user with the email, or ErrNotFound.
 	GetByEmail(ctx context.Context, email string) (*User, error)
+	// GetUser returns the user with the id, or ErrNotFound.
 	GetUser(ctx context.Context, id int64) (*User, error)
 }
 
@@ -23,6 +26,7 @@ type postgresRepository struct {
 	db *sqlx.DB
 }
 
+// NewPostgresRepository builds a Repository that stores users in PostgreSQL.
 func NewPostgresRepository(db *sqlx.DB) Repository {
 	return &postgresRepository{
 		db: db,

@@ -14,8 +14,8 @@ import (
 // Password hashing
 // -----------------------------------------------------------------------------
 
-// hashPassword returns an argon2id hash of password encoded in the PHC
-// string format: $argon2id$v=19$m=...,t=...,p=...$salt$hash
+// hashPassword turns password into an argon2id hash.
+// The result is in PHC format: $argon2id$v=19$m=...,t=...,p=...$salt$hash
 func hashPassword(password string) (string, error) {
 	salt := make([]byte, argonSaltLen)
 	if _, err := rand.Read(salt); err != nil {

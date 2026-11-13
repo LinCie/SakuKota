@@ -14,9 +14,9 @@ import (
 const (
 	// MaxImageSize is the largest image, in bytes, that Promote accepts.
 	MaxImageSize = 5 << 20
-	// UploadTTL is how long a presigned upload stays valid.
+	// UploadTTL is how long a temporary upload link stays valid.
 	UploadTTL = 5 * time.Minute
-	// MaxMedias is the most medias a place or sub-district can have. The
+	// MaxMedias is the most photos a place or sub-district can have. The
 	// position CHECKs of PLACE_MEDIAS and SUB_DISTRICT_MEDIAS match it.
 	MaxMedias = 10
 )
@@ -42,7 +42,7 @@ var imageTypes = map[string]string{
 // extension of an allowed type.
 var uploadName = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$`)
 
-// Upload is a presigned upload of a new image, and the key it is stored under
+// Upload is a temporary upload link for a new image, and the key it is stored under
 // until it is promoted.
 type Upload struct {
 	Key string
@@ -66,6 +66,7 @@ type Images struct {
 	publicBaseURL string
 }
 
+// NewImages builds an Images that stores files in store and builds public links from publicBaseURL.
 func NewImages(store ObjectStore, publicBaseURL string) *Images {
 	return &Images{
 		store:         store,
@@ -77,7 +78,7 @@ func NewImages(store ObjectStore, publicBaseURL string) *Images {
 // Images
 // -----------------------------------------------------------------------------
 
-// PresignUpload checks contentType and returns an upload to
+// PresignUpload checks contentType and returns a temporary link to upload to
 // uploads/{prefix}/{uuid}.{ext}.
 func (i *Images) PresignUpload(ctx context.Context, prefix, contentType string) (Upload, error) {
 	ext, ok := extensionOf(contentType)
@@ -94,9 +95,8 @@ func (i *Images) PresignUpload(ctx context.Context, prefix, contentType string) 
 	return Upload{Key: key, PresignedUpload: presigned}, nil
 }
 
-// Promote checks that uploadKey was presigned for prefix and holds an allowed
-// image, then moves it to {prefix}/{uuid}.{ext} and returns the moved image's
-// key, content type, and size.
+// Promote checks that uploadKey was issued for prefix and holds an allowed image.
+// It moves the image to {prefix}/{uuid}.{ext} and returns its key, type, and size.
 func (i *Images) Promote(ctx context.Context, prefix, uploadKey string) (Media, error) {
 	name, ok := strings.CutPrefix(uploadKey, uploadDir(prefix))
 	match := uploadName.FindStringSubmatch(name)
@@ -128,6 +128,7 @@ func (i *Images) Promote(ctx context.Context, prefix, uploadKey string) (Media, 
 	return Media{Key: key, ContentType: info.ContentType, Size: info.Size}, nil
 }
 
+// Delete removes the file stored under key.
 func (i *Images) Delete(ctx context.Context, key string) error {
 	return i.store.Delete(ctx, key)
 }

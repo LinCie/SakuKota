@@ -14,6 +14,7 @@ type Handler struct {
 	service Service
 }
 
+// NewHandler creates a Handler that passes its work to the review service.
 func NewHandler(service Service) *Handler {
 	return &Handler{
 		service: service,
@@ -24,8 +25,8 @@ func NewHandler(service Service) *Handler {
 // Handler
 // -----------------------------------------------------------------------------
 
-// CreateReview stores the authenticated user's review of the place given by
-// the `id` path parameter. It must be served behind middleware.WithAuth.
+// CreateReview saves the logged-in user's review of the place in the URL.
+// The route must sit behind middleware.WithAuth, so the user is known.
 func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
 	placeID, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
@@ -63,8 +64,8 @@ func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusCreated, toReviewResponse(*created))
 }
 
-// GetReviews lists the reviews of the place given by the `id` path parameter,
-// newest first.
+// GetReviews sends back the reviews of the place in the URL, newest first.
+// If there is no such place, it sends a not-found error.
 func (h *Handler) GetReviews(w http.ResponseWriter, r *http.Request) {
 	placeID, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {

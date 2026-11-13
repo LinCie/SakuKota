@@ -14,9 +14,8 @@ import (
 //
 //go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock
 type Repository interface {
-	// Create stores the suggestion as pending and returns it with its author.
-	// It returns ErrTooManyPending if the user already has MaxPendingPerUser
-	// pending suggestions, or ErrSubDistrictNotFound or ErrCategoryNotFound.
+	// Create saves the suggestion as pending and returns it with its author.
+	// It returns ErrTooManyPending at the limit, or ErrSubDistrictNotFound or ErrCategoryNotFound.
 	Create(ctx context.Context, s *Suggestion) (*Suggestion, error)
 	// GetSuggestion returns the suggestion with its author, or ErrSuggestionNotFound.
 	GetSuggestion(ctx context.Context, id int64) (*Suggestion, error)
@@ -25,9 +24,8 @@ type Repository interface {
 	// GetMany returns the suggestions matching the filter with their authors,
 	// oldest first.
 	GetMany(ctx context.Context, filter SuggestionFilter) ([]Suggestion, error)
-	// MarkApproved marks the suggestion approved as the place placeID. It
-	// returns ErrSuggestionNotFound, or ErrAlreadyReviewed if the suggestion is
-	// not pending.
+	// MarkApproved marks the suggestion approved and links it to the place placeID.
+	// It returns ErrSuggestionNotFound, or ErrAlreadyReviewed if it is not pending.
 	MarkApproved(ctx context.Context, id, placeID, adminID int64) (*Suggestion, error)
 	// Reject marks the suggestion rejected with the reason. It returns
 	// ErrSuggestionNotFound, or ErrAlreadyReviewed if the suggestion is not pending.
@@ -38,6 +36,7 @@ type postgresRepository struct {
 	db *sqlx.DB
 }
 
+// NewPostgresRepository builds a Repository that stores suggestions in PostgreSQL.
 func NewPostgresRepository(db *sqlx.DB) Repository {
 	return &postgresRepository{
 		db: db,
@@ -66,9 +65,8 @@ const suggestionRowColumns = `id, user_id, sub_district_id, category_id, name, a
 	attributes, note, status, rejection_reason, place_id, reviewed_by,
 	reviewed_at, created_at`
 
-// Create stores the suggestion as pending and returns it with its author. The
-// user's row is locked while the pending suggestions are counted, so concurrent
-// submissions by the same user cannot both pass the limit.
+// Create saves the suggestion as pending and returns it with its author.
+// It locks the user's row while counting, so two submissions at once cannot both pass the limit.
 func (r *postgresRepository) Create(ctx context.Context, s *Suggestion) (*Suggestion, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -207,8 +205,7 @@ func (r *postgresRepository) Reject(ctx context.Context, id, adminID int64, reas
 }
 
 // review records the outcome of suggestion id and returns it with its author.
-// The update only applies to a pending suggestion, so a suggestion is reviewed
-// at most once even when admins act at the same time.
+// Only a pending suggestion is updated, so two admins cannot both review it.
 func (r *postgresRepository) review(
 	ctx context.Context,
 	id int64,
@@ -268,9 +265,8 @@ func (r *postgresRepository) unreviewableError(ctx context.Context, id int64) er
 	return ErrAlreadyReviewed
 }
 
-// mapForeignKeyError translates a foreign key violation on
-// PLACE_SUGGESTIONS into the sub-district or category it refers to. Other
-// errors are returned unchanged.
+// mapForeignKeyError maps a bad sub-district or category reference to its not-found error.
+// Any other error is returned unchanged.
 func mapForeignKeyError(err error) error {
 	if database.IsCode(err, database.ForeignKeyViolation) {
 		switch database.ConstraintName(err) {

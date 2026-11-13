@@ -18,8 +18,8 @@ const (
 	roleKey   contextKey = "role"
 )
 
-// WithAuth validates the bearer token and stores the user ID and role in the
-// request context.
+// WithAuth checks the bearer token, then stores the user ID and role in the request.
+// A missing or invalid token gets a 401 response.
 func WithAuth(cfg config.Config) httpx.Constructor {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

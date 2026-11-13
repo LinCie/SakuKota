@@ -32,6 +32,7 @@ type SubDistrictResponse struct {
 // Conversions
 // -----------------------------------------------------------------------------
 
+// toSubDistrict turns the request body into a SubDistrict.
 func toSubDistrict(req SubDistrictRequest) *SubDistrict {
 	return &SubDistrict{
 		Name:                   req.Name,
@@ -42,7 +43,8 @@ func toSubDistrict(req SubDistrictRequest) *SubDistrict {
 	}
 }
 
-// toSubDistrictResponse converts sd, turning its image keys into URLs with imageURL.
+// toSubDistrictResponse turns sd into the JSON shape sent to clients.
+// Image keys become full links using imageURL.
 func toSubDistrictResponse(sd SubDistrict, imageURL func(key string) string) SubDistrictResponse {
 	var staticMap *string
 	if sd.StaticMapImageKey != nil {
@@ -62,6 +64,7 @@ func toSubDistrictResponse(sd SubDistrict, imageURL func(key string) string) Sub
 	}
 }
 
+// toSubDistrictResponses turns each sub-district into its response shape.
 func toSubDistrictResponses(subDistricts []SubDistrict, imageURL func(key string) string) []SubDistrictResponse {
 	responses := make([]SubDistrictResponse, 0, len(subDistricts))
 

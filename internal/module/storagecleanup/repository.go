@@ -25,6 +25,7 @@ type postgresRepository struct {
 	db *sqlx.DB
 }
 
+// NewPostgresRepository builds a Repository that keeps the deletion queue in PostgreSQL.
 func NewPostgresRepository(db *sqlx.DB) Repository {
 	return &postgresRepository{
 		db: db,
@@ -42,9 +43,8 @@ func (r *postgresRepository) Remove(ctx context.Context, key string) error {
 	return err
 }
 
-// ClaimDue returns up to limit due deletions, longest due first, and holds
-// them back by moving their next attempt claimLease ahead. Rows claimed by a
-// concurrent worker are skipped.
+// ClaimDue returns up to limit due deletions, oldest due first.
+// It pushes each one's next attempt back by claimLease, so other workers skip it.
 func (r *postgresRepository) ClaimDue(ctx context.Context, limit int) ([]Deletion, error) {
 	deletions := make([]Deletion, 0)
 

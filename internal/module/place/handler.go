@@ -19,6 +19,8 @@ type Handler struct {
 	imageURL func(key string) string
 }
 
+// NewHandler creates a Handler that passes its work to the service.
+// imageURL turns a stored image key into a link the browser can open.
 func NewHandler(service Service, imageURL func(key string) string) *Handler {
 	return &Handler{
 		service:  service,
@@ -30,6 +32,8 @@ func NewHandler(service Service, imageURL func(key string) string) *Handler {
 // Handler
 // -----------------------------------------------------------------------------
 
+// CreatePlace reads a new place from the request body, saves it, and sends it back.
+// If the data is wrong, it sends back an error that says why.
 func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 	req, ok := httpx.DecodeJSON[PlaceRequest](w, r)
 	if !ok {
@@ -45,8 +49,8 @@ func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusCreated, toPlaceResponse(*p, h.imageURL))
 }
 
-// CreateMediaUpload returns a presigned upload for a new media of the place
-// given by the `id` path parameter.
+// CreateMediaUpload gives the client a temporary upload link for a new photo of the place.
+// The client sends the photo file straight to storage using that link.
 func (h *Handler) CreateMediaUpload(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
@@ -68,10 +72,8 @@ func (h *Handler) CreateMediaUpload(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, storage.ToImageUploadResponse(upload))
 }
 
-// GetPlaces lists places, optionally filtered by `sub_district_id`,
-// `category_id` (comma-separated, matches any), a `q` search term, and a
-// `bbox` (west,south,east,north), and capped to the `limit` lowest ids after
-// skipping the first `offset`. The response carries the total number of matches alongside the places.
+// GetPlaces sends a page of places matching the URL filters (area, category, search, map box).
+// It also sends the total number of matches, so the client knows how many pages there are.
 func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	filter := PlaceFilter{Query: strings.TrimSpace(query.Get("q"))}
@@ -142,7 +144,8 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetPlace returns the place given by the `id` path parameter.
+// GetPlace sends back the place whose id is in the URL.
+// If there is no such place, it sends a not-found error.
 func (h *Handler) GetPlace(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
@@ -163,7 +166,7 @@ func (h *Handler) GetPlace(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.imageURL))
 }
 
-// GetCategories lists every category with its fields.
+// GetCategories sends back every category, each with its custom fields.
 func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
 	categories, err := h.service.GetCategories(r.Context())
 	if err != nil {
@@ -174,7 +177,8 @@ func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toCategoryDetailResponses(categories))
 }
 
-// GetCategory returns the category given by the `id` path parameter.
+// GetCategory sends back the category whose id is in the URL.
+// If there is no such category, it sends a not-found error.
 func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
@@ -195,7 +199,8 @@ func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toCategoryDetailResponse(*c))
 }
 
-// PutPlace replaces the place given by the `id` path parameter.
+// PutPlace replaces the place whose id is in the URL with the details in the body.
+// Any field left out of the body is cleared.
 func (h *Handler) PutPlace(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
@@ -217,7 +222,8 @@ func (h *Handler) PutPlace(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.imageURL))
 }
 
-// DeletePlace deletes the place given by the `id` path parameter.
+// DeletePlace removes the place whose id is in the URL.
+// It sends no content on success, or a not-found error if there is no such place.
 func (h *Handler) DeletePlace(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
@@ -237,8 +243,8 @@ func (h *Handler) DeletePlace(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// AddMedia adds the uploaded image to the medias of the place given by the
-// `id` path parameter.
+// AddMedia attaches an already uploaded photo to the place whose id is in the URL.
+// It sends back the updated place.
 func (h *Handler) AddMedia(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
@@ -260,8 +266,8 @@ func (h *Handler) AddMedia(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.imageURL))
 }
 
-// DeleteMedia deletes the media given by the `mediaId` path parameter from the
-// place given by the `id` path parameter.
+// DeleteMedia removes the photo mediaId from the place id, both taken from the URL.
+// It sends no content on success, or a not-found error if the photo is missing.
 func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
 	if !ok {
@@ -287,9 +293,8 @@ func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// parseBoundingBox parses "west,south,east,north" in degrees. It reports false
-// unless there are four finite coordinates in range with west <= east and
-// south <= north.
+// parseBoundingBox reads a map box written as "west,south,east,north" in degrees.
+// It returns false unless there are four valid numbers in range that form a proper box.
 func parseBoundingBox(param string) (*BoundingBox, bool) {
 	parts := strings.Split(param, ",")
 	if len(parts) != 4 {
@@ -314,7 +319,8 @@ func parseBoundingBox(param string) (*BoundingBox, bool) {
 	return &b, true
 }
 
-// respondImageError writes the response for an error from uploading a place's media.
+// respondImageError sends the right error response for a failed photo upload or add.
+// Any unexpected error becomes a generic 500 response.
 func respondImageError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrPlaceNotFound):
@@ -328,7 +334,8 @@ func respondImageError(w http.ResponseWriter, err error) {
 	}
 }
 
-// respondPlaceError writes the response for an error from creating or updating a place.
+// respondPlaceError sends the right error response for a failed place create or update.
+// Any unexpected error becomes a generic 500 response.
 func respondPlaceError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrPlaceNotFound):

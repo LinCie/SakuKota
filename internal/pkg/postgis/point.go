@@ -20,6 +20,8 @@ type Point struct {
 	geom.Point
 }
 
+// NewPoint makes an XY point with SRID 4326 from longitude and latitude.
+// It returns an error if either value is outside its valid range.
 func NewPoint(longitude, latitude float64) (*Point, error) {
 	if longitude < -180 || longitude > 180 {
 		return nil, fmt.Errorf(
@@ -46,6 +48,7 @@ func NewPoint(longitude, latitude float64) (*Point, error) {
 	}, nil
 }
 
+// MustPoint is NewPoint for values known to be valid. It panics on bad input.
 func MustPoint(longitude, latitude float64) *Point {
 	p, err := NewPoint(longitude, latitude)
 	if err != nil {
@@ -55,9 +58,8 @@ func MustPoint(longitude, latitude float64) *Point {
 	return p
 }
 
-// MarshalJSON encodes a point as a GeoJSON Point instead of exposing the
-// unexported fields used internally by go-geom. It marshals once, unlike
-// geojson.Marshal, which marshals the coordinates and then the geometry.
+// MarshalJSON writes the point as a GeoJSON Point, so go-geom's internal fields stay out.
+// It marshals once, unlike geojson.Marshal, which marshals the coordinates and then the geometry.
 func (p Point) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type        string     `json:"type"`
@@ -148,6 +150,7 @@ func (p Point) Value() (driver.Value, error) {
 	return data, nil
 }
 
+// validatePoint returns an error unless p is a non-empty XY point with SRID 4326.
 func validatePoint(p *Point) error {
 	if p == nil {
 		return fmt.Errorf("point is nil")

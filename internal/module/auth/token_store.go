@@ -39,6 +39,7 @@ type memoryRefreshStore struct {
 // tokens. A sweep visits every token, so it must not run on every Save.
 const refreshSweepInterval = time.Minute
 
+// NewMemoryRefreshStore creates a refresh store that keeps tokens in memory.
 func NewMemoryRefreshStore() RefreshStore {
 	return &memoryRefreshStore{
 		tokens: make(map[string]memoryRefreshEntry),
@@ -49,6 +50,7 @@ func NewMemoryRefreshStore() RefreshStore {
 // memoryRefreshStore
 // -----------------------------------------------------------------------------
 
+// Save stores the token. Expired tokens are swept out at most once a minute.
 func (s *memoryRefreshStore) Save(_ context.Context, tokenHash string, userID int64, ttl time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -67,9 +69,8 @@ func (s *memoryRefreshStore) Save(_ context.Context, tokenHash string, userID in
 	return nil
 }
 
-// sweepExpired removes tokens that expired before now. Tokens are otherwise
-// removed only when presented, so one that is never used again would stay.
-// The caller holds s.mu.
+// sweepExpired removes tokens that expired before now, so unused ones do not pile up.
+// The caller must hold s.mu.
 func (s *memoryRefreshStore) sweepExpired(now time.Time) {
 	for hash, e := range s.tokens {
 		if now.After(e.expiresAt) {
@@ -92,6 +93,7 @@ func (s *memoryRefreshStore) Consume(_ context.Context, tokenHash string) (int64
 	return e.userID, nil
 }
 
+// Delete removes the token if it is stored.
 func (s *memoryRefreshStore) Delete(_ context.Context, tokenHash string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -113,14 +115,17 @@ type redisRefreshStore struct {
 	client *redis.Client
 }
 
+// NewRedisRefreshStore creates a refresh store that keeps tokens in Redis.
 func NewRedisRefreshStore(client *redis.Client) RefreshStore {
 	return &redisRefreshStore{client: client}
 }
 
+// key returns the Redis key for a token hash.
 func (s *redisRefreshStore) key(tokenHash string) string {
 	return redisRefreshKeyPrefix + tokenHash
 }
 
+// Save stores the token in Redis, which deletes it once ttl has passed.
 func (s *redisRefreshStore) Save(ctx context.Context, tokenHash string, userID int64, ttl time.Duration) error {
 	// Redis treats a zero ttl as no expiry and rejects a negative one. A
 	// token that is already expired is not worth storing.
@@ -145,6 +150,7 @@ func (s *redisRefreshStore) Consume(ctx context.Context, tokenHash string) (int6
 	return strconv.ParseInt(val, 10, 64)
 }
 
+// Delete removes the token from Redis if it is there.
 func (s *redisRefreshStore) Delete(ctx context.Context, tokenHash string) error {
 	return s.client.Del(ctx, s.key(tokenHash)).Err()
 }

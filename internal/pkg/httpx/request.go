@@ -7,10 +7,8 @@ import (
 	"net/http"
 )
 
-// DecodeJSON decodes the request body, which must be exactly one JSON object,
-// into a new T. An empty body, malformed JSON, a value that is not an object
-// (including null), wrong field types, and data after the object are answered
-// with 400 INVALID_BODY, and false is returned.
+// DecodeJSON reads the request body as exactly one JSON object into a new T.
+// Anything else gets a 400 INVALID_BODY response, and false is returned.
 func DecodeJSON[T any](w http.ResponseWriter, r *http.Request) (*T, bool) {
 	var v *T
 	decoder := json.NewDecoder(r.Body)

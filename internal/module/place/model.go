@@ -92,7 +92,8 @@ type CategoryField struct {
 // array. It is nil for other data types.
 type FieldOptions []string
 
-// Scan implements database/sql.Scanner.
+// Scan reads a JSON array from the database into o.
+// It lets database/sql fill in this type.
 func (o *FieldOptions) Scan(src any) error {
 	switch value := src.(type) {
 	case nil:
@@ -105,7 +106,8 @@ func (o *FieldOptions) Scan(src any) error {
 	}
 }
 
-// Value implements database/sql/driver.Valuer.
+// Value turns the options into a JSON array for the database, or NULL if they are nil.
+// It lets database/sql write this type.
 func (o FieldOptions) Value() (driver.Value, error) {
 	if o == nil {
 		return nil, nil

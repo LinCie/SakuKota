@@ -14,20 +14,23 @@ import (
 //
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
 type Service interface {
+	// Create checks a new sub-district's data and saves it.
 	Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error)
+	// GetMany returns every sub-district.
 	GetMany(ctx context.Context) ([]SubDistrict, error)
+	// GetSubDistrict returns the sub-district with the given id.
 	GetSubDistrict(ctx context.Context, id int64) (*SubDistrict, error)
-	// Update replaces the sub-district's editable fields with those of sd.
+	// Update overwrites the sub-district with the given id with the details in sd.
 	Update(ctx context.Context, id int64, sd *SubDistrict) (*SubDistrict, error)
+	// Delete removes the sub-district with the given id.
 	Delete(ctx context.Context, id int64) error
-	// ImageUploadURL returns an upload for a new image in the sub-district's slot.
+	// ImageUploadURL gives a temporary link to upload a new image in the given slot.
 	ImageUploadURL(ctx context.Context, id int64, slot ImageSlot, contentType string) (storage.Upload, error)
-	// AddMedia adds the uploaded image to the sub-district's medias.
+	// AddMedia attaches an uploaded photo to the sub-district.
 	AddMedia(ctx context.Context, id int64, uploadKey string) (*SubDistrict, error)
-	// DeleteMedia removes the media from the sub-district's medias.
+	// DeleteMedia removes a photo from the sub-district.
 	DeleteMedia(ctx context.Context, id, mediaID int64) error
-	// SetStaticMap makes the uploaded image the sub-district's static map,
-	// replacing any previous one.
+	// SetStaticMap sets the uploaded image as the static map, replacing any previous one.
 	SetStaticMap(ctx context.Context, id int64, uploadKey string) (*SubDistrict, error)
 }
 
@@ -36,6 +39,7 @@ type service struct {
 	images ImageStorage
 }
 
+// NewService builds the sub-district service from the repository and the image storage.
 func NewService(repo Repository, images ImageStorage) Service {
 	return &service{
 		repo:   repo,
@@ -47,6 +51,7 @@ func NewService(repo Repository, images ImageStorage) Service {
 // service
 // -----------------------------------------------------------------------------
 
+// Create checks the new sub-district's data, then saves it.
 func (s *service) Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error) {
 	if err := validate(sd); err != nil {
 		return nil, err
@@ -55,16 +60,18 @@ func (s *service) Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, er
 	return s.repo.Create(ctx, sd)
 }
 
+// GetMany returns every sub-district.
 func (s *service) GetMany(ctx context.Context) ([]SubDistrict, error) {
 	return s.repo.GetMany(ctx)
 }
 
+// GetSubDistrict returns the sub-district with the given id.
 func (s *service) GetSubDistrict(ctx context.Context, id int64) (*SubDistrict, error) {
 	return s.repo.GetSubDistrict(ctx, id)
 }
 
-// Update replaces the stored sub-district's fields with those of sd. The
-// repository reports ErrSubDistrictNotFound when there is no such sub-district.
+// Update checks the new details, then overwrites the sub-district with the given id.
+// If there is no such sub-district, the repository reports ErrSubDistrictNotFound.
 func (s *service) Update(ctx context.Context, id int64, sd *SubDistrict) (*SubDistrict, error) {
 	if err := validate(sd); err != nil {
 		return nil, err
@@ -74,13 +81,14 @@ func (s *service) Update(ctx context.Context, id int64, sd *SubDistrict) (*SubDi
 	return s.repo.Update(ctx, sd)
 }
 
-// Delete removes the sub-district. The repository queues its medias and
-// static map for deletion.
+// Delete removes the sub-district with the given id.
+// The repository also queues its photos and static map for deletion from storage.
 func (s *service) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
 }
 
-// ImageUploadURL returns an upload for a new image in slot of the sub-district.
+// ImageUploadURL checks the sub-district exists, then gives a temporary link to upload an image.
+// The image is stored under the sub-district's folder for that slot.
 func (s *service) ImageUploadURL(ctx context.Context, id int64, slot ImageSlot, contentType string) (storage.Upload, error) {
 	if _, err := s.repo.GetSubDistrict(ctx, id); err != nil {
 		return storage.Upload{}, err
@@ -89,27 +97,26 @@ func (s *service) ImageUploadURL(ctx context.Context, id int64, slot ImageSlot, 
 	return s.images.PresignUpload(ctx, imagePrefix(id, slot), contentType)
 }
 
-// AddMedia promotes the upload and adds it to the sub-district's medias.
+// AddMedia attaches an uploaded photo to the sub-district's photo list.
+// If the photo cannot be attached, for example because the list is full, its file is deleted again.
 func (s *service) AddMedia(ctx context.Context, id int64, uploadKey string) (*SubDistrict, error) {
 	return s.storeImage(ctx, id, SlotMedias, uploadKey, s.repo.AddMedia)
 }
 
-// DeleteMedia removes the media from the sub-district. The repository queues
-// its image for deletion.
+// DeleteMedia removes a photo from the sub-district.
+// The repository also queues its file for deletion from storage.
 func (s *service) DeleteMedia(ctx context.Context, id, mediaID int64) error {
 	return s.repo.DeleteMedia(ctx, id, mediaID)
 }
 
-// SetStaticMap promotes the upload and stores it as the sub-district's static
-// map. The repository queues the previous static map for deletion.
+// SetStaticMap moves the uploaded image into place as the sub-district's static map.
+// The repository queues the previous static map for deletion.
 func (s *service) SetStaticMap(ctx context.Context, id int64, uploadKey string) (*SubDistrict, error) {
 	return s.storeImage(ctx, id, SlotStaticMap, uploadKey, s.repo.SetStaticMap)
 }
 
-// storeImage promotes the upload to slot and stores it with store. If the
-// promoted image cannot be stored, for example because the sub-district
-// already has storage.MaxMedias, its delete is attempted once and a failure is
-// ignored: it only leaves an unused object behind.
+// storeImage moves the upload into the slot, then saves it with store.
+// If saving fails, the moved file is deleted again, and a failed delete is ignored.
 func (s *service) storeImage(ctx context.Context, id int64, slot ImageSlot, uploadKey string,
 	store func(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error),
 ) (*SubDistrict, error) {
@@ -131,7 +138,7 @@ func (s *service) storeImage(ctx context.Context, id int64, slot ImageSlot, uplo
 	return updated, nil
 }
 
-// imagePrefix is the storage prefix of the images in slot of sub-district id.
+// imagePrefix returns the storage folder for the images in a slot of the sub-district with id.
 func imagePrefix(id int64, slot ImageSlot) string {
 	return "subdistricts/" + strconv.FormatInt(id, 10) + "/" + string(slot)
 }
@@ -140,8 +147,8 @@ func imagePrefix(id int64, slot ImageSlot) string {
 // validation
 // -----------------------------------------------------------------------------
 
-// validate trims the text fields, then checks every field against its limits.
-// Blank optional text is stored as absent.
+// validate cleans up the text fields, then checks every field against its limits.
+// Blank optional text is saved as nothing.
 func validate(sd *SubDistrict) error {
 	sd.Name = strings.TrimSpace(sd.Name)
 	if n := utf8.RuneCountInString(sd.Name); n == 0 || n > maxNameLength {

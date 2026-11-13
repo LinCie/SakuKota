@@ -12,9 +12,8 @@ import (
 //
 //go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock
 type Repository interface {
-	// Create stores the review and adds its rating to the place's totals in
-	// the same statement. It returns the stored review with its author, or
-	// ErrPlaceNotFound or ErrAlreadyReviewed.
+	// Create saves the review and adds its rating to the place's totals.
+	// It returns the saved review with its author, or ErrPlaceNotFound or ErrAlreadyReviewed.
 	Create(ctx context.Context, r *Review) (*Review, error)
 	// GetByPlace returns the place's reviews with their authors, newest
 	// first, or ErrPlaceNotFound.
@@ -25,6 +24,7 @@ type postgresRepository struct {
 	db *sqlx.DB
 }
 
+// NewPostgresRepository builds a Repository that stores reviews in PostgreSQL.
 func NewPostgresRepository(db *sqlx.DB) Repository {
 	return &postgresRepository{
 		db: db,
@@ -40,10 +40,8 @@ func NewPostgresRepository(db *sqlx.DB) Repository {
 const reviewColumns = `r.id, r.place_id, r.user_id, r.rating, r.comment, r.created_at,
 	u.id AS "user.id", u.name AS "user.name"`
 
-// Create inserts the review and adds its rating to the place's totals. Both
-// happen in one statement, so a review that fails to insert leaves the totals
-// untouched. The totals are incremented rather than recounted, so concurrent
-// reviews of the same place wait on the place's row and none is lost.
+// Create saves the review and adds its rating to the place's totals in one statement.
+// Adding to the totals, not recounting them, means two reviews at once both count.
 func (r *postgresRepository) Create(ctx context.Context, review *Review) (*Review, error) {
 	var created Review
 
@@ -111,9 +109,8 @@ func (r *postgresRepository) GetByPlace(ctx context.Context, placeID int64) ([]R
 	return reviews, nil
 }
 
-// mapCreateError translates a second review by the same user into
-// ErrAlreadyReviewed and a missing place into ErrPlaceNotFound. Other errors
-// are returned unchanged.
+// mapCreateError maps a repeat review to ErrAlreadyReviewed and a missing place to ErrPlaceNotFound.
+// Any other error is returned unchanged.
 func mapCreateError(err error) error {
 	if database.IsCode(err, database.UniqueViolation) &&
 		database.ConstraintName(err) == "place_reviews_place_id_user_id_key" {
