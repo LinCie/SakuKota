@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"rantau-go/internal/config"
-	"rantau-go/internal/module/user"
+	"rantau-go/internal/module/users"
 	"rantau-go/internal/pkg/httpx"
 	"rantau-go/internal/pkg/jwt"
 	"rantau-go/internal/router"
@@ -191,7 +191,7 @@ func TestRouter_EveryRouteHasADeclaredAccess(t *testing.T) {
 
 func TestRouter_Access(t *testing.T) {
 	h := newRouter(t)
-	user, admin := token(t, "user"), token(t, user.RoleAdmin)
+	user, admin := token(t, "user"), token(t, users.RoleAdmin)
 
 	for key, level := range routeAccess {
 		t.Run(key, func(t *testing.T) {

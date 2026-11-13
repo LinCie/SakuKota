@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"rantau-go/internal/config"
-	"rantau-go/internal/module/user"
+	"rantau-go/internal/module/users"
 	"rantau-go/internal/pkg/httpx"
 )
 
@@ -44,7 +44,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 			errors.Is(err, ErrWeakPassword),
 			errors.Is(err, ErrPasswordTooLong):
 			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
-		case errors.Is(err, user.ErrEmailTaken):
+		case errors.Is(err, users.ErrEmailTaken):
 			httpx.RespondError(w, http.StatusConflict, httpx.CodeEmailTaken, err.Error())
 		default:
 			httpx.RespondInternalError(w)

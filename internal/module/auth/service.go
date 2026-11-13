@@ -12,7 +12,7 @@ import (
 	"unicode/utf8"
 
 	"rantau-go/internal/config"
-	"rantau-go/internal/module/user"
+	"rantau-go/internal/module/users"
 	"rantau-go/internal/pkg/jwt"
 )
 
@@ -21,26 +21,26 @@ import (
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
 type Service interface {
 	// Register checks the sign-up details, then saves the user with a hashed password.
-	Register(ctx context.Context, u *user.User, password string) (*user.User, error)
+	Register(ctx context.Context, u *users.User, password string) (*users.User, error)
 	// Login checks the email and password, then issues a new pair of tokens.
-	Login(ctx context.Context, email, password string) (*user.User, *Tokens, error)
+	Login(ctx context.Context, email, password string) (*users.User, *Tokens, error)
 	// Refresh trades a refresh token for the user and a new token pair.
 	// The old refresh token stops working.
-	Refresh(ctx context.Context, refreshToken string) (*user.User, *Tokens, error)
+	Refresh(ctx context.Context, refreshToken string) (*users.User, *Tokens, error)
 	// Logout revokes a refresh token so it cannot be used again.
 	Logout(ctx context.Context, refreshToken string) error
 }
 
 type service struct {
 	cfg   config.Config
-	users user.Service
+	users users.Service
 	store RefreshStore
 	// hashSlots holds one token per running password hash.
 	hashSlots chan struct{}
 }
 
 // NewService builds the auth service from the config, the user service, and the refresh store.
-func NewService(cfg config.Config, userService user.Service, store RefreshStore) Service {
+func NewService(cfg config.Config, userService users.Service, store RefreshStore) Service {
 	return &service{
 		cfg:       cfg,
 		users:     userService,
@@ -54,7 +54,7 @@ func NewService(cfg config.Config, userService user.Service, store RefreshStore)
 // -----------------------------------------------------------------------------
 
 // Register checks the name, email, and password, then saves the user with a hashed password.
-func (s *service) Register(ctx context.Context, u *user.User, password string) (*user.User, error) {
+func (s *service) Register(ctx context.Context, u *users.User, password string) (*users.User, error) {
 	u.Name = strings.TrimSpace(u.Name)
 	switch {
 	case u.Name == "":
@@ -91,7 +91,7 @@ func (s *service) Register(ctx context.Context, u *user.User, password string) (
 }
 
 // Login checks the email and password, then issues a new pair of tokens for the user.
-func (s *service) Login(ctx context.Context, email, password string) (*user.User, *Tokens, error) {
+func (s *service) Login(ctx context.Context, email, password string) (*users.User, *Tokens, error) {
 	// No stored password is this long, so there is nothing to verify.
 	if utf8.RuneCountInString(password) > maxPasswordLength {
 		return nil, nil, ErrInvalidCredentials
@@ -99,7 +99,7 @@ func (s *service) Login(ctx context.Context, email, password string) (*user.User
 
 	u, err := s.users.GetByEmail(ctx, normalizeEmail(email))
 	if err != nil {
-		if errors.Is(err, user.ErrNotFound) {
+		if errors.Is(err, users.ErrNotFound) {
 			return nil, nil, ErrInvalidCredentials
 		}
 		return nil, nil, err
@@ -123,7 +123,7 @@ func (s *service) Login(ctx context.Context, email, password string) (*user.User
 
 // Refresh exchanges a valid refresh token for the user and a new token pair.
 // The old refresh token is consumed, so it cannot be reused.
-func (s *service) Refresh(ctx context.Context, refreshToken string) (*user.User, *Tokens, error) {
+func (s *service) Refresh(ctx context.Context, refreshToken string) (*users.User, *Tokens, error) {
 	userID, err := s.store.Consume(ctx, hashToken(refreshToken))
 	if err != nil {
 		return nil, nil, err
@@ -132,7 +132,7 @@ func (s *service) Refresh(ctx context.Context, refreshToken string) (*user.User,
 	// Reload the user so the new access token reflects their current role.
 	u, err := s.users.GetUser(ctx, userID)
 	if err != nil {
-		if errors.Is(err, user.ErrNotFound) {
+		if errors.Is(err, users.ErrNotFound) {
 			return nil, nil, ErrInvalidRefreshToken
 		}
 		return nil, nil, err
@@ -153,7 +153,7 @@ func (s *service) Logout(ctx context.Context, refreshToken string) error {
 
 // issueTokens makes a new access token and refresh token for u.
 // The refresh token is saved by its hash, never as it is.
-func (s *service) issueTokens(ctx context.Context, u *user.User) (*Tokens, error) {
+func (s *service) issueTokens(ctx context.Context, u *users.User) (*Tokens, error) {
 	accessToken, err := jwt.GenerateToken(s.cfg, u.ID, u.Role)
 	if err != nil {
 		return nil, err

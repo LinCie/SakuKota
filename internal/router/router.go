@@ -12,11 +12,11 @@ import (
 	"rantau-go/internal/docs"
 	"rantau-go/internal/middleware"
 	"rantau-go/internal/module/auth"
-	"rantau-go/internal/module/place"
-	"rantau-go/internal/module/review"
-	"rantau-go/internal/module/subdistrict"
-	"rantau-go/internal/module/suggestion"
-	"rantau-go/internal/module/user"
+	"rantau-go/internal/module/places"
+	"rantau-go/internal/module/reviews"
+	"rantau-go/internal/module/subdistricts"
+	"rantau-go/internal/module/suggestions"
+	"rantau-go/internal/module/users"
 	"rantau-go/internal/storage"
 )
 
@@ -40,12 +40,12 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 
 	images := storage.NewImages(storage.NewS3(cfg.Storage), cfg.Storage.PublicURL)
 
-	userModule := user.NewModule(db)
+	userModule := users.NewModule(db)
 	authModule := auth.NewModule(cfg, userModule.Service, rdb)
-	placeModule := place.NewModule(db, images)
-	reviewModule := review.NewModule(db)
-	subdistrictModule := subdistrict.NewModule(db, images)
-	suggestionModule := suggestion.NewModule(db, placeModule.Service)
+	placeModule := places.NewModule(db, images)
+	reviewModule := reviews.NewModule(db)
+	subdistrictModule := subdistricts.NewModule(db, images)
+	suggestionModule := suggestions.NewModule(db, placeModule.Service)
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
@@ -64,7 +64,7 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.WithAuth(cfg))
-				r.Use(middleware.Guard([]string{user.RoleAdmin}))
+				r.Use(middleware.Guard([]string{users.RoleAdmin}))
 
 				// POST /v1/places
 				r.Post("/", placeModule.Handler.CreatePlace)
@@ -119,7 +119,7 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.WithAuth(cfg))
-				r.Use(middleware.Guard([]string{user.RoleAdmin}))
+				r.Use(middleware.Guard([]string{users.RoleAdmin}))
 
 				// GET /v1/suggestions
 				r.Get("/", suggestionModule.Handler.GetSuggestions)
@@ -144,7 +144,7 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.WithAuth(cfg))
-				r.Use(middleware.Guard([]string{user.RoleAdmin}))
+				r.Use(middleware.Guard([]string{users.RoleAdmin}))
 
 				// POST /v1/subdistricts
 				r.Post("/", subdistrictModule.Handler.CreateSubDistrict)
@@ -156,7 +156,7 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 				r.Delete("/{id}", subdistrictModule.Handler.DeleteSubDistrict)
 
 				// POST /v1/subdistricts/{id}/medias/upload-url
-				r.Post("/{id}/medias/upload-url", subdistrictModule.Handler.CreateImageUpload(subdistrict.SlotMedias))
+				r.Post("/{id}/medias/upload-url", subdistrictModule.Handler.CreateImageUpload(subdistricts.SlotMedias))
 
 				// POST /v1/subdistricts/{id}/medias
 				r.Post("/{id}/medias", subdistrictModule.Handler.AddMedia)
@@ -165,7 +165,7 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 				r.Delete("/{id}/medias/{mediaId}", subdistrictModule.Handler.DeleteMedia)
 
 				// POST /v1/subdistricts/{id}/static-map/upload-url
-				r.Post("/{id}/static-map/upload-url", subdistrictModule.Handler.CreateImageUpload(subdistrict.SlotStaticMap))
+				r.Post("/{id}/static-map/upload-url", subdistrictModule.Handler.CreateImageUpload(subdistricts.SlotStaticMap))
 
 				// PUT /v1/subdistricts/{id}/static-map
 				r.Put("/{id}/static-map", subdistrictModule.Handler.SetStaticMap)

@@ -228,14 +228,14 @@ The test router posts to `/v1/auth`, and the refresh cookie path is
   service is not called. If revocation fails, the response is 500 but the
   cookie is still cleared. A revoked token can no longer refresh.
 
-### 6.2 Users (`internal/module/user`)
+### 6.2 Users (`internal/module/users`)
 
 This is a service only, with no HTTP handler. It offers `Create`, `GetByEmail`,
 and `GetUser`, which pass repository results and errors (`ErrEmailTaken`,
 `ErrNotFound`) through unchanged. Stored users carry a `Role`, which defaults
 to `"user"`.
 
-### 6.3 Places and categories (`internal/module/place`)
+### 6.3 Places and categories (`internal/module/places`)
 
 **Place response:** `id, sub_district_id, name, address, location,
 operating_hours, estimated_price_range, short_description, attributes,
@@ -361,7 +361,7 @@ its key; a place without images has `[]`. Lists and single reads return
   | `mosque` | Masjid | M | board | `facility_type`, `friday_prayer` |
   | `worship-other` | Ibadah Lain | I | board | `religion` |
 
-### 6.4 Reviews (`internal/module/review`)
+### 6.4 Reviews (`internal/module/reviews`)
 
 - **`GET /places/{id}/reviews`** is public. It lists newest first, and on a
   tie the higher id comes first. An unknown place returns `404
@@ -383,7 +383,7 @@ its key; a place without images has `[]`. Lists and single reads return
   user{id,name}}`.
 - There are no edit or delete endpoints for reviews.
 
-### 6.5 Sub-districts / kecamatan (`internal/module/subdistrict`)
+### 6.5 Sub-districts / kecamatan (`internal/module/subdistricts`)
 
 **Response:** `id, name, slug, flood_history, safety_crime_information,
 estimated_daily_spending, medias, static_map_image_url`. `medias` has the same
@@ -434,7 +434,7 @@ is **not** writable: the server ignores it in create and update bodies.
   The medias are never touched. If storing fails, the promoted object is
   deleted.
 
-### 6.6 Suggestions (`internal/module/suggestion`)
+### 6.6 Suggestions (`internal/module/suggestions`)
 
 Any signed-in user can submit suggestions and list their own. Admins can list,
 read, approve, and reject them. The admin role check happens in the API router.
@@ -693,3 +693,4 @@ them.
 | 2026-11-13 | Verification update | Multiple images (medias). New `MEDIAS`, `PLACE_MEDIAS`, and `SUB_DISTRICT_MEDIAS` tables replace `PLACES.image_key` and `SUB_DISTRICTS.image_key`; the static map is `SUB_DISTRICTS.static_map_media_id`. Places and sub-districts take up to 10 medias through `POST .../medias/upload-url`, `POST .../medias`, and `DELETE .../medias/{mediaId}` (`INVALID_MEDIA_ID`, `MEDIA_NOT_FOUND`, `MEDIA_LIMIT_REACHED`); `image_url` became `medias`; the old `/image` routes are gone; `Promote` returns a `Media`. Known gaps listed in §10. The web app is not updated yet |
 | 2026-11-11 | Verification update | Review cleanup pass. Every JSON body goes through `httpx.DecodeJSON`, which also rejects data after the object (`INVALID_BODY`); auth user objects include `role`; `GET /places` `offset` and `INVALID_OFFSET` recorded (already tested); a category field with an unknown data type fails as a server error rather than `ErrInvalidAttributes`; `internal/module/users` renamed to `internal/module/user`; untested changes (no API CORS, per-command config, new migration checks) listed in §10 |
 | 2026-11-13 | Verification update | Video medias. `internal/storage` also allows `video/mp4` and `video/webm` (50 MB `MaxVideoSize`, `ErrVideoTooLarge`, a `400 VALIDATION_ERROR`); §6.7 updated and covered by new storage and place handler tests. The web app change (upload, playback) is untested and noted in §10 |
+| 2026-11-13 | Verification update | Plural module packages. `internal/module/place`, `review`, `subdistrict`, `suggestion`, and `user` renamed to `places`, `reviews`, `subdistricts`, `suggestions`, and `users`, with package names and qualifiers to match; `auth` and `storagecleanup` are unchanged. Verified by `go build`, `go vet`, and `go test ./...` (1248 passed in 30 packages) |

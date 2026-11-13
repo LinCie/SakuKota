@@ -13,8 +13,8 @@ import (
 
 	"rantau-go/internal/config"
 	"rantau-go/internal/module/auth"
-	"rantau-go/internal/module/user"
-	usermock "rantau-go/internal/module/user/mock"
+	"rantau-go/internal/module/users"
+	usersmock "rantau-go/internal/module/users/mock"
 )
 
 const (
@@ -37,18 +37,18 @@ func testConfig() config.Config {
 
 // newService uses the real password hashing and refresh store; only the
 // user service is mocked.
-func newService(t *testing.T) (auth.Service, *usermock.MockService) {
+func newService(t *testing.T) (auth.Service, *usersmock.MockService) {
 	t.Helper()
-	userSvc := usermock.NewMockService(gomock.NewController(t))
+	userSvc := usersmock.NewMockService(gomock.NewController(t))
 	return auth.NewService(testConfig(), userSvc, auth.NewMemoryRefreshStore()), userSvc
 }
 
 // issueSession logs in testEmail and returns the issued tokens.
-func issueSession(t *testing.T, svc auth.Service, userSvc *usermock.MockService) *auth.Tokens {
+func issueSession(t *testing.T, svc auth.Service, userSvc *usersmock.MockService) *auth.Tokens {
 	t.Helper()
 
 	userSvc.EXPECT().GetByEmail(gomock.Any(), testEmail).
-		Return(&user.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)
+		Return(&users.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)
 
 	_, tokens, err := svc.Login(context.Background(), testEmail, testPassword)
 	require.NoError(t, err, "login")
@@ -62,14 +62,14 @@ func issueSession(t *testing.T, svc auth.Service, userSvc *usermock.MockService)
 func TestService_Register_NormalizesAndStoresHashedUser(t *testing.T) {
 	svc, userSvc := newService(t)
 
-	var stored *user.User
+	var stored *users.User
 	userSvc.EXPECT().Create(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, u *user.User) (*user.User, error) {
+		func(_ context.Context, u *users.User) (*users.User, error) {
 			stored = u
-			return &user.User{ID: 1, Name: u.Name, Email: u.Email, PasswordHash: u.PasswordHash}, nil
+			return &users.User{ID: 1, Name: u.Name, Email: u.Email, PasswordHash: u.PasswordHash}, nil
 		})
 
-	u, err := svc.Register(context.Background(), &user.User{Name: "  Ana  ", Email: "  ANA@Example.COM "}, testPassword)
+	u, err := svc.Register(context.Background(), &users.User{Name: "  Ana  ", Email: "  ANA@Example.COM "}, testPassword)
 	require.NoError(t, err, "register")
 	assert.Equal(t, int64(1), u.ID)
 	assert.Equal(t, "Ana", stored.Name)
@@ -103,7 +103,7 @@ func TestService_Register_RejectsInvalidInput(t *testing.T) {
 			// No expectations: invalid input must never reach storage.
 			svc, _ := newService(t)
 
-			_, err := svc.Register(context.Background(), &user.User{Name: tc.userName, Email: tc.email}, tc.password)
+			_, err := svc.Register(context.Background(), &users.User{Name: tc.userName, Email: tc.email}, tc.password)
 			assert.ErrorIs(t, err, tc.want)
 		})
 	}
@@ -112,9 +112,9 @@ func TestService_Register_RejectsInvalidInput(t *testing.T) {
 func TestService_Register_AcceptsEightCharacterPassword(t *testing.T) {
 	svc, userSvc := newService(t)
 
-	userSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&user.User{ID: 1}, nil)
+	userSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&users.User{ID: 1}, nil)
 
-	_, err := svc.Register(context.Background(), &user.User{Name: "Ana", Email: testEmail}, "12345678")
+	_, err := svc.Register(context.Background(), &users.User{Name: "Ana", Email: testEmail}, "12345678")
 	assert.NoError(t, err, "register")
 }
 
@@ -122,9 +122,9 @@ func TestService_Register_PasswordLengthLimitsCountCharacters(t *testing.T) {
 	for _, password := range []string{strings.Repeat("a", 128), strings.Repeat("é", 8), strings.Repeat("é", 128)} {
 		svc, userSvc := newService(t)
 
-		userSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&user.User{ID: 1}, nil)
+		userSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&users.User{ID: 1}, nil)
 
-		_, err := svc.Register(context.Background(), &user.User{Name: "Ana", Email: testEmail}, password)
+		_, err := svc.Register(context.Background(), &users.User{Name: "Ana", Email: testEmail}, password)
 		assert.NoError(t, err, "register with %d bytes", len(password))
 	}
 }
@@ -140,19 +140,19 @@ func TestService_Login_PasswordOverMaximumIsInvalidCredentials(t *testing.T) {
 func TestService_Register_AcceptsHundredCharacterName(t *testing.T) {
 	svc, userSvc := newService(t)
 
-	userSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&user.User{ID: 1}, nil)
+	userSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&users.User{ID: 1}, nil)
 
-	_, err := svc.Register(context.Background(), &user.User{Name: strings.Repeat("a", 100), Email: testEmail}, "password1")
+	_, err := svc.Register(context.Background(), &users.User{Name: strings.Repeat("a", 100), Email: testEmail}, "password1")
 	assert.NoError(t, err, "register")
 }
 
 func TestService_Register_DuplicateEmailIsReturned(t *testing.T) {
 	svc, userSvc := newService(t)
 
-	userSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, user.ErrEmailTaken)
+	userSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, users.ErrEmailTaken)
 
-	_, err := svc.Register(context.Background(), &user.User{Name: "Ana", Email: testEmail}, testPassword)
-	assert.ErrorIs(t, err, user.ErrEmailTaken)
+	_, err := svc.Register(context.Background(), &users.User{Name: "Ana", Email: testEmail}, testPassword)
+	assert.ErrorIs(t, err, users.ErrEmailTaken)
 }
 
 // -----------------------------------------------------------------------------
@@ -163,7 +163,7 @@ func TestService_Login_NormalizesEmailAndIssuesTokens(t *testing.T) {
 	svc, userSvc := newService(t)
 
 	userSvc.EXPECT().GetByEmail(gomock.Any(), testEmail).
-		Return(&user.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)
+		Return(&users.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)
 
 	u, tokens, err := svc.Login(context.Background(), "  ANA@Example.com ", testPassword)
 	require.NoError(t, err, "login")
@@ -175,21 +175,21 @@ func TestService_Login_NormalizesEmailAndIssuesTokens(t *testing.T) {
 func TestService_Login_InvalidCredentials(t *testing.T) {
 	tests := []struct {
 		name     string
-		setup    func(*usermock.MockService)
+		setup    func(*usersmock.MockService)
 		password string
 	}{
 		{
 			name: "unknown email",
-			setup: func(userSvc *usermock.MockService) {
-				userSvc.EXPECT().GetByEmail(gomock.Any(), testEmail).Return(nil, user.ErrNotFound)
+			setup: func(userSvc *usersmock.MockService) {
+				userSvc.EXPECT().GetByEmail(gomock.Any(), testEmail).Return(nil, users.ErrNotFound)
 			},
 			password: testPassword,
 		},
 		{
 			name: "wrong password",
-			setup: func(userSvc *usermock.MockService) {
+			setup: func(userSvc *usersmock.MockService) {
 				userSvc.EXPECT().GetByEmail(gomock.Any(), testEmail).
-					Return(&user.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)
+					Return(&users.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)
 			},
 			password: "wrong-horse",
 		},
@@ -222,7 +222,7 @@ func TestService_Login_CorruptHashIsNotBadCredentials(t *testing.T) {
 	svc, userSvc := newService(t)
 
 	userSvc.EXPECT().GetByEmail(gomock.Any(), testEmail).
-		Return(&user.User{ID: 7, Email: testEmail, PasswordHash: "corrupt"}, nil)
+		Return(&users.User{ID: 7, Email: testEmail, PasswordHash: "corrupt"}, nil)
 
 	_, _, err := svc.Login(context.Background(), testEmail, testPassword)
 	require.Error(t, err, "login with a corrupt stored hash succeeded")
@@ -238,7 +238,7 @@ func TestService_Refresh_ConsumesOldSessionAndIssuesNewTokens(t *testing.T) {
 	first := issueSession(t, svc, userSvc)
 
 	userSvc.EXPECT().GetUser(gomock.Any(), int64(7)).
-		Return(&user.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)
+		Return(&users.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)
 
 	u, second, err := svc.Refresh(context.Background(), first.RefreshToken)
 	require.NoError(t, err, "refresh")
@@ -262,7 +262,7 @@ func TestService_Refresh_DeletedUserIsRejected(t *testing.T) {
 	svc, userSvc := newService(t)
 	first := issueSession(t, svc, userSvc)
 
-	userSvc.EXPECT().GetUser(gomock.Any(), int64(7)).Return(nil, user.ErrNotFound)
+	userSvc.EXPECT().GetUser(gomock.Any(), int64(7)).Return(nil, users.ErrNotFound)
 
 	// No session may be issued for a missing user.
 	_, _, err := svc.Refresh(context.Background(), first.RefreshToken)

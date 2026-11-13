@@ -3,7 +3,7 @@ package auth
 import (
 	"time"
 
-	"rantau-go/internal/module/user"
+	"rantau-go/internal/module/users"
 )
 
 // RegisterRequest is the API payload for registering a User.
@@ -41,15 +41,15 @@ type UserResponse struct {
 // -----------------------------------------------------------------------------
 
 // toUser turns the sign-up body into a User. The password is set later.
-func toUser(req RegisterRequest) *user.User {
-	return &user.User{
+func toUser(req RegisterRequest) *users.User {
+	return &users.User{
 		Name:  req.Name,
 		Email: req.Email,
 	}
 }
 
 // toSessionResponse builds the login or refresh reply from the user and access token.
-func toSessionResponse(u *user.User, t *Tokens) SessionResponse {
+func toSessionResponse(u *users.User, t *Tokens) SessionResponse {
 	return SessionResponse{
 		User:        toUserResponse(u),
 		AccessToken: t.AccessToken,
@@ -57,7 +57,7 @@ func toSessionResponse(u *user.User, t *Tokens) SessionResponse {
 }
 
 // toUserResponse turns u into the JSON shape sent to clients.
-func toUserResponse(u *user.User) UserResponse {
+func toUserResponse(u *users.User) UserResponse {
 	return UserResponse{
 		ID:        u.ID,
 		Name:      u.Name,
