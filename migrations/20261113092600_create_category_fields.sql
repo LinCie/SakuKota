@@ -1,25 +1,19 @@
 -- +goose Up
-
--- More categories a perantau needs. `color` is grouped by theme, so a hue marks
--- a group and the code and icon tell its categories apart:
---   cat   (blue)   health and emergency: clinic, hospital, puskesmas, police
---   board (green)  care and community: pharmacy, worship
---   chili (red)    food and daily goods: warung, minimarket, water and gas
---   plum           crafts: tailor, print and copy
---   sign  (yellow) city services and paperwork: laundry, bank, transit, offices
-INSERT INTO CATEGORIES (name, slug, code, label, color)
-VALUES
-    ('Mosque & Musala', 'mosque', 'M', 'Masjid', 'board'),
-    ('Other Worship', 'worship-other', 'I', 'Ibadah Lain', 'board'),
-    ('Police Post', 'police-post', 'P', 'Pos Polisi', 'cat'),
-    ('Hospital', 'hospital', 'R', 'Rumah Sakit', 'cat'),
-    ('Community Health Center', 'puskesmas', 'S', 'Puskesmas', 'cat'),
-    ('Bank & ATM', 'bank-atm', 'B', 'Bank & ATM', 'sign'),
-    ('Minimarket', 'minimarket', 'T', 'Minimarket', 'chili'),
-    ('Transit Stop', 'transit-stop', 'H', 'Halte/Stasiun', 'sign'),
-    ('Public Service Office', 'public-service', 'U', 'Layanan Publik', 'sign'),
-    ('Water & Gas Refill', 'water-gas', 'G', 'Air & Gas', 'chili'),
-    ('Print & Copy', 'print-copy', 'F', 'Fotokopi', 'plum');
+-- The custom fields of a category, defined here like the categories
+-- themselves. The place service validates a place's attributes by data type,
+-- so a type it does not know must not be storable.
+CREATE TABLE CATEGORY_FIELDS (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    category_id BIGINT NOT NULL,
+    key VARCHAR(64) NOT NULL,
+    label VARCHAR(100) NOT NULL,
+    data_type VARCHAR(20) NOT NULL CHECK (data_type IN ('text', 'number', 'boolean', 'select', 'range', 'date')),
+    required BOOLEAN NOT NULL DEFAULT FALSE,
+    options JSONB,
+    sort_order INTEGER NOT NULL,
+    UNIQUE (category_id, key),
+    FOREIGN KEY (category_id) REFERENCES CATEGORIES(id)
+);
 
 WITH SEEDED_CATEGORY_FIELDS (
     sort_order,
@@ -31,6 +25,23 @@ WITH SEEDED_CATEGORY_FIELDS (
     options
 ) AS (
     VALUES
+        (1, 'affordable-food-warung', 'halal', 'Halal', 'boolean', TRUE, NULL),
+        (2, 'affordable-food-warung', 'serving_style', 'Cara penyajian', 'select', TRUE, '["Prasmanan", "Dimasak saat dipesan"]'),
+        (3, 'affordable-food-warung', 'seating_capacity', 'Kapasitas tempat duduk', 'number', FALSE, NULL),
+        (1, 'tailor', 'specialty', 'Keahlian', 'select', TRUE, '["Permak", "Reparasi", "Jahit baru"]'),
+        (2, 'tailor', 'turnaround_days', 'Lama pengerjaan (hari)', 'range', TRUE, NULL),
+        (3, 'tailor', 'same_day_service', 'Bisa selesai di hari yang sama', 'boolean', FALSE, NULL),
+        (1, 'local-clinic', 'bpjs_accepted', 'Menerima BPJS', 'boolean', TRUE, NULL),
+        (2, 'local-clinic', 'walk_in', 'Bisa datang tanpa janji', 'boolean', FALSE, NULL),
+        (3, 'local-clinic', 'services', 'Layanan', 'text', FALSE, NULL),
+        (4, 'local-clinic', 'opened_on', 'Mulai beroperasi', 'date', FALSE, NULL),
+        (1, 'laundry', 'service_type', 'Jenis layanan', 'select', TRUE, '["Swalayan", "Titip cuci", "Swalayan & titip cuci"]'),
+        (2, 'laundry', 'turnaround_hours', 'Lama pengerjaan (jam)', 'range', TRUE, NULL),
+        (3, 'laundry', 'express_available', 'Layanan ekspres', 'boolean', FALSE, NULL),
+        (4, 'laundry', 'minimum_weight_kg', 'Berat minimum (kg)', 'number', FALSE, NULL),
+        (1, 'pharmacy', 'accepts_prescriptions', 'Melayani resep dokter', 'boolean', TRUE, NULL),
+        (2, 'pharmacy', 'compounding', 'Melayani obat racikan', 'boolean', FALSE, NULL),
+        (3, 'pharmacy', 'delivery', 'Pengantaran', 'select', FALSE, '["Tidak ada", "Kurir sendiri", "Ojek online"]'),
         (1, 'mosque', 'facility_type', 'Jenis tempat', 'select', TRUE, '["Masjid", "Musala"]'),
         (2, 'mosque', 'friday_prayer', 'Salat Jumat', 'boolean', TRUE, NULL),
         (3, 'mosque', 'women_prayer_area', 'Tempat salat perempuan', 'boolean', FALSE, NULL),
@@ -75,29 +86,4 @@ FROM SEEDED_CATEGORY_FIELDS scf
 JOIN CATEGORIES c ON c.slug = scf.category_slug;
 
 -- +goose Down
-
--- Places and suggestions in these categories go with them. Images stored for
--- the deleted places are not queued for cleanup.
-DELETE FROM PLACE_SUGGESTIONS
-WHERE category_id IN (SELECT id FROM CATEGORIES WHERE slug IN (
-    'mosque', 'worship-other', 'police-post', 'hospital', 'puskesmas', 'bank-atm',
-    'minimarket', 'transit-stop', 'public-service', 'water-gas', 'print-copy'
-));
-
-DELETE FROM PLACES
-WHERE category_id IN (SELECT id FROM CATEGORIES WHERE slug IN (
-    'mosque', 'worship-other', 'police-post', 'hospital', 'puskesmas', 'bank-atm',
-    'minimarket', 'transit-stop', 'public-service', 'water-gas', 'print-copy'
-));
-
-DELETE FROM CATEGORY_FIELDS
-WHERE category_id IN (SELECT id FROM CATEGORIES WHERE slug IN (
-    'mosque', 'worship-other', 'police-post', 'hospital', 'puskesmas', 'bank-atm',
-    'minimarket', 'transit-stop', 'public-service', 'water-gas', 'print-copy'
-));
-
-DELETE FROM CATEGORIES
-WHERE slug IN (
-    'mosque', 'worship-other', 'police-post', 'hospital', 'puskesmas', 'bank-atm',
-    'minimarket', 'transit-stop', 'public-service', 'water-gas', 'print-copy'
-);
+DROP TABLE CATEGORY_FIELDS;

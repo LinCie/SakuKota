@@ -1,0 +1,16 @@
+-- +goose Up
+-- A place links up to 10 medias by position. Each media has a single owner.
+-- Deleting a media closes the gap by shifting later medias down one position.
+-- The deferrable key is checked at the end of that statement, so the shift
+-- does not collide with a position that has not moved yet.
+CREATE TABLE PLACE_MEDIAS (
+    place_id BIGINT NOT NULL,
+    media_id BIGINT NOT NULL UNIQUE,
+    position SMALLINT NOT NULL CHECK (position BETWEEN 1 AND 10),
+    PRIMARY KEY (place_id, position) DEFERRABLE INITIALLY IMMEDIATE,
+    FOREIGN KEY (place_id) REFERENCES PLACES(id) ON DELETE CASCADE,
+    FOREIGN KEY (media_id) REFERENCES MEDIAS(id) ON DELETE CASCADE
+);
+
+-- +goose Down
+DROP TABLE PLACE_MEDIAS;

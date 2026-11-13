@@ -13,12 +13,5 @@ CREATE TABLE PLACE_REVIEWS (
     FOREIGN KEY (user_id) REFERENCES USERS(id) ON DELETE CASCADE
 );
 
--- The ratings of a place's reviews, updated in the same statement that stores
--- a review. The sum is kept instead of the average so it stays exact.
-ALTER TABLE PLACES
-    ADD COLUMN rating_count INTEGER NOT NULL DEFAULT 0 CHECK (rating_count >= 0),
-    ADD COLUMN rating_sum INTEGER NOT NULL DEFAULT 0 CHECK (rating_sum >= 0);
-
 -- +goose Down
-ALTER TABLE PLACES DROP COLUMN rating_sum, DROP COLUMN rating_count;
 DROP TABLE PLACE_REVIEWS;
