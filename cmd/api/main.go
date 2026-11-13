@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"expvar"
 	"fmt"
 	"log"
 	"log/slog"
@@ -30,6 +31,7 @@ func main() {
 		log.Fatalf("create database connection: %v", err)
 	}
 	defer func() { _ = db.Close() }()
+	expvar.Publish("dbstats", expvar.Func(func() any { return db.Stats() }))
 
 	rdb, err := database.NewRedisClient(context.Background(), cfg.RedisURL)
 	if err != nil {

@@ -23,8 +23,8 @@ func NewPostgresDB(
 		"pgx",
 	)
 
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(10)
 	db.SetConnMaxLifetime(30 * time.Minute)
 	db.SetConnMaxIdleTime(5 * time.Minute)
 
