@@ -15,6 +15,13 @@ import {
 // Custom fields
 // -----------------------------------------------------------------------------
 
+/** Whether text is a real calendar date in YYYY-MM-DD form. */
+function validDate(text: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+  const date = new Date(`${text}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(text);
+}
+
 /** Error messages by field key; empty when every custom field is valid. */
 export function attributeErrors(
   fields: CategoryField[],
@@ -35,6 +42,10 @@ export function attributeErrors(
       Number.isNaN(parseNumber(textOf(value)))
     ) {
       errors[field.key] = "Isi dengan angka.";
+    }
+
+    if (field.data_type === "date" && !validDate(textOf(value).trim())) {
+      errors[field.key] = "Isi tanggal yang valid.";
     }
 
     if (field.data_type === "range") {
@@ -80,14 +91,20 @@ export const placeSchema = z.object({
     .max(150, "Nama tempat maksimal 150 karakter."),
   lat: z
     .string()
-    .refine((v) => validCoordinate(v, 90), "Isi lintang, atau ketuk peta.")
+    .refine((v) => validCoordinate(v, 90), {
+      error: "Isi lintang, atau ketuk peta.",
+      abort: true,
+    })
     .refine(
       (v) => withinBounds(v, INDONESIA.minLat, INDONESIA.maxLat),
       "Lokasi harus di Indonesia: lintang antara -11 dan 6.",
     ),
   lng: z
     .string()
-    .refine((v) => validCoordinate(v, 180), "Isi bujur, atau ketuk peta.")
+    .refine((v) => validCoordinate(v, 180), {
+      error: "Isi bujur, atau ketuk peta.",
+      abort: true,
+    })
     .refine(
       (v) => withinBounds(v, INDONESIA.minLng, INDONESIA.maxLng),
       "Lokasi harus di Indonesia: bujur antara 95 dan 141.",

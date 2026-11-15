@@ -60,8 +60,14 @@ export function isBlank(
   return textOf(value).trim() === "";
 }
 
+// Plain decimals only: `Number` alone would also accept "Infinity", "1e3" and "0x10".
+const decimal = /^[+-]?(\d+([.,]\d*)?|[.,]\d+)$/;
+
 /** Numbers typed with a decimal comma ("1,5") are common on Indonesian keyboards. */
 export function parseNumber(text: string): number {
-  const trimmed = text.trim().replace(",", ".");
-  return trimmed === "" ? NaN : Number(trimmed);
+  const trimmed = text.trim();
+  if (!decimal.test(trimmed)) return NaN;
+  const value = Number(trimmed.replace(",", "."));
+  // Hundreds of digits overflow to Infinity.
+  return Number.isFinite(value) ? value : NaN;
 }
