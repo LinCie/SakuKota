@@ -10,6 +10,7 @@ import {
 import type { Place } from "../types";
 import { useLeafletMap } from "../hooks";
 import { JAKARTA_CENTER, locatedPlaces, MAP_CANVAS_CLASS } from "./leaflet-map";
+import { LocatePlate } from "./locate-plate";
 import { signIcon } from "./map-icons";
 import { ZoomPlate } from "./zoom-plate";
 
@@ -139,6 +140,15 @@ export function SurvivalMap({
   const onSelectEvent = useEffectEvent(onSelect);
   const onViewChangeEvent = useEffectEvent(onViewChange);
 
+  // The list panel opens and closes beside the map, so it follows its container's size.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!leaflet || !container) return;
+    const observer = new ResizeObserver(() => leaflet.map.invalidateSize());
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [leaflet]);
+
   // Registered before the framing effect below, so the move its fitBounds
   // causes is reported.
   useEffect(() => {
@@ -267,6 +277,7 @@ export function SurvivalMap({
       <div ref={containerRef} className={MAP_CANVAS_CLASS} />
 
       <ZoomPlate map={leaflet?.map} />
+      <LocatePlate leaflet={leaflet} />
 
       {children}
     </div>

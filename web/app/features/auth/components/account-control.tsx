@@ -1,3 +1,4 @@
+import { Menu } from "@base-ui/react/menu";
 import { Link, useLocation } from "@tanstack/react-router";
 import { LogOut, MapPinPlus, ShieldCheck, UserRound } from "lucide-react";
 
@@ -9,10 +10,14 @@ import { clearSession, isAdmin } from "../session";
 const plateClass =
   "border-paint/35 text-paint hover:border-paint/60 hover:bg-board-deep focus-visible:outline-sign inline-flex h-11 shrink-0 items-center gap-2 rounded-[3px] border-2 px-3 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2";
 
+const itemClass =
+  "data-highlighted:bg-paint-deep flex h-11 cursor-pointer items-center gap-2.5 rounded-[3px] px-2.5 text-sm font-bold outline-none";
+
 /**
  * The header's account corner: a "Masuk" plate when signed out (returning to
  * the current page afterwards), a "Usulkan" plate, the user's first name, and
- * "Keluar" when signed in.
+ * "Keluar" when signed in. On phones it is a single icon plate; signed in, it
+ * opens a menu of the same actions.
  */
 export function AccountControl({ className }: { className?: string }) {
   const session = useSession();
@@ -24,10 +29,18 @@ export function AccountControl({ className }: { className?: string }) {
       <Link
         to="/masuk"
         search={{ kembali: href === "/" ? undefined : href }}
-        className={cn(plateClass, className)}
+        className={cn(
+          plateClass,
+          "max-sm:size-11 max-sm:justify-center max-sm:px-0",
+          className,
+        )}
       >
-        <UserRound aria-hidden="true" className="size-4" strokeWidth={2.5} />
-        Masuk
+        <UserRound
+          aria-hidden="true"
+          className="size-4 max-sm:size-5"
+          strokeWidth={2.5}
+        />
+        <span className="sr-only sm:not-sr-only">Masuk</span>
       </Link>
     );
   }
@@ -39,39 +52,89 @@ export function AccountControl({ className }: { className?: string }) {
     logout().catch(() => undefined);
   }
 
-  // The admin plate is icon-only on phones, where it replaces the name.
-  const admin = isAdmin(session);
-  const adminLink = admin && !pathname.startsWith("/admin");
-  // Like the admin plate, the suggest plate is icon-only on phones.
+  const firstName = session.user.name.split(" ")[0];
+  const adminLink = isAdmin(session) && !pathname.startsWith("/admin");
   const suggestLink = pathname !== "/usulan" && !pathname.startsWith("/admin");
 
   return (
     <div className={cn("flex items-center gap-3", className)}>
+      <Menu.Root>
+        <Menu.Trigger
+          aria-label={`Akun ${firstName}`}
+          className={cn(plateClass, "size-11 justify-center px-0 sm:hidden")}
+        >
+          <UserRound aria-hidden="true" className="size-5" strokeWidth={2.5} />
+        </Menu.Trigger>
+        <Menu.Portal>
+          <Menu.Positioner sideOffset={4} align="end" className="z-50">
+            <Menu.Popup className="border-ink/15 bg-paint text-ink min-w-52 rounded-[5px] border p-1 shadow-[0_8px_24px_rgb(26_26_23/0.2)] outline-none">
+              <p className="text-ink-soft max-w-60 truncate px-2.5 py-2 text-sm font-semibold">
+                {session.user.name}
+              </p>
+              <div aria-hidden="true" className="bg-ink/15 mx-1 my-1 h-px" />
+              {suggestLink ? (
+                <Menu.LinkItem
+                  render={<Link to="/usulan" />}
+                  className={itemClass}
+                >
+                  <MapPinPlus
+                    aria-hidden="true"
+                    className="size-4"
+                    strokeWidth={2.5}
+                  />
+                  Usulkan
+                </Menu.LinkItem>
+              ) : null}
+              {adminLink ? (
+                <Menu.LinkItem
+                  render={<Link to="/admin" />}
+                  className={itemClass}
+                >
+                  <ShieldCheck
+                    aria-hidden="true"
+                    className="size-4"
+                    strokeWidth={2.5}
+                  />
+                  Admin
+                </Menu.LinkItem>
+              ) : null}
+              <Menu.Item onClick={signOut} className={itemClass}>
+                <LogOut
+                  aria-hidden="true"
+                  className="size-4"
+                  strokeWidth={2.5}
+                />
+                Keluar
+              </Menu.Item>
+            </Menu.Popup>
+          </Menu.Positioner>
+        </Menu.Portal>
+      </Menu.Root>
+
       {suggestLink ? (
-        <Link to="/usulan" className={plateClass}>
+        <Link to="/usulan" className={cn(plateClass, "max-sm:hidden")}>
           <MapPinPlus aria-hidden="true" className="size-4" strokeWidth={2.5} />
-          <span className="sr-only sm:not-sr-only">Usulkan</span>
+          Usulkan
         </Link>
       ) : null}
       {adminLink ? (
-        <Link to="/admin" className={plateClass}>
+        <Link to="/admin" className={cn(plateClass, "max-sm:hidden")}>
           <ShieldCheck
             aria-hidden="true"
             className="size-4"
             strokeWidth={2.5}
           />
-          <span className="sr-only sm:not-sr-only">Admin</span>
+          Admin
         </Link>
       ) : null}
-      <span
-        className={cn(
-          "text-paint max-w-[10ch] truncate text-sm font-bold",
-          admin && "hidden sm:block",
-        )}
-      >
-        {session.user.name.split(" ")[0]}
+      <span className="text-paint max-w-[10ch] truncate text-sm font-bold max-sm:hidden">
+        {firstName}
       </span>
-      <button type="button" onClick={signOut} className={plateClass}>
+      <button
+        type="button"
+        onClick={signOut}
+        className={cn(plateClass, "max-sm:hidden")}
+      >
         <LogOut aria-hidden="true" className="size-4" strokeWidth={2.5} />
         Keluar
       </button>

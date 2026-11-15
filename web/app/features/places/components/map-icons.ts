@@ -44,6 +44,19 @@ export function pinIcon(L: typeof Leaflet, category: Category | undefined) {
   });
 }
 
+/**
+ * The visitor's own position: a round painted-blue dot, so it never reads as a
+ * square place sign, with a slow ping while motion is allowed.
+ */
+export function userLocationIcon(L: typeof Leaflet) {
+  return L.divIcon({
+    className: "pointer-events-none",
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    html: `<span class="relative grid size-5 place-items-center"><span class="bg-cat/40 absolute inset-0 rounded-full motion-safe:animate-ping"></span><span class="bg-cat border-paint ring-ink relative size-4.5 rounded-full border-[3px] ring-2 shadow-[0_3px_6px_rgb(26_26_23/0.35)]"></span></span>`,
+  });
+}
+
 /** A place already on the map: a small, quiet sign for spotting duplicates. */
 export function neighbourIcon(L: typeof Leaflet, category: Category) {
   const { solid, icon } = categoryStyle(category);
