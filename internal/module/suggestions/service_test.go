@@ -25,6 +25,12 @@ func noPlaces(t *testing.T) *mock.MockPlaceService {
 	return mock.NewMockPlaceService(gomock.NewController(t))
 }
 
+// placeRules returns a place service for the tests of Create, which uses only
+// the place's text rules, so it needs no repository or storage.
+func placeRules() suggestions.PlaceService {
+	return places.NewService(nil, nil)
+}
+
 // newMocks returns a repository and place service that fail the test on any
 // call they do not expect.
 func newMocks(t *testing.T) (*mock.MockRepository, *mock.MockPlaceService) {
@@ -75,7 +81,7 @@ func createSuggestion(t *testing.T, s *suggestions.Suggestion) (*suggestions.Sug
 			return got, nil
 		}).AnyTimes()
 
-	_, err := suggestions.NewService(repo, noPlaces(t)).Create(context.Background(), s)
+	_, err := suggestions.NewService(repo, placeRules()).Create(context.Background(), s)
 	return stored, err
 }
 
@@ -90,6 +96,22 @@ func TestService_Create_MaxPendingPerUser(t *testing.T) {
 // -----------------------------------------------------------------------------
 // Submitting suggestions
 // -----------------------------------------------------------------------------
+
+func TestService_Create_NameComesFromPlaceService(t *testing.T) {
+	repo, placeSvc := newMocks(t)
+	placeSvc.EXPECT().NormalizeName(gomock.Any(), "  Warung Bu Ani  ").Return("checked name", nil)
+	placeSvc.EXPECT().NormalizeOptionalFields(gomock.Any(), gomock.Any()).Return(nil)
+	repo.EXPECT().Create(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got *suggestions.Suggestion) (*suggestions.Suggestion, error) {
+			assert.Equal(t, "checked name", got.Name)
+			return got, nil
+		})
+
+	s := submitted()
+	s.Name = "  Warung Bu Ani  "
+	_, err := suggestions.NewService(repo, placeSvc).Create(context.Background(), s)
+	require.NoError(t, err)
+}
 
 func TestService_Create_Name(t *testing.T) {
 	long := strings.Repeat("a", 150)
@@ -388,7 +410,7 @@ func TestService_Create_Storage(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&suggestions.Suggestion{ID: 3}, tc.storeErr)
 
-			got, err := suggestions.NewService(repo, noPlaces(t)).Create(context.Background(), submitted())
+			got, err := suggestions.NewService(repo, placeRules()).Create(context.Background(), submitted())
 			require.ErrorIs(t, err, tc.wantErr)
 			if tc.wantErr == nil {
 				require.NotNil(t, got, "stored suggestion was not returned")

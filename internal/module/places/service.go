@@ -40,6 +40,11 @@ type Service interface {
 	AddMedia(ctx context.Context, id int64, uploadKey string) (*Place, error)
 	// DeleteMedia removes a photo from the place.
 	DeleteMedia(ctx context.Context, id, mediaID int64) error
+	// NormalizeName trims the spaces around a place name, and rejects it if it is empty or too long.
+	NormalizeName(ctx context.Context, name string) (string, error)
+	// NormalizeOptionalFields trims the optional text of p and turns blank values into nothing.
+	// It rejects a value longer than its column allows.
+	NormalizeOptionalFields(ctx context.Context, p *Place) error
 }
 
 type service struct {
@@ -113,13 +118,13 @@ func (s *service) Delete(ctx context.Context, id int64) error {
 // validate cleans up the place's text, then checks its location and attributes.
 // The attributes are checked against the fields of its category.
 func (s *service) validate(ctx context.Context, p *Place) error {
-	name, err := NormalizeName(p.Name)
+	name, err := s.NormalizeName(ctx, p.Name)
 	if err != nil {
 		return err
 	}
 	p.Name = name
 
-	if err := normalizeOptionalFields(p); err != nil {
+	if err := s.NormalizeOptionalFields(ctx, p); err != nil {
 		return err
 	}
 
@@ -184,7 +189,7 @@ func imagePrefix(id int64) string {
 }
 
 // NormalizeName trims the spaces around name, and rejects it if it is empty or too long.
-func NormalizeName(name string) (string, error) {
+func (s *service) NormalizeName(_ context.Context, name string) (string, error) {
 	name = strings.TrimSpace(name)
 	switch {
 	case name == "":
@@ -196,9 +201,9 @@ func NormalizeName(name string) (string, error) {
 	return name, nil
 }
 
-// normalizeOptionalFields trims the optional text fields of p and turns blank ones into nothing.
+// NormalizeOptionalFields trims the optional text fields of p and turns blank ones into nothing.
 // It rejects any of them that is longer than its column allows.
-func normalizeOptionalFields(p *Place) error {
+func (s *service) NormalizeOptionalFields(_ context.Context, p *Place) error {
 	var ok bool
 
 	if p.Address, ok = text.TrimOptionalMax(p.Address, MaxAddressLength); !ok {

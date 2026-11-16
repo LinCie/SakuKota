@@ -15,12 +15,11 @@ import (
 
 type Handler struct {
 	service Service
+
 	// imageURL returns the public URL of the image stored under a key.
 	imageURL func(key string) string
 }
 
-// NewHandler creates a Handler that passes its work to the service.
-// imageURL turns a stored image key into a link the browser can open.
 func NewHandler(service Service, imageURL func(key string) string) *Handler {
 	return &Handler{
 		service:  service,
@@ -32,8 +31,6 @@ func NewHandler(service Service, imageURL func(key string) string) *Handler {
 // Handler
 // -----------------------------------------------------------------------------
 
-// CreatePlace reads a new place from the request body, saves it, and sends it back.
-// If the data is wrong, it sends back an error that says why.
 func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 	req, ok := httpx.DecodeJSON[PlaceRequest](w, r)
 	if !ok {
@@ -73,7 +70,7 @@ func (h *Handler) CreateMediaUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetPlaces sends a page of places matching the URL filters (area, category, search, map box),
-// plus the total number of matches. The X-Cache header says HIT, MISS, or BYPASS when cached.
+// plus the total number of matches.
 func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	filter := PlaceFilter{Query: strings.TrimSpace(query.Get("q"))}
@@ -88,7 +85,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if param := query.Get("category_id"); param != "" {
-		for part := range strings.SplitSeq(param, ",") {
+		for _, part := range strings.Split(param, ",") {
 			id, ok := httpx.ParseID(part)
 			if !ok {
 				httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidCategoryID, "invalid category_id")
@@ -125,8 +122,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 		filter.Bounds = bounds
 	}
 
-	ctx, status := withCacheStatus(r.Context())
-	places, total, err := h.service.GetMany(ctx, filter)
+	places, total, err := h.service.GetMany(r.Context(), filter)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrSubDistrictNotFound):
@@ -137,10 +133,6 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 			httpx.RespondInternalError(w)
 		}
 		return
-	}
-
-	if *status != "" {
-		w.Header().Set(cacheHeader, string(*status))
 	}
 
 	httpx.RespondJSON(w, http.StatusOK, PlacePageResponse{

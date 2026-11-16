@@ -7,7 +7,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"rantau-go/internal/middleware"
-	"rantau-go/internal/module/places"
 	"rantau-go/internal/pkg/httpx"
 )
 
@@ -115,12 +114,12 @@ func (h *Handler) ApproveSuggestion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// The body is the place to create, in the shape of POST /places.
-	req, ok := httpx.DecodeJSON[places.PlaceRequest](w, r)
+	req, ok := httpx.DecodeJSON[ApproveSuggestionRequest](w, r)
 	if !ok {
 		return
 	}
 
-	approved, err := h.service.Approve(r.Context(), id, adminID, places.ToPlace(*req))
+	approved, err := h.service.Approve(r.Context(), id, adminID, toPlace(*req))
 	if err != nil {
 		respondError(w, err)
 		return
@@ -181,8 +180,8 @@ func respondError(w http.ResponseWriter, err error) {
 		errors.Is(err, ErrReasonTooLong),
 		errors.Is(err, ErrSubDistrictNotFound),
 		errors.Is(err, ErrCategoryNotFound),
-		errors.Is(err, places.ErrInvalidLocation),
-		errors.Is(err, places.ErrInvalidAttributes):
+		errors.Is(err, ErrPlaceInvalidLocation),
+		errors.Is(err, ErrPlaceInvalidAttributes):
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 	default:
 		httpx.RespondInternalError(w)

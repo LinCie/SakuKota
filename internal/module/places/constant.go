@@ -34,19 +34,3 @@ const listCacheKeyPrefix = "places:index:"
 // listCacheTTL is how long a cached index is served before it is read again.
 // Nothing clears indexes sooner, so it is also how stale a list can be.
 const listCacheTTL = 30 * time.Second
-
-// cacheStatusKey is the context key under which a request carries its *cacheStatus.
-const cacheStatusKey = "places.cache_status"
-
-// cacheHeader is the response header that reports the cacheStatus of a list request.
-const cacheHeader = "X-Cache"
-
-// How a list request used the index cache.
-const (
-	// cacheHit means the index came from Redis.
-	cacheHit cacheStatus = "HIT"
-	// cacheMiss means the index was read from the repository, including after a Redis failure.
-	cacheMiss cacheStatus = "MISS"
-	// cacheBypass means the filter is not cached, so the repository answered directly.
-	cacheBypass cacheStatus = "BYPASS"
-)

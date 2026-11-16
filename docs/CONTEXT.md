@@ -1,11 +1,12 @@
 # Rantau — Project Context
 
 > **Living document.** This file states what the project is *for* and what the
-> backend is *specified to do*. Update it only after a VERIFICATION phase
-> completes (see [Maintaining this file](#maintaining-this-file)).
+> backend is *specified to do*. Update it in the same task as any change to backend
+> behavior or the API contract, once a VERIFICATION phase passes (see
+> [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-15. Updated after the places limit pass (see the change log).
->   Verified by the place service tests and the web typecheck, lint, and tests; the web app changes are outside the test workflow.
+> - Last updated: 2026-11-16. Updated after removing the `X-Cache` header (see the change log).
+>   Verified by `go build`, `go vet`, and the place package unit tests; the web app changes are outside the test workflow.
 > - Status: verified. All Go tests pass and the API was checked by hand. The web app has not been
 >   updated for medias yet, so its image views and the place image upload are broken until it is.
 
@@ -670,11 +671,15 @@ them.
 - **Unspecified behaviors:** review editing or deletion; a "current user" endpoint; listing users.
 - **Frontend (`web/`)** is outside the backend test workflow. US-01
   clustering, placeholders, and filter/viewport sync are untested there.
+- **Load test script.** `scripts/k6/get-places.js` still reads the `X-Cache`
+  header, which `GET /places` no longer sends (removed 2026-11-16), so its
+  `cache_hit` metric always reports `none`. Not updated yet.
 
 ## Maintaining this file
 
-- Update this file **only after a VERIFICATION phase passes**, so it reflects
-  the verified contract. Do not update it for planned or unverified behavior.
+- Update this file in the same task as any change to backend behavior or the
+  API contract, **only after a VERIFICATION phase passes**, so it reflects the
+  verified contract. Do not update it for planned or unverified behavior.
 - Every behavior stated here must trace to a test. If a test changes the
   contract, update the matching section and remove resolved items from §10.
 - Derive content from tests and from the user's approved specification, never
@@ -696,3 +701,4 @@ them.
 | 2026-11-13 | Verification update | Video medias. `internal/storage` also allows `video/mp4` and `video/webm` (50 MB `MaxVideoSize`, `ErrVideoTooLarge`, a `400 VALIDATION_ERROR`); §6.7 updated and covered by new storage and place handler tests. The web app change (upload, playback) is untested and noted in §10 |
 | 2026-11-13 | Verification update | Plural module packages. `internal/module/place`, `review`, `subdistrict`, `suggestion`, and `user` renamed to `places`, `reviews`, `subdistricts`, `suggestions`, and `users`, with package names and qualifiers to match; `auth` and `storagecleanup` are unchanged. Verified by `go build`, `go vet`, and `go test ./...` (1248 passed in 30 packages) |
 | 2026-11-15 | Verification update | Places limit pass. `GET /places` caps every page at 40 (`maxLimit`, was 1000), so a client cannot request more. The web map no longer sends a zoom-based `limit` or keeps `limit` in the URL; it sends only the `bbox` and relies on the cap. Verified by the place package tests (418 passed) and the web typecheck, lint, and tests (240 passed) |
+| 2026-11-16 | Verification update | `GET /places` no longer sends the `X-Cache` header, and the cache-status context behind it is removed. The header was never part of this contract, so no section describes it. Verified by `go build`, `go vet` (with the `integration` tag), and the place package unit tests (418 passed); the integration tests were not run. `scripts/k6/get-places.js` still reads the header (§10) |

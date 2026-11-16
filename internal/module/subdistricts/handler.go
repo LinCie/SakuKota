@@ -13,6 +13,7 @@ import (
 
 type Handler struct {
 	service Service
+
 	// imageURL returns the public URL of the image stored under a key.
 	imageURL func(key string) string
 }
@@ -30,8 +31,6 @@ func NewHandler(service Service, imageURL func(key string) string) *Handler {
 // Handler
 // -----------------------------------------------------------------------------
 
-// CreateSubDistrict reads a new sub-district from the request body and saves it.
-// It sends back the saved sub-district, or an error that says what is wrong.
 func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
 	req, ok := httpx.DecodeJSON[SubDistrictRequest](w, r)
 	if !ok {

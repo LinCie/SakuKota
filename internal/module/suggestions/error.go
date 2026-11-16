@@ -17,6 +17,8 @@ var (
 	ErrEstimatedPriceRangeTooLong = places.ErrEstimatedPriceRangeTooLong
 	ErrSubDistrictNotFound        = places.ErrSubDistrictNotFound
 	ErrCategoryNotFound           = places.ErrCategoryNotFound
+	ErrPlaceInvalidLocation       = places.ErrInvalidLocation
+	ErrPlaceInvalidAttributes     = places.ErrInvalidAttributes
 )
 
 var (

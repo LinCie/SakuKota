@@ -184,3 +184,32 @@ func (mr *MockPlaceServiceMockRecorder) Delete(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockPlaceService)(nil).Delete), ctx, id)
 }
+
+// NormalizeName mocks base method.
+func (m *MockPlaceService) NormalizeName(ctx context.Context, name string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NormalizeName", ctx, name)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NormalizeName indicates an expected call of NormalizeName.
+func (mr *MockPlaceServiceMockRecorder) NormalizeName(ctx, name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NormalizeName", reflect.TypeOf((*MockPlaceService)(nil).NormalizeName), ctx, name)
+}
+
+// NormalizeOptionalFields mocks base method.
+func (m *MockPlaceService) NormalizeOptionalFields(ctx context.Context, p *places.Place) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NormalizeOptionalFields", ctx, p)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NormalizeOptionalFields indicates an expected call of NormalizeOptionalFields.
+func (mr *MockPlaceServiceMockRecorder) NormalizeOptionalFields(ctx, p any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NormalizeOptionalFields", reflect.TypeOf((*MockPlaceService)(nil).NormalizeOptionalFields), ctx, p)
+}

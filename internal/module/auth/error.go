@@ -3,6 +3,8 @@ package auth
 import (
 	"errors"
 	"fmt"
+
+	"rantau-go/internal/module/users"
 )
 
 var (
@@ -16,3 +18,6 @@ var (
 	ErrInvalidRefreshToken = errors.New("invalid or expired refresh token")
 	ErrInvalidHash         = errors.New("invalid argon2id hash")
 )
+
+// ErrEmailTaken is owned by the users module, which decides when an email is taken.
+var ErrEmailTaken = users.ErrEmailTaken

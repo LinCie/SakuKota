@@ -4,8 +4,6 @@ package places_test
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -89,29 +87,6 @@ func TestCachedRepository_GetMany(t *testing.T) {
 			}
 		})
 	}
-
-	t.Run("X-Cache header reports how the index was read", func(t *testing.T) {
-		redistest.Reset(t, testRedis)
-		// Only the first request with a sub-district misses; the rest hit or bypass.
-		router := newRouter(places.NewService(newCached(t, repo, 1), nil))
-
-		tests := []struct {
-			name   string
-			target string
-			want   string
-		}{
-			{name: "cold", target: fmt.Sprintf("/places?sub_district_id=%d", setiabudi), want: "MISS"},
-			{name: "warm", target: fmt.Sprintf("/places?sub_district_id=%d", setiabudi), want: "HIT"},
-			{name: "another page shares the index", target: fmt.Sprintf("/places?sub_district_id=%d&limit=2&offset=2", setiabudi), want: "HIT"},
-			{name: "without sub-district", target: "/places", want: "BYPASS"},
-		}
-
-		for _, tc := range tests {
-			rec := serve(t, router, jsonRequest(http.MethodGet, tc.target, ""))
-			require.Equal(t, http.StatusOK, rec.Code, tc.name)
-			assert.Equal(t, tc.want, rec.Header().Get("X-Cache"), tc.name)
-		}
-	})
 
 	t.Run("unknown sub-district is an error that is not cached", func(t *testing.T) {
 		redistest.Reset(t, testRedis)

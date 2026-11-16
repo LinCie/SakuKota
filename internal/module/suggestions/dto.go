@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"rantau-go/internal/module/places"
 	"rantau-go/internal/pkg/postgis"
 )
 
@@ -21,6 +22,22 @@ type CreateSuggestionRequest struct {
 	// Attributes is a JSON object keyed by the category's field keys.
 	Attributes json.RawMessage `json:"attributes"`
 	Note       *string         `json:"note"`
+}
+
+// ApproveSuggestionRequest is the API payload for approving a suggestion. It is
+// the final place, in the shape of POST /places, so the admin can correct the
+// suggestion.
+type ApproveSuggestionRequest struct {
+	SubDistrictID       int64          `json:"sub_district_id"`
+	CategoryID          int64          `json:"category_id"`
+	Name                string         `json:"name"`
+	Address             *string        `json:"address"`
+	Location            *postgis.Point `json:"location"`
+	OperatingHours      *string        `json:"operating_hours"`
+	EstimatedPriceRange *string        `json:"estimated_price_range"`
+	ShortDescription    *string        `json:"short_description"`
+	// Attributes is a JSON object keyed by the category's field keys.
+	Attributes json.RawMessage `json:"attributes"`
 }
 
 // RejectSuggestionRequest is the API payload for rejecting a suggestion.
@@ -58,6 +75,21 @@ type AuthorResponse struct {
 // -----------------------------------------------------------------------------
 // Conversions
 // -----------------------------------------------------------------------------
+
+// toPlace turns the approval body into the place to create.
+func toPlace(req ApproveSuggestionRequest) *places.Place {
+	return &places.Place{
+		SubDistrictID:       req.SubDistrictID,
+		CategoryID:          req.CategoryID,
+		Name:                req.Name,
+		Address:             req.Address,
+		Location:            req.Location,
+		OperatingHours:      req.OperatingHours,
+		EstimatedPriceRange: req.EstimatedPriceRange,
+		ShortDescription:    req.ShortDescription,
+		Attributes:          req.Attributes,
+	}
+}
 
 // toSuggestion returns the suggestion the user submits. The author comes from
 // the token, not the request.

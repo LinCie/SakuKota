@@ -30,12 +30,18 @@ type Service interface {
 	Reject(ctx context.Context, id, adminID int64, reason *string) (*Suggestion, error)
 }
 
-// PlaceService defines the place operations that approving a suggestion requires.
+// PlaceService defines the place operations that suggestions require: checking the
+// place text when a suggestion is submitted, and creating and deleting places on approval.
 type PlaceService interface {
 	// Create saves a new place, which approval uses to make a place from a suggestion.
 	Create(ctx context.Context, p *places.Place) (*places.Place, error)
 	// Delete removes the place again, which is used to undo a failed approval.
 	Delete(ctx context.Context, id int64) error
+	// NormalizeName trims the spaces around a place name, and rejects it if it is empty or too long.
+	NormalizeName(ctx context.Context, name string) (string, error)
+	// NormalizeOptionalFields trims the optional text of p and turns blank values into nothing.
+	// It rejects a value longer than its column allows.
+	NormalizeOptionalFields(ctx context.Context, p *places.Place) error
 }
 
 type service struct {
@@ -57,7 +63,7 @@ func NewService(repo Repository, places PlaceService) Service {
 
 // Create checks the suggestion's fields, then saves it as pending.
 func (s *service) Create(ctx context.Context, sg *Suggestion) (*Suggestion, error) {
-	name, err := places.NormalizeName(sg.Name)
+	name, err := s.places.NormalizeName(ctx, sg.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -71,19 +77,15 @@ func (s *service) Create(ctx context.Context, sg *Suggestion) (*Suggestion, erro
 		return nil, err
 	}
 
-	address, ok := text.TrimOptionalMax(sg.Address, places.MaxAddressLength)
-	if !ok {
-		return nil, ErrAddressTooLong
+	// The optional place text follows the place rules, so the place service checks and trims it.
+	place := &places.Place{
+		Address:             sg.Address,
+		OperatingHours:      sg.OperatingHours,
+		EstimatedPriceRange: sg.EstimatedPriceRange,
+		ShortDescription:    sg.ShortDescription,
 	}
-
-	operatingHours, ok := text.TrimOptionalMax(sg.OperatingHours, places.MaxOperatingHoursLength)
-	if !ok {
-		return nil, ErrOperatingHoursTooLong
-	}
-
-	estimatedPriceRange, ok := text.TrimOptionalMax(sg.EstimatedPriceRange, places.MaxEstimatedPriceRangeLength)
-	if !ok {
-		return nil, ErrEstimatedPriceRangeTooLong
+	if err := s.places.NormalizeOptionalFields(ctx, place); err != nil {
+		return nil, err
 	}
 
 	note, ok := text.TrimOptionalMax(sg.Note, maxNoteLength)
@@ -98,11 +100,11 @@ func (s *service) Create(ctx context.Context, sg *Suggestion) (*Suggestion, erro
 		SubDistrictID:       sg.SubDistrictID,
 		CategoryID:          sg.CategoryID,
 		Name:                name,
-		Address:             address,
+		Address:             place.Address,
 		Location:            sg.Location,
-		OperatingHours:      operatingHours,
-		EstimatedPriceRange: estimatedPriceRange,
-		ShortDescription:    text.TrimOptional(sg.ShortDescription),
+		OperatingHours:      place.OperatingHours,
+		EstimatedPriceRange: place.EstimatedPriceRange,
+		ShortDescription:    place.ShortDescription,
 		Attributes:          attributes,
 		Note:                note,
 		Status:              StatusPending,
