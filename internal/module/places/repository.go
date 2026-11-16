@@ -24,6 +24,12 @@ type Repository interface {
 	Create(ctx context.Context, p *Place) (*Place, error)
 	// GetMany returns one page of places matching the filter, plus the total number of matches.
 	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error)
+	// GetLocations returns the id and coordinates of every place matching the filter's
+	// sub-district, categories, and query. Bounds, limit, and offset are ignored.
+	GetLocations(ctx context.Context, filter PlaceFilter) ([]PlaceLocation, error)
+	// GetByIDs returns the places with the given ids, with their category and
+	// photos, lowest ids first. Ids that match no place are skipped.
+	GetByIDs(ctx context.Context, ids []int64) ([]Place, error)
 	// GetCategories returns every category with its fields.
 	GetCategories(ctx context.Context) ([]Category, error)
 	// GetCategory returns the category with its fields.
@@ -151,6 +157,52 @@ func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([
 	}
 
 	return places, total, nil
+}
+
+// GetLocations returns the id and coordinates of every place matching the filter's
+// sub-district, categories, and query, lowest ids first.
+func (r *postgresRepository) GetLocations(ctx context.Context, filter PlaceFilter) ([]PlaceLocation, error) {
+	if err := r.checkFilterTargets(ctx, filter); err != nil {
+		return nil, err
+	}
+
+	filter.Bounds = nil
+	where, args := placeWhere(filter)
+
+	locations := make([]PlaceLocation, 0)
+	err := r.db.SelectContext(
+		ctx,
+		&locations,
+		`SELECT p.id, ST_X(p.location) AS longitude, ST_Y(p.location) AS latitude`+
+			placeFrom+where+` ORDER BY p.id`,
+		args...,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return locations, nil
+}
+
+// GetByIDs returns the places with the given ids, with their category and photos.
+func (r *postgresRepository) GetByIDs(ctx context.Context, ids []int64) ([]Place, error) {
+	places := make([]Place, 0, len(ids))
+
+	err := r.db.SelectContext(
+		ctx,
+		&places,
+		`SELECT `+placeColumns+placeFrom+` WHERE p.id = ANY($1) ORDER BY p.id`,
+		ids,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := r.attachMedias(ctx, places); err != nil {
+		return nil, err
+	}
+
+	return places, nil
 }
 
 // GetCategories returns every category with its fields.
@@ -585,7 +637,9 @@ func placeWhere(filter PlaceFilter) (string, []any) {
 
 	if b := filter.Bounds; b != nil {
 		conditions = append(conditions, fmt.Sprintf(
-			"p.location && ST_MakeEnvelope(%s, %s, %s, %s, %d)",
+			// ST_Covers keeps the edges and, unlike a bare &&, which compares
+			// float4 boxes, drops points just outside. It still uses the GiST index.
+			"ST_Covers(ST_MakeEnvelope(%s, %s, %s, %s, %d), p.location)",
 			arg(b.MinLng), arg(b.MinLat), arg(b.MaxLng), arg(b.MaxLat), postgis.SRID,
 		))
 	}

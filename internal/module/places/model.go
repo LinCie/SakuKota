@@ -50,6 +50,14 @@ type PlaceFilter struct {
 	Offset int
 }
 
+// PlaceLocation is the id and coordinates of a place, in degrees. The
+// coordinates are nil for a place without a location.
+type PlaceLocation struct {
+	ID        int64    `db:"id"`
+	Longitude *float64 `db:"longitude"`
+	Latitude  *float64 `db:"latitude"`
+}
+
 // BoundingBox is an area in degrees, from its west and south edges to its
 // east and north edges.
 type BoundingBox struct {

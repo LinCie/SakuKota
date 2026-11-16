@@ -4,8 +4,8 @@
 > backend is *specified to do*. Update it only after a VERIFICATION phase
 > completes (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-13. Updated after the video-upload pass (see the change log).
->   Verified by the storage and place handler tests; the web app changes are outside the test workflow.
+> - Last updated: 2026-11-15. Updated after the places limit pass (see the change log).
+>   Verified by the place service tests and the web typecheck, lint, and tests; the web app changes are outside the test workflow.
 > - Status: verified. All Go tests pass and the API was checked by hand. The web app has not been
 >   updated for medias yet, so its image views and the place image upload are broken until it is.
 
@@ -284,9 +284,10 @@ its key; a place without images has `[]`. Lists and single reads return
     on name, address, short description, and category name. `%` and `_` are
     literal. Attributes are **not** searched.
   - `limit`: a positive integer, otherwise `INVALID_LIMIT`. An absent limit, or
-    one above 1000, is replaced by 1000, so no list is unbounded. `total` still
-    counts every match, so a client can tell when the list was cut off. This
-    includes requests that the web map sends without a limit.
+    one above 40, is replaced by 40 (`maxLimit`), so no list is unbounded and a
+    client cannot ask for more. `total` still counts every match, so a client can
+    tell when the list was cut off. The web map sends no limit and relies on
+    this cap.
   - `offset`: a non-negative integer, otherwise `INVALID_OFFSET`.
   - `bbox=west,south,east,north`: four finite numbers with lon in ±180, lat in
     ±90, `west ≤ east`, and `south ≤ north`, otherwise `INVALID_BBOX`. Edges
@@ -582,7 +583,7 @@ body.
 
 | Story | Backend support |
 | ----- | --------------- |
-| US-01 Browse pins in the viewport | `GET /places?bbox=…&limit=…`; `total` lets the UI show "N results" when the list is truncated. Clustering and empty states are frontend work |
+| US-01 Browse pins in the viewport | `GET /places?bbox=…`; the server returns at most 40 places, and `total` lets the UI show "N results" when the list is truncated. Clustering and empty states are frontend work |
 | US-02 Pin details (6 fields) | Place response: name, category, address/location, operating hours, price range, description. Missing values are `null`, so the UI can show placeholders |
 | US-03 Kecamatan dropdown | `GET /subdistricts` (ordered by id) |
 | US-04 Kecamatan info modal | Flood, safety, and spending fields plus `static_map_image_url`, with `null` for missing data |
@@ -694,3 +695,4 @@ them.
 | 2026-11-11 | Verification update | Review cleanup pass. Every JSON body goes through `httpx.DecodeJSON`, which also rejects data after the object (`INVALID_BODY`); auth user objects include `role`; `GET /places` `offset` and `INVALID_OFFSET` recorded (already tested); a category field with an unknown data type fails as a server error rather than `ErrInvalidAttributes`; `internal/module/users` renamed to `internal/module/user`; untested changes (no API CORS, per-command config, new migration checks) listed in §10 |
 | 2026-11-13 | Verification update | Video medias. `internal/storage` also allows `video/mp4` and `video/webm` (50 MB `MaxVideoSize`, `ErrVideoTooLarge`, a `400 VALIDATION_ERROR`); §6.7 updated and covered by new storage and place handler tests. The web app change (upload, playback) is untested and noted in §10 |
 | 2026-11-13 | Verification update | Plural module packages. `internal/module/place`, `review`, `subdistrict`, `suggestion`, and `user` renamed to `places`, `reviews`, `subdistricts`, `suggestions`, and `users`, with package names and qualifiers to match; `auth` and `storagecleanup` are unchanged. Verified by `go build`, `go vet`, and `go test ./...` (1248 passed in 30 packages) |
+| 2026-11-15 | Verification update | Places limit pass. `GET /places` caps every page at 40 (`maxLimit`, was 1000), so a client cannot request more. The web map no longer sends a zoom-based `limit` or keeps `limit` in the URL; it sends only the `bbox` and relies on the cap. Verified by the place package tests (418 passed) and the web typecheck, lint, and tests (240 passed) |

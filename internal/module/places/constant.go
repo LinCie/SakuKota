@@ -1,5 +1,7 @@
 package places
 
+import "time"
+
 // Data types a CategoryField can have. A CHECK on CATEGORY_FIELDS.data_type
 // allows exactly these, so adding one needs a migration as well.
 const (
@@ -24,4 +26,11 @@ const (
 
 // maxLimit is the most places a list returns. A request without a limit, or
 // with a larger one, gets this many; the total still counts every match.
-const maxLimit = 1000
+const maxLimit = 40
+
+// listCacheKeyPrefix namespaces cached place indexes in Redis.
+const listCacheKeyPrefix = "places:index:"
+
+// listCacheTTL is how long a cached index is served before it is read again.
+// Nothing clears indexes sooner, so it is also how stale a list can be.
+const listCacheTTL = 30 * time.Second

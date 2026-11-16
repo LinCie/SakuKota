@@ -15,13 +15,10 @@ import { signIcon } from "./map-icons";
 import { ZoomPlate } from "./zoom-plate";
 
 const FIT_OPTIONS = { padding: [56, 56] as [number, number], maxZoom: 16 };
-// A picked place is shown at least this close, past MAP_UNLIMITED_ZOOM so its sign is not cut by the limit.
+// A picked place is shown at least this close.
 const PLACE_ZOOM = 16;
 // Keeps a selected sign this far from the map's edges.
 const SIGN_MARGIN = 72;
-// Below this zoom the map asks for at most MAP_PLACE_LIMIT places.
-const MAP_UNLIMITED_ZOOM = 15;
-const MAP_PLACE_LIMIT = 25;
 // ZoomPlate replaces Leaflet's zoom control.
 const MAP_OPTIONS: Leaflet.MapOptions = { zoomControl: false };
 
@@ -72,11 +69,6 @@ function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-/** The place limit for a zoom level; undefined shows every place. */
-function placeLimitForZoom(zoom: number) {
-  return zoom < MAP_UNLIMITED_ZOOM ? MAP_PLACE_LIMIT : undefined;
-}
-
 /**
  * The bounds as "west,south,east,north", rounded outward to 4 decimals
  * (about 11 m) so small pans share a request, and clamped to valid
@@ -97,8 +89,6 @@ function bboxParam(bounds: Leaflet.LatLngBounds) {
 export type MapView = {
   /** "west,south,east,north" in degrees. */
   bbox: string;
-  /** The place limit for the zoom; undefined shows every place in view. */
-  limit: number | undefined;
 };
 
 /** Asks the map to teleport to a place. A new object each time, so asking again repeats it. */
@@ -155,10 +145,7 @@ export function SurvivalMap({
     if (!leaflet) return;
     const { map } = leaflet;
     const reportView = () =>
-      onViewChangeEvent({
-        bbox: bboxParam(map.getBounds()),
-        limit: placeLimitForZoom(map.getZoom()),
-      });
+      onViewChangeEvent({ bbox: bboxParam(map.getBounds()) });
     map.on("moveend", reportView);
     return () => {
       map.off("moveend", reportView);

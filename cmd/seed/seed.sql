@@ -1,3 +1,169 @@
+-- Jakarta kecamatan. A temporary table so the bulk places below can use each
+-- one's approximate center.
+CREATE TEMPORARY TABLE SEEDED_SUB_DISTRICTS (
+    name,
+    slug,
+    flood_history,
+    safety_crime_information,
+    estimated_daily_spending,
+    longitude,
+    latitude
+) ON COMMIT DROP AS
+    VALUES
+        (
+            'Setiabudi',
+            'setiabudi',
+            'Some streets near the Cideng and Karet drainage channels can pool after intense rain. Main roads usually clear quickly, but low-lying alleys may be difficult to cross during a storm.',
+            'Busy commuter corridors are generally well lit. Use normal late-night precautions around quiet alleys and keep belongings secure in crowded areas.',
+            150000.00,
+            106.8300,
+            -6.2150
+        ),
+        (
+            'Mampang Prapatan',
+            'mampang-prapatan',
+            'Short-lived flooding can occur around drainage bottlenecks near Tegal Parang and Mampang. Check local conditions during heavy rain before taking smaller roads.',
+            'Commercial streets are active into the evening. Residential lanes are quieter, so use established routes and app-based transport when returning late.',
+            135000.00,
+            106.8230,
+            -6.2450
+        ),
+        (
+            'Tebet',
+            'tebet',
+            'Lanes near the Ciliwung river can flood after long, heavy rain. Main roads around the station usually stay passable.',
+            'Food streets and the station area stay lively into the night. Keep belongings close in crowds and walk lit main roads when it is late.',
+            140000.00,
+            106.8560,
+            -6.2260
+        ),
+        (
+            'Menteng',
+            'menteng',
+            'Main avenues drain well, though some side streets can pool briefly during intense rain.',
+            'Quiet, well-lit residential streets with offices and embassies. Usual precautions apply around busy evening spots.',
+            175000.00,
+            106.8340,
+            -6.1960
+        ),
+        (
+            'Tanah Abang',
+            'tanah-abang',
+            'Streets near the market and canals can pool after heavy rain, slowing traffic around the station.',
+            'The market gets very crowded, so keep bags in front and watch for pickpockets. Daytime traffic is heavy.',
+            130000.00,
+            106.8130,
+            -6.2030
+        ),
+        (
+            'Kebayoran Baru',
+            'kebayoran-baru',
+            'Mostly well drained, with brief pooling at a few low points during storms.',
+            'Commercial areas stay busy into the night. Use app-based transport when returning late.',
+            180000.00,
+            106.7990,
+            -6.2440
+        ),
+        (
+            'Pancoran',
+            'pancoran',
+            'Low-lying lanes near drainage channels may pool after heavy rain. Main roads usually clear quickly.',
+            'Arterial roads carry heavy traffic, so cross with care and use pedestrian bridges.',
+            135000.00,
+            106.8450,
+            -6.2550
+        ),
+        (
+            'Gambir',
+            'gambir',
+            'Central avenues drain well, but some side streets see short-lived pooling in storms.',
+            'A central area of offices and parks that is busy by day. Keep belongings close around the station.',
+            160000.00,
+            106.8200,
+            -6.1760
+        ),
+        (
+            'Senen',
+            'senen',
+            'Streets around the market and station can pool after heavy rain.',
+            'A crowded market and transport hub. Watch for pickpockets and take care on quiet streets at night.',
+            120000.00,
+            106.8450,
+            -6.1830
+        ),
+        (
+            'Kemayoran',
+            'kemayoran',
+            'Some low-lying neighborhoods flood in the rainy season. Check conditions before travelling in heavy rain.',
+            'A mix of homes and event venues. Quieter streets at night call for normal precautions.',
+            125000.00,
+            106.8530,
+            -6.1620
+        ),
+        (
+            'Grogol Petamburan',
+            'grogol-petamburan',
+            'Low areas near rivers and canals can flood after heavy rain.',
+            'Busy around campuses and malls. Keep belongings secure on crowded public transport.',
+            130000.00,
+            106.7900,
+            -6.1650
+        ),
+        (
+            'Kelapa Gading',
+            'kelapa-gading',
+            'Prone to flooding in heavy rainy seasons, and some streets can be impassable for hours.',
+            'Residential and mall area with security in the commercial zones. Normal precautions on side streets at night.',
+            165000.00,
+            106.9050,
+            -6.1600
+        ),
+        (
+            'Cengkareng',
+            'cengkareng',
+            'Low-lying parts can flood in the rainy season. Follow local updates during storms.',
+            'A large residential district. Use main roads at night and keep vehicles locked.',
+            115000.00,
+            106.7350,
+            -6.1500
+        ),
+        (
+            'Jatinegara',
+            'jatinegara',
+            'Neighborhoods along the Ciliwung can flood when the river rises. Follow local warnings.',
+            'A busy market and station area. Watch belongings in crowds.',
+            120000.00,
+            106.8700,
+            -6.2250
+        ),
+        (
+            'Pasar Minggu',
+            'pasar-minggu',
+            'Areas near the Ciliwung can flood when the river rises after upstream rain.',
+            'A busy market and station. Keep valuables secure; residential lanes are quieter at night.',
+            125000.00,
+            106.8400,
+            -6.2850
+        ),
+        (
+            'Cilandak',
+            'cilandak',
+            'Generally drains well, with occasional pooling on some roads after heavy storms.',
+            'Mostly residential with commercial strips. Normal precautions at night.',
+            155000.00,
+            106.8000,
+            -6.2900
+        ),
+        (
+            'Kebayoran Lama',
+            'kebayoran-lama',
+            'Some low areas near rivers may flood during heavy rain.',
+            'A busy market and arterial roads. Keep belongings secure in crowds.',
+            135000.00,
+            106.7780,
+            -6.2450
+        );
+
 INSERT INTO SUB_DISTRICTS (
     name,
     slug,
@@ -5,24 +171,18 @@ INSERT INTO SUB_DISTRICTS (
     safety_crime_information,
     estimated_daily_spending
 )
-VALUES
-    (
-        'Setiabudi',
-        'setiabudi',
-        'Some streets near the Cideng and Karet drainage channels can pool after intense rain. Main roads usually clear quickly, but low-lying alleys may be difficult to cross during a storm.',
-        'Busy commuter corridors are generally well lit. Use normal late-night precautions around quiet alleys and keep belongings secure in crowded areas.',
-        150000.00
-    ),
-    (
-        'Mampang Prapatan',
-        'mampang-prapatan',
-        'Short-lived flooding can occur around drainage bottlenecks near Tegal Parang and Mampang. Check local conditions during heavy rain before taking smaller roads.',
-        'Commercial streets are active into the evening. Residential lanes are quieter, so use established routes and app-based transport when returning late.',
-        135000.00
-    )
+SELECT
+    name,
+    slug,
+    flood_history,
+    safety_crime_information,
+    estimated_daily_spending
+FROM SEEDED_SUB_DISTRICTS
 ON CONFLICT (slug) DO NOTHING;
 
-WITH SEEDED_PLACES (
+-- Hand-written places. A temporary table so the bulk places below can copy
+-- them.
+CREATE TEMPORARY TABLE SEEDED_PLACES (
     name,
     sub_district_slug,
     address,
@@ -33,7 +193,7 @@ WITH SEEDED_PLACES (
     short_description,
     category_slug,
     attributes
-) AS (
+) ON COMMIT DROP AS
     VALUES
         (
             'Warung Nasi Sari Rasa',
@@ -622,8 +782,8 @@ WITH SEEDED_PLACES (
             'Round-the-clock copy and print counter for last-minute documents.',
             'print-copy',
             '{"color_print": true, "passport_photo": false, "open_24h": true}'
-        )
-)
+        );
+
 INSERT INTO PLACES (
     sub_district_id,
     category_id,
@@ -654,6 +814,71 @@ WHERE NOT EXISTS (
     WHERE existing.sub_district_id = sd.id
       AND existing.name = sp.name
 );
+
+-- Bulk places copying the hand-written ones under numbered names, spread over the
+-- sub-districts (1 in 20 has no location); the fixed seed keeps every database alike.
+SELECT setseed(0.42);
+
+WITH BULK_PLACES AS (
+    SELECT
+        t.*,
+        t.name || ' ' || g.n AS bulk_name,
+        s.slug AS bulk_sub_district_slug,
+        s.longitude AS center_longitude,
+        s.latitude AS center_latitude,
+        g.n,
+        random() AS r1,
+        random() AS r2
+    FROM generate_series(1, 50000) AS g(n)
+    JOIN (
+        SELECT sp.*, ROW_NUMBER() OVER (ORDER BY sp.name) - 1 AS idx
+        FROM SEEDED_PLACES sp
+    ) t ON t.idx = g.n % (SELECT COUNT(*) FROM SEEDED_PLACES)
+    -- Steps to the next sub-district after each round of templates, so every
+    -- sub-district gets every template.
+    JOIN (
+        SELECT ssd.*, ROW_NUMBER() OVER (ORDER BY ssd.slug) - 1 AS idx
+        FROM SEEDED_SUB_DISTRICTS ssd
+    ) s ON s.idx = (g.n / (SELECT COUNT(*) FROM SEEDED_PLACES))
+        % (SELECT COUNT(*) FROM SEEDED_SUB_DISTRICTS)
+)
+INSERT INTO PLACES (
+    sub_district_id,
+    category_id,
+    name,
+    address,
+    location,
+    operating_hours,
+    estimated_price_range,
+    short_description,
+    attributes
+)
+SELECT
+    sd.id,
+    c.id,
+    bp.bulk_name,
+    bp.address,
+    CASE
+        WHEN bp.n % 20 = 0 THEN NULL
+        ELSE ST_SetSRID(ST_MakePoint(
+            bp.center_longitude + (bp.r1 - 0.5) * 0.035,
+            bp.center_latitude + (bp.r2 - 0.5) * 0.035
+        ), 4326)
+    END,
+    bp.operating_hours,
+    bp.estimated_price_range,
+    bp.short_description,
+    bp.attributes::jsonb
+FROM BULK_PLACES bp
+JOIN SUB_DISTRICTS sd ON sd.slug = bp.bulk_sub_district_slug
+JOIN CATEGORIES c ON c.slug = bp.category_slug
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM PLACES existing
+    WHERE existing.sub_district_id = sd.id
+      AND existing.name = bp.bulk_name
+)
+ORDER BY bp.n;
 
 -- Default admin account. Password: admin123 (change after first sign-in).
 INSERT INTO USERS (name, email, password_hash, role)
@@ -704,3 +929,6 @@ ON CONFLICT (place_id, user_id) DO NOTHING;
 UPDATE PLACES p
 SET rating_count = (SELECT COUNT(*) FROM PLACE_REVIEWS r WHERE r.place_id = p.id),
     rating_sum = (SELECT COALESCE(SUM(r.rating), 0) FROM PLACE_REVIEWS r WHERE r.place_id = p.id);
+
+-- Refresh the planner's statistics so the bulk places are planned for at once.
+ANALYZE PLACES;

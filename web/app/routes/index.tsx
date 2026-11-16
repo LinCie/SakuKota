@@ -20,13 +20,6 @@ function searchString(value: unknown) {
   return typeof value === "string" && value !== "" ? value : undefined;
 }
 
-// A limit must be a positive whole number; anything else is dropped.
-function searchLimit(value: unknown) {
-  return typeof value === "number" && Number.isInteger(value) && value > 0
-    ? value
-    : undefined;
-}
-
 const BBOX_COORDINATE = /^-?\d+(\.\d+)?$/;
 
 // A bbox must be "west,south,east,north" with west <= east and south <= north,
@@ -52,18 +45,16 @@ export const Route = createFileRoute("/")({
     kecamatan: searchString(search.kecamatan),
     kategori: searchString(search.kategori),
     q: searchString(search.q),
-    limit: searchLimit(search.limit),
     bbox: searchBBox(search.bbox),
     tempat: typeof search.tempat === "number" ? search.tempat : undefined,
   }),
   // The kecamatan, categories, and search are applied by the backend; the
   // selected place (`tempat`) is picked from the loaded results, so changing
   // it doesn't reload.
-  loaderDeps: ({ search: { kecamatan, kategori, q, limit, bbox } }) => ({
+  loaderDeps: ({ search: { kecamatan, kategori, q, bbox } }) => ({
     kecamatan,
     kategori,
     q,
-    limit,
     bbox,
   }),
   loader: async ({ context: { queryClient }, deps }) => {

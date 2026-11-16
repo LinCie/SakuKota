@@ -779,7 +779,7 @@ func TestService_Update_Storage(t *testing.T) {
 }
 
 func TestService_GetMany_LimitDefaultsToAndIsCappedAtMaximum(t *testing.T) {
-	const maximum = 1000
+	const maximum = 40
 
 	tests := []struct {
 		name  string

@@ -41,8 +41,6 @@ export type HomeSearch = {
   /** Comma-separated category slugs; absent means every category. */
   kategori?: string;
   q?: string;
-  /** Caps the places to the lowest ids while the map is zoomed out. */
-  limit?: number;
   /** The map's view as "west,south,east,north"; only places inside it are loaded. */
   bbox?: string;
   tempat?: number;
@@ -52,10 +50,7 @@ function activeCategorySlugs(kategori: string | undefined) {
   return (kategori ?? "").split(",").filter(Boolean);
 }
 
-type PlacesFilters = Pick<
-  HomeSearch,
-  "kecamatan" | "kategori" | "q" | "limit" | "bbox"
->;
+type PlacesFilters = Pick<HomeSearch, "kecamatan" | "kategori" | "q" | "bbox">;
 
 /**
  * The kecamatan on show (the one in the URL, else the first) and the places
@@ -64,7 +59,7 @@ type PlacesFilters = Pick<
  * no places either.
  */
 export function placesSelection(
-  { kecamatan, kategori, q, limit, bbox }: PlacesFilters,
+  { kecamatan, kategori, q, bbox }: PlacesFilters,
   categories: CategoryDetail[],
   subDistricts: SubDistrict[],
 ) {
@@ -78,7 +73,7 @@ export function placesSelection(
       .map((category) => category.id),
     q: q?.trim(),
   };
-  const params: GetPlacesParams = { ...listParams, limit, bbox };
+  const params: GetPlacesParams = { ...listParams, bbox };
   return { subDistrict, params, listParams };
 }
 
@@ -162,9 +157,9 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
     selectPlace(place.id);
   }
 
-  function setView({ bbox, limit }: MapView) {
-    if (bbox !== search.bbox || limit !== search.limit) {
-      updateParams({ bbox, limit });
+  function setView({ bbox }: MapView) {
+    if (bbox !== search.bbox) {
+      updateParams({ bbox });
     }
   }
 
@@ -248,11 +243,10 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
         subDistrict={subDistrict}
         search={searchField}
         onKecamatanChange={(slug) =>
-          // The new kecamatan loads whole, so the map can frame it.
+          // The new kecamatan loads without a view, so the map can frame it.
           updateParams({
             kecamatan: slug,
             tempat: undefined,
-            limit: undefined,
             bbox: undefined,
           })
         }

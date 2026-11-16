@@ -11,7 +11,7 @@ package mock
 
 import (
 	context "context"
-	"rantau-go/internal/module/places"
+	places "rantau-go/internal/module/places"
 	storage "rantau-go/internal/storage"
 	reflect "reflect"
 
@@ -100,6 +100,21 @@ func (mr *MockRepositoryMockRecorder) DeleteMedia(ctx, id, mediaID any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMedia", reflect.TypeOf((*MockRepository)(nil).DeleteMedia), ctx, id, mediaID)
 }
 
+// GetByIDs mocks base method.
+func (m *MockRepository) GetByIDs(ctx context.Context, ids []int64) ([]places.Place, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByIDs", ctx, ids)
+	ret0, _ := ret[0].([]places.Place)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByIDs indicates an expected call of GetByIDs.
+func (mr *MockRepositoryMockRecorder) GetByIDs(ctx, ids any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByIDs", reflect.TypeOf((*MockRepository)(nil).GetByIDs), ctx, ids)
+}
+
 // GetCategories mocks base method.
 func (m *MockRepository) GetCategories(ctx context.Context) ([]places.Category, error) {
 	m.ctrl.T.Helper()
@@ -128,6 +143,21 @@ func (m *MockRepository) GetCategory(ctx context.Context, id int64) (*places.Cat
 func (mr *MockRepositoryMockRecorder) GetCategory(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCategory", reflect.TypeOf((*MockRepository)(nil).GetCategory), ctx, id)
+}
+
+// GetLocations mocks base method.
+func (m *MockRepository) GetLocations(ctx context.Context, filter places.PlaceFilter) ([]places.PlaceLocation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLocations", ctx, filter)
+	ret0, _ := ret[0].([]places.PlaceLocation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLocations indicates an expected call of GetLocations.
+func (mr *MockRepositoryMockRecorder) GetLocations(ctx, filter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLocations", reflect.TypeOf((*MockRepository)(nil).GetLocations), ctx, filter)
 }
 
 // GetMany mocks base method.

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -19,22 +20,35 @@ import (
 	"rantau-go/internal/pkg/postgis"
 	"rantau-go/internal/storage"
 	"rantau-go/internal/testutil/pgtest"
+	"rantau-go/internal/testutil/redistest"
 )
 
-// testDB is shared by the tests in this file. pgtest.Reset empties it before
-// each test.
-var testDB *sqlx.DB
+// testDB and testRedis are shared by the tests in this package. pgtest.Reset and
+// redistest.Reset empty them before each test.
+var (
+	testDB    *sqlx.DB
+	testRedis *redis.Client
+)
 
 func TestMain(m *testing.M) {
-	db, stop, err := pgtest.Start(context.Background())
+	db, stopDB, err := pgtest.Start(context.Background())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	testDB = db
 
+	rdb, stopRedis, err := redistest.Start(context.Background())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		stopDB()
+		os.Exit(1)
+	}
+	testRedis = rdb
+
 	code := m.Run()
-	stop()
+	stopRedis()
+	stopDB()
 	os.Exit(code)
 }
 
@@ -319,6 +333,12 @@ func TestRepository_GetMany(t *testing.T) {
 			filter:    places.PlaceFilter{Bounds: &places.BoundingBox{MinLng: 106.82, MinLat: -6.21, MaxLng: 106.84, MaxLat: -6.20}},
 			want:      []string{"Laundry Bersih", "Penjahit Maju"},
 			wantTotal: 2,
+		},
+		{
+			name:      "bounds exclude places just past the edge",
+			filter:    places.PlaceFilter{Bounds: &places.BoundingBox{MinLng: 106.82, MinLat: -6.21, MaxLng: 106.839999, MaxLat: -6.20}},
+			want:      []string{"Laundry Bersih"},
+			wantTotal: 1,
 		},
 		{
 			name:      "bounds exclude places outside the box",
