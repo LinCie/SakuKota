@@ -11,7 +11,7 @@ package mock
 
 import (
 	context "context"
-	"rantau-go/internal/module/places"
+	places "rantau-go/internal/module/places"
 	storage "rantau-go/internal/storage"
 	reflect "reflect"
 
@@ -174,35 +174,6 @@ func (m *MockService) MediaUploadURL(ctx context.Context, id int64, contentType 
 func (mr *MockServiceMockRecorder) MediaUploadURL(ctx, id, contentType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MediaUploadURL", reflect.TypeOf((*MockService)(nil).MediaUploadURL), ctx, id, contentType)
-}
-
-// NormalizeName mocks base method.
-func (m *MockService) NormalizeName(ctx context.Context, name string) (string, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NormalizeName", ctx, name)
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// NormalizeName indicates an expected call of NormalizeName.
-func (mr *MockServiceMockRecorder) NormalizeName(ctx, name any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NormalizeName", reflect.TypeOf((*MockService)(nil).NormalizeName), ctx, name)
-}
-
-// NormalizeOptionalFields mocks base method.
-func (m *MockService) NormalizeOptionalFields(ctx context.Context, p *places.Place) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NormalizeOptionalFields", ctx, p)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// NormalizeOptionalFields indicates an expected call of NormalizeOptionalFields.
-func (mr *MockServiceMockRecorder) NormalizeOptionalFields(ctx, p any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NormalizeOptionalFields", reflect.TypeOf((*MockService)(nil).NormalizeOptionalFields), ctx, p)
 }
 
 // Update mocks base method.

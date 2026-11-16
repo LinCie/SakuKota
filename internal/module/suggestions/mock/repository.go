@@ -11,7 +11,7 @@ package mock
 
 import (
 	context "context"
-	"rantau-go/internal/module/suggestions"
+	suggestions "rantau-go/internal/module/suggestions"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"

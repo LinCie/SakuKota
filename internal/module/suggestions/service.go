@@ -30,18 +30,12 @@ type Service interface {
 	Reject(ctx context.Context, id, adminID int64, reason *string) (*Suggestion, error)
 }
 
-// PlaceService defines the place operations that suggestions require: checking the
-// place text when a suggestion is submitted, and creating and deleting places on approval.
+// PlaceService defines the place operations that approving a suggestion requires.
 type PlaceService interface {
 	// Create saves a new place, which approval uses to make a place from a suggestion.
 	Create(ctx context.Context, p *places.Place) (*places.Place, error)
 	// Delete removes the place again, which is used to undo a failed approval.
 	Delete(ctx context.Context, id int64) error
-	// NormalizeName trims the spaces around a place name, and rejects it if it is empty or too long.
-	NormalizeName(ctx context.Context, name string) (string, error)
-	// NormalizeOptionalFields trims the optional text of p and turns blank values into nothing.
-	// It rejects a value longer than its column allows.
-	NormalizeOptionalFields(ctx context.Context, p *places.Place) error
 }
 
 type service struct {
@@ -63,7 +57,7 @@ func NewService(repo Repository, places PlaceService) Service {
 
 // Create checks the suggestion's fields, then saves it as pending.
 func (s *service) Create(ctx context.Context, sg *Suggestion) (*Suggestion, error) {
-	name, err := s.places.NormalizeName(ctx, sg.Name)
+	name, err := places.NormalizeName(sg.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -77,14 +71,14 @@ func (s *service) Create(ctx context.Context, sg *Suggestion) (*Suggestion, erro
 		return nil, err
 	}
 
-	// The optional place text follows the place rules, so the place service checks and trims it.
+	// The optional place text follows the place rules, so they check and trim it.
 	place := &places.Place{
 		Address:             sg.Address,
 		OperatingHours:      sg.OperatingHours,
 		EstimatedPriceRange: sg.EstimatedPriceRange,
 		ShortDescription:    sg.ShortDescription,
 	}
-	if err := s.places.NormalizeOptionalFields(ctx, place); err != nil {
+	if err := places.NormalizeOptionalFields(place); err != nil {
 		return nil, err
 	}
 
