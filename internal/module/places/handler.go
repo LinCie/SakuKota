@@ -72,8 +72,8 @@ func (h *Handler) CreateMediaUpload(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, storage.ToImageUploadResponse(upload))
 }
 
-// GetPlaces sends a page of places matching the URL filters (area, category, search, map box).
-// It also sends the total number of matches, so the client knows how many pages there are.
+// GetPlaces sends a page of places matching the URL filters (area, category, search, map box),
+// plus the total number of matches. The X-Cache header says HIT, MISS, or BYPASS when cached.
 func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	filter := PlaceFilter{Query: strings.TrimSpace(query.Get("q"))}
@@ -125,7 +125,8 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 		filter.Bounds = bounds
 	}
 
-	places, total, err := h.service.GetMany(r.Context(), filter)
+	ctx, status := withCacheStatus(r.Context())
+	places, total, err := h.service.GetMany(ctx, filter)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrSubDistrictNotFound):
@@ -136,6 +137,10 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 			httpx.RespondInternalError(w)
 		}
 		return
+	}
+
+	if *status != "" {
+		w.Header().Set(cacheHeader, string(*status))
 	}
 
 	httpx.RespondJSON(w, http.StatusOK, PlacePageResponse{

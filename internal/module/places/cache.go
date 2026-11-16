@@ -12,6 +12,25 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// cacheStatus records how a request used the index cache, for the X-Cache header.
+// It stays empty when the request never reached the cached repository.
+type cacheStatus string
+
+// withCacheStatus returns a context that lets the cached repository report its status
+// through the returned pointer.
+func withCacheStatus(ctx context.Context) (context.Context, *cacheStatus) {
+	status := new(cacheStatus)
+
+	return context.WithValue(ctx, cacheStatusKey, status), status
+}
+
+// setCacheStatus reports status to the request's recorder, if it has one.
+func setCacheStatus(ctx context.Context, status cacheStatus) {
+	if p, ok := ctx.Value(cacheStatusKey).(*cacheStatus); ok {
+		*p = status
+	}
+}
+
 // cachedRepository wraps a Repository and serves GetMany pages from a Redis index of ids and
 // coordinates; entries only expire after listCacheTTL.
 type cachedRepository struct {
@@ -32,6 +51,8 @@ func NewCachedRepository(repo Repository, client *redis.Client) Repository {
 // A filter without a sub-district is not cached.
 func (r *cachedRepository) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error) {
 	if filter.SubDistrictID == 0 {
+		setCacheStatus(ctx, cacheBypass)
+
 		return r.Repository.GetMany(ctx, filter)
 	}
 
@@ -59,8 +80,12 @@ func (r *cachedRepository) index(ctx context.Context, filter PlaceFilter) ([]byt
 	key := indexCacheKey(filter)
 
 	if data, err := r.client.Get(ctx, key).Bytes(); err == nil && len(data)%indexEntrySize == 0 {
+		setCacheStatus(ctx, cacheHit)
+
 		return data, nil
 	}
+
+	setCacheStatus(ctx, cacheMiss)
 
 	locations, err := r.Repository.GetLocations(ctx, filter)
 	if err != nil {

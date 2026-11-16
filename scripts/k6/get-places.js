@@ -2,6 +2,7 @@
 // Usage: k6 run -e PROFILE=smoke|load|stress|spike|soak -e RATE=2 -e DURATION=60s -e MAX_VUS=n scripts/k6/get-places.js
 import http from "k6/http";
 import { check, sleep } from "k6";
+import { Rate, Trend } from "k6/metrics";
 
 const BASE_URL = __ENV.BASE_URL || "http://localhost:8080";
 const PROFILE = __ENV.PROFILE || "load";
@@ -107,6 +108,11 @@ function arrivalRate(stages) {
   };
 }
 
+// Response times split by the API's X-Cache header (hit, miss, or bypass), and
+// the share of requests served from the cache.
+const cacheDuration = new Trend("places_duration", true);
+const cacheHitRate = new Rate("cache_hit");
+
 export const options = {
   scenarios: {
     [PROFILE]: { ...PROFILES[PROFILE], gracefulStop: "1m" },
@@ -118,6 +124,8 @@ export const options = {
     "http_req_duration{kind:list}": ["p(95)<500"],
     "http_req_duration{search:yes}": ["p(95)<500"],
     "http_req_duration{category:yes}": ["p(95)<500"],
+    "places_duration{cache:hit}": ["p(95)<500"],
+    "places_duration{cache:miss}": ["p(95)<500"],
   },
 };
 
@@ -327,6 +335,10 @@ function getPlaces(state, kind, { limit, offset, bbox }) {
     },
   });
   if (!check(res, { "status is 200": (r) => r.status === 200 })) return null;
+
+  const cache = (res.headers["X-Cache"] || "none").toLowerCase();
+  cacheDuration.add(res.timings.duration, { cache, kind });
+  cacheHitRate.add(cache === "hit");
 
   const body = res.json("data");
   const places = body.places;
