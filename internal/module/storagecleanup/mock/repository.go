@@ -11,7 +11,6 @@ package mock
 
 import (
 	context "context"
-	storagecleanup "rantau-go/internal/module/storagecleanup"
 	reflect "reflect"
 	time "time"
 
@@ -42,19 +41,19 @@ func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 	return m.recorder
 }
 
-// ClaimDue mocks base method.
-func (m *MockRepository) ClaimDue(ctx context.Context, limit int) ([]storagecleanup.Deletion, error) {
+// GetDue mocks base method.
+func (m *MockRepository) GetDue(ctx context.Context, limit int) ([]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ClaimDue", ctx, limit)
-	ret0, _ := ret[0].([]storagecleanup.Deletion)
+	ret := m.ctrl.Call(m, "GetDue", ctx, limit)
+	ret0, _ := ret[0].([]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ClaimDue indicates an expected call of ClaimDue.
-func (mr *MockRepositoryMockRecorder) ClaimDue(ctx, limit any) *gomock.Call {
+// GetDue indicates an expected call of GetDue.
+func (mr *MockRepositoryMockRecorder) GetDue(ctx, limit any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimDue", reflect.TypeOf((*MockRepository)(nil).ClaimDue), ctx, limit)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDue", reflect.TypeOf((*MockRepository)(nil).GetDue), ctx, limit)
 }
 
 // Remove mocks base method.

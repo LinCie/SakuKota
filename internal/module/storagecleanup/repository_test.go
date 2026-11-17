@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -42,15 +41,14 @@ func newRepository(t *testing.T) storagecleanup.Repository {
 	return storagecleanup.NewPostgresRepository(testDB)
 }
 
-// queue adds key to the queue, due dueIn from now (negative for already due),
-// after the given number of failed attempts.
-func queue(t *testing.T, key string, attempts int, dueIn time.Duration) {
+// queue adds key to the queue, due dueIn from now (negative for already due).
+func queue(t *testing.T, key string, dueIn time.Duration) {
 	t.Helper()
 
 	_, err := testDB.Exec(
-		`INSERT INTO STORAGE_DELETIONS (key, attempts, next_attempt_at)
-		VALUES ($1, $2, NOW() + make_interval(secs => $3))`,
-		key, attempts, dueIn.Seconds(),
+		`INSERT INTO STORAGE_DELETIONS (key, next_attempt_at)
+		VALUES ($1, NOW() + make_interval(secs => $2))`,
+		key, dueIn.Seconds(),
 	)
 	require.NoError(t, err)
 }
@@ -75,22 +73,13 @@ func stateOf(t *testing.T, key string) queueState {
 	return s
 }
 
-func keysOf(deletions []storagecleanup.Deletion) []string {
-	keys := make([]string, 0, len(deletions))
-	for _, d := range deletions {
-		keys = append(keys, d.Key)
-	}
-
-	return keys
-}
-
 func TestRepository_Remove(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("takes the key off the queue and leaves the others", func(t *testing.T) {
 		repo := newRepository(t)
-		queue(t, "a.jpg", 0, 0)
-		queue(t, "b.jpg", 0, 0)
+		queue(t, "a.jpg", 0)
+		queue(t, "b.jpg", 0)
 
 		require.NoError(t, repo.Remove(ctx, "a.jpg"))
 
@@ -104,117 +93,76 @@ func TestRepository_Remove(t *testing.T) {
 	})
 }
 
-func TestRepository_ClaimDue(t *testing.T) {
+func TestRepository_GetDue(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("returns the due deletions with their attempts, longest due first", func(t *testing.T) {
+	t.Run("returns the due keys, longest due first", func(t *testing.T) {
 		repo := newRepository(t)
-		queue(t, "newer.jpg", 0, -time.Minute)
-		queue(t, "older.jpg", 3, -time.Hour)
-		queue(t, "oldest.jpg", 1, -2*time.Hour)
+		queue(t, "newer.jpg", -time.Minute)
+		queue(t, "older.jpg", -time.Hour)
+		queue(t, "oldest.jpg", -2*time.Hour)
 
-		got, err := repo.ClaimDue(ctx, 10)
+		got, err := repo.GetDue(ctx, 10)
 
 		require.NoError(t, err)
-		assert.Equal(t, []storagecleanup.Deletion{
-			{Key: "oldest.jpg", Attempts: 1},
-			{Key: "older.jpg", Attempts: 3},
-			{Key: "newer.jpg", Attempts: 0},
-		}, got)
+		assert.Equal(t, []string{"oldest.jpg", "older.jpg", "newer.jpg"}, got)
 	})
 
-	t.Run("orders deletions that became due together by key", func(t *testing.T) {
+	t.Run("orders keys that became due together by key", func(t *testing.T) {
 		repo := newRepository(t)
 		_, err := testDB.Exec(`INSERT INTO STORAGE_DELETIONS (key, next_attempt_at)
 			VALUES ('b.jpg', '2026-01-01T00:00:00Z'), ('a.jpg', '2026-01-01T00:00:00Z')`)
 		require.NoError(t, err)
 
-		got, err := repo.ClaimDue(ctx, 10)
+		got, err := repo.GetDue(ctx, 10)
 
 		require.NoError(t, err)
-		assert.Equal(t, []string{"a.jpg", "b.jpg"}, keysOf(got))
+		assert.Equal(t, []string{"a.jpg", "b.jpg"}, got)
 	})
 
-	t.Run("skips deletions that are not due yet", func(t *testing.T) {
+	t.Run("skips keys that are not due yet", func(t *testing.T) {
 		repo := newRepository(t)
-		queue(t, "due.jpg", 0, -time.Minute)
-		queue(t, "later.jpg", 0, time.Hour)
+		queue(t, "due.jpg", -time.Minute)
+		queue(t, "later.jpg", time.Hour)
 
-		got, err := repo.ClaimDue(ctx, 10)
+		got, err := repo.GetDue(ctx, 10)
 
 		require.NoError(t, err)
-		assert.Equal(t, []string{"due.jpg"}, keysOf(got))
+		assert.Equal(t, []string{"due.jpg"}, got)
 	})
 
-	t.Run("claims at most limit, the longest due first", func(t *testing.T) {
+	t.Run("returns at most limit, the longest due first", func(t *testing.T) {
 		repo := newRepository(t)
-		queue(t, "c.jpg", 0, -time.Minute)
-		queue(t, "a.jpg", 0, -3*time.Hour)
-		queue(t, "b.jpg", 0, -2*time.Hour)
+		queue(t, "c.jpg", -time.Minute)
+		queue(t, "a.jpg", -3*time.Hour)
+		queue(t, "b.jpg", -2*time.Hour)
 
-		got, err := repo.ClaimDue(ctx, 2)
+		got, err := repo.GetDue(ctx, 2)
 
 		require.NoError(t, err)
-		assert.Equal(t, []string{"a.jpg", "b.jpg"}, keysOf(got))
-		assert.Less(t, stateOf(t, "c.jpg").DueIn, 0.0, "the rest stay due")
+		assert.Equal(t, []string{"a.jpg", "b.jpg"}, got)
 	})
 
-	t.Run("holds claimed deletions back for a lease", func(t *testing.T) {
+	t.Run("leaves the returned keys due", func(t *testing.T) {
 		repo := newRepository(t)
-		queue(t, "a.jpg", 2, -time.Minute)
+		queue(t, "a.jpg", -time.Minute)
 
-		first, err := repo.ClaimDue(ctx, 10)
+		first, err := repo.GetDue(ctx, 10)
 		require.NoError(t, err)
-		second, err := repo.ClaimDue(ctx, 10)
+		second, err := repo.GetDue(ctx, 10)
 		require.NoError(t, err)
 
-		assert.Equal(t, []string{"a.jpg"}, keysOf(first))
-		assert.Empty(t, second, "a claimed deletion is not claimed again")
-		state := stateOf(t, "a.jpg")
-		assert.InDelta(t, (15 * time.Minute).Seconds(), state.DueIn, 30, "the lease is 15 minutes")
-		assert.Equal(t, 2, state.Attempts, "claiming does not count as an attempt")
+		assert.Equal(t, []string{"a.jpg"}, first)
+		assert.Equal(t, first, second)
 	})
 
-	t.Run("returns an empty, non-nil slice when nothing is due", func(t *testing.T) {
+	t.Run("returns nothing when nothing is due", func(t *testing.T) {
 		repo := newRepository(t)
 
-		got, err := repo.ClaimDue(ctx, 10)
+		got, err := repo.GetDue(ctx, 10)
 
 		require.NoError(t, err)
-		assert.NotNil(t, got)
 		assert.Empty(t, got)
-	})
-
-	t.Run("gives each deletion to one of several workers claiming at once", func(t *testing.T) {
-		repo := newRepository(t)
-		const keys, workers = 60, 6
-		for i := range keys {
-			queue(t, fmt.Sprintf("key-%02d.jpg", i), 0, -time.Minute)
-		}
-
-		var wg sync.WaitGroup
-		claimed := make([][]storagecleanup.Deletion, workers)
-		errs := make([]error, workers)
-		for w := range workers {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				claimed[w], errs[w] = repo.ClaimDue(ctx, 20)
-			}()
-		}
-		wg.Wait()
-
-		seen := map[string]int{}
-		for w := range workers {
-			require.NoError(t, errs[w])
-			for _, key := range keysOf(claimed[w]) {
-				seen[key]++
-			}
-		}
-		assert.Len(t, seen, keys, "every deletion is claimed")
-		for key, n := range seen {
-			assert.Equal(t, 1, n, "%s is claimed once", key)
-		}
 	})
 }
 
@@ -223,7 +171,7 @@ func TestRepository_Reschedule(t *testing.T) {
 
 	t.Run("records the failed attempt and makes the deletion due after the delay", func(t *testing.T) {
 		repo := newRepository(t)
-		queue(t, "a.jpg", 0, -time.Minute)
+		queue(t, "a.jpg", -time.Minute)
 
 		require.NoError(t, repo.Reschedule(ctx, "a.jpg", 30*time.Minute, "storage unavailable"))
 
@@ -235,7 +183,7 @@ func TestRepository_Reschedule(t *testing.T) {
 
 	t.Run("counts each failure and keeps the latest error", func(t *testing.T) {
 		repo := newRepository(t)
-		queue(t, "a.jpg", 0, -time.Minute)
+		queue(t, "a.jpg", -time.Minute)
 
 		require.NoError(t, repo.Reschedule(ctx, "a.jpg", time.Minute, "first"))
 		require.NoError(t, repo.Reschedule(ctx, "a.jpg", time.Hour, "second"))
@@ -246,32 +194,21 @@ func TestRepository_Reschedule(t *testing.T) {
 		assert.InDelta(t, time.Hour.Seconds(), state.DueIn, 30)
 	})
 
-	t.Run("keeps the deletion from being claimed until the delay passes", func(t *testing.T) {
+	t.Run("keeps the deletion from being due until the delay passes", func(t *testing.T) {
 		repo := newRepository(t)
-		queue(t, "a.jpg", 0, -time.Minute)
+		queue(t, "a.jpg", -time.Minute)
 		require.NoError(t, repo.Reschedule(ctx, "a.jpg", time.Hour, "failed"))
 
-		got, err := repo.ClaimDue(ctx, 10)
+		got, err := repo.GetDue(ctx, 10)
 
 		require.NoError(t, err)
 		assert.Empty(t, got)
 	})
 
-	t.Run("makes the deletion claimable at once when the delay is zero", func(t *testing.T) {
-		repo := newRepository(t)
-		queue(t, "a.jpg", 0, time.Hour)
-		require.NoError(t, repo.Reschedule(ctx, "a.jpg", 0, "failed"))
-
-		got, err := repo.ClaimDue(ctx, 10)
-
-		require.NoError(t, err)
-		assert.Equal(t, []storagecleanup.Deletion{{Key: "a.jpg", Attempts: 1}}, got)
-	})
-
 	t.Run("leaves other deletions alone", func(t *testing.T) {
 		repo := newRepository(t)
-		queue(t, "a.jpg", 0, -time.Minute)
-		queue(t, "b.jpg", 0, -time.Minute)
+		queue(t, "a.jpg", -time.Minute)
+		queue(t, "b.jpg", -time.Minute)
 
 		require.NoError(t, repo.Reschedule(ctx, "a.jpg", time.Hour, "failed"))
 

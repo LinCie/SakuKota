@@ -29,10 +29,7 @@ func newMocks(t *testing.T) (*mock.MockRepository, *mock.MockImageStorage) {
 func TestService_Run_DeletesDueObjects(t *testing.T) {
 	repo, objects := newMocks(t)
 	gomock.InOrder(
-		repo.EXPECT().ClaimDue(gomock.Any(), 100).Return([]storagecleanup.Deletion{
-			{Key: keyA, Attempts: 0},
-			{Key: keyB, Attempts: 3},
-		}, nil),
+		repo.EXPECT().GetDue(gomock.Any(), 100).Return([]string{keyA, keyB}, nil),
 		objects.EXPECT().Delete(gomock.Any(), keyA).Return(nil),
 		repo.EXPECT().Remove(gomock.Any(), keyA).Return(nil),
 		objects.EXPECT().Delete(gomock.Any(), keyB).Return(nil),
@@ -45,63 +42,29 @@ func TestService_Run_DeletesDueObjects(t *testing.T) {
 func TestService_Run_EmptyQueue(t *testing.T) {
 	// Nothing is due, so nothing may be deleted.
 	repo, objects := newMocks(t)
-	repo.EXPECT().ClaimDue(gomock.Any(), 100).Return(nil, nil)
+	repo.EXPECT().GetDue(gomock.Any(), 100).Return(nil, nil)
 
 	require.NoError(t, storagecleanup.NewService(repo, objects).Run(context.Background()))
 }
 
-func TestService_Run_ClaimFailure(t *testing.T) {
+func TestService_Run_GetDueFailure(t *testing.T) {
 	// Nothing may be deleted when the queue cannot be read.
 	boom := errors.New("connection reset")
 	repo, objects := newMocks(t)
-	repo.EXPECT().ClaimDue(gomock.Any(), 100).Return(nil, boom)
+	repo.EXPECT().GetDue(gomock.Any(), 100).Return(nil, boom)
 
 	err := storagecleanup.NewService(repo, objects).Run(context.Background())
 	require.ErrorIs(t, err, boom)
 }
 
 func TestService_Run_DeleteFailureIsRescheduled(t *testing.T) {
-	// Retries back off exponentially from 15 minutes, up to a day.
-	tests := []struct {
-		name        string
-		attempts    int
-		wantRetryIn time.Duration
-	}{
-		{name: "first failure", attempts: 0, wantRetryIn: 15 * time.Minute},
-		{name: "second failure", attempts: 1, wantRetryIn: 30 * time.Minute},
-		{name: "third failure", attempts: 2, wantRetryIn: time.Hour},
-		{name: "last failure below the cap", attempts: 6, wantRetryIn: 16 * time.Hour},
-		{name: "capped at a day", attempts: 7, wantRetryIn: 24 * time.Hour},
-		{name: "stays capped after many failures", attempts: 100, wantRetryIn: 24 * time.Hour},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			deleteErr := errors.New("connection reset")
-			repo, objects := newMocks(t)
-			gomock.InOrder(
-				repo.EXPECT().ClaimDue(gomock.Any(), 100).Return([]storagecleanup.Deletion{
-					{Key: keyA, Attempts: tc.attempts},
-				}, nil),
-				objects.EXPECT().Delete(gomock.Any(), keyA).Return(deleteErr),
-				repo.EXPECT().Reschedule(gomock.Any(), keyA, tc.wantRetryIn, "connection reset").Return(nil),
-			)
-
-			// A failed delete is retried later, so it does not fail the run.
-			require.NoError(t, storagecleanup.NewService(repo, objects).Run(context.Background()))
-		})
-	}
-}
-
-func TestService_Run_ContinuesAfterDeleteFailure(t *testing.T) {
+	// A failed delete is retried an hour later. It does not fail the run, and
+	// the run carries on with the next key.
 	repo, objects := newMocks(t)
 	gomock.InOrder(
-		repo.EXPECT().ClaimDue(gomock.Any(), 100).Return([]storagecleanup.Deletion{
-			{Key: keyA, Attempts: 0},
-			{Key: keyB, Attempts: 0},
-		}, nil),
+		repo.EXPECT().GetDue(gomock.Any(), 100).Return([]string{keyA, keyB}, nil),
 		objects.EXPECT().Delete(gomock.Any(), keyA).Return(errors.New("connection reset")),
-		repo.EXPECT().Reschedule(gomock.Any(), keyA, 15*time.Minute, "connection reset").Return(nil),
+		repo.EXPECT().Reschedule(gomock.Any(), keyA, time.Hour, "connection reset").Return(nil),
 		objects.EXPECT().Delete(gomock.Any(), keyB).Return(nil),
 		repo.EXPECT().Remove(gomock.Any(), keyB).Return(nil),
 	)
@@ -127,7 +90,7 @@ func TestService_Run_QueueUpdateFailure(t *testing.T) {
 			name: "reschedule failure is returned",
 			expect: func(repo *mock.MockRepository, objects *mock.MockImageStorage) {
 				objects.EXPECT().Delete(gomock.Any(), keyA).Return(errors.New("timeout"))
-				repo.EXPECT().Reschedule(gomock.Any(), keyA, 15*time.Minute, "timeout").Return(boom)
+				repo.EXPECT().Reschedule(gomock.Any(), keyA, time.Hour, "timeout").Return(boom)
 			},
 		},
 	}
@@ -135,9 +98,7 @@ func TestService_Run_QueueUpdateFailure(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			repo, objects := newMocks(t)
-			repo.EXPECT().ClaimDue(gomock.Any(), 100).Return([]storagecleanup.Deletion{
-				{Key: keyA, Attempts: 0},
-			}, nil)
+			repo.EXPECT().GetDue(gomock.Any(), 100).Return([]string{keyA}, nil)
 			tc.expect(repo, objects)
 
 			err := storagecleanup.NewService(repo, objects).Run(context.Background())

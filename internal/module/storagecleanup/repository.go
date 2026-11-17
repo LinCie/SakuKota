@@ -13,9 +13,8 @@ import (
 type Repository interface {
 	// Remove takes key off the queue.
 	Remove(ctx context.Context, key string) error
-	// ClaimDue returns up to limit deletions that are due and holds them back
-	// from other workers until they are removed or rescheduled.
-	ClaimDue(ctx context.Context, limit int) ([]Deletion, error)
+	// GetDue returns up to limit keys that are due, longest due first.
+	GetDue(ctx context.Context, limit int) ([]string, error)
 	// Reschedule records a failed attempt to delete key and makes it due again
 	// after retryIn.
 	Reschedule(ctx context.Context, key string, retryIn time.Duration, lastErr string) error
@@ -43,37 +42,26 @@ func (r *postgresRepository) Remove(ctx context.Context, key string) error {
 	return err
 }
 
-// ClaimDue returns up to limit due deletions, oldest due first.
-// It pushes each one's next attempt back by claimLease, so other workers skip it.
-func (r *postgresRepository) ClaimDue(ctx context.Context, limit int) ([]Deletion, error) {
-	deletions := make([]Deletion, 0)
+// GetDue returns up to limit due keys, longest due first. It does not change
+// the queue, so runs that overlap get the same keys.
+func (r *postgresRepository) GetDue(ctx context.Context, limit int) ([]string, error) {
+	var keys []string
 
 	err := r.db.SelectContext(
 		ctx,
-		&deletions,
-		`WITH due AS (
-			SELECT key, next_attempt_at AS due_at
-			FROM STORAGE_DELETIONS
-			WHERE next_attempt_at <= NOW()
-			ORDER BY next_attempt_at, key
-			LIMIT $1
-			FOR UPDATE SKIP LOCKED
-		), claimed AS (
-			UPDATE STORAGE_DELETIONS d
-			SET next_attempt_at = NOW() + make_interval(secs => $2)
-			FROM due
-			WHERE d.key = due.key
-			RETURNING d.key, d.attempts, due.due_at
-		)
-		SELECT key, attempts FROM claimed ORDER BY due_at, key`,
+		&keys,
+		`SELECT key
+		FROM STORAGE_DELETIONS
+		WHERE next_attempt_at <= NOW()
+		ORDER BY next_attempt_at, key
+		LIMIT $1`,
 		limit,
-		claimLease.Seconds(),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return deletions, nil
+	return keys, nil
 }
 
 // Reschedule records a failed attempt to delete key and makes it due again

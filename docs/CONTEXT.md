@@ -536,19 +536,21 @@ deleted, when a sub-district's static map is replaced, and when a place or
 sub-district is deleted. `cmd/cleanup`
 runs one batch and exits, so it must be scheduled.
 
-- **`Run`** claims up to 100 due rows and deletes each object.
+- **`Run`** gets up to 100 due rows and deletes each object.
   - When a delete succeeds, the row is removed from the queue.
-  - When a delete fails, the row is rescheduled with backoff
-    `15m × 2^attempts`, capped at 24h, and the error message is recorded.
+  - When a delete fails, the row is rescheduled to be due again in 1 hour,
+    whatever the number of earlier failures, and the error message is recorded.
   - A failed delete does not fail the run, and processing continues with the
     next row.
-  - If the claim fails, nothing is deleted and the error is returned. If
-    removing or rescheduling a row fails, the error is returned.
-- **`ClaimDue(limit)`** returns due rows, longest overdue first. Claimed rows are
-  hidden from later claims but stay in the queue.
+  - If getting the due rows fails, nothing is deleted and the error is
+    returned. If removing or rescheduling a row fails, the error is returned.
+- **`GetDue(limit)`** returns the keys of due rows, longest overdue first. It does not
+  change the queue, so the rows stay due until they are removed or
+  rescheduled, and runs that overlap get the same rows. That is harmless,
+  because the storage delete and `Remove` are idempotent.
 - **`Remove`** is idempotent.
 - **`Reschedule`** increments `attempts`, sets `last_error`, and moves
-  `next_attempt_at` to now + delay. A delay of 0 makes the row due again.
+  `next_attempt_at` to now + delay.
 
 ## 7. Error code catalogue
 
@@ -696,3 +698,5 @@ them.
 | 2026-11-15 | Verification update | Places limit pass. `GET /places` caps every page at 40 (`maxLimit`, was 1000), so a client cannot request more. The web map no longer sends a zoom-based `limit` or keeps `limit` in the URL; it sends only the `bbox` and relies on the cap. Verified by the place package tests (418 passed) and the web typecheck, lint, and tests (240 passed) |
 | 2026-11-16 | Verification update | `GET /places` no longer sends the `X-Cache` header, and the cache-status context behind it is removed. The header was never part of this contract, so no section describes it. Verified by `go build`, `go vet` (with the `integration` tag), and the place package unit tests (418 passed); the integration tests were not run. `scripts/k6/get-places.js` still reads the header (§10) |
 | 2026-11-16 | Verification update | Auth simplification. The password has no maximum length (was 128), so a long password is hashed like any other and an over-long login is no longer short-circuited to `INVALID_CREDENTIALS`; the limit of 4 concurrent hashes is gone; the in-memory refresh store and its sweep are removed from production code (auth tests use a fake map store). The email check is a plain pattern (one `@`, no spaces) instead of `net/mail`, and password verification uses the argon2 constants rather than the parameters stored in the hash. Verified by `go build`, `go vet`, and the auth package tests |
+| 2026-11-17 | Verification update | Storage cleanup reads instead of claiming. `ClaimDue` is replaced by `GetDue`, a plain read of the due rows; the 15-minute claim lease and the row locking are removed, so overlapping runs get the same rows (harmless, as the storage delete and `Remove` are idempotent) and no longer split the work. §6.8 and the README updated. Verified by `go build`, `go vet` (with and without the `integration` tag), and the `storagecleanup` unit and integration tests (31 passed) |
+| 2026-11-17 | Verification update | Storage cleanup fixed retry. A failed delete is due again in 1 hour (was `15m × 2^attempts`, capped at 24h); `GetDue` returns keys instead of `Deletion` rows, and the `Deletion` type and the unused `Service` mock are removed. `attempts` is still counted in the table. §6.8 and the README updated. Verified by `go build`, `go vet` (with and without the `integration` tag), and the `storagecleanup` unit and integration tests (23 passed) |
