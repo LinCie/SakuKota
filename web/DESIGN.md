@@ -252,13 +252,13 @@ A signwriter's tin set: a few saturated, flat enamel colours over warm paint whi
 
 ### Secondary
 
-- **Sign Yellow** (sign): the lettering colour on green (wordmark, notice-board title, header inset borders), the primary action plate ("Lihat info", empty-state actions, "Coba lagi"), the Laundry, Bank & ATM, Halte/Stasiun, and Layanan Publik category plates, the code on a selected pin, and focus borders on the header's fields. Also the text-selection colour.
+- **Sign Yellow** (sign): the lettering colour on green (wordmark, notice-board title, header inset borders), the primary action plate ("Lihat info", empty-state actions, "Coba lagi"), the Laundry, Bank & ATM, Halte/Stasiun, and Layanan Publik category plates, the code on a selected pin, the fill of earned review stars, and focus borders on the header's fields. Also the text-selection colour.
 - **Faded Sign Yellow** (sign-soft): the hover/focus fill for sign-yellow plates, quiet buttons, zoom buttons, and list rows (list rows at 60% strength).
 
 ### Tertiary
 
-- **Chili Red** (chili): the Warung, Minimarket, and Air & Gas categories, the 6px stripe under every green board, the daily-spending figure, and the text caret.
-- **Painted Blue** (cat): the Klinik, Rumah Sakit, Puskesmas, and Pos Polisi categories, focus outlines on paint-white surfaces, and links in the map attribution.
+- **Chili Red** (chili): the Warung, Minimarket, and Air & Gas categories, the 6px stripe under every green board, the daily-spending figure, field errors, the "Ditolak" suggestion badge, the admin's delete button, and the text caret.
+- **Painted Blue** (cat): the Klinik, Rumah Sakit, Puskesmas, and Pos Polisi categories, focus outlines on paint-white surfaces, the visitor's own location on the map, and links in the map attribution.
 - **Tailor Plum** (plum): the Penjahit and Fotokopi categories only.
 
 ### Neutral
@@ -319,7 +319,7 @@ The world is flat: panels sit on the page with borders, not shadows. Depth appea
 ### Shadow Vocabulary
 
 - **Sign cast** (`box-shadow: 0 3px 6px rgb(26 26 23 / 0.35)`): under each map sign plate.
-- **Control cast** (`box-shadow: 0 3px 8px rgb(26 26 23 / 0.25)`): the map zoom plate.
+- **Control cast** (`box-shadow: 0 3px 8px rgb(26 26 23 / 0.25)`): the plates that float over the map: zoom, "Lokasi saya", the list toggle, and the phone's "Info kecamatan".
 - **Card lift** (`box-shadow: 0 8px 24px rgb(26 26 23 / 0.2)`): the empty-state card over the map.
 - **Sheet lift** (`box-shadow: 0 -10px 30px rgb(26 26 23 / 0.3)`): the mobile bottom sheet, cast upward.
 - **Dialog lift** (`box-shadow: 0 24px 60px rgb(0 0 0 / 0.35)`): the notice-board dialog, over a 60% ink backdrop.
@@ -332,7 +332,7 @@ The auth board lies flat on its green wall and casts no shadow.
 
 ## Shapes
 
-Signboards are rectangles with barely softened corners: 3px for every plate, field, and button; 2px for the inner code square; 5px for outer frames (wordmark frame, menu board, empty-state card); 6px for the dialog; 10px for the mobile sheet's top corners only. The signature form is the **painted inset border**: an outer plate or frame with ~4–6px padding holding an inner rectangle outlined in a thinner or softer line (yellow 2px on the wordmark and notice-board header; ink at 40%, 1px inside the menu board). Borders are 2px ink by default; dashed marks "off" or "missing", dotted marks menu-board leaders. The only full round is the grab handle on the mobile sheet.
+Signboards are rectangles with barely softened corners: 3px for every plate, field, and button; 2px for the inner code square; 5px for outer frames (wordmark frame, menu board, empty-state card); 6px for the dialog; 10px for the mobile sheet's top corners only. The signature form is the **painted inset border**: an outer plate or frame with ~4–6px padding holding an inner rectangle outlined in a thinner or softer line (yellow 2px on the wordmark and notice-board header; ink at 40%, 1px inside the menu board). Borders are 2px ink by default; dashed marks "off" or "missing", dotted marks menu-board leaders. The only full rounds are the grab handle on the mobile sheet, the gallery's dots, and the visitor's location dot.
 
 ## Components
 
@@ -356,8 +356,8 @@ Painted plates, confident and flat.
 
 ### Cards / Containers
 
-- **Menu board (place details):** a 5px paint-white frame with 2px ink border and 4px padding, holding a 3px inner panel ringed in 1px ink at 40%. Inside: the category badge, Bungee headline, Figtree description, a 2px ink rule, then leader rows (label, 2px dotted leader in ink at 25%, right-aligned value) and a dashed-divided address block. The category's custom fields follow the price row in the category's field order, rendered by data type: short values (numbers, yes/no led by a 16px check or cross icon, choices, ranges as "12–24", dates as "2 Maret 2015") as leader rows, then free text as dashed-divided blocks like the address, and a missing value as a missing slot reading "Data tidak tersedia".
-- **Notice board (kecamatan info):** a native modal dialog (6px, 2px ink border) with a sticky green header whose yellow-inset plate carries the Bungee title and close button, a 6px chili stripe, then dashed-divided sections each headed by a green icon and a bold label.
+- **Menu board (place details):** a 5px paint-white frame with 2px ink border and 4px padding, holding a 3px inner panel ringed in 1px ink at 40%. Inside: the category badge, Bungee headline, the media gallery (4:3), Figtree description, a 2px ink rule, then leader rows (label, 2px dotted leader in ink at 25%, right-aligned value) and a dashed-divided address block. The rows run rating (a yellow-filled star, the average, and the review count in soft ink, or a missing slot reading "Belum ada ulasan"), opening hours, then price. The place's reviews follow under the board (see Reviews). The category's custom fields follow the price row in the category's field order, rendered by data type: short values (numbers, yes/no led by a 16px check or cross icon, choices, ranges as "12–24", dates as "2 Maret 2015") as leader rows, then free text as dashed-divided blocks like the address, and a missing value as a missing slot reading "Data tidak tersedia".
+- **Notice board (kecamatan info):** a native modal dialog (6px, 2px ink border) with a sticky green header whose yellow-inset plate carries the Bungee title and close button, a 6px chili stripe, then dashed-divided sections each headed by a green icon and a bold label: photos (the media gallery at 8:5), flood history, safety, estimated daily spending, and the area map.
 - **Empty-state card:** 5px paint-white card with 2px ink border and card lift, centred over a 70% paint scrim on the map, with one message and one yellow action plate.
 
 ### Inputs / Fields
@@ -373,7 +373,7 @@ Painted plates, confident and flat.
 
 - **Header board:** full-width warung green with the wordmark plate (deep green frame, yellow inset border, yellow Bungee), a paint-at-85% tagline, and the controls; closed by a 6px chili stripe.
 - **Category strip:** paint white with a 2px ink bottom rule; the count sentence is a polite live region with the number in Bungee.
-- **Account plate (header):** a 44px plate on the green board with a 2px paint-at-35% outline, no fill, and a paint-white Figtree bold label (0.875rem) led by a 16px user icon. Hover raises the border to paint at 60% and fills deep board green. Focus is a 2px yellow outline offset 2px. It is never a yellow plate, because yellow is reserved for the action plate. Signed out it reads "Masuk" and links to the sign-in page, carrying the current map address. Signed in, the first name (paint-white bold, truncated at 10ch) sits beside the same plate reading "Keluar" with a log-out icon. On phones it is a 44px icon-only square: signed out it links to the sign-in page; signed in it opens a menu (the category menu's look) headed by the full name, with "Usulkan", "Admin" for admins, and "Keluar".
+- **Account plate (header):** a 44px plate on the green board with a 2px paint-at-35% outline, no fill, and a paint-white Figtree bold label (0.875rem) led by a 16px user icon. Hover raises the border to paint at 60% and fills deep board green. Focus is a 2px yellow outline offset 2px. It is never a yellow plate, because yellow is reserved for the action plate. Signed out it reads "Masuk" and links to the sign-in page, carrying the current map address. Signed in, the row reads "Usulkan" (a plate with a pin-plus icon, linking to `/usulan`), "Admin" for admins (a plate with a shield icon), the first name (paint-white bold, truncated at 10ch), and the same plate reading "Keluar" with a log-out icon. "Usulkan" is left out on `/usulan` and in the admin area, and "Admin" inside the admin area. On phones it is a 44px icon-only square: signed out it links to the sign-in page; signed in it opens a menu (the category menu's look) headed by the full name, with "Usulkan", "Admin" for admins, and "Keluar".
 - **Place list:** rows divided by 1px dashed ink at 20%; each row is a code plate, name (Figtree semibold), truncated address (soft ink), and right-aligned tabular price; hover and focus fill with faded sign yellow at 60%.
 
 ### Map Sign (signature)
@@ -382,7 +382,9 @@ A place is a 36px category plate (2px border, Bungee code, sign cast) on a 3px �
 
 **Planting motion:** when signs appear, each rises from its post (vertical scale from 0 at the base) over 500ms with `cubic-bezier(0.16, 1, 0.3, 1)`, staggered west to east in 40ms steps up to 360ms. Changing kecamatan flies the map to the new bounds over 0.9s; reduced motion jumps instead and skips the rise.
 
-**Map canvas:** Esri Light Gray base and reference tiles (streets and labels, no POI icons) warmed with a 30% sepia filter over a deep-paint backing; the default Leaflet zoom control is replaced by a paint-white zoom plate (2px ink border, ink divider, control cast) at the top left; attribution sits on paint at 90% in 10px soft ink with blue links.
+**Map canvas:** Esri Light Gray base and reference tiles (streets and labels, no POI icons) warmed with a 30% sepia filter over a deep-paint backing; the default Leaflet zoom control is replaced by a paint-white zoom plate (2px ink border, ink divider, control cast) at the top left; attribution sits on paint at 90% in 10px soft ink with blue links. The map zooms out no further than zoom 16, a few kilometres across, so signs never pile up; there is no clustering.
+
+**Lokasi saya:** a paint-white plate (2px ink border, control cast; 44px, 40px from 768px) at the map's bottom right holds a locate icon, which spins while locating and turns painted blue once found. The visitor is a 18px painted-blue dot with a 3px paint border and a 2px ink ring over a pulsing blue halo, inside a faint blue accuracy circle; the map flies there over 0.9s. A failure shows a short note above the plate on an ink plate with paint-white semibold text (5px corners), which clears itself after 6 seconds.
 
 ### Auth Wall (Masuk / Daftar)
 
@@ -396,7 +398,36 @@ The header board grown to fill the viewport: full-bleed warung green with paint-
 
 ### Missing Slot
 
-A drawn empty slot: inline dashed 2px border in ink at 30%, 3px corners, soft-ink label-size text such as "Jam buka tidak tersedia" or "Data tidak tersedia". A missing area image becomes a dashed 8:5 frame holding the slot.
+A drawn empty slot: inline dashed 2px border in ink at 30%, 3px corners, soft-ink label-size text such as "Jam buka tidak tersedia" or "Data tidak tersedia". A missing image becomes a dashed frame at the image's own ratio (4:3 for a place, 8:5 for a kecamatan photo or area map) holding the slot.
+
+### Media Gallery
+
+A place's or kecamatan's photos and videos, one at a time in a 3px-cornered frame with a 2px ink border over a deep-paint backing; videos play with the browser's controls. With more than one, a 32px arrow plate (paint at 90%, 2px ink border) sits at each side's middle and a centred row of 10px round dots sits under the frame: ink-filled for the current one, paint white with a 1px ink border for the rest. Slides move over 300ms ease-out, and not at all under reduced motion. The gallery takes focus with a blue outline, and the arrow keys move it.
+
+### Reviews
+
+Under the menu board, headed "Ulasan" in Bungee at 1rem. Each review is a row divided by 1px dashed ink at 25%: the author's name in Figtree semibold, five 16px stars on the right (earned stars yellow-filled with an ink outline, the rest ink at 25%), the comment, and the date in small soft ink. No reviews is a missing slot reading "Belum ada ulasan".
+
+- **Signed out:** a 44px sign plate reading "Masuk untuk menulis ulasan", which returns to the same place after sign-in.
+- **Signed in:** a form of five 44px star targets with 28px stars (faded-yellow hover; unpicked stars in ink at 40%, or chili after a failed submit), an optional comment field, and the submit plate reading "Kirim ulasan". Once the user has reviewed the place, a soft-ink line replaces the form.
+
+### Suggest Page (`/usulan`)
+
+A scrolling page under the map's own green header board (wordmark and account plate, closed by the chili stripe). On paint white, a column up to 64rem wide holds a quiet "Kembali ke peta" link, a Bungee headline at 1.5rem, a soft-ink lede, and the form; from 1024px a 20rem "Usulanku" column sits to its right and stays in view. "Usulanku" is menu-board framed (5px frame, 2px ink border, 4px padding, inner 3px panel ringed in 1px ink at 40%) and lists the user's suggestions in rows divided by 1px dashed ink at 25%, each with its status badge and, when rejected, the reason.
+
+**Status badge:** a small plate (3px corners, 1px border, Figtree semibold at 0.75rem), state by mark. "Menunggu" is a dashed outline in ink at 60%; "Disetujui" is solid board green with paint-white text; "Ditolak" is solid chili with paint-white text.
+
+### Admin Console (`/admin`)
+
+A working back office, quieter than the map: no Bungee beyond the wordmark, hairline borders in place of 2px ink, and no painted inset frames.
+
+- **Frame:** a deep-paint sidebar (15rem from 768px, a scrolling strip above the page on phones) with the wordmark and 36px nav items in Figtree semibold with a 16px icon; the active item is a solid board-green plate with paint-white text. A sticky 56px ink top bar carries a yellow-outlined "Admin" badge, a "Kembali ke peta" link in paint at 80%, and the account plate.
+- **Page:** paint white with 16px padding (24px from 768px); a Figtree bold title at 1.5rem with its actions on the right.
+- **Cards and tables:** 5px corners and a 1px border in ink at 15%. Table headers are deep paint with soft-ink semibold text at 0.75rem; rows are divided by 1px ink at 10% and hover to deep paint at 50%.
+- **Buttons:** 36px, 3px corners, 1px border, Figtree semibold at 0.875rem, blue focus outline. Primary is board green with paint-white text (deep board green on hover), secondary is paint white with an ink-at-20% border, ghost has no border, and danger is chili with paint-white text.
+- **Form drawer:** slides in from the right over a 40% ink backdrop, up to 32rem wide, with dialog lift, a title and description above, the form scrolling in the middle, and its actions in a footer.
+- **Toasts:** ink plates with paint-white text (5px corners), for finished writes. The suggest page uses them too.
+- **Gate:** anyone who is not an admin sees a small bordered card instead: "Masuk dulu" with a sign-in button when signed out, "Khusus admin" when signed in, and a link back to the map.
 
 ### Motion
 

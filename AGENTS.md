@@ -10,11 +10,12 @@ Read `docs/CONTEXT.md` before planning or changing behavior. It covers the produ
 
 ## What the repository contains
 
-- `cmd/` — API, database migration, and seed entry points
+- `cmd/` — API, database migration, seed, bulk seed, and storage cleanup entry points
 - `internal/module/` — backend features organized by domain
 - `internal/` — shared config, HTTP, middleware, routing, database, and PostGIS packages
 - `migrations/` — database schema migrations, which also define the categories and their custom fields
 - `web/` — standalone React and TypeScript frontend
+- `docs/` — project context, plus the product, backend and database, and frontend documentation
 
 ## Conventions
 

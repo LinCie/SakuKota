@@ -5,10 +5,11 @@
 > behavior or the API contract, once a VERIFICATION phase passes (see
 > [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-17. Updated after the seed started uploading images (see the change log).
->   Verified by `go build`, `go vet`, the full Go test suite, and running `make seed` twice.
-> - Status: verified. All Go tests pass and the API was checked by hand. The web app has not been
->   updated for medias yet, so its image views and the place image upload are broken until it is.
+> - Last updated: 2026-11-17. Brought in line with the tests and the web app (see the change log).
+>   Verified by `go build`, `go vet` (with and without the `integration` tag), and the Go unit
+>   tests. The integration tests were not run.
+> - Status: verified. All Go unit tests pass. The web app shows and uploads medias (images and
+>   videos) for places; it is untested, like the rest of `web/`.
 
 ## Contents
 
@@ -284,13 +285,21 @@ its key; a place without images has `[]`. Lists and single reads return
     one above 100, is replaced by 100 (`maxLimit`), so no list is unbounded and a
     client cannot ask for more. `total` still counts every match, so a client can
     tell when the list was cut off. The web map sends a limit that follows its
-    zoom level: 100 at its widest zoom (14, which it cannot zoom out past), then
-    80, 60, and 40 from zoom 17 inward. The web side is untested.
+    zoom level: 100 at its widest zoom (16, which it cannot zoom out past), then
+    80 at 17, 60 at 18, and 40 at 19. The web side is untested.
   - `offset`: a non-negative integer, otherwise `INVALID_OFFSET`.
   - `bbox=west,south,east,north`: four finite numbers with lon in ±180, lat in
     ±90, `west ≤ east`, and `south ≤ north`, otherwise `INVALID_BBOX`. Edges
     count as inside, and places without a location are excluded. It also sets
     the order (see above). A GiST index on `PLACES.location` is required.
+  - **Cache.** A list with a `sub_district_id` is served from an index of place
+    ids and coordinates kept in Redis, one entry per sub-district, category
+    set, and search term. `bbox`, `limit`, and `offset` are applied to the
+    index, so they share that entry. A cached list has the same places, order,
+    and `total` as the uncached one, on the first read and on later ones. A
+    list without a `sub_district_id` is never cached, and an unknown
+    sub-district is still `404` and is not cached. See §10 for how stale a
+    cached list can be.
 - **Get (`GET /places/{id}`).** Returns `404 PLACE_NOT_FOUND` for an unknown
   place.
 - **Update (`PUT /places/{id}`).** The body has the same shape and validation as
@@ -315,7 +324,8 @@ its key; a place without images has `[]`. Lists and single reads return
     under `places/{id}` and returns `{upload_key, upload_url, method, headers,
     expires_at}`. An unknown place returns 404 before anything is presigned.
   - `POST /places/{id}/medias {upload_key}` promotes the upload, stores the
-    media at the **lowest free position**, and returns `200` with the place.
+    media **after the last one** (position `n + 1`), and returns `200` with the
+    place.
     The place row is locked while the position is chosen, so concurrent adds
     never share a position or exceed the limit (14 concurrent adds: exactly
     10 succeed).
@@ -323,8 +333,9 @@ its key; a place without images has `[]`. Lists and single reads return
   - If storing fails after promotion (including the limit), the promoted
     object is deleted (best effort, failures ignored).
   - `DELETE /places/{id}/medias/{mediaId}` returns `204`, deletes the media,
-    and queues its key in `STORAGE_DELETIONS`. The other medias keep their
-    positions, and the next add fills the gap. A media of another place, an
+    and queues its key in `STORAGE_DELETIONS`. Later medias shift down one
+    position, so positions stay `1..n` and the next add goes to the end. A
+    media of another place, an
     unknown media, or an unknown place returns `404 MEDIA_NOT_FOUND`; an
     invalid media id returns `400 INVALID_MEDIA_ID`.
   - Promotion and type errors return `400 VALIDATION_ERROR`.
@@ -420,9 +431,9 @@ is **not** writable: the server ignores it in create and update bodies.
     nothing.
 - **Medias.** The same rules and routes as place medias, under
   `/subdistricts/{id}/medias` (stored under `subdistricts/{id}/medias`, linked
-  through `SUB_DISTRICT_MEDIAS`): presign, add at the lowest free position up
-  to 10 (`409 MEDIA_LIMIT_REACHED`), and delete (`404 MEDIA_NOT_FOUND`,
-  `400 INVALID_MEDIA_ID`). The static map is not a media: deleting its id
+  through `SUB_DISTRICT_MEDIAS`): presign, add after the last media up to 10
+  (`409 MEDIA_LIMIT_REACHED`), and delete, which shifts later medias down one
+  position (`404 MEDIA_NOT_FOUND`, `400 INVALID_MEDIA_ID`). The static map is not a media: deleting its id
   through the media route returns `404 MEDIA_NOT_FOUND`. Adding a media never
   touches the static map.
 - **Static map.** One image, stored under `subdistricts/{id}/static-map`, with
@@ -630,9 +641,9 @@ them.
   - Startup fails on an invalid `JWT_EXPIRES_MINUTES`,
     `REFRESH_TOKEN_EXPIRES_DAYS`, or `COOKIE_SECURE`, and on a `JWT_SECRET`
     shorter than 32 bytes.
-  - Migrations add indexes on `PLACES(sub_district_id, category_id)` and
-    `PLACE_SUGGESTIONS(user_id, status)` and `(place_id)`, and a `CHECK` that
-    `USERS.role` is `user` or `admin`.
+  - Migrations add indexes on `PLACES(sub_district_id)`, `PLACES(category_id)`,
+    `PLACE_SUGGESTIONS(user_id, status)`, and `PLACE_SUGGESTIONS(place_id)`,
+    and a `CHECK` that `USERS.role` is `user` or `admin`.
   - Cleanup after a failed approval or image store ignores request
     cancellation, so a dropped request still removes the orphan.
   - Every command logs through `slog`, and the `log` package and chi's request
@@ -654,7 +665,12 @@ them.
   Redis, `Consume` is an atomic `GETDEL`, so it needs Redis 6.2+), so sessions
   survive a restart and are shared between instances. The API pings Redis at
   startup and exits if `REDIS_URL` is invalid or unreachable. None of this is
-  tested: no test runs against a real Redis.
+  tested: no auth test runs against a real Redis.
+- **Places list cache, untested parts.** The cached index (keys
+  `places:index:<hash>`) lives for 30 seconds and nothing clears it sooner, so
+  a cached list can miss a place created, edited, or deleted in the last 30
+  seconds. A Redis failure is meant to fall back to PostgreSQL without failing
+  the request. Neither the lifetime nor the fallback is tested.
 - **Video medias, web.** The web app accepts the same five types with the
   same limits, plays videos with controls in the media card and gallery, and
   labels the add button "Tambah file". Untested, like the rest of `web/`.
@@ -662,15 +678,16 @@ them.
   - If a media add commits at the moment its place or sub-district is
     deleted, that media row and its object can be left behind without being
     queued for deletion.
-  - Media positions cannot be reordered, and a deleted media leaves a gap
-    until the next add fills it.
+  - Media positions cannot be reordered.
   - `MEDIAS` has no owner type: a row belongs to whichever link (or static
     map) references it.
 - **Unspecified values:** `UploadTTL`, `MaxImageSize`, `MaxVideoSize`, how and when the
   cleanup worker runs, and how long access tokens last in production.
 - **Unspecified behaviors:** review editing or deletion; a "current user" endpoint; listing users.
 - **Frontend (`web/`)** is outside the backend test workflow. US-01
-  clustering, placeholders, and filter/viewport sync are untested there.
+  clustering, placeholders, and filter/viewport sync are untested there. Its
+  admin area covers places and suggestions; it has no screens for creating or
+  editing sub-districts, their medias, or their static map.
 - **Load test script.** `scripts/k6/get-places.js` still reads the `X-Cache`
   header, which `GET /places` no longer sends (removed 2026-11-16), so its
   `cache_hit` metric always reports `none`. Not updated yet.
@@ -711,3 +728,4 @@ them.
 | 2026-11-17 | Verification update | Places cap raised. `GET /places` caps every page at 100 (`maxLimit`, was 40), and an absent limit also gets 100. The web map cannot zoom out past zoom 13 and sends a zoom-based `limit` again, kept in the URL: 100 at zoom 13, 80 at 14, 60 at 15, and 40 from 16. `scripts/k6/get-places.js` knows the new cap but does not send the zoom-based limit. Verified by `go build`, `go vet` (with and without the `integration` tag), the full Go unit suite (1237 passed), the place integration tests (508 passed), and the web typecheck, lint, and tests (240 passed); the map was not checked in a browser |
 | 2026-11-17 | Web update | No API change. The web map's widest zoom moved from 13 to 14, and its zoom-based `limit` moved with it, so every zoom level asks for 20 more places than before: 100 at zoom 14, 80 at 15, 60 at 16, and 40 from 17. Verified by the web typecheck, lint, and tests (240 passed); the map was not checked in a browser |
 | 2026-11-17 | Seed data | No API change. `make seed` (`cmd/seed`) now uploads images, so it needs the `STORAGE_*` settings and a set-up bucket (`make dev-setup` seeds after `storage-init`). Every place in Setiabudi, Mampang Prapatan, and Tebet, and each of the three kecamatan, gets 2 or 3 generated 640x480 PNGs of one random color (136 bytes each), and each kecamatan gets a static map: an 800x600 PNG stitched from OpenStreetMap tiles, kept in `cmd/seed/images/static-maps`. Keys follow the API's (`places/{id}/`, `subdistricts/{id}/medias/`, `subdistricts/{id}/static-map/`). Reruns skip whatever already has its images; objects uploaded by a failed run stay in the bucket without a row. `storage.S3` gained `Put`, used only by the seed and outside `ObjectStore`. Verified by `go build`, `go vet`, `go test ./...` (1237 passed), and running the seed twice on the local database (2,716 medias the first time, none added the second), with a color image and a static map fetched from the bucket's public URL |
+| 2026-11-17 | Documentation update | No behavior change; this file was brought in line with the tests and the web app. Media positions: an add goes after the last media and a delete shifts later medias down, so positions stay `1..n` (§6.3, §6.5; the "gap" item is removed from §10). The Redis index behind `GET /places` with a `sub_district_id` is recorded in §6.3, with its untested 30-second lifetime and fallback in §10. The web map's widest zoom is 16, so its `limit` is 100 at 16, 80 at 17, 60 at 18, and 40 at 19. §10 names the two single-column `PLACES` indexes and notes that the web admin has no sub-district screens. The header no longer says the web app lacks medias. Verified by `go build`, `go vet` (with and without the `integration` tag), and the Go unit tests; the integration tests, which cover the media positions and the cache, were not run |

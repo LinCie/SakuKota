@@ -1,10 +1,10 @@
 # Rantau web
 
-The React frontend for Rantau: a public survival map of curated daily essentials in Jakarta, plus an admin area for managing places and sub-districts (categories are viewable but read-only, since the backend defines them). See [`PRODUCT.md`](PRODUCT.md) for the product and [`DESIGN.md`](DESIGN.md) for the visual system.
+The React frontend for Rantau: a public survival map of curated daily essentials in Jakarta, where signed-in users can review places and suggest new ones, plus an admin area for managing places and reviewing suggestions. Categories are defined by the backend and are read-only here; kecamatan have no admin screens yet. See [`PRODUCT.md`](PRODUCT.md) for the product, [`DESIGN.md`](DESIGN.md) for the visual system, and [`../docs/frontend.md`](../docs/frontend.md) for routes, components, and state.
 
 ## Stack
 
-React 19, TypeScript, Vite, TanStack Router (file routes in `app/routes`), TanStack Query and Form, Tailwind CSS v4 (utility classes only, no raw CSS), Leaflet, and pnpm.
+React 19, TypeScript, Vite, TanStack Router (file routes in `app/routes`), TanStack Query and Form, Zod, ky, Base UI, Tailwind CSS v4 (utility classes only, no raw CSS), Leaflet, Vitest, and pnpm.
 
 ## Development
 
@@ -15,6 +15,7 @@ pnpm install
 pnpm dev            # http://localhost:5173
 pnpm typecheck      # tsc
 pnpm lint           # ESLint
+pnpm test           # Vitest
 pnpm format:check   # Prettier
 pnpm build          # production build in dist/
 ```
@@ -22,8 +23,8 @@ pnpm build          # production build in dist/
 ## Layout
 
 ```
-app/routes/      file-based routes: the map (/), sign-in (/masuk, /daftar), and /admin
-app/features/    one folder per domain: places, subdistricts, categories, auth, admin
+app/routes/      file-based routes: the map (/), sign-in (/masuk, /daftar), suggestions (/usulan), and /admin
+app/features/    one folder per domain: places, subdistricts, reviews, suggestions, auth, admin
 app/shared/      API client, hooks, and shared components
 ```
 
