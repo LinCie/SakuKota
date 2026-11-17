@@ -66,6 +66,11 @@ func TestCachedRepository_GetMany(t *testing.T) {
 
 	for name, filter := range filters {
 		t.Run(name, func(t *testing.T) {
+			// The service always sets a limit, so the repository requires one.
+			if filter.Limit == 0 {
+				filter.Limit = 100
+			}
+
 			want, wantTotal, err := repo.GetMany(ctx, filter)
 			require.NoError(t, err)
 

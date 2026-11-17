@@ -2,8 +2,8 @@ package places
 
 import "time"
 
-// Data types a CategoryField can have. A CHECK on CATEGORY_FIELDS.data_type
-// allows exactly these, so adding one needs a migration as well.
+// Data types of a CategoryField. A CHECK on CATEGORY_FIELDS.data_type allows
+// exactly these, so a new one needs a migration too.
 const (
 	FieldTypeText    = "text"
 	FieldTypeNumber  = "number"
@@ -15,8 +15,7 @@ const (
 	FieldTypeDate = "date"
 )
 
-// Lengths in characters, counted after trimming spaces. They match the VARCHAR
-// columns of PLACES.
+// Maximum lengths in characters, counted after trimming. They match the VARCHAR columns of PLACES.
 const (
 	MaxNameLength                = 150
 	MaxAddressLength             = 255
@@ -24,13 +23,16 @@ const (
 	MaxEstimatedPriceRangeLength = 100
 )
 
-// maxLimit is the most places a list returns. A request without a limit, or
-// with a larger one, gets this many; the total still counts every match.
+// maxLimit is the most places one page returns. The total still counts every match.
 const maxLimit = 40
 
 // listCacheKeyPrefix namespaces cached place indexes in Redis.
 const listCacheKeyPrefix = "places:index:"
 
-// listCacheTTL is how long a cached index is served before it is read again.
-// Nothing clears indexes sooner, so it is also how stale a list can be.
+// listCacheTTL is how long a cached index is served. Nothing clears it sooner,
+// so it is also how stale a list can be.
 const listCacheTTL = 30 * time.Second
+
+// indexEntrySize is the bytes one place takes in an index: id, longitude and
+// latitude as 8 little-endian bytes each. A place without a location has NaN coordinates.
+const indexEntrySize = 24

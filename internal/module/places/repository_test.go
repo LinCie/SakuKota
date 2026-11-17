@@ -409,6 +409,11 @@ func TestRepository_GetMany(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// The service always sets a limit, so the repository requires one.
+			if tt.filter.Limit == 0 {
+				tt.filter.Limit = 100
+			}
+
 			got, total, err := repo.GetMany(ctx, tt.filter)
 
 			require.NoError(t, err)
@@ -445,7 +450,7 @@ func TestRepository_GetMany(t *testing.T) {
 	t.Run("returns an empty, non-nil slice when there are no places", func(t *testing.T) {
 		empty := newRepository(t)
 
-		got, total, err := empty.GetMany(ctx, places.PlaceFilter{})
+		got, total, err := empty.GetMany(ctx, places.PlaceFilter{Limit: 10})
 
 		require.NoError(t, err)
 		assert.NotNil(t, got)
@@ -722,7 +727,7 @@ func TestRepository_Delete(t *testing.T) {
 
 		require.NoError(t, repo.Delete(ctx, doomed.ID))
 
-		got, total, err := repo.GetMany(ctx, places.PlaceFilter{})
+		got, total, err := repo.GetMany(ctx, places.PlaceFilter{Limit: 10})
 		require.NoError(t, err)
 		assert.Equal(t, []string{kept.Name}, names(got))
 		assert.Equal(t, 1, total)
@@ -983,7 +988,7 @@ func TestRepository_GetMany_Medias(t *testing.T) {
 	mustAddMedia(t, repo, second.ID, "places/2/a.webp")
 	mustAddMedia(t, repo, first.ID, "places/1/b.webp")
 
-	got, _, err := repo.GetMany(ctx, places.PlaceFilter{})
+	got, _, err := repo.GetMany(ctx, places.PlaceFilter{Limit: 10})
 
 	require.NoError(t, err)
 	require.Len(t, got, 3)

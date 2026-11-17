@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 
 	"rantau-go/internal/pkg/postgis"
+	"rantau-go/internal/pkg/utils"
 	"rantau-go/internal/storage"
 )
 
-// PlaceRequest is the API payload for creating a Place or replacing one. An
-// update sends every field: keys left out are cleared.
+// PlaceRequest is the body for creating or replacing a place.
+// A replace clears every field left out.
 type PlaceRequest struct {
 	SubDistrictID       int64          `json:"sub_district_id"`
 	CategoryID          int64          `json:"category_id"`
@@ -22,7 +23,7 @@ type PlaceRequest struct {
 	Attributes json.RawMessage `json:"attributes"`
 }
 
-// PlaceResponse is the API representation of a Place.
+// PlaceResponse is the API representation of a place.
 type PlaceResponse struct {
 	ID                  int64           `json:"id"`
 	SubDistrictID       int64           `json:"sub_district_id"`
@@ -41,14 +42,14 @@ type PlaceResponse struct {
 	Category CategoryResponse        `json:"category"`
 }
 
-// PlacePageResponse is the API representation of the places matching a
-// filter. Total counts every match, including those cut off by the limit.
+// PlacePageResponse is one page of places. Total counts every match, including
+// those beyond the page.
 type PlacePageResponse struct {
 	Places []PlaceResponse `json:"places"`
 	Total  int             `json:"total"`
 }
 
-// CategoryResponse is the API representation of the Category of a place.
+// CategoryResponse is the API representation of a place's category.
 type CategoryResponse struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
@@ -58,19 +59,13 @@ type CategoryResponse struct {
 	Color string `json:"color"`
 }
 
-// CategoryDetailResponse is the API representation of a Category with the
-// custom fields its places carry.
+// CategoryDetailResponse is a category with its custom fields.
 type CategoryDetailResponse struct {
-	ID     int64                   `json:"id"`
-	Name   string                  `json:"name"`
-	Slug   string                  `json:"slug"`
-	Code   string                  `json:"code"`
-	Label  string                  `json:"label"`
-	Color  string                  `json:"color"`
+	CategoryResponse
 	Fields []CategoryFieldResponse `json:"fields"`
 }
 
-// CategoryFieldResponse is the API representation of a CategoryField.
+// CategoryFieldResponse is the API representation of a category field.
 type CategoryFieldResponse struct {
 	ID         int64    `json:"id"`
 	CategoryID int64    `json:"category_id"`
@@ -83,7 +78,7 @@ type CategoryFieldResponse struct {
 }
 
 // -----------------------------------------------------------------------------
-// Conversions
+// Exported
 // -----------------------------------------------------------------------------
 
 // ToPlace turns the request body into a Place.
@@ -101,8 +96,11 @@ func ToPlace(req PlaceRequest) *Place {
 	}
 }
 
-// toPlaceResponse turns p into the JSON shape sent to clients.
-// Photo keys become full links using imageURL.
+// -----------------------------------------------------------------------------
+// Unexported
+// -----------------------------------------------------------------------------
+
+// toPlaceResponse turns p into its response, with photo keys turned into URLs by imageURL.
 func toPlaceResponse(p Place, imageURL func(key string) string) PlaceResponse {
 	return PlaceResponse{
 		ID:                  p.ID,
@@ -121,7 +119,7 @@ func toPlaceResponse(p Place, imageURL func(key string) string) PlaceResponse {
 	}
 }
 
-// ratingAverage returns the average star rating, or nil if there are no ratings yet.
+// ratingAverage returns the mean rating, or nil before the first rating.
 func ratingAverage(count, sum int) *float64 {
 	if count == 0 {
 		return nil
@@ -131,18 +129,7 @@ func ratingAverage(count, sum int) *float64 {
 	return &average
 }
 
-// toPlaceResponses turns each place into its response shape.
-func toPlaceResponses(places []Place, imageURL func(key string) string) []PlaceResponse {
-	responses := make([]PlaceResponse, 0, len(places))
-
-	for _, p := range places {
-		responses = append(responses, toPlaceResponse(p, imageURL))
-	}
-
-	return responses
-}
-
-// toCategoryResponse turns c into its response shape.
+// toCategoryResponse turns c into its response.
 func toCategoryResponse(c Category) CategoryResponse {
 	return CategoryResponse{
 		ID:    c.ID,
@@ -154,37 +141,15 @@ func toCategoryResponse(c Category) CategoryResponse {
 	}
 }
 
-// toCategoryDetailResponse turns c and its fields into its response shape.
+// toCategoryDetailResponse turns c and its fields into its response.
 func toCategoryDetailResponse(c Category) CategoryDetailResponse {
-	fields := make([]CategoryFieldResponse, 0, len(c.Fields))
-
-	for _, f := range c.Fields {
-		fields = append(fields, toCategoryFieldResponse(f))
-	}
-
 	return CategoryDetailResponse{
-		ID:     c.ID,
-		Name:   c.Name,
-		Slug:   c.Slug,
-		Code:   c.Code,
-		Label:  c.Label,
-		Color:  c.Color,
-		Fields: fields,
+		CategoryResponse: toCategoryResponse(c),
+		Fields:           utils.Map(c.Fields, toCategoryFieldResponse),
 	}
 }
 
-// toCategoryDetailResponses turns each category into its response shape.
-func toCategoryDetailResponses(categories []Category) []CategoryDetailResponse {
-	responses := make([]CategoryDetailResponse, 0, len(categories))
-
-	for _, c := range categories {
-		responses = append(responses, toCategoryDetailResponse(c))
-	}
-
-	return responses
-}
-
-// toCategoryFieldResponse turns f into its response shape.
+// toCategoryFieldResponse turns f into its response.
 func toCategoryFieldResponse(f CategoryField) CategoryFieldResponse {
 	return CategoryFieldResponse{
 		ID:         f.ID,

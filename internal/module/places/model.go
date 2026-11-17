@@ -9,7 +9,7 @@ import (
 	"rantau-go/internal/storage"
 )
 
-// Place represents a row in the PLACES table, joined with its category.
+// Place is a row of PLACES, joined with its category.
 type Place struct {
 	ID                  int64          `db:"id"`
 	SubDistrictID       int64          `db:"sub_district_id"`
@@ -20,46 +20,43 @@ type Place struct {
 	OperatingHours      *string        `db:"operating_hours"`
 	EstimatedPriceRange *string        `db:"estimated_price_range"`
 	ShortDescription    *string        `db:"short_description"`
-	// Attributes holds the values of the category's custom fields as a JSON
-	// object keyed by CategoryField.Key.
+	// Attributes holds the category's custom field values, keyed by CategoryField.Key.
 	Attributes json.RawMessage `db:"attributes"`
-	// RatingCount and RatingSum total the ratings of the place's reviews. The
-	// review module keeps them up to date; place updates never change them.
+	// RatingCount and RatingSum total the place's review ratings.
+	// The review module maintains them; place updates leave them alone.
 	RatingCount int      `db:"rating_count"`
 	RatingSum   int      `db:"rating_sum"`
 	Category    Category `db:"category"`
-	// Medias are the place's images in position order. The repository loads
-	// them separately, so they are never nil once read.
+	// Medias are the place's images in position order, loaded separately by
+	// the repository. They are never nil once read.
 	Medias []storage.Media `db:"-"`
 }
 
-// PlaceFilter narrows the places returned by GetMany. Zero values apply no filter.
+// PlaceFilter narrows the places GetMany returns. A zero field applies no filter.
 type PlaceFilter struct {
 	SubDistrictID int64
 	// CategoryIDs matches places in any of the given categories.
 	CategoryIDs []int64
-	// Query is matched case-insensitively against the name, address,
-	// short description, and category name.
+	// Query matches the name, address, short description, or category name, ignoring case.
 	Query string
 	// Bounds keeps places located inside the box, edges included.
 	Bounds *BoundingBox
-	// Limit caps the number of places returned, lowest ids first. The service
-	// replaces zero, or a value above its maximum, with the maximum.
+	// Limit is the page size. The service replaces zero or an oversized value
+	// with its maximum, so below the service it is always positive.
 	Limit int
-	// Offset skips this many places, lowest ids first, before Limit applies.
+	// Offset skips this many places before the page starts. Places are ordered by id.
 	Offset int
 }
 
-// PlaceLocation is the id and coordinates of a place, in degrees. The
-// coordinates are nil for a place without a location.
+// PlaceLocation is a place's id and coordinates in degrees.
+// The coordinates are nil for a place without a location.
 type PlaceLocation struct {
 	ID        int64    `db:"id"`
 	Longitude *float64 `db:"longitude"`
 	Latitude  *float64 `db:"latitude"`
 }
 
-// BoundingBox is an area in degrees, from its west and south edges to its
-// east and north edges.
+// BoundingBox is an area in degrees.
 type BoundingBox struct {
 	MinLng float64
 	MinLat float64
@@ -67,13 +64,12 @@ type BoundingBox struct {
 	MaxLat float64
 }
 
-// Category represents a row in the CATEGORIES table. Categories are defined by
-// the migrations, not created through the API.
+// Category is a row of CATEGORIES. Migrations define categories; the API cannot create them.
 type Category struct {
 	ID   int64  `db:"id"`
 	Name string `db:"name"`
 	Slug string `db:"slug"`
-	// Code is the single character that marks the category on a map sign.
+	// Code is the single character that marks the category on the map.
 	Code string `db:"code"`
 	// Label is the short name clients display.
 	Label string `db:"label"`
@@ -82,8 +78,8 @@ type Category struct {
 	Fields []CategoryField `db:"-"`
 }
 
-// CategoryField represents a row in the CATEGORY_FIELDS table: a custom field
-// that places in the category carry in their Attributes.
+// CategoryField is a row of CATEGORY_FIELDS: a custom field that places of the
+// category carry in their Attributes.
 type CategoryField struct {
 	ID         int64        `db:"id"`
 	CategoryID int64        `db:"category_id"`
@@ -96,12 +92,11 @@ type CategoryField struct {
 	SortOrder int32 `db:"sort_order"`
 }
 
-// FieldOptions are the allowed values of a select field, stored as a JSONB
-// array. It is nil for other data types.
+// FieldOptions are the allowed values of a select field, stored as a JSONB array.
+// It is nil for other data types.
 type FieldOptions []string
 
-// Scan reads a JSON array from the database into o.
-// It lets database/sql fill in this type.
+// Scan reads a JSON array from the database (database/sql's Scanner).
 func (o *FieldOptions) Scan(src any) error {
 	switch value := src.(type) {
 	case nil:
@@ -114,8 +109,7 @@ func (o *FieldOptions) Scan(src any) error {
 	}
 }
 
-// Value turns the options into a JSON array for the database, or NULL if they are nil.
-// It lets database/sql write this type.
+// Value writes the options as a JSON array, or NULL if nil (database/sql's Valuer).
 func (o FieldOptions) Value() (driver.Value, error) {
 	if o == nil {
 		return nil, nil

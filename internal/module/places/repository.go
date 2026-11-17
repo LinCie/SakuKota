@@ -13,6 +13,7 @@ import (
 
 	"rantau-go/internal/database"
 	"rantau-go/internal/pkg/postgis"
+	"rantau-go/internal/pkg/utils"
 	"rantau-go/internal/storage"
 )
 
@@ -22,13 +23,16 @@ import (
 type Repository interface {
 	// Create saves the place and returns it with its category and photos.
 	Create(ctx context.Context, p *Place) (*Place, error)
-	// GetMany returns one page of places matching the filter, plus the total number of matches.
+	// AddMedia stores the photo in the place's first free position and returns the place.
+	// It returns ErrPlaceNotFound, or storage.ErrMediaLimitReached if the place is full.
+	AddMedia(ctx context.Context, id int64, m storage.Media) (*Place, error)
+	// GetMany returns one page of places matching the filter, plus the total match count.
 	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error)
 	// GetLocations returns the id and coordinates of every place matching the filter's
 	// sub-district, categories, and query. Bounds, limit, and offset are ignored.
 	GetLocations(ctx context.Context, filter PlaceFilter) ([]PlaceLocation, error)
-	// GetByIDs returns the places with the given ids, with their category and
-	// photos, lowest ids first. Ids that match no place are skipped.
+	// GetByIDs returns the places with the given ids, lowest ids first.
+	// Ids that match no place are skipped.
 	GetByIDs(ctx context.Context, ids []int64) ([]Place, error)
 	// GetCategories returns every category with its fields.
 	GetCategories(ctx context.Context) ([]Category, error)
@@ -36,16 +40,13 @@ type Repository interface {
 	GetCategory(ctx context.Context, id int64) (*Category, error)
 	// GetPlace returns the place with its category and photos.
 	GetPlace(ctx context.Context, id int64) (*Place, error)
-	// Update saves the place's new details and returns it with its category and photos.
+	// Update overwrites the place and returns it with its category and photos.
 	Update(ctx context.Context, p *Place) (*Place, error)
-	// Delete removes the place and its photos, and queues their files for deletion.
+	// Delete removes the place and its photos and queues the photo files for deletion.
 	// It returns ErrPlaceNotFound if there is no such place.
 	Delete(ctx context.Context, id int64) error
-	// AddMedia stores the photo in the place's first free slot and returns the place.
-	// It returns ErrPlaceNotFound, or ErrMediaLimitReached if the place is already full.
-	AddMedia(ctx context.Context, id int64, m storage.Media) (*Place, error)
 	// DeleteMedia removes the photo and queues its file for deletion.
-	// Later photos move up one slot to close the gap; ErrMediaNotFound if there is no such photo.
+	// It returns storage.ErrMediaNotFound if there is no such photo.
 	DeleteMedia(ctx context.Context, id, mediaID int64) error
 }
 
@@ -53,36 +54,18 @@ type postgresRepository struct {
 	db *sqlx.DB
 }
 
-// NewPostgresRepository builds a Repository that stores places in PostgreSQL.
+// -----------------------------------------------------------------------------
+// Exported
+// -----------------------------------------------------------------------------
+
 func NewPostgresRepository(db *sqlx.DB) Repository {
 	return &postgresRepository{
 		db: db,
 	}
 }
 
-// -----------------------------------------------------------------------------
-// postgresRepository
-// -----------------------------------------------------------------------------
-
-// likeEscaper escapes LIKE wildcards so the search query matches literally.
-var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
-
-// placeColumns selects a place from `p` and its category from `c`, aliased to
-// match the nested Place.Category fields.
-const placeColumns = `p.id, p.sub_district_id, p.category_id, p.name, p.address,
-	p.location, p.operating_hours, p.estimated_price_range, p.short_description,
-	p.attributes, p.rating_count, p.rating_sum,
-	c.id AS "category.id", c.name AS "category.name", c.slug AS "category.slug",
-	c.code AS "category.code", c.label AS "category.label", c.color AS "category.color"`
-
-// placeRowColumns are the PLACES columns that placeColumns reads from `p`. The
-// RETURNING clause of a write lists them so its row can be joined with its
-// category and selected with placeColumns.
-const placeRowColumns = `id, sub_district_id, category_id, name, address,
-	location, operating_hours, estimated_price_range, short_description,
-	attributes, rating_count, rating_sum`
-
 // Create inserts the place and returns it with its category and photos.
+// The CTE returns the new row joined with its category in one query.
 func (r *postgresRepository) Create(ctx context.Context, p *Place) (*Place, error) {
 	var created Place
 
@@ -116,8 +99,70 @@ func (r *postgresRepository) Create(ctx context.Context, p *Place) (*Place, erro
 	return r.withMedias(ctx, created)
 }
 
-// GetMany returns one page of places matching the filter, plus the total number of matches.
-// If the first page is not full, it already holds every match, so no count query runs.
+// AddMedia stores the photo in the place's first free position and returns the place.
+// The place row is locked so concurrent uploads cannot take the same position or exceed the limit.
+func (r *postgresRepository) AddMedia(ctx context.Context, id int64, m storage.Media) (*Place, error) {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// FOR NO KEY UPDATE: only non-key data changes, so foreign key inserts elsewhere are not blocked.
+	var locked int64
+	err = tx.GetContext(ctx, &locked, `SELECT id FROM PLACES WHERE id = $1 FOR NO KEY UPDATE`, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPlaceNotFound
+		}
+		return nil, err
+	}
+
+	// The lowest unused position; NULL means every position is taken.
+	var position *int
+	err = tx.GetContext(
+		ctx,
+		&position,
+		`SELECT MIN(free) FROM generate_series(1, $2::int) AS free
+		WHERE free NOT IN (SELECT position FROM PLACE_MEDIAS WHERE place_id = $1)`,
+		id,
+		storage.MaxMedias,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if position == nil {
+		return nil, storage.ErrMediaLimitReached
+	}
+
+	_, err = tx.ExecContext(
+		ctx,
+		`WITH media AS (
+			INSERT INTO MEDIAS (key, content_type, size_bytes)
+			VALUES ($2, $3, $4)
+			RETURNING id
+		)
+		INSERT INTO PLACE_MEDIAS (place_id, media_id, position)
+		SELECT $1, id, $5 FROM media`,
+		id,
+		m.Key,
+		m.ContentType,
+		m.Size,
+		*position,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return r.GetPlace(ctx, id)
+}
+
+// GetMany returns one page of places matching the filter, plus the total match count.
+// filter.Limit must be positive; the service guarantees it.
 func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error) {
 	if err := r.checkFilterTargets(ctx, filter); err != nil {
 		return nil, 0, err
@@ -125,17 +170,10 @@ func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([
 
 	where, args := placeWhere(filter)
 
-	query := `SELECT ` + placeColumns + placeFrom + where + ` ORDER BY p.id`
-	pageArgs := args
-	if filter.Limit > 0 {
-		// Clip so the limit is not written into args, which the count reuses.
-		pageArgs = append(slices.Clip(args), filter.Limit)
-		query += ` LIMIT $` + strconv.Itoa(len(pageArgs))
-	}
-	if filter.Offset > 0 {
-		pageArgs = append(slices.Clip(pageArgs), filter.Offset)
-		query += ` OFFSET $` + strconv.Itoa(len(pageArgs))
-	}
+	// Clip so the page values are not written into args, which the count reuses.
+	pageArgs := append(slices.Clip(args), filter.Limit, filter.Offset)
+	query := fmt.Sprintf(`SELECT %s%s%s ORDER BY p.id LIMIT $%d OFFSET $%d`,
+		placeColumns, placeFrom, where, len(args)+1, len(args)+2)
 
 	places := make([]Place, 0)
 	if err := r.db.SelectContext(ctx, &places, query, pageArgs...); err != nil {
@@ -144,11 +182,6 @@ func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([
 
 	if err := r.attachMedias(ctx, places); err != nil {
 		return nil, 0, err
-	}
-
-	// A first page with fewer places than the limit means none were cut off.
-	if filter.Offset == 0 && (filter.Limit == 0 || len(places) < filter.Limit) {
-		return places, len(places), nil
 	}
 
 	var total int
@@ -160,7 +193,7 @@ func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([
 }
 
 // GetLocations returns the id and coordinates of every place matching the filter's
-// sub-district, categories, and query, lowest ids first.
+// sub-district, categories, and query. Bounds, limit, and offset are ignored.
 func (r *postgresRepository) GetLocations(ctx context.Context, filter PlaceFilter) ([]PlaceLocation, error) {
 	if err := r.checkFilterTargets(ctx, filter); err != nil {
 		return nil, err
@@ -184,7 +217,7 @@ func (r *postgresRepository) GetLocations(ctx context.Context, filter PlaceFilte
 	return locations, nil
 }
 
-// GetByIDs returns the places with the given ids, with their category and photos.
+// GetByIDs returns the places with the given ids, with category and photos.
 func (r *postgresRepository) GetByIDs(ctx context.Context, ids []int64) ([]Place, error) {
 	places := make([]Place, 0, len(ids))
 
@@ -273,7 +306,8 @@ func (r *postgresRepository) GetPlace(ctx context.Context, id int64) (*Place, er
 	return r.withMedias(ctx, p)
 }
 
-// Update saves the place's details and returns it with its category and photos.
+// Update overwrites the place and returns it with its category and photos.
+// Like Create, one CTE writes the row and joins its category.
 // It returns ErrPlaceNotFound if there is no such place.
 func (r *postgresRepository) Update(ctx context.Context, p *Place) (*Place, error) {
 	var updated Place
@@ -313,9 +347,11 @@ func (r *postgresRepository) Update(ctx context.Context, p *Place) (*Place, erro
 	return r.withMedias(ctx, updated)
 }
 
-// Delete removes the place with its photos and queues their files for deletion.
+// Delete removes the place and its photos and queues the photo files for deletion.
 // It returns ErrPlaceNotFound if there is no such place.
 func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
+	// One statement deletes the photos and the place and queues the photo files,
+	// so either all of it commits or none of it does.
 	var deleted int
 
 	err := r.db.GetContext(
@@ -345,112 +381,8 @@ func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-// checkFilterTargets returns ErrSubDistrictNotFound or ErrCategoryNotFound for a missing target.
-// This is deliberate: an unknown target gives a 404, not an empty list.
-func (r *postgresRepository) checkFilterTargets(ctx context.Context, filter PlaceFilter) error {
-	if filter.SubDistrictID != 0 {
-		var exists bool
-		err := r.db.GetContext(
-			ctx,
-			&exists,
-			`SELECT EXISTS (SELECT 1 FROM SUB_DISTRICTS WHERE id = $1)`,
-			filter.SubDistrictID,
-		)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return ErrSubDistrictNotFound
-		}
-	}
-
-	if len(filter.CategoryIDs) == 0 {
-		return nil
-	}
-
-	var found []int64
-	err := r.db.SelectContext(
-		ctx,
-		&found,
-		`SELECT id FROM CATEGORIES WHERE id = ANY($1)`,
-		filter.CategoryIDs,
-	)
-	if err != nil {
-		return err
-	}
-
-	for _, id := range filter.CategoryIDs {
-		if !slices.Contains(found, id) {
-			return ErrCategoryNotFound
-		}
-	}
-
-	return nil
-}
-
-// AddMedia stores the photo in the place's first free slot and returns the place.
-// It locks the place row so two uploads at once cannot take the same slot or go over the limit.
-func (r *postgresRepository) AddMedia(ctx context.Context, id int64, m storage.Media) (*Place, error) {
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	// FOR NO KEY UPDATE: only non-key data changes, so foreign key inserts elsewhere are not blocked.
-	var locked int64
-	err = tx.GetContext(ctx, &locked, `SELECT id FROM PLACES WHERE id = $1 FOR NO KEY UPDATE`, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrPlaceNotFound
-		}
-		return nil, err
-	}
-
-	var position *int
-	err = tx.GetContext(
-		ctx,
-		&position,
-		`SELECT MIN(free) FROM generate_series(1, $2::int) AS free
-		WHERE free NOT IN (SELECT position FROM PLACE_MEDIAS WHERE place_id = $1)`,
-		id,
-		storage.MaxMedias,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if position == nil {
-		return nil, storage.ErrMediaLimitReached
-	}
-
-	_, err = tx.ExecContext(
-		ctx,
-		`WITH media AS (
-			INSERT INTO MEDIAS (key, content_type, size_bytes)
-			VALUES ($2, $3, $4)
-			RETURNING id
-		)
-		INSERT INTO PLACE_MEDIAS (place_id, media_id, position)
-		SELECT $1, id, $5 FROM media`,
-		id,
-		m.Key,
-		m.ContentType,
-		m.Size,
-		*position,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-
-	return r.GetPlace(ctx, id)
-}
-
-// DeleteMedia removes the photo, queues its file for deletion, and shifts later photos up one slot.
-// The shift closes the gap, so the next added photo goes to the end, not into the hole.
+// DeleteMedia removes the photo, queues its file for deletion, and moves later photos up one position.
+// The shift closes the gap, so the next upload goes to the end.
 func (r *postgresRepository) DeleteMedia(ctx context.Context, id, mediaID int64) error {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -491,6 +423,7 @@ func (r *postgresRepository) DeleteMedia(ctx context.Context, id, mediaID int64)
 	if err != nil {
 		return err
 	}
+	// No row was deleted: the place has no such photo.
 	if position == nil {
 		return storage.ErrMediaNotFound
 	}
@@ -508,6 +441,113 @@ func (r *postgresRepository) DeleteMedia(ctx context.Context, id, mediaID int64)
 	return tx.Commit()
 }
 
+// -----------------------------------------------------------------------------
+// Unexported
+// -----------------------------------------------------------------------------
+
+// placeColumns selects a place from alias p and its category from alias c,
+// named to fill Place.Category.
+const placeColumns = `p.id, p.sub_district_id, p.category_id, p.name, p.address,
+	p.location, p.operating_hours, p.estimated_price_range, p.short_description,
+	p.attributes, p.rating_count, p.rating_sum,
+	c.id AS "category.id", c.name AS "category.name", c.slug AS "category.slug",
+	c.code AS "category.code", c.label AS "category.label", c.color AS "category.color"`
+
+// placeRowColumns are the PLACES columns that placeColumns reads. A write's RETURNING clause
+// lists them so the row can be joined with its category and selected with placeColumns.
+const placeRowColumns = `id, sub_district_id, category_id, name, address,
+	location, operating_hours, estimated_price_range, short_description,
+	attributes, rating_count, rating_sum`
+
+// placeFrom is the FROM clause the filters are written against.
+const placeFrom = ` FROM PLACES p JOIN CATEGORIES c ON c.id = p.category_id`
+
+// checkFilterTargets returns ErrSubDistrictNotFound or ErrCategoryNotFound if the filter
+// names one that does not exist. An unknown target is a 404, not an empty list.
+func (r *postgresRepository) checkFilterTargets(ctx context.Context, filter PlaceFilter) error {
+	if filter.SubDistrictID != 0 {
+		var exists bool
+		err := r.db.GetContext(
+			ctx,
+			&exists,
+			`SELECT EXISTS (SELECT 1 FROM SUB_DISTRICTS WHERE id = $1)`,
+			filter.SubDistrictID,
+		)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return ErrSubDistrictNotFound
+		}
+	}
+
+	if len(filter.CategoryIDs) == 0 {
+		return nil
+	}
+
+	var found []int64
+	err := r.db.SelectContext(
+		ctx,
+		&found,
+		`SELECT id FROM CATEGORIES WHERE id = ANY($1)`,
+		filter.CategoryIDs,
+	)
+	if err != nil {
+		return err
+	}
+
+	// ANY returns each existing id once, so check every requested id against it.
+	for _, id := range filter.CategoryIDs {
+		if !slices.Contains(found, id) {
+			return ErrCategoryNotFound
+		}
+	}
+
+	return nil
+}
+
+// placeWhere builds the WHERE clause and its arguments from the filter.
+// Only the filters that are set become conditions, so the database can use its indexes.
+func placeWhere(filter PlaceFilter) (string, []any) {
+	var conditions []string
+	var args []any
+	arg := func(v any) string {
+		args = append(args, v)
+		return "$" + strconv.Itoa(len(args))
+	}
+
+	if filter.SubDistrictID != 0 {
+		conditions = append(conditions, "p.sub_district_id = "+arg(filter.SubDistrictID))
+	}
+
+	if len(filter.CategoryIDs) > 0 {
+		conditions = append(conditions, "p.category_id = ANY("+arg(filter.CategoryIDs)+")")
+	}
+
+	if filter.Query != "" {
+		pattern := arg("%" + utils.EscapeLike(filter.Query) + "%")
+		conditions = append(conditions, fmt.Sprintf(
+			"(p.name ILIKE %[1]s OR p.address ILIKE %[1]s OR p.short_description ILIKE %[1]s OR c.name ILIKE %[1]s)",
+			pattern,
+		))
+	}
+
+	if b := filter.Bounds; b != nil {
+		conditions = append(conditions, fmt.Sprintf(
+			// ST_Covers keeps the edges and, unlike a bare &&, which compares
+			// float4 boxes, drops points just outside. It still uses the GiST index.
+			"ST_Covers(ST_MakeEnvelope(%s, %s, %s, %s, %d), p.location)",
+			arg(b.MinLng), arg(b.MinLat), arg(b.MaxLng), arg(b.MaxLat), postgis.SRID,
+		))
+	}
+
+	if len(conditions) == 0 {
+		return "", args
+	}
+
+	return " WHERE " + strings.Join(conditions, " AND "), args
+}
+
 // withMedias returns p with its photos attached.
 func (r *postgresRepository) withMedias(ctx context.Context, p Place) (*Place, error) {
 	places := []Place{p}
@@ -518,8 +558,7 @@ func (r *postgresRepository) withMedias(ctx context.Context, p Place) (*Place, e
 	return &places[0], nil
 }
 
-// attachMedias loads the photos of all the given places in one query.
-// Each place gets its photos in position order.
+// attachMedias loads the photos of all places in one query, in position order.
 func (r *postgresRepository) attachMedias(ctx context.Context, places []Place) error {
 	if len(places) == 0 {
 		return nil
@@ -556,6 +595,7 @@ func (r *postgresRepository) attachMedias(ctx context.Context, places []Place) e
 
 	for i := range places {
 		places[i].Medias = mediasByPlace[places[i].ID]
+		// Never nil, so it encodes as [].
 		if places[i].Medias == nil {
 			places[i].Medias = make([]storage.Media, 0)
 		}
@@ -564,8 +604,7 @@ func (r *postgresRepository) attachMedias(ctx context.Context, places []Place) e
 	return nil
 }
 
-// attachFields loads the custom fields of all the given categories in one query.
-// Each category gets its fields in sort order.
+// attachFields loads the fields of all categories in one query, in sort order.
 func (r *postgresRepository) attachFields(ctx context.Context, categories []Category) error {
 	if len(categories) == 0 {
 		return nil
@@ -598,6 +637,7 @@ func (r *postgresRepository) attachFields(ctx context.Context, categories []Cate
 
 	for i := range categories {
 		categories[i].Fields = fieldsByCategory[categories[i].ID]
+		// Never nil, so it encodes as [].
 		if categories[i].Fields == nil {
 			categories[i].Fields = make([]CategoryField, 0)
 		}
@@ -606,53 +646,7 @@ func (r *postgresRepository) attachFields(ctx context.Context, categories []Cate
 	return nil
 }
 
-// placeFrom is the FROM clause the place filters are written against.
-const placeFrom = ` FROM PLACES p JOIN CATEGORIES c ON c.id = p.category_id`
-
-// placeWhere builds the WHERE clause for the filter, along with its values.
-// Only the filters that are set become conditions, so the database can use its indexes.
-func placeWhere(filter PlaceFilter) (string, []any) {
-	var conditions []string
-	var args []any
-	arg := func(v any) string {
-		args = append(args, v)
-		return "$" + strconv.Itoa(len(args))
-	}
-
-	if filter.SubDistrictID != 0 {
-		conditions = append(conditions, "p.sub_district_id = "+arg(filter.SubDistrictID))
-	}
-
-	if len(filter.CategoryIDs) > 0 {
-		conditions = append(conditions, "p.category_id = ANY("+arg(filter.CategoryIDs)+")")
-	}
-
-	if filter.Query != "" {
-		pattern := arg("%" + likeEscaper.Replace(filter.Query) + "%")
-		conditions = append(conditions, fmt.Sprintf(
-			"(p.name ILIKE %[1]s OR p.address ILIKE %[1]s OR p.short_description ILIKE %[1]s OR c.name ILIKE %[1]s)",
-			pattern,
-		))
-	}
-
-	if b := filter.Bounds; b != nil {
-		conditions = append(conditions, fmt.Sprintf(
-			// ST_Covers keeps the edges and, unlike a bare &&, which compares
-			// float4 boxes, drops points just outside. It still uses the GiST index.
-			"ST_Covers(ST_MakeEnvelope(%s, %s, %s, %s, %d), p.location)",
-			arg(b.MinLng), arg(b.MinLat), arg(b.MaxLng), arg(b.MaxLat), postgis.SRID,
-		))
-	}
-
-	if len(conditions) == 0 {
-		return "", args
-	}
-
-	return " WHERE " + strings.Join(conditions, " AND "), args
-}
-
-// mapForeignKeyError turns a foreign key error on PLACES into the matching not-found error.
-// Any other error is returned unchanged.
+// mapForeignKeyError turns a PLACES foreign key violation into the matching not-found error.
 func mapForeignKeyError(err error) error {
 	if database.IsCode(err, database.ForeignKeyViolation) {
 		switch database.ConstraintName(err) {

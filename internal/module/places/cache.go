@@ -12,15 +12,19 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// cachedRepository wraps a Repository and serves GetMany pages from a Redis index of ids and
-// coordinates; entries only expire after listCacheTTL.
+// cachedRepository serves GetMany from a Redis index of place ids and coordinates.
+// Entries expire only after listCacheTTL, so a list can be that stale.
 type cachedRepository struct {
 	Repository
 	client *redis.Client
 }
 
-// NewCachedRepository wraps repo so that GetMany answers from Redis when it can.
-// Redis errors never fail a request: the index is then read from repo.
+// -----------------------------------------------------------------------------
+// Exported
+// -----------------------------------------------------------------------------
+
+// NewCachedRepository wraps repo so GetMany reads from Redis when it can.
+// A Redis failure never fails a request; the index is read from repo instead.
 func NewCachedRepository(repo Repository, client *redis.Client) Repository {
 	return &cachedRepository{
 		Repository: repo,
@@ -28,7 +32,7 @@ func NewCachedRepository(repo Repository, client *redis.Client) Repository {
 	}
 }
 
-// GetMany returns one page of places matching the filter, plus the total number of matches.
+// GetMany pages through the cached index of the filter's sub-district.
 // A filter without a sub-district is not cached.
 func (r *cachedRepository) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error) {
 	if filter.SubDistrictID == 0 {
@@ -53,11 +57,16 @@ func (r *cachedRepository) GetMany(ctx context.Context, filter PlaceFilter) ([]P
 	return places, total, nil
 }
 
-// index returns the encoded index for the filter, reading it from the repository and
-// caching it on a miss or a Redis failure.
+// -----------------------------------------------------------------------------
+// Unexported
+// -----------------------------------------------------------------------------
+
+// index returns the encoded index for the filter. On a miss, a bad entry, or a
+// Redis failure it reads the index from the repository and tries to cache it.
 func (r *cachedRepository) index(ctx context.Context, filter PlaceFilter) ([]byte, error) {
 	key := indexCacheKey(filter)
 
+	// A length that is not a whole number of entries means a corrupt entry.
 	if data, err := r.client.Get(ctx, key).Bytes(); err == nil && len(data)%indexEntrySize == 0 {
 		return data, nil
 	}
@@ -73,8 +82,9 @@ func (r *cachedRepository) index(ctx context.Context, filter PlaceFilter) ([]byt
 	return data, nil
 }
 
-// indexCacheKey returns the Redis key for the filter's index, which depends only on the
-// sub-district, the categories (in any order), and the query.
+// indexCacheKey returns the Redis key of the filter's index.
+// Bounds, limit, and offset are left out because they are applied to the index afterwards.
+// The categories are sorted so their order does not matter.
 func indexCacheKey(filter PlaceFilter) string {
 	data, _ := json.Marshal(PlaceFilter{
 		SubDistrictID: filter.SubDistrictID,
@@ -85,10 +95,6 @@ func indexCacheKey(filter PlaceFilter) string {
 
 	return listCacheKeyPrefix + hex.EncodeToString(sum[:])
 }
-
-// indexEntrySize is the bytes one place takes in an index: id, longitude, and latitude,
-// 8 little-endian bytes each. A place without a location has NaN coordinates.
-const indexEntrySize = 24
 
 // encodeIndex packs the locations into the compact form kept in Redis.
 func encodeIndex(locations []PlaceLocation) []byte {
@@ -108,8 +114,8 @@ func encodeIndex(locations []PlaceLocation) []byte {
 	return data
 }
 
-// pageFromIndex returns the ids on the filter's page of the index, plus the number of
-// places inside the filter's bounds (edges included). A limit of zero means no limit.
+// pageFromIndex returns the ids on the filter's page of the index, and the number
+// of places inside the filter's bounds (edges included).
 func pageFromIndex(index []byte, filter PlaceFilter) ([]int64, int) {
 	var ids []int64
 	total := 0
@@ -119,12 +125,13 @@ func pageFromIndex(index []byte, filter PlaceFilter) ([]int64, int) {
 			longitude := math.Float64frombits(binary.LittleEndian.Uint64(entry[8:]))
 			latitude := math.Float64frombits(binary.LittleEndian.Uint64(entry[16:]))
 
+			// Written as "not inside" so NaN (no location) is excluded: every NaN comparison is false.
 			if !(longitude >= b.MinLng && longitude <= b.MaxLng && latitude >= b.MinLat && latitude <= b.MaxLat) {
 				continue
 			}
 		}
 
-		if total >= filter.Offset && (filter.Limit <= 0 || len(ids) < filter.Limit) {
+		if total >= filter.Offset && len(ids) < filter.Limit {
 			ids = append(ids, int64(binary.LittleEndian.Uint64(entry)))
 		}
 		total++

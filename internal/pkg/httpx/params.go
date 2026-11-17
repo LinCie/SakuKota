@@ -1,6 +1,11 @@
 package httpx
 
-import "strconv"
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
+)
 
 // ParseID parses s as a positive int64 identifier.
 func ParseID(s string) (int64, bool) {
@@ -10,4 +15,14 @@ func ParseID(s string) (int64, bool) {
 	}
 
 	return id, true
+}
+
+// PathID reads a positive integer URL parameter, or answers 400 with code and message.
+func PathID(w http.ResponseWriter, r *http.Request, name, code, message string) (int64, bool) {
+	id, ok := ParseID(chi.URLParam(r, name))
+	if !ok {
+		RespondError(w, http.StatusBadRequest, code, message)
+	}
+
+	return id, ok
 }

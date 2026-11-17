@@ -1,14 +1,9 @@
 package places
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"slices"
 	"strconv"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"rantau-go/internal/pkg/postgis"
@@ -20,9 +15,13 @@ import (
 //
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
 type Service interface {
-	// Create checks a new place's data and saves it.
+	// Create validates and saves a new place.
 	Create(ctx context.Context, p *Place) (*Place, error)
-	// GetMany returns one page of places matching the filter, plus the total number of matches.
+	// MediaUploadURL returns a temporary link to upload a photo for the place.
+	MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error)
+	// AddMedia attaches an uploaded photo to the place.
+	AddMedia(ctx context.Context, id int64, uploadKey string) (*Place, error)
+	// GetMany returns one page of places matching the filter, plus the total match count.
 	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error)
 	// GetPlace returns the place with the given id.
 	GetPlace(ctx context.Context, id int64) (*Place, error)
@@ -30,14 +29,10 @@ type Service interface {
 	GetCategories(ctx context.Context) ([]Category, error)
 	// GetCategory returns the category with the given id.
 	GetCategory(ctx context.Context, id int64) (*Category, error)
-	// Update overwrites the place with the given id with the details in p.
+	// Update validates p and overwrites the place with the given id.
 	Update(ctx context.Context, id int64, p *Place) (*Place, error)
 	// Delete removes the place with the given id.
 	Delete(ctx context.Context, id int64) error
-	// MediaUploadURL gives a temporary link to upload a new photo for the place.
-	MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error)
-	// AddMedia attaches an uploaded photo to the place.
-	AddMedia(ctx context.Context, id int64, uploadKey string) (*Place, error)
 	// DeleteMedia removes a photo from the place.
 	DeleteMedia(ctx context.Context, id, mediaID int64) error
 }
@@ -47,7 +42,10 @@ type service struct {
 	images ImageStorage
 }
 
-// NewService builds the place service from the repository and the image storage.
+// -----------------------------------------------------------------------------
+// Exported
+// -----------------------------------------------------------------------------
+
 func NewService(repo Repository, images ImageStorage) Service {
 	return &service{
 		repo:   repo,
@@ -55,135 +53,7 @@ func NewService(repo Repository, images ImageStorage) Service {
 	}
 }
 
-// -----------------------------------------------------------------------------
-// service
-// -----------------------------------------------------------------------------
-
-// Create checks the new place's data, then saves it.
-func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
-	if err := s.validate(ctx, p); err != nil {
-		return nil, err
-	}
-
-	return s.repo.Create(ctx, p)
-}
-
-// GetMany returns one page of places matching the filter.
-// Without a limit, or with one above maxLimit, it uses maxLimit so no list is unbounded.
-func (s *service) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error) {
-	if filter.Limit <= 0 || filter.Limit > maxLimit {
-		filter.Limit = maxLimit
-	}
-
-	return s.repo.GetMany(ctx, filter)
-}
-
-// GetPlace returns the place with the given id.
-func (s *service) GetPlace(ctx context.Context, id int64) (*Place, error) {
-	return s.repo.GetPlace(ctx, id)
-}
-
-// GetCategories returns every category.
-func (s *service) GetCategories(ctx context.Context) ([]Category, error) {
-	return s.repo.GetCategories(ctx)
-}
-
-// GetCategory returns the category with the given id.
-func (s *service) GetCategory(ctx context.Context, id int64) (*Category, error) {
-	return s.repo.GetCategory(ctx, id)
-}
-
-// Update checks the new details, then overwrites the place with the given id.
-// If there is no such place, the repository reports ErrPlaceNotFound.
-func (s *service) Update(ctx context.Context, id int64, p *Place) (*Place, error) {
-	if err := s.validate(ctx, p); err != nil {
-		return nil, err
-	}
-	p.ID = id
-
-	return s.repo.Update(ctx, p)
-}
-
-// Delete removes the place with the given id.
-// The repository also queues its photos for deletion from storage.
-func (s *service) Delete(ctx context.Context, id int64) error {
-	return s.repo.Delete(ctx, id)
-}
-
-// validate cleans up the place's text, then checks its location and attributes.
-// The attributes are checked against the fields of its category.
-func (s *service) validate(ctx context.Context, p *Place) error {
-	name, err := NormalizeName(p.Name)
-	if err != nil {
-		return err
-	}
-	p.Name = name
-
-	if err := NormalizeOptionalFields(p); err != nil {
-		return err
-	}
-
-	if err := validateLocation(p.Location); err != nil {
-		return err
-	}
-
-	category, err := s.repo.GetCategory(ctx, p.CategoryID)
-	if err != nil {
-		return err
-	}
-
-	attributes, err := validateAttributes(category.Fields, p.Attributes)
-	if err != nil {
-		return err
-	}
-	p.Attributes = attributes
-
-	return nil
-}
-
-// MediaUploadURL checks the place exists, then gives a temporary link to upload a new photo.
-// The photo is uploaded under the place's storage folder.
-func (s *service) MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error) {
-	if _, err := s.repo.GetPlace(ctx, id); err != nil {
-		return storage.Upload{}, err
-	}
-
-	return s.images.PresignUpload(ctx, imagePrefix(id), contentType)
-}
-
-// AddMedia moves the uploaded photo into the place's folder and attaches it to the place.
-// If attaching fails, for example because the place is full, the moved file is deleted again.
-func (s *service) AddMedia(ctx context.Context, id int64, uploadKey string) (*Place, error) {
-	if _, err := s.repo.GetPlace(ctx, id); err != nil {
-		return nil, err
-	}
-
-	promoted, err := s.images.Promote(ctx, imagePrefix(id), uploadKey)
-	if err != nil {
-		return nil, err
-	}
-
-	updated, err := s.repo.AddMedia(ctx, id, promoted)
-	if err != nil {
-		_ = s.images.Delete(context.WithoutCancel(ctx), promoted.Key)
-		return nil, err
-	}
-
-	return updated, nil
-}
-
-// DeleteMedia removes a photo from the place.
-// The repository also queues its file for deletion from storage.
-func (s *service) DeleteMedia(ctx context.Context, id, mediaID int64) error {
-	return s.repo.DeleteMedia(ctx, id, mediaID)
-}
-
-// imagePrefix returns the storage folder for the photos of the place with id.
-func imagePrefix(id int64) string {
-	return "places/" + strconv.FormatInt(id, 10)
-}
-
-// NormalizeName trims the spaces around name, and rejects it if it is empty or too long.
+// NormalizeName trims name and rejects it if it is empty or too long.
 func NormalizeName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	switch {
@@ -196,8 +66,8 @@ func NormalizeName(name string) (string, error) {
 	return name, nil
 }
 
-// NormalizeOptionalFields trims the optional text fields of p and turns blank ones into nothing.
-// It rejects any of them that is longer than its column allows.
+// NormalizeOptionalFields trims the optional text fields of p and turns blank ones into nil.
+// It rejects any that exceed their column length.
 func NormalizeOptionalFields(p *Place) error {
 	var ok bool
 
@@ -218,140 +88,120 @@ func NormalizeOptionalFields(p *Place) error {
 	return nil
 }
 
-// validateLocation rejects a location that lies outside Indonesia.
-// A missing location is allowed.
-func validateLocation(loc *postgis.Point) error {
-	if loc != nil && !postgis.InIndonesia(loc) {
+func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
+	if err := s.validate(ctx, p); err != nil {
+		return nil, err
+	}
+
+	return s.repo.Create(ctx, p)
+}
+
+func (s *service) MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error) {
+	if _, err := s.repo.GetPlace(ctx, id); err != nil {
+		return storage.Upload{}, err
+	}
+
+	return s.images.PresignUpload(ctx, imagePrefix(id), contentType)
+}
+
+func (s *service) AddMedia(ctx context.Context, id int64, uploadKey string) (*Place, error) {
+	if _, err := s.repo.GetPlace(ctx, id); err != nil {
+		return nil, err
+	}
+
+	promoted, err := s.images.Promote(ctx, imagePrefix(id), uploadKey)
+	if err != nil {
+		return nil, err
+	}
+
+	updated, err := s.repo.AddMedia(ctx, id, promoted)
+	if err != nil {
+		// Attaching failed (e.g. the place is full), so remove the file just moved.
+		// WithoutCancel: the cleanup must run even if the request was cancelled.
+		_ = s.images.Delete(context.WithoutCancel(ctx), promoted.Key)
+		return nil, err
+	}
+
+	return updated, nil
+}
+
+// GetMany caps the page size so no list is unbounded.
+func (s *service) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error) {
+	if filter.Limit <= 0 || filter.Limit > maxLimit {
+		filter.Limit = maxLimit
+	}
+
+	return s.repo.GetMany(ctx, filter)
+}
+
+func (s *service) GetPlace(ctx context.Context, id int64) (*Place, error) {
+	return s.repo.GetPlace(ctx, id)
+}
+
+func (s *service) GetCategories(ctx context.Context) ([]Category, error) {
+	return s.repo.GetCategories(ctx)
+}
+
+func (s *service) GetCategory(ctx context.Context, id int64) (*Category, error) {
+	return s.repo.GetCategory(ctx, id)
+}
+
+func (s *service) Update(ctx context.Context, id int64, p *Place) (*Place, error) {
+	if err := s.validate(ctx, p); err != nil {
+		return nil, err
+	}
+	p.ID = id
+
+	return s.repo.Update(ctx, p)
+}
+
+// Delete also queues the place's photo files for deletion, in the repository.
+func (s *service) Delete(ctx context.Context, id int64) error {
+	return s.repo.Delete(ctx, id)
+}
+
+// DeleteMedia also queues the photo file for deletion, in the repository.
+func (s *service) DeleteMedia(ctx context.Context, id, mediaID int64) error {
+	return s.repo.DeleteMedia(ctx, id, mediaID)
+}
+
+// -----------------------------------------------------------------------------
+// Unexported
+// -----------------------------------------------------------------------------
+
+// validate cleans the place's text and checks its location and its attributes
+// against the fields of its category.
+func (s *service) validate(ctx context.Context, p *Place) error {
+	name, err := NormalizeName(p.Name)
+	if err != nil {
+		return err
+	}
+	p.Name = name
+
+	if err := NormalizeOptionalFields(p); err != nil {
+		return err
+	}
+
+	// The location is optional.
+	if p.Location != nil && !postgis.InIndonesia(p.Location) {
 		return ErrInvalidLocation
 	}
 
-	return nil
-}
-
-// -----------------------------------------------------------------------------
-// Attribute validation
-// -----------------------------------------------------------------------------
-
-// validateAttributes checks the attributes against the category's fields and returns clean JSON.
-// Missing required fields and unknown keys are rejected, and blank optional text is dropped.
-func validateAttributes(fields []CategoryField, raw json.RawMessage) (json.RawMessage, error) {
-	var values map[string]any
-	if len(raw) > 0 {
-		decoder := json.NewDecoder(bytes.NewReader(raw))
-		// Keep numbers as json.Number so they are stored exactly as sent.
-		decoder.UseNumber()
-		if err := decoder.Decode(&values); err != nil {
-			return nil, fmt.Errorf("%w: must be a JSON object", ErrInvalidAttributes)
-		}
-	}
-	if values == nil {
-		values = make(map[string]any)
+	category, err := s.repo.GetCategory(ctx, p.CategoryID)
+	if err != nil {
+		return err
 	}
 
-	for _, f := range fields {
-		value, ok := values[f.Key]
-		if !ok || value == nil || isBlankOptionalText(f, value) {
-			if f.Required {
-				return nil, fmt.Errorf("%w: %q is required", ErrInvalidAttributes, f.Key)
-			}
-			delete(values, f.Key)
-			continue
-		}
-
-		if err := validateAttribute(f, value); err != nil {
-			return nil, err
-		}
+	attributes, err := validateAttributes(category.Fields, p.Attributes)
+	if err != nil {
+		return err
 	}
-
-	for key := range values {
-		known := slices.ContainsFunc(fields, func(f CategoryField) bool {
-			return f.Key == key
-		})
-		if !known {
-			return nil, fmt.Errorf("%w: unknown field %q", ErrInvalidAttributes, key)
-		}
-	}
-
-	return json.Marshal(values)
-}
-
-// isBlankOptionalText reports whether value is optional text that is empty or only spaces.
-// Such a value counts as not set.
-func isBlankOptionalText(f CategoryField, value any) bool {
-	text, ok := value.(string)
-	return f.DataType == FieldTypeText && !f.Required && ok && strings.TrimSpace(text) == ""
-}
-
-// validateAttribute checks that one value has the right type and format for its field.
-func validateAttribute(f CategoryField, value any) error {
-	switch f.DataType {
-	case FieldTypeText:
-		text, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("%w: %q must be text", ErrInvalidAttributes, f.Key)
-		}
-		if f.Required && strings.TrimSpace(text) == "" {
-			return fmt.Errorf("%w: %q is required", ErrInvalidAttributes, f.Key)
-		}
-	case FieldTypeNumber:
-		if _, ok := value.(json.Number); !ok {
-			return fmt.Errorf("%w: %q must be a number", ErrInvalidAttributes, f.Key)
-		}
-	case FieldTypeBoolean:
-		if _, ok := value.(bool); !ok {
-			return fmt.Errorf("%w: %q must be a boolean", ErrInvalidAttributes, f.Key)
-		}
-	case FieldTypeSelect:
-		option, ok := value.(string)
-		if !ok || !slices.Contains(f.Options, option) {
-			return fmt.Errorf("%w: %q must be one of: %s",
-				ErrInvalidAttributes, f.Key, strings.Join(f.Options, ", "))
-		}
-	case FieldTypeRange:
-		if !validRange(value) {
-			return fmt.Errorf(`%w: %q must be {"min": number, "max": number} with min <= max`,
-				ErrInvalidAttributes, f.Key)
-		}
-	case FieldTypeDate:
-		date, ok := value.(string)
-		if _, err := time.Parse(time.DateOnly, date); !ok || err != nil {
-			return fmt.Errorf("%w: %q must be a date in YYYY-MM-DD format", ErrInvalidAttributes, f.Key)
-		}
-	default:
-		// CATEGORY_FIELDS allows only the types above, so this is a server
-		// fault, not the client's.
-		return fmt.Errorf("place: field %q has unknown data type %q", f.Key, f.DataType)
-	}
+	p.Attributes = attributes
 
 	return nil
 }
 
-// validRange reports whether value is {"min": number, "max": number} with min <= max.
-func validRange(value any) bool {
-	bounds, ok := value.(map[string]any)
-	if !ok || len(bounds) != 2 {
-		return false
-	}
-
-	lowNumber, ok := bounds["min"].(json.Number)
-	if !ok {
-		return false
-	}
-
-	highNumber, ok := bounds["max"].(json.Number)
-	if !ok {
-		return false
-	}
-
-	low, err := lowNumber.Float64()
-	if err != nil {
-		return false
-	}
-
-	high, err := highNumber.Float64()
-	if err != nil {
-		return false
-	}
-
-	return low <= high
+// imagePrefix returns the storage folder of the place's photos.
+func imagePrefix(id int64) string {
+	return "places/" + strconv.FormatInt(id, 10)
 }
