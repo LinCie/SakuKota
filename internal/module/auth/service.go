@@ -30,9 +30,19 @@ type Service interface {
 	Logout(ctx context.Context, refreshToken string) error
 }
 
+// UserService defines the user operations that authentication requires.
+type UserService interface {
+	// Create saves a new user.
+	Create(ctx context.Context, u *users.User) (*users.User, error)
+	// GetByEmail returns the user with the email, or users.ErrNotFound.
+	GetByEmail(ctx context.Context, email string) (*users.User, error)
+	// GetUser returns the user with the id, or users.ErrNotFound.
+	GetUser(ctx context.Context, id int64) (*users.User, error)
+}
+
 type service struct {
 	cfg   config.Config
-	users users.Service
+	users UserService
 	store RefreshStore
 }
 
@@ -40,7 +50,7 @@ type service struct {
 // Exported
 // -----------------------------------------------------------------------------
 
-func NewService(cfg config.Config, userService users.Service, store RefreshStore) Service {
+func NewService(cfg config.Config, userService UserService, store RefreshStore) Service {
 	return &service{
 		cfg:   cfg,
 		users: userService,
