@@ -25,7 +25,7 @@ import (
 // newRouter serves the place handlers on the paths the API uses for them, so
 // URL parameters resolve as they do in production.
 func newRouter(svc places.Service) http.Handler {
-	h := places.NewHandler(svc, testImageURL)
+	h := places.NewHandler(svc, testMediaURL)
 	r := chi.NewRouter()
 	r.Route("/places", func(r chi.Router) {
 		r.Get("/", h.GetPlaces)
@@ -44,8 +44,8 @@ func newRouter(svc places.Service) http.Handler {
 	return r
 }
 
-// testImageURL stands in for the storage's public URLs.
-func testImageURL(key string) string {
+// testMediaURL stands in for the storage's public URLs.
+func testMediaURL(key string) string {
 	return "https://img.test/" + key
 }
 
@@ -901,7 +901,7 @@ func TestHandler_CreateMediaUpload(t *testing.T) {
 			wantCode   string
 		}{
 			{name: "unknown place", err: places.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
-			{name: "image type not allowed", err: storage.ErrInvalidImageType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "image type not allowed", err: storage.ErrInvalidMediaType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 		}
 
@@ -919,13 +919,11 @@ func TestHandler_CreateMediaUpload(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		svc := mock.NewMockService(gomock.NewController(t))
 		svc.EXPECT().MediaUploadURL(gomock.Any(), int64(3), "image/webp").Return(storage.Upload{
-			Key: "uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp",
-			PresignedUpload: storage.PresignedUpload{
-				URL:       "http://localhost:3900/rantau-images/uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp?X-Amz-Signature=abc",
-				Method:    "PUT",
-				Headers:   map[string]string{"Content-Type": "image/webp"},
-				ExpiresAt: time.Date(2026, 10, 31, 12, 5, 0, 0, time.UTC),
-			},
+			Key:       "uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp",
+			URL:       "http://localhost:3900/rantau-images/uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp?X-Amz-Signature=abc",
+			Method:    "PUT",
+			Headers:   map[string]string{"Content-Type": "image/webp"},
+			ExpiresAt: time.Date(2026, 10, 31, 12, 5, 0, 0, time.UTC),
 		}, nil)
 
 		rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/places/3/medias/upload-url", `{"content_type":"image/webp"}`))
@@ -976,9 +974,9 @@ func TestHandler_AddMedia(t *testing.T) {
 			wantCode   string
 		}{
 			{name: "unknown place", err: places.ErrPlaceNotFound, wantStatus: http.StatusNotFound, wantCode: "PLACE_NOT_FOUND"},
-			{name: "invalid upload key", err: storage.ErrInvalidImageKey, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "image not uploaded", err: storage.ErrImageNotUploaded, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "image type not allowed", err: storage.ErrInvalidImageType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "invalid upload key", err: storage.ErrInvalidUploadKey, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "image not uploaded", err: storage.ErrMediaNotUploaded, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "image type not allowed", err: storage.ErrInvalidMediaType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "image too large", err: storage.ErrImageTooLarge, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "video too large", err: storage.ErrVideoTooLarge, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "place already has the most medias", err: storage.ErrMediaLimitReached, wantStatus: http.StatusConflict, wantCode: "MEDIA_LIMIT_REACHED"},

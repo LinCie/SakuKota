@@ -38,18 +38,18 @@ type Service interface {
 }
 
 type service struct {
-	repo   Repository
-	images ImageStorage
+	repo  Repository
+	media MediaStorage
 }
 
 // -----------------------------------------------------------------------------
 // Exported
 // -----------------------------------------------------------------------------
 
-func NewService(repo Repository, images ImageStorage) Service {
+func NewService(repo Repository, media MediaStorage) Service {
 	return &service{
-		repo:   repo,
-		images: images,
+		repo:  repo,
+		media: media,
 	}
 }
 
@@ -101,7 +101,7 @@ func (s *service) MediaUploadURL(ctx context.Context, id int64, contentType stri
 		return storage.Upload{}, err
 	}
 
-	return s.images.PresignUpload(ctx, imagePrefix(id), contentType)
+	return s.media.PresignUpload(ctx, mediaPrefix(id), contentType)
 }
 
 func (s *service) AddMedia(ctx context.Context, id int64, uploadKey string) (*Place, error) {
@@ -109,7 +109,7 @@ func (s *service) AddMedia(ctx context.Context, id int64, uploadKey string) (*Pl
 		return nil, err
 	}
 
-	promoted, err := s.images.Promote(ctx, imagePrefix(id), uploadKey)
+	promoted, err := s.media.Promote(ctx, mediaPrefix(id), uploadKey)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (s *service) AddMedia(ctx context.Context, id int64, uploadKey string) (*Pl
 	if err != nil {
 		// Attaching failed (e.g. the place is full), so remove the file just moved.
 		// WithoutCancel: the cleanup must run even if the request was cancelled.
-		_ = s.images.Delete(context.WithoutCancel(ctx), promoted.Key)
+		_ = s.media.Delete(context.WithoutCancel(ctx), promoted.Key)
 		return nil, err
 	}
 
@@ -201,7 +201,7 @@ func (s *service) validate(ctx context.Context, p *Place) error {
 	return nil
 }
 
-// imagePrefix returns the storage folder of the place's photos.
-func imagePrefix(id int64) string {
+// mediaPrefix returns the storage folder of the place's medias.
+func mediaPrefix(id int64) string {
 	return "places/" + strconv.FormatInt(id, 10)
 }

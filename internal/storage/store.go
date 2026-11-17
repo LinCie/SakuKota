@@ -6,12 +6,12 @@ import (
 	"time"
 )
 
-// ObjectStore defines the object operations Images is built on.
+// ObjectStore defines the object operations MediaStore is built on.
 //
 //go:generate mockgen -source=store.go -destination=mock/store.go -package=mock
 type ObjectStore interface {
-	// PresignPut returns a temporary link that uploads key with contentType until ttl passes.
-	PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (PresignedUpload, error)
+	// PresignPut returns a temporary link that uploads key with contentType until UploadTTL passes.
+	PresignPut(ctx context.Context, key, contentType string) (Upload, error)
 	// Stat returns the object's size and type, or ErrObjectNotFound.
 	Stat(ctx context.Context, key string) (ObjectInfo, error)
 	// Copy copies the object at srcKey to dstKey.
@@ -20,9 +20,10 @@ type ObjectStore interface {
 	Delete(ctx context.Context, key string) error
 }
 
-// PresignedUpload is a temporary link a client can use to upload an object without
-// credentials.
-type PresignedUpload struct {
+// Upload is a temporary link a client can use to upload an object without
+// credentials, and the key the object is stored under until it is promoted.
+type Upload struct {
+	Key    string
 	URL    string
 	Method string
 	// Headers must be sent with the request exactly as given.

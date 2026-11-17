@@ -12,15 +12,15 @@ type Service interface {
 }
 
 type service struct {
-	repo   Repository
-	images ImageStorage
+	repo  Repository
+	media MediaStorage
 }
 
-// NewService builds the cleanup service from the queue and the image storage.
-func NewService(repo Repository, images ImageStorage) Service {
+// NewService builds the cleanup service from the queue and the media storage.
+func NewService(repo Repository, media MediaStorage) Service {
 	return &service{
-		repo:   repo,
-		images: images,
+		repo:  repo,
+		media: media,
 	}
 }
 
@@ -48,7 +48,7 @@ func (s *service) Run(ctx context.Context) error {
 // delete removes the object for key, then takes key off the queue.
 // If the object cannot be removed, key is rescheduled and only queue errors are returned.
 func (s *service) delete(ctx context.Context, key string) error {
-	if err := s.images.Delete(ctx, key); err != nil {
+	if err := s.media.Delete(ctx, key); err != nil {
 		slog.ErrorContext(ctx, "delete storage object", "key", key, "err", err)
 		return s.repo.Reschedule(ctx, key, retryDelay, err.Error())
 	}

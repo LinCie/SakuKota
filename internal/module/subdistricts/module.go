@@ -9,11 +9,11 @@ type Module struct {
 	Handler *Handler
 }
 
-// The handler uses images.PublicURL to build image links.
-func NewModule(db *sqlx.DB, images ImageStorage) *Module {
+// The handler uses media.PublicURL to build image links.
+func NewModule(db *sqlx.DB, media MediaStorage) *Module {
 	repo := NewPostgresRepository(db)
-	service := NewService(repo, images)
-	handler := NewHandler(service, images.PublicURL)
+	service := NewService(repo, media)
+	handler := NewHandler(service, media.PublicURL)
 
 	return &Module{
 		Service: service,

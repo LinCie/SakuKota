@@ -5,8 +5,8 @@
 > behavior or the API contract, once a VERIFICATION phase passes (see
 > [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-16. Updated after simplifying the auth module (see the change log).
->   Verified by `go build`, `go vet`, and the auth package tests; the web app changes are outside the test workflow.
+> - Last updated: 2026-11-17. Updated after simplifying and renaming the storage module (see the change log).
+>   Verified by `go build`, `go vet`, and the full Go test suite.
 > - Status: verified. All Go tests pass and the API was checked by hand. The web app has not been
 >   updated for medias yet, so its image views and the place image upload are broken until it is.
 
@@ -496,7 +496,7 @@ read, approve, and reject them. The admin role check happens in the API router.
 - **Allowed types.** Exactly `image/jpeg` (`.jpg`), `image/png` (`.png`),
   `image/webp` (`.webp`), `video/mp4` (`.mp4`), and `video/webm` (`.webm`).
   Content types with parameters are rejected. Any other type (including
-  `video/quicktime`) returns `ErrInvalidImageType` without touching the store.
+  `video/quicktime`) returns `ErrInvalidMediaType` without touching the store.
 - **Presign.** The key is `uploads/{prefix}/{lowercase-uuid}.{ext}` and is
   unique on every call. The URL is a presigned PUT on the **public endpoint**,
   valid for `UploadTTL`. The Content-Type is signed, so uploading with a
@@ -504,15 +504,15 @@ read, approve, and reject them. The admin role check happens in the API router.
 - **Promote(prefix, uploadKey).**
   1. The key must be exactly `uploads/{prefix}/{lowercase-uuid}.{allowed-ext}`.
      Other prefixes, nesting, traversal, already-promoted keys, non-UUID names,
-     and missing extensions return `ErrInvalidImageKey` without touching the
+     and missing extensions return `ErrInvalidUploadKey` without touching the
      store.
-  2. If the object is missing, the result is `ErrImageNotUploaded`.
+  2. If the object is missing, the result is `ErrMediaNotUploaded`.
   3. If an image is larger than `MaxImageSize` (5 MB), the result is
      `ErrImageTooLarge`; if a video is larger than `MaxVideoSize` (50 MB), it
      is `ErrVideoTooLarge`. Both map to `400 VALIDATION_ERROR`. A disallowed
      type, or a type that does not match the extension (including an image
      type for a video extension and the reverse), returns
-     `ErrInvalidImageType`. In these rejected cases the
+     `ErrInvalidMediaType`. In these rejected cases the
      upload is deleted (best effort).
   4. Otherwise the object is copied to `{prefix}/{name}`, the upload is deleted
      (failures ignored), and a `Media` with the new key and the stored content
@@ -700,3 +700,4 @@ them.
 | 2026-11-16 | Verification update | Auth simplification. The password has no maximum length (was 128), so a long password is hashed like any other and an over-long login is no longer short-circuited to `INVALID_CREDENTIALS`; the limit of 4 concurrent hashes is gone; the in-memory refresh store and its sweep are removed from production code (auth tests use a fake map store). The email check is a plain pattern (one `@`, no spaces) instead of `net/mail`, and password verification uses the argon2 constants rather than the parameters stored in the hash. Verified by `go build`, `go vet`, and the auth package tests |
 | 2026-11-17 | Verification update | Storage cleanup reads instead of claiming. `ClaimDue` is replaced by `GetDue`, a plain read of the due rows; the 15-minute claim lease and the row locking are removed, so overlapping runs get the same rows (harmless, as the storage delete and `Remove` are idempotent) and no longer split the work. §6.8 and the README updated. Verified by `go build`, `go vet` (with and without the `integration` tag), and the `storagecleanup` unit and integration tests (31 passed) |
 | 2026-11-17 | Verification update | Storage cleanup fixed retry. A failed delete is due again in 1 hour (was `15m × 2^attempts`, capped at 24h); `GetDue` returns keys instead of `Deletion` rows, and the `Deletion` type and the unused `Service` mock are removed. `attempts` is still counted in the table. §6.8 and the README updated. Verified by `go build`, `go vet` (with and without the `integration` tag), and the `storagecleanup` unit and integration tests (23 passed) |
+| 2026-11-17 | Verification update | Storage simplification and renames, no route or status change. The message of a missing upload is now `file has not been uploaded` (was `image has not been uploaded`); the code is still `400 VALIDATION_ERROR`. Go names say media instead of image: `Images` is `MediaStore`, `ErrInvalidImageType`/`ErrImageNotUploaded`/`ErrInvalidImageKey` are `ErrInvalidMediaType`/`ErrMediaNotUploaded`/`ErrInvalidUploadKey`, and the OpenAPI schemas `ImageUpload*` and `SetImageRequest` are `MediaUpload*` and `ConfirmUploadRequest`. Verified by `go build`, `go vet` (with and without the `integration` tag), and the full Go test suite |

@@ -15,18 +15,18 @@ import (
 type Handler struct {
 	service Service
 
-	// imageURL turns a stored image key into its public URL.
-	imageURL func(key string) string
+	// mediaURL turns a stored media key into its public URL.
+	mediaURL func(key string) string
 }
 
 // -----------------------------------------------------------------------------
 // Exported
 // -----------------------------------------------------------------------------
 
-func NewHandler(service Service, imageURL func(key string) string) *Handler {
+func NewHandler(service Service, mediaURL func(key string) string) *Handler {
 	return &Handler{
 		service:  service,
-		imageURL: imageURL,
+		mediaURL: mediaURL,
 	}
 }
 
@@ -43,7 +43,7 @@ func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusCreated, toPlaceResponse(*p, h.imageURL))
+	httpx.RespondJSON(w, http.StatusCreated, toPlaceResponse(*p, h.mediaURL))
 }
 
 // CreateMediaUpload returns a temporary link the client uploads a photo to directly.
@@ -53,7 +53,7 @@ func (h *Handler) CreateMediaUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, ok := httpx.DecodeJSON[storage.ImageUploadRequest](w, r)
+	req, ok := httpx.DecodeJSON[storage.MediaUploadRequest](w, r)
 	if !ok {
 		return
 	}
@@ -64,7 +64,7 @@ func (h *Handler) CreateMediaUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, storage.ToImageUploadResponse(upload))
+	httpx.RespondJSON(w, http.StatusOK, storage.ToMediaUploadResponse(upload))
 }
 
 // AddMedia attaches an already uploaded photo to the place and returns the place.
@@ -74,7 +74,7 @@ func (h *Handler) AddMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, ok := httpx.DecodeJSON[storage.SetImageRequest](w, r)
+	req, ok := httpx.DecodeJSON[storage.ConfirmUploadRequest](w, r)
 	if !ok {
 		return
 	}
@@ -85,7 +85,7 @@ func (h *Handler) AddMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.imageURL))
+	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.mediaURL))
 }
 
 // GetPlaces returns one page of places matching the URL filters, plus the total match count.
@@ -102,7 +102,7 @@ func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.RespondJSON(w, http.StatusOK, PlacePageResponse{
-		Places: utils.Map(places, func(p Place) PlaceResponse { return toPlaceResponse(p, h.imageURL) }),
+		Places: utils.Map(places, func(p Place) PlaceResponse { return toPlaceResponse(p, h.mediaURL) }),
 		Total:  total,
 	})
 }
@@ -120,7 +120,7 @@ func (h *Handler) GetPlace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.imageURL))
+	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.mediaURL))
 }
 
 // GetCategories returns every category with its custom fields.
@@ -168,7 +168,7 @@ func (h *Handler) PutPlace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.imageURL))
+	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.mediaURL))
 }
 
 // DeletePlace deletes the place with the id in the URL.
@@ -323,7 +323,7 @@ func respondError(w http.ResponseWriter, err error) {
 		httpx.RespondError(w, http.StatusNotFound, httpx.CodeMediaNotFound, err.Error())
 	case errors.Is(err, storage.ErrMediaLimitReached):
 		httpx.RespondError(w, http.StatusConflict, httpx.CodeMediaLimitReached, err.Error())
-	case IsValidationError(err), storage.IsInvalidImage(err):
+	case IsValidationError(err), storage.IsInvalidMedia(err):
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 	default:
 		httpx.RespondInternalError(w)

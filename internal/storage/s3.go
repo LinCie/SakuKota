@@ -26,20 +26,18 @@ var _ ObjectStore = (*S3)(nil)
 // NewS3 creates a store client from cfg. Temporary upload links are signed for the
 // public endpoint, which is the host clients reach.
 func NewS3(cfg config.StorageConfig) *S3 {
-	options := func(endpoint string) s3.Options {
-		return s3.Options{
-			BaseEndpoint: aws.String(endpoint),
-			Region:       cfg.Region,
-			Credentials:  credentials.NewStaticCredentialsProvider(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
-			UsePathStyle: true,
-		}
+	opts := s3.Options{
+		BaseEndpoint: aws.String(cfg.Endpoint),
+		Region:       cfg.Region,
+		Credentials:  credentials.NewStaticCredentialsProvider(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
+		UsePathStyle: true,
 	}
+	client := s3.New(opts)
 
-	return &S3{
-		client:    s3.New(options(cfg.Endpoint)),
-		presigner: s3.NewPresignClient(s3.New(options(cfg.PublicEndpoint))),
-		bucket:    cfg.Bucket,
-	}
+	opts.BaseEndpoint = aws.String(cfg.PublicEndpoint)
+	presigner := s3.NewPresignClient(s3.New(opts))
+
+	return &S3{client: client, presigner: presigner, bucket: cfg.Bucket}
 }
 
 // -----------------------------------------------------------------------------
@@ -47,16 +45,16 @@ func NewS3(cfg config.StorageConfig) *S3 {
 // -----------------------------------------------------------------------------
 
 // PresignPut returns a temporary link that uploads key, signed for the public endpoint clients use.
-func (s *S3) PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (PresignedUpload, error) {
-	expiresAt := time.Now().Add(ttl)
+func (s *S3) PresignPut(ctx context.Context, key, contentType string) (Upload, error) {
+	expiresAt := time.Now().Add(UploadTTL)
 
 	req, err := s.presigner.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s.bucket),
 		Key:         aws.String(key),
 		ContentType: aws.String(contentType),
-	}, s3.WithPresignExpires(ttl))
+	}, s3.WithPresignExpires(UploadTTL))
 	if err != nil {
-		return PresignedUpload{}, err
+		return Upload{}, err
 	}
 
 	// Clients cannot set Host; it comes from the URL.
@@ -67,7 +65,8 @@ func (s *S3) PresignPut(ctx context.Context, key, contentType string, ttl time.D
 		}
 	}
 
-	return PresignedUpload{
+	return Upload{
+		Key:       key,
 		URL:       req.URL,
 		Method:    req.Method,
 		Headers:   headers,
@@ -96,7 +95,7 @@ func (s *S3) Stat(ctx context.Context, key string) (ObjectInfo, error) {
 }
 
 // Copy copies srcKey to dstKey in the bucket. srcKey is not URL-escaped, so it
-// must be made of URL-safe characters, as the keys Images creates are.
+// must be made of URL-safe characters, as the keys MediaStore creates are.
 func (s *S3) Copy(ctx context.Context, srcKey, dstKey string) error {
 	_, err := s.client.CopyObject(ctx, &s3.CopyObjectInput{
 		Bucket:     aws.String(s.bucket),

@@ -6,10 +6,10 @@ import (
 	"rantau-go/internal/storage"
 )
 
-// ImageStorage defines the image operations required by the service.
+// MediaStorage defines the media operations required by the service.
 //
 //go:generate mockgen -source=storage.go -destination=mock/storage.go -package=mock
-type ImageStorage interface {
+type MediaStorage interface {
 	// PresignUpload returns a temporary link for uploading a file under prefix.
 	PresignUpload(ctx context.Context, prefix, contentType string) (storage.Upload, error)
 	// Promote moves the uploaded file under uploadKey into prefix and describes it as a photo.

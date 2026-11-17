@@ -537,7 +537,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ImageUploadRequest" },
+              "schema": { "$ref": "#/components/schemas/MediaUploadRequest" },
               "example": { "content_type": "image/webp" }
             }
           }
@@ -547,7 +547,7 @@
             "description": "Upload presigned successfully.",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ImageUploadResponse" }
+                "schema": { "$ref": "#/components/schemas/MediaUploadResponse" }
               }
             }
           },
@@ -608,7 +608,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/SetImageRequest" },
+              "schema": { "$ref": "#/components/schemas/ConfirmUploadRequest" },
               "example": {
                 "upload_key": "uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"
               }
@@ -637,7 +637,7 @@
                     "value": { "code": "INVALID_BODY", "message": "invalid request body" }
                   },
                   "validation": {
-                    "value": { "code": "VALIDATION_ERROR", "message": "image has not been uploaded" }
+                    "value": { "code": "VALIDATION_ERROR", "message": "file has not been uploaded" }
                   }
                 }
               }
@@ -1622,7 +1622,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ImageUploadRequest" },
+              "schema": { "$ref": "#/components/schemas/MediaUploadRequest" },
               "example": { "content_type": "image/webp" }
             }
           }
@@ -1632,7 +1632,7 @@
             "description": "Upload presigned successfully.",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ImageUploadResponse" }
+                "schema": { "$ref": "#/components/schemas/MediaUploadResponse" }
               }
             }
           },
@@ -1693,7 +1693,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/SetImageRequest" },
+              "schema": { "$ref": "#/components/schemas/ConfirmUploadRequest" },
               "example": {
                 "upload_key": "uploads/subdistricts/1/medias/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"
               }
@@ -1722,7 +1722,7 @@
                     "value": { "code": "INVALID_BODY", "message": "invalid request body" }
                   },
                   "validation": {
-                    "value": { "code": "VALIDATION_ERROR", "message": "image has not been uploaded" }
+                    "value": { "code": "VALIDATION_ERROR", "message": "file has not been uploaded" }
                   }
                 }
               }
@@ -1839,7 +1839,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ImageUploadRequest" },
+              "schema": { "$ref": "#/components/schemas/MediaUploadRequest" },
               "example": { "content_type": "image/png" }
             }
           }
@@ -1849,7 +1849,7 @@
             "description": "Upload presigned successfully.",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ImageUploadResponse" }
+                "schema": { "$ref": "#/components/schemas/MediaUploadResponse" }
               }
             }
           },
@@ -1910,7 +1910,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/SetImageRequest" },
+              "schema": { "$ref": "#/components/schemas/ConfirmUploadRequest" },
               "example": {
                 "upload_key": "uploads/subdistricts/1/static-map/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.png"
               }
@@ -1939,7 +1939,7 @@
                     "value": { "code": "INVALID_BODY", "message": "invalid request body" }
                   },
                   "validation": {
-                    "value": { "code": "VALIDATION_ERROR", "message": "image has not been uploaded" }
+                    "value": { "code": "VALIDATION_ERROR", "message": "file has not been uploaded" }
                   }
                 }
               }
@@ -2128,7 +2128,7 @@
           "data": { "$ref": "#/components/schemas/Place" }
         }
       },
-      "ImageUploadRequest": {
+      "MediaUploadRequest": {
         "type": "object",
         "required": ["content_type"],
         "properties": {
@@ -2139,7 +2139,7 @@
           }
         }
       },
-      "ImageUpload": {
+      "MediaUpload": {
         "type": "object",
         "required": ["upload_key", "upload_url", "method", "headers", "expires_at"],
         "properties": {
@@ -2165,14 +2165,14 @@
           }
         }
       },
-      "ImageUploadResponse": {
+      "MediaUploadResponse": {
         "type": "object",
         "required": ["data"],
         "properties": {
-          "data": { "$ref": "#/components/schemas/ImageUpload" }
+          "data": { "$ref": "#/components/schemas/MediaUpload" }
         }
       },
-      "SetImageRequest": {
+      "ConfirmUploadRequest": {
         "type": "object",
         "required": ["upload_key"],
         "properties": {

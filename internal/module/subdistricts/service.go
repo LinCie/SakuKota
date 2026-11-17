@@ -16,8 +16,8 @@ import (
 type Service interface {
 	// Create checks a new sub-district's data and saves it.
 	Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error)
-	// ImageUploadURL gives a temporary link to upload a new image in the given slot.
-	ImageUploadURL(ctx context.Context, id int64, slot ImageSlot, contentType string) (storage.Upload, error)
+	// MediaUploadURL gives a temporary link to upload a new file in the given slot.
+	MediaUploadURL(ctx context.Context, id int64, slot MediaSlot, contentType string) (storage.Upload, error)
 	// AddMedia attaches an uploaded photo to the sub-district.
 	AddMedia(ctx context.Context, id int64, uploadKey string) (*SubDistrict, error)
 	// GetMany returns every sub-district.
@@ -35,18 +35,18 @@ type Service interface {
 }
 
 type service struct {
-	repo   Repository
-	images ImageStorage
+	repo  Repository
+	media MediaStorage
 }
 
 // -----------------------------------------------------------------------------
 // Exported
 // -----------------------------------------------------------------------------
 
-func NewService(repo Repository, images ImageStorage) Service {
+func NewService(repo Repository, media MediaStorage) Service {
 	return &service{
-		repo:   repo,
-		images: images,
+		repo:  repo,
+		media: media,
 	}
 }
 
@@ -58,16 +58,16 @@ func (s *service) Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, er
 	return s.repo.Create(ctx, sd)
 }
 
-func (s *service) ImageUploadURL(ctx context.Context, id int64, slot ImageSlot, contentType string) (storage.Upload, error) {
+func (s *service) MediaUploadURL(ctx context.Context, id int64, slot MediaSlot, contentType string) (storage.Upload, error) {
 	if _, err := s.repo.GetSubDistrict(ctx, id); err != nil {
 		return storage.Upload{}, err
 	}
 
-	return s.images.PresignUpload(ctx, imagePrefix(id, slot), contentType)
+	return s.media.PresignUpload(ctx, mediaPrefix(id, slot), contentType)
 }
 
 func (s *service) AddMedia(ctx context.Context, id int64, uploadKey string) (*SubDistrict, error) {
-	return s.storeImage(ctx, id, SlotMedias, uploadKey, s.repo.AddMedia)
+	return s.storeMedia(ctx, id, SlotMedias, uploadKey, s.repo.AddMedia)
 }
 
 func (s *service) GetMany(ctx context.Context) ([]SubDistrict, error) {
@@ -89,7 +89,7 @@ func (s *service) Update(ctx context.Context, id int64, sd *SubDistrict) (*SubDi
 
 // SetStaticMap also queues the previous static map for deletion, in the repository.
 func (s *service) SetStaticMap(ctx context.Context, id int64, uploadKey string) (*SubDistrict, error) {
-	return s.storeImage(ctx, id, SlotStaticMap, uploadKey, s.repo.SetStaticMap)
+	return s.storeMedia(ctx, id, SlotStaticMap, uploadKey, s.repo.SetStaticMap)
 }
 
 // Delete also queues the sub-district's photos and static map for deletion, in the repository.
@@ -106,31 +106,31 @@ func (s *service) DeleteMedia(ctx context.Context, id, mediaID int64) error {
 // Unexported
 // -----------------------------------------------------------------------------
 
-// storeImage moves the upload into the slot, then saves it with store.
+// storeMedia moves the upload into the slot, then saves it with store.
 // If saving fails, the moved file is deleted again, and a failed delete is ignored.
-func (s *service) storeImage(ctx context.Context, id int64, slot ImageSlot, uploadKey string,
+func (s *service) storeMedia(ctx context.Context, id int64, slot MediaSlot, uploadKey string,
 	store func(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error),
 ) (*SubDistrict, error) {
 	if _, err := s.repo.GetSubDistrict(ctx, id); err != nil {
 		return nil, err
 	}
 
-	promoted, err := s.images.Promote(ctx, imagePrefix(id, slot), uploadKey)
+	promoted, err := s.media.Promote(ctx, mediaPrefix(id, slot), uploadKey)
 	if err != nil {
 		return nil, err
 	}
 
 	updated, err := store(ctx, id, promoted)
 	if err != nil {
-		_ = s.images.Delete(context.WithoutCancel(ctx), promoted.Key)
+		_ = s.media.Delete(context.WithoutCancel(ctx), promoted.Key)
 		return nil, err
 	}
 
 	return updated, nil
 }
 
-// imagePrefix returns the storage folder for the images in a slot of the sub-district with id.
-func imagePrefix(id int64, slot ImageSlot) string {
+// mediaPrefix returns the storage folder for the files in a slot of the sub-district with id.
+func mediaPrefix(id int64, slot MediaSlot) string {
 	return "subdistricts/" + strconv.FormatInt(id, 10) + "/" + string(slot)
 }
 

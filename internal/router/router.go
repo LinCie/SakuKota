@@ -38,13 +38,13 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 	r.Get("/docs", docs.Scalar)
 	r.Get("/openapi.json", docs.OpenAPI)
 
-	images := storage.NewImages(storage.NewS3(cfg.Storage), cfg.Storage.PublicURL)
+	media := storage.NewMediaStore(storage.NewS3(cfg.Storage), cfg.Storage.PublicURL)
 
 	userModule := users.NewModule(db)
 	authModule := auth.NewModule(cfg, userModule.Service, rdb)
-	placeModule := places.NewModule(db, rdb, images)
+	placeModule := places.NewModule(db, rdb, media)
 	reviewModule := reviews.NewModule(db)
-	subdistrictModule := subdistricts.NewModule(db, images)
+	subdistrictModule := subdistricts.NewModule(db, media)
 	suggestionModule := suggestions.NewModule(db, placeModule.Service)
 
 	r.Route("/v1", func(r chi.Router) {

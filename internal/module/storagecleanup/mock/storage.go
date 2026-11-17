@@ -16,32 +16,32 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockImageStorage is a mock of ImageStorage interface.
-type MockImageStorage struct {
+// MockMediaStorage is a mock of MediaStorage interface.
+type MockMediaStorage struct {
 	ctrl     *gomock.Controller
-	recorder *MockImageStorageMockRecorder
+	recorder *MockMediaStorageMockRecorder
 	isgomock struct{}
 }
 
-// MockImageStorageMockRecorder is the mock recorder for MockImageStorage.
-type MockImageStorageMockRecorder struct {
-	mock *MockImageStorage
+// MockMediaStorageMockRecorder is the mock recorder for MockMediaStorage.
+type MockMediaStorageMockRecorder struct {
+	mock *MockMediaStorage
 }
 
-// NewMockImageStorage creates a new mock instance.
-func NewMockImageStorage(ctrl *gomock.Controller) *MockImageStorage {
-	mock := &MockImageStorage{ctrl: ctrl}
-	mock.recorder = &MockImageStorageMockRecorder{mock}
+// NewMockMediaStorage creates a new mock instance.
+func NewMockMediaStorage(ctrl *gomock.Controller) *MockMediaStorage {
+	mock := &MockMediaStorage{ctrl: ctrl}
+	mock.recorder = &MockMediaStorageMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockImageStorage) EXPECT() *MockImageStorageMockRecorder {
+func (m *MockMediaStorage) EXPECT() *MockMediaStorageMockRecorder {
 	return m.recorder
 }
 
 // Delete mocks base method.
-func (m *MockImageStorage) Delete(ctx context.Context, key string) error {
+func (m *MockMediaStorage) Delete(ctx context.Context, key string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Delete", ctx, key)
 	ret0, _ := ret[0].(error)
@@ -49,7 +49,7 @@ func (m *MockImageStorage) Delete(ctx context.Context, key string) error {
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockImageStorageMockRecorder) Delete(ctx, key any) *gomock.Call {
+func (mr *MockMediaStorageMockRecorder) Delete(ctx, key any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockImageStorage)(nil).Delete), ctx, key)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockMediaStorage)(nil).Delete), ctx, key)
 }

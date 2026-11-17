@@ -13,18 +13,18 @@ import (
 type Handler struct {
 	service Service
 
-	// imageURL returns the public URL of the image stored under a key.
-	imageURL func(key string) string
+	// mediaURL returns the public URL of the file stored under a key.
+	mediaURL func(key string) string
 }
 
 // -----------------------------------------------------------------------------
 // Exported
 // -----------------------------------------------------------------------------
 
-func NewHandler(service Service, imageURL func(key string) string) *Handler {
+func NewHandler(service Service, mediaURL func(key string) string) *Handler {
 	return &Handler{
 		service:  service,
-		imageURL: imageURL,
+		mediaURL: mediaURL,
 	}
 }
 
@@ -41,23 +41,23 @@ func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusCreated, toSubDistrictResponse(*sd, h.imageURL))
+	httpx.RespondJSON(w, http.StatusCreated, toSubDistrictResponse(*sd, h.mediaURL))
 }
 
 // CreateMediaUpload returns a temporary link the client uploads a photo to directly.
 func (h *Handler) CreateMediaUpload(w http.ResponseWriter, r *http.Request) {
-	h.createImageUpload(w, r, SlotMedias)
+	h.createMediaUpload(w, r, SlotMedias)
 }
 
 // CreateStaticMapUpload returns a temporary link the client uploads the static map to directly.
 func (h *Handler) CreateStaticMapUpload(w http.ResponseWriter, r *http.Request) {
-	h.createImageUpload(w, r, SlotStaticMap)
+	h.createMediaUpload(w, r, SlotStaticMap)
 }
 
 // AddMedia attaches an uploaded photo to the sub-district whose id is in the URL.
 // It sends back the updated sub-district.
 func (h *Handler) AddMedia(w http.ResponseWriter, r *http.Request) {
-	h.storeImage(w, r, h.service.AddMedia)
+	h.storeMedia(w, r, h.service.AddMedia)
 }
 
 // GetSubDistricts sends back every sub-district, in id order.
@@ -69,7 +69,7 @@ func (h *Handler) GetSubDistricts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.RespondJSON(w, http.StatusOK, utils.Map(subDistricts, func(sd SubDistrict) SubDistrictResponse {
-		return toSubDistrictResponse(sd, h.imageURL)
+		return toSubDistrictResponse(sd, h.mediaURL)
 	}))
 }
 
@@ -87,7 +87,7 @@ func (h *Handler) GetSubDistrict(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponse(*sd, h.imageURL))
+	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponse(*sd, h.mediaURL))
 }
 
 // PutSubDistrict replaces the sub-district whose id is in the URL with the details in the body.
@@ -109,13 +109,13 @@ func (h *Handler) PutSubDistrict(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponse(*sd, h.imageURL))
+	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponse(*sd, h.mediaURL))
 }
 
 // SetStaticMap makes the uploaded image the static map of the sub-district whose id is in the URL.
 // It sends back the updated sub-district.
 func (h *Handler) SetStaticMap(w http.ResponseWriter, r *http.Request) {
-	h.storeImage(w, r, h.service.SetStaticMap)
+	h.storeMedia(w, r, h.service.SetStaticMap)
 }
 
 // DeleteSubDistrict removes the sub-district whose id is in the URL.
@@ -159,26 +159,26 @@ func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 // Unexported
 // -----------------------------------------------------------------------------
 
-// createImageUpload sends a temporary upload link for a new image in the slot
+// createMediaUpload sends a temporary upload link for a new file in the slot
 // of the sub-district in the URL.
-func (h *Handler) createImageUpload(w http.ResponseWriter, r *http.Request, slot ImageSlot) {
+func (h *Handler) createMediaUpload(w http.ResponseWriter, r *http.Request, slot MediaSlot) {
 	id, ok := subDistrictID(w, r)
 	if !ok {
 		return
 	}
 
-	req, ok := httpx.DecodeJSON[storage.ImageUploadRequest](w, r)
+	req, ok := httpx.DecodeJSON[storage.MediaUploadRequest](w, r)
 	if !ok {
 		return
 	}
 
-	upload, err := h.service.ImageUploadURL(r.Context(), id, slot, req.ContentType)
+	upload, err := h.service.MediaUploadURL(r.Context(), id, slot, req.ContentType)
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, storage.ToImageUploadResponse(upload))
+	httpx.RespondJSON(w, http.StatusOK, storage.ToMediaUploadResponse(upload))
 }
 
 // subDistrictID reads the sub-district id from the URL, or answers 400.
@@ -186,9 +186,9 @@ func subDistrictID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	return httpx.PathID(w, r, "id", httpx.CodeInvalidSubDistrictID, "invalid sub_district_id")
 }
 
-// storeImage reads the upload key from the body and passes it to store for the sub-district in the URL.
+// storeMedia reads the upload key from the body and passes it to store for the sub-district in the URL.
 // It sends back the updated sub-district, or the matching error.
-func (h *Handler) storeImage(w http.ResponseWriter, r *http.Request,
+func (h *Handler) storeMedia(w http.ResponseWriter, r *http.Request,
 	store func(ctx context.Context, id int64, uploadKey string) (*SubDistrict, error),
 ) {
 	id, ok := subDistrictID(w, r)
@@ -196,7 +196,7 @@ func (h *Handler) storeImage(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	req, ok := httpx.DecodeJSON[storage.SetImageRequest](w, r)
+	req, ok := httpx.DecodeJSON[storage.ConfirmUploadRequest](w, r)
 	if !ok {
 		return
 	}
@@ -207,7 +207,7 @@ func (h *Handler) storeImage(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponse(*sd, h.imageURL))
+	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponse(*sd, h.mediaURL))
 }
 
 // respondError sends the right error response for a failed service call.
@@ -227,7 +227,7 @@ func respondError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrInvalidName),
 		errors.Is(err, ErrInvalidSlug),
 		errors.Is(err, ErrInvalidEstimatedDailySpending),
-		storage.IsInvalidImage(err):
+		storage.IsInvalidMedia(err):
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 	default:
 		httpx.RespondInternalError(w)

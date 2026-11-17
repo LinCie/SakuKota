@@ -24,7 +24,7 @@ import (
 // newRouter serves the sub-district handlers on the paths the API uses for
 // them, so URL parameters resolve as they do in production.
 func newRouter(svc subdistricts.Service) http.Handler {
-	h := subdistricts.NewHandler(svc, testImageURL)
+	h := subdistricts.NewHandler(svc, testMediaURL)
 	r := chi.NewRouter()
 	r.Route("/subdistricts", func(r chi.Router) {
 		r.Get("/", h.GetSubDistricts)
@@ -41,8 +41,8 @@ func newRouter(svc subdistricts.Service) http.Handler {
 	return r
 }
 
-// testImageURL stands in for the storage's public URLs.
-func testImageURL(key string) string {
+// testMediaURL stands in for the storage's public URLs.
+func testMediaURL(key string) string {
 	return "https://img.test/" + key
 }
 
@@ -611,14 +611,14 @@ func TestHandler_DeleteSubDistrict(t *testing.T) {
 
 // handlerSlots are the image slots with their path segment.
 var handlerSlots = []struct {
-	slot subdistricts.ImageSlot
+	slot subdistricts.MediaSlot
 	path string
 }{
 	{slot: subdistricts.SlotMedias, path: "medias"},
 	{slot: subdistricts.SlotStaticMap, path: "static-map"},
 }
 
-func TestHandler_CreateImageUpload(t *testing.T) {
+func TestHandler_CreateMediaUpload(t *testing.T) {
 	t.Run("rejects invalid requests", func(t *testing.T) {
 		tests := []struct {
 			name     string
@@ -654,14 +654,14 @@ func TestHandler_CreateImageUpload(t *testing.T) {
 			wantCode   string
 		}{
 			{name: "unknown sub-district", err: subdistricts.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
-			{name: "image type not allowed", err: storage.ErrInvalidImageType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "image type not allowed", err: storage.ErrInvalidMediaType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 		}
 
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				svc := mock.NewMockService(gomock.NewController(t))
-				svc.EXPECT().ImageUploadURL(gomock.Any(), int64(3), subdistricts.SlotMedias, "image/gif").Return(storage.Upload{}, tc.err)
+				svc.EXPECT().MediaUploadURL(gomock.Any(), int64(3), subdistricts.SlotMedias, "image/gif").Return(storage.Upload{}, tc.err)
 
 				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/subdistricts/3/medias/upload-url", `{"content_type":"image/gif"}`))
 				assertError(t, rec, tc.wantStatus, tc.wantCode)
@@ -673,14 +673,12 @@ func TestHandler_CreateImageUpload(t *testing.T) {
 		for _, hs := range handlerSlots {
 			t.Run(hs.path, func(t *testing.T) {
 				svc := mock.NewMockService(gomock.NewController(t))
-				svc.EXPECT().ImageUploadURL(gomock.Any(), int64(3), hs.slot, "image/png").Return(storage.Upload{
-					Key: "uploads/subdistricts/3/" + hs.path + "/a.png",
-					PresignedUpload: storage.PresignedUpload{
-						URL:       "http://localhost:3900/rantau-images/uploads/subdistricts/3/" + hs.path + "/a.png?X-Amz-Signature=abc",
-						Method:    "PUT",
-						Headers:   map[string]string{"Content-Type": "image/png"},
-						ExpiresAt: time.Date(2026, 10, 31, 12, 5, 0, 0, time.UTC),
-					},
+				svc.EXPECT().MediaUploadURL(gomock.Any(), int64(3), hs.slot, "image/png").Return(storage.Upload{
+					Key:       "uploads/subdistricts/3/" + hs.path + "/a.png",
+					URL:       "http://localhost:3900/rantau-images/uploads/subdistricts/3/" + hs.path + "/a.png?X-Amz-Signature=abc",
+					Method:    "PUT",
+					Headers:   map[string]string{"Content-Type": "image/png"},
+					ExpiresAt: time.Date(2026, 10, 31, 12, 5, 0, 0, time.UTC),
 				}, nil)
 
 				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/subdistricts/3/"+hs.path+"/upload-url", `{"content_type":"image/png"}`))
@@ -726,9 +724,9 @@ var uploadErrors = []struct {
 	wantCode   string
 }{
 	{name: "unknown sub-district", err: subdistricts.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
-	{name: "invalid upload key", err: storage.ErrInvalidImageKey, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-	{name: "image not uploaded", err: storage.ErrImageNotUploaded, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-	{name: "image type not allowed", err: storage.ErrInvalidImageType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+	{name: "invalid upload key", err: storage.ErrInvalidUploadKey, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+	{name: "image not uploaded", err: storage.ErrMediaNotUploaded, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+	{name: "image type not allowed", err: storage.ErrInvalidMediaType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 	{name: "image too large", err: storage.ErrImageTooLarge, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 	{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
 }

@@ -79,7 +79,7 @@ func createPlace(t *testing.T, c *places.Category, p *places.Place) (*places.Pla
 			return got, nil
 		}).AnyTimes()
 
-	_, err := places.NewService(repo, noImages(t)).Create(context.Background(), p)
+	_, err := places.NewService(repo, noMedia(t)).Create(context.Background(), p)
 	return stored, err
 }
 
@@ -99,18 +99,18 @@ func decodeExact(t *testing.T, raw json.RawMessage) any {
 	return v
 }
 
-// noImages returns image storage that fails the test if it is used.
-func noImages(t *testing.T) *mock.MockImageStorage {
+// noMedia returns media storage that fails the test if it is used.
+func noMedia(t *testing.T) *mock.MockMediaStorage {
 	t.Helper()
-	return mock.NewMockImageStorage(gomock.NewController(t))
+	return mock.NewMockMediaStorage(gomock.NewController(t))
 }
 
 // newMocks returns a repository and image storage that fail the test on any
 // call they do not expect.
-func newMocks(t *testing.T) (*mock.MockRepository, *mock.MockImageStorage) {
+func newMocks(t *testing.T) (*mock.MockRepository, *mock.MockMediaStorage) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
-	return mock.NewMockRepository(ctrl), mock.NewMockImageStorage(ctrl)
+	return mock.NewMockRepository(ctrl), mock.NewMockMediaStorage(ctrl)
 }
 
 // -----------------------------------------------------------------------------
@@ -274,7 +274,7 @@ func TestService_Create_BlankOptionalText(t *testing.T) {
 					return got, nil
 				})
 
-			_, err := places.NewService(repo, noImages(t)).Create(context.Background(), &places.Place{
+			_, err := places.NewService(repo, noMedia(t)).Create(context.Background(), &places.Place{
 				Name: "Kafe Senja", SubDistrictID: 1, CategoryID: 3,
 				Attributes: json.RawMessage(tc.attributes),
 			})
@@ -306,7 +306,7 @@ func TestService_Create_BlankAttributeRejected(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().GetCategory(gomock.Any(), gomock.Any()).Return(warungCategory(), nil).AnyTimes()
 
-			_, err := places.NewService(repo, noImages(t)).Create(context.Background(), &places.Place{
+			_, err := places.NewService(repo, noMedia(t)).Create(context.Background(), &places.Place{
 				Name: "Warung Bu Ani", SubDistrictID: 1, CategoryID: 1,
 				Attributes: json.RawMessage(tc.attributes),
 			})
@@ -392,7 +392,7 @@ func TestService_Create_Storage(t *testing.T) {
 				repo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&places.Place{ID: 7}, tc.storeErr)
 			}
 
-			got, err := places.NewService(repo, noImages(t)).Create(context.Background(), &places.Place{
+			got, err := places.NewService(repo, noMedia(t)).Create(context.Background(), &places.Place{
 				Name: "Kopi Senja", SubDistrictID: 1, CategoryID: 2,
 			})
 			require.ErrorIs(t, err, tc.wantErr)
@@ -472,7 +472,7 @@ func updatePlace(t *testing.T, id int64, p *places.Place) (*places.Place, error)
 			return got, nil
 		}).AnyTimes()
 
-	_, err := places.NewService(repo, noImages(t)).Update(context.Background(), id, p)
+	_, err := places.NewService(repo, noMedia(t)).Update(context.Background(), id, p)
 	return stored, err
 }
 
@@ -752,7 +752,7 @@ func TestService_Update_Storage(t *testing.T) {
 			repo.EXPECT().GetCategory(gomock.Any(), int64(2)).Return(openCategory(), nil)
 			repo.EXPECT().Update(gomock.Any(), gomock.Any()).Return(&places.Place{ID: 7}, tc.updateErr)
 
-			got, err := places.NewService(repo, noImages(t)).Update(context.Background(), 7, kopiInput())
+			got, err := places.NewService(repo, noMedia(t)).Update(context.Background(), 7, kopiInput())
 			require.ErrorIs(t, err, tc.wantErr)
 			if tc.wantErr == nil {
 				require.NotNil(t, got, "stored place was not returned")
@@ -778,11 +778,11 @@ func TestService_GetMany_LimitDefaultsToAndIsCappedAtMaximum(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			repo, images := newMocks(t)
+			repo, media := newMocks(t)
 			repo.EXPECT().GetMany(gomock.Any(), places.PlaceFilter{Query: "kopi", Limit: tc.want}).
 				Return([]places.Place{}, 0, nil)
 
-			_, _, err := places.NewService(repo, images).GetMany(context.Background(),
+			_, _, err := places.NewService(repo, media).GetMany(context.Background(),
 				places.PlaceFilter{Query: "kopi", Limit: tc.limit})
 			assert.NoError(t, err, "get many")
 		})
@@ -808,7 +808,7 @@ func TestService_Delete(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(tc.repoErr)
 
-			err := places.NewService(repo, noImages(t)).Delete(context.Background(), 7)
+			err := places.NewService(repo, noMedia(t)).Delete(context.Background(), 7)
 			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
@@ -820,7 +820,7 @@ func TestService_Delete_Medias(t *testing.T) {
 	repo := mock.NewMockRepository(gomock.NewController(t))
 	repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(nil)
 
-	err := places.NewService(repo, noImages(t)).Delete(context.Background(), 7)
+	err := places.NewService(repo, noMedia(t)).Delete(context.Background(), 7)
 	require.NoError(t, err, "the place was deleted")
 }
 
@@ -970,17 +970,18 @@ const (
 var promoted = storage.Media{Key: imageKey, ContentType: "image/webp", Size: 2048}
 
 func TestService_MediaUploadURL(t *testing.T) {
-	repo, images := newMocks(t)
+	repo, media := newMocks(t)
 	upload := storage.Upload{
-		Key:             uploadKey,
-		PresignedUpload: storage.PresignedUpload{URL: "http://localhost:3900/signed", Method: "PUT"},
+		Key:    uploadKey,
+		URL:    "http://localhost:3900/signed",
+		Method: "PUT",
 	}
 	gomock.InOrder(
 		repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), nil),
-		images.EXPECT().PresignUpload(gomock.Any(), "places/7", "image/webp").Return(upload, nil),
+		media.EXPECT().PresignUpload(gomock.Any(), "places/7", "image/webp").Return(upload, nil),
 	)
 
-	got, err := places.NewService(repo, images).MediaUploadURL(context.Background(), 7, "image/webp")
+	got, err := places.NewService(repo, media).MediaUploadURL(context.Background(), 7, "image/webp")
 	require.NoError(t, err)
 	assert.Equal(t, upload, got)
 }
@@ -1003,7 +1004,7 @@ func TestService_MediaUploadURL_LookupFailure(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(nil, tc.getErr)
 
-			_, err := places.NewService(repo, noImages(t)).MediaUploadURL(context.Background(), 7, "image/webp")
+			_, err := places.NewService(repo, noMedia(t)).MediaUploadURL(context.Background(), 7, "image/webp")
 			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
@@ -1016,17 +1017,17 @@ func TestService_MediaUploadURL_PresignFailure(t *testing.T) {
 		name       string
 		presignErr error
 	}{
-		{name: "invalid image type", presignErr: storage.ErrInvalidImageType},
+		{name: "invalid image type", presignErr: storage.ErrInvalidMediaType},
 		{name: "storage failure is returned", presignErr: boom},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			repo, images := newMocks(t)
+			repo, media := newMocks(t)
 			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), nil)
-			images.EXPECT().PresignUpload(gomock.Any(), "places/7", "image/gif").Return(storage.Upload{}, tc.presignErr)
+			media.EXPECT().PresignUpload(gomock.Any(), "places/7", "image/gif").Return(storage.Upload{}, tc.presignErr)
 
-			_, err := places.NewService(repo, images).MediaUploadURL(context.Background(), 7, "image/gif")
+			_, err := places.NewService(repo, media).MediaUploadURL(context.Background(), 7, "image/gif")
 			require.ErrorIs(t, err, tc.presignErr)
 		})
 	}
@@ -1034,17 +1035,17 @@ func TestService_MediaUploadURL_PresignFailure(t *testing.T) {
 
 func TestService_AddMedia(t *testing.T) {
 	// The promoted media is stored as it is, and nothing is deleted.
-	repo, images := newMocks(t)
+	repo, media := newMocks(t)
 	updated := savedKopi()
 	updated.Medias = []storage.Media{{ID: 3, Key: imageKey, ContentType: "image/webp", Size: 2048, Position: 1}}
 
 	gomock.InOrder(
 		repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), nil),
-		images.EXPECT().Promote(gomock.Any(), "places/7", uploadKey).Return(promoted, nil),
+		media.EXPECT().Promote(gomock.Any(), "places/7", uploadKey).Return(promoted, nil),
 		repo.EXPECT().AddMedia(gomock.Any(), int64(7), promoted).Return(updated, nil),
 	)
 
-	got, err := places.NewService(repo, images).AddMedia(context.Background(), 7, uploadKey)
+	got, err := places.NewService(repo, media).AddMedia(context.Background(), 7, uploadKey)
 	require.NoError(t, err)
 	assert.Same(t, updated, got, "want the stored place")
 }
@@ -1067,7 +1068,7 @@ func TestService_AddMedia_LookupFailure(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(nil, tc.getErr)
 
-			_, err := places.NewService(repo, noImages(t)).AddMedia(context.Background(), 7, uploadKey)
+			_, err := places.NewService(repo, noMedia(t)).AddMedia(context.Background(), 7, uploadKey)
 			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
@@ -1080,9 +1081,9 @@ func TestService_AddMedia_PromoteFailure(t *testing.T) {
 		name       string
 		promoteErr error
 	}{
-		{name: "invalid upload key", promoteErr: storage.ErrInvalidImageKey},
-		{name: "image not uploaded", promoteErr: storage.ErrImageNotUploaded},
-		{name: "invalid image type", promoteErr: storage.ErrInvalidImageType},
+		{name: "invalid upload key", promoteErr: storage.ErrInvalidUploadKey},
+		{name: "image not uploaded", promoteErr: storage.ErrMediaNotUploaded},
+		{name: "invalid image type", promoteErr: storage.ErrInvalidMediaType},
 		{name: "image too large", promoteErr: storage.ErrImageTooLarge},
 		{name: "storage failure is returned", promoteErr: boom},
 	}
@@ -1090,11 +1091,11 @@ func TestService_AddMedia_PromoteFailure(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Nothing may be stored.
-			repo, images := newMocks(t)
+			repo, media := newMocks(t)
 			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), nil)
-			images.EXPECT().Promote(gomock.Any(), "places/7", uploadKey).Return(storage.Media{}, tc.promoteErr)
+			media.EXPECT().Promote(gomock.Any(), "places/7", uploadKey).Return(storage.Media{}, tc.promoteErr)
 
-			_, err := places.NewService(repo, images).AddMedia(context.Background(), 7, uploadKey)
+			_, err := places.NewService(repo, media).AddMedia(context.Background(), 7, uploadKey)
 			require.ErrorIs(t, err, tc.promoteErr)
 		})
 	}
@@ -1117,15 +1118,15 @@ func TestService_AddMedia_StoreFailure(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// The promoted image is removed.
-			repo, images := newMocks(t)
+			repo, media := newMocks(t)
 			gomock.InOrder(
 				repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), nil),
-				images.EXPECT().Promote(gomock.Any(), "places/7", uploadKey).Return(promoted, nil),
+				media.EXPECT().Promote(gomock.Any(), "places/7", uploadKey).Return(promoted, nil),
 				repo.EXPECT().AddMedia(gomock.Any(), int64(7), promoted).Return(nil, tc.addErr),
-				images.EXPECT().Delete(gomock.Any(), imageKey).Return(tc.deleteErr),
+				media.EXPECT().Delete(gomock.Any(), imageKey).Return(tc.deleteErr),
 			)
 
-			_, err := places.NewService(repo, images).AddMedia(context.Background(), 7, uploadKey)
+			_, err := places.NewService(repo, media).AddMedia(context.Background(), 7, uploadKey)
 			require.ErrorIs(t, err, tc.addErr)
 		})
 	}
@@ -1150,7 +1151,7 @@ func TestService_DeleteMedia(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().DeleteMedia(gomock.Any(), int64(7), int64(3)).Return(tc.repoErr)
 
-			err := places.NewService(repo, noImages(t)).DeleteMedia(context.Background(), 7, 3)
+			err := places.NewService(repo, noMedia(t)).DeleteMedia(context.Background(), 7, 3)
 			require.ErrorIs(t, err, tc.repoErr)
 		})
 	}
@@ -1178,7 +1179,7 @@ func TestService_GetPlace(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().GetPlace(gomock.Any(), int64(7)).Return(savedKopi(), tc.repoErr)
 
-			got, err := places.NewService(repo, noImages(t)).GetPlace(context.Background(), 7)
+			got, err := places.NewService(repo, noMedia(t)).GetPlace(context.Background(), 7)
 			require.ErrorIs(t, err, tc.wantErr)
 			if tc.wantErr == nil {
 				require.NotNil(t, got, "stored place was not returned")
@@ -1206,7 +1207,7 @@ func TestService_GetCategory(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().GetCategory(gomock.Any(), int64(1)).Return(warungCategory(), tc.repoErr)
 
-			got, err := places.NewService(repo, noImages(t)).GetCategory(context.Background(), 1)
+			got, err := places.NewService(repo, noMedia(t)).GetCategory(context.Background(), 1)
 			require.ErrorIs(t, err, tc.wantErr)
 			if tc.wantErr == nil {
 				require.NotNil(t, got, "stored category was not returned")

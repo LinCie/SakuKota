@@ -130,19 +130,19 @@ func (mr *MockServiceMockRecorder) GetSubDistrict(ctx, id any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubDistrict", reflect.TypeOf((*MockService)(nil).GetSubDistrict), ctx, id)
 }
 
-// ImageUploadURL mocks base method.
-func (m *MockService) ImageUploadURL(ctx context.Context, id int64, slot subdistricts.ImageSlot, contentType string) (storage.Upload, error) {
+// MediaUploadURL mocks base method.
+func (m *MockService) MediaUploadURL(ctx context.Context, id int64, slot subdistricts.MediaSlot, contentType string) (storage.Upload, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ImageUploadURL", ctx, id, slot, contentType)
+	ret := m.ctrl.Call(m, "MediaUploadURL", ctx, id, slot, contentType)
 	ret0, _ := ret[0].(storage.Upload)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ImageUploadURL indicates an expected call of ImageUploadURL.
-func (mr *MockServiceMockRecorder) ImageUploadURL(ctx, id, slot, contentType any) *gomock.Call {
+// MediaUploadURL indicates an expected call of MediaUploadURL.
+func (mr *MockServiceMockRecorder) MediaUploadURL(ctx, id, slot, contentType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ImageUploadURL", reflect.TypeOf((*MockService)(nil).ImageUploadURL), ctx, id, slot, contentType)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MediaUploadURL", reflect.TypeOf((*MockService)(nil).MediaUploadURL), ctx, id, slot, contentType)
 }
 
 // SetStaticMap mocks base method.

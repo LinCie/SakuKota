@@ -13,7 +13,6 @@ import (
 	context "context"
 	storage "rantau-go/internal/storage"
 	reflect "reflect"
-	time "time"
 
 	gomock "go.uber.org/mock/gomock"
 )
@@ -71,18 +70,18 @@ func (mr *MockObjectStoreMockRecorder) Delete(ctx, key any) *gomock.Call {
 }
 
 // PresignPut mocks base method.
-func (m *MockObjectStore) PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (storage.PresignedUpload, error) {
+func (m *MockObjectStore) PresignPut(ctx context.Context, key, contentType string) (storage.Upload, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PresignPut", ctx, key, contentType, ttl)
-	ret0, _ := ret[0].(storage.PresignedUpload)
+	ret := m.ctrl.Call(m, "PresignPut", ctx, key, contentType)
+	ret0, _ := ret[0].(storage.Upload)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // PresignPut indicates an expected call of PresignPut.
-func (mr *MockObjectStoreMockRecorder) PresignPut(ctx, key, contentType, ttl any) *gomock.Call {
+func (mr *MockObjectStoreMockRecorder) PresignPut(ctx, key, contentType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PresignPut", reflect.TypeOf((*MockObjectStore)(nil).PresignPut), ctx, key, contentType, ttl)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PresignPut", reflect.TypeOf((*MockObjectStore)(nil).PresignPut), ctx, key, contentType)
 }
 
 // Stat mocks base method.

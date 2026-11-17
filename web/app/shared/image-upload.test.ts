@@ -5,7 +5,7 @@ import {
   ImageUploadError,
   imageErrorMessage,
   uploadImage,
-  type ImageUpload,
+  type MediaUpload,
 } from "./image-upload";
 
 const MB = 1024 * 1024;
@@ -17,7 +17,7 @@ function fakeFile(type: string, size: number) {
   return file;
 }
 
-const upload: ImageUpload = {
+const upload: MediaUpload = {
   upload_key: "key-1",
   upload_url: "https://storage.example/put?sig=abc",
   method: "PUT",

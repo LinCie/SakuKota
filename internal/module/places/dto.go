@@ -100,8 +100,8 @@ func ToPlace(req PlaceRequest) *Place {
 // Unexported
 // -----------------------------------------------------------------------------
 
-// toPlaceResponse turns p into its response, with photo keys turned into URLs by imageURL.
-func toPlaceResponse(p Place, imageURL func(key string) string) PlaceResponse {
+// toPlaceResponse turns p into its response, with media keys turned into URLs by mediaURL.
+func toPlaceResponse(p Place, mediaURL func(key string) string) PlaceResponse {
 	return PlaceResponse{
 		ID:                  p.ID,
 		SubDistrictID:       p.SubDistrictID,
@@ -114,7 +114,7 @@ func toPlaceResponse(p Place, imageURL func(key string) string) PlaceResponse {
 		Attributes:          p.Attributes,
 		RatingAverage:       ratingAverage(p.RatingCount, p.RatingSum),
 		RatingCount:         p.RatingCount,
-		Medias:              storage.ToMediaResponses(p.Medias, imageURL),
+		Medias:              storage.ToMediaResponses(p.Medias, mediaURL),
 		Category:            toCategoryResponse(p.Category),
 	}
 }

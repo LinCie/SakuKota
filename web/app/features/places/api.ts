@@ -7,7 +7,7 @@ import {
   type CommonApiErrorCode,
   unwrap,
 } from "~/shared/api";
-import type { ImageErrorCode, ImageUpload } from "~/shared/image-upload";
+import type { ImageErrorCode, MediaUpload } from "~/shared/image-upload";
 import type { CategoryDetail, GeoPoint, Place, PlacePage } from "./types";
 
 // -----------------------------------------------------------------------------
@@ -134,9 +134,9 @@ export async function deletePlace(id: number): Promise<void> {
 export async function requestPlaceMediaUpload(
   id: number,
   contentType: string,
-): Promise<ImageUpload> {
+): Promise<MediaUpload> {
   return unwrap(
-    await apiPost<ImageUpload, PlaceImageErrorCode>(
+    await apiPost<MediaUpload, PlaceImageErrorCode>(
       `places/${id}/medias/upload-url`,
       { json: { content_type: contentType } },
     ),

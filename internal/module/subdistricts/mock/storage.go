@@ -17,32 +17,32 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockImageStorage is a mock of ImageStorage interface.
-type MockImageStorage struct {
+// MockMediaStorage is a mock of MediaStorage interface.
+type MockMediaStorage struct {
 	ctrl     *gomock.Controller
-	recorder *MockImageStorageMockRecorder
+	recorder *MockMediaStorageMockRecorder
 	isgomock struct{}
 }
 
-// MockImageStorageMockRecorder is the mock recorder for MockImageStorage.
-type MockImageStorageMockRecorder struct {
-	mock *MockImageStorage
+// MockMediaStorageMockRecorder is the mock recorder for MockMediaStorage.
+type MockMediaStorageMockRecorder struct {
+	mock *MockMediaStorage
 }
 
-// NewMockImageStorage creates a new mock instance.
-func NewMockImageStorage(ctrl *gomock.Controller) *MockImageStorage {
-	mock := &MockImageStorage{ctrl: ctrl}
-	mock.recorder = &MockImageStorageMockRecorder{mock}
+// NewMockMediaStorage creates a new mock instance.
+func NewMockMediaStorage(ctrl *gomock.Controller) *MockMediaStorage {
+	mock := &MockMediaStorage{ctrl: ctrl}
+	mock.recorder = &MockMediaStorageMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockImageStorage) EXPECT() *MockImageStorageMockRecorder {
+func (m *MockMediaStorage) EXPECT() *MockMediaStorageMockRecorder {
 	return m.recorder
 }
 
 // Delete mocks base method.
-func (m *MockImageStorage) Delete(ctx context.Context, key string) error {
+func (m *MockMediaStorage) Delete(ctx context.Context, key string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Delete", ctx, key)
 	ret0, _ := ret[0].(error)
@@ -50,13 +50,13 @@ func (m *MockImageStorage) Delete(ctx context.Context, key string) error {
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockImageStorageMockRecorder) Delete(ctx, key any) *gomock.Call {
+func (mr *MockMediaStorageMockRecorder) Delete(ctx, key any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockImageStorage)(nil).Delete), ctx, key)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockMediaStorage)(nil).Delete), ctx, key)
 }
 
 // PresignUpload mocks base method.
-func (m *MockImageStorage) PresignUpload(ctx context.Context, prefix, contentType string) (storage.Upload, error) {
+func (m *MockMediaStorage) PresignUpload(ctx context.Context, prefix, contentType string) (storage.Upload, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PresignUpload", ctx, prefix, contentType)
 	ret0, _ := ret[0].(storage.Upload)
@@ -65,13 +65,13 @@ func (m *MockImageStorage) PresignUpload(ctx context.Context, prefix, contentTyp
 }
 
 // PresignUpload indicates an expected call of PresignUpload.
-func (mr *MockImageStorageMockRecorder) PresignUpload(ctx, prefix, contentType any) *gomock.Call {
+func (mr *MockMediaStorageMockRecorder) PresignUpload(ctx, prefix, contentType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PresignUpload", reflect.TypeOf((*MockImageStorage)(nil).PresignUpload), ctx, prefix, contentType)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PresignUpload", reflect.TypeOf((*MockMediaStorage)(nil).PresignUpload), ctx, prefix, contentType)
 }
 
 // Promote mocks base method.
-func (m *MockImageStorage) Promote(ctx context.Context, prefix, uploadKey string) (storage.Media, error) {
+func (m *MockMediaStorage) Promote(ctx context.Context, prefix, uploadKey string) (storage.Media, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Promote", ctx, prefix, uploadKey)
 	ret0, _ := ret[0].(storage.Media)
@@ -80,13 +80,13 @@ func (m *MockImageStorage) Promote(ctx context.Context, prefix, uploadKey string
 }
 
 // Promote indicates an expected call of Promote.
-func (mr *MockImageStorageMockRecorder) Promote(ctx, prefix, uploadKey any) *gomock.Call {
+func (mr *MockMediaStorageMockRecorder) Promote(ctx, prefix, uploadKey any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Promote", reflect.TypeOf((*MockImageStorage)(nil).Promote), ctx, prefix, uploadKey)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Promote", reflect.TypeOf((*MockMediaStorage)(nil).Promote), ctx, prefix, uploadKey)
 }
 
 // PublicURL mocks base method.
-func (m *MockImageStorage) PublicURL(key string) string {
+func (m *MockMediaStorage) PublicURL(key string) string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PublicURL", key)
 	ret0, _ := ret[0].(string)
@@ -94,7 +94,7 @@ func (m *MockImageStorage) PublicURL(key string) string {
 }
 
 // PublicURL indicates an expected call of PublicURL.
-func (mr *MockImageStorageMockRecorder) PublicURL(key any) *gomock.Call {
+func (mr *MockMediaStorageMockRecorder) PublicURL(key any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublicURL", reflect.TypeOf((*MockImageStorage)(nil).PublicURL), key)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublicURL", reflect.TypeOf((*MockMediaStorage)(nil).PublicURL), key)
 }

@@ -4,11 +4,11 @@ import { writeErrorMessage } from "./write-error";
 // -----------------------------------------------------------------------------
 // Images are uploaded straight to object storage: the backend presigns an
 // upload, the browser sends the file to it, and the backend then confirms the
-// upload key (see internal/storage/images.go).
+// upload key (see internal/storage/media_store.go).
 // -----------------------------------------------------------------------------
 
-/** A presigned upload (see ImageUploadResponse in the backend's dto.go files). */
-export type ImageUpload = {
+/** A presigned upload (see MediaUploadResponse in the backend's dto.go files). */
+export type MediaUpload = {
   /** Key to confirm once the file is uploaded. */
   upload_key: string;
   upload_url: string;
@@ -60,7 +60,7 @@ export class ImageUploadError extends Error {
  */
 export async function uploadImage(
   file: File,
-  presign: (contentType: string) => Promise<ImageUpload>,
+  presign: (contentType: string) => Promise<MediaUpload>,
 ): Promise<string> {
   if (!imageAccept.split(",").includes(file.type)) {
     throw new ImageUploadError(

@@ -10,10 +10,10 @@ type Module struct {
 	Handler *Handler
 }
 
-func NewModule(db *sqlx.DB, rdb *redis.Client, images ImageStorage) *Module {
+func NewModule(db *sqlx.DB, rdb *redis.Client, media MediaStorage) *Module {
 	repo := NewCachedRepository(NewPostgresRepository(db), rdb)
-	service := NewService(repo, images)
-	handler := NewHandler(service, images.PublicURL)
+	service := NewService(repo, media)
+	handler := NewHandler(service, media.PublicURL)
 
 	return &Module{
 		Service: service,

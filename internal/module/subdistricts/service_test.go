@@ -32,22 +32,22 @@ func createSubDistrict(t *testing.T, sd *subdistricts.SubDistrict) (*subdistrict
 			return got, nil
 		}).AnyTimes()
 
-	_, err := subdistricts.NewService(repo, noImages(t)).Create(context.Background(), sd)
+	_, err := subdistricts.NewService(repo, noMedia(t)).Create(context.Background(), sd)
 	return stored, err
 }
 
-// noImages returns image storage that fails the test if it is used.
-func noImages(t *testing.T) *mock.MockImageStorage {
+// noMedia returns media storage that fails the test if it is used.
+func noMedia(t *testing.T) *mock.MockMediaStorage {
 	t.Helper()
-	return mock.NewMockImageStorage(gomock.NewController(t))
+	return mock.NewMockMediaStorage(gomock.NewController(t))
 }
 
 // newMocks returns a repository and image storage that fail the test on any
 // call they do not expect.
-func newMocks(t *testing.T) (*mock.MockRepository, *mock.MockImageStorage) {
+func newMocks(t *testing.T) (*mock.MockRepository, *mock.MockMediaStorage) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
-	return mock.NewMockRepository(ctrl), mock.NewMockImageStorage(ctrl)
+	return mock.NewMockRepository(ctrl), mock.NewMockMediaStorage(ctrl)
 }
 
 // -----------------------------------------------------------------------------
@@ -252,7 +252,7 @@ func TestService_Create_Storage(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&subdistricts.SubDistrict{ID: 7}, tc.storeErr)
 
-			got, err := subdistricts.NewService(repo, noImages(t)).Create(context.Background(), &subdistricts.SubDistrict{
+			got, err := subdistricts.NewService(repo, noMedia(t)).Create(context.Background(), &subdistricts.SubDistrict{
 				Name: "Menteng", Slug: "menteng",
 			})
 			require.ErrorIs(t, err, tc.wantErr)
@@ -312,7 +312,7 @@ func updateSubDistrict(t *testing.T, id int64, sd *subdistricts.SubDistrict) (*s
 			return got, nil
 		}).AnyTimes()
 
-	_, err := subdistricts.NewService(repo, noImages(t)).Update(context.Background(), id, sd)
+	_, err := subdistricts.NewService(repo, noMedia(t)).Update(context.Background(), id, sd)
 	return stored, err
 }
 
@@ -339,7 +339,7 @@ func TestService_GetSubDistrict(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(found, tc.repoErr)
 
-			got, err := subdistricts.NewService(repo, noImages(t)).GetSubDistrict(context.Background(), 7)
+			got, err := subdistricts.NewService(repo, noMedia(t)).GetSubDistrict(context.Background(), 7)
 			require.ErrorIs(t, err, tc.wantErr)
 			if tc.wantErr == nil {
 				require.NotNil(t, got, "sub-district was not returned")
@@ -458,7 +458,7 @@ func TestService_Update_Storage(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().Update(gomock.Any(), gomock.Any()).Return(&subdistricts.SubDistrict{ID: 7}, tc.updateErr)
 
-			got, err := subdistricts.NewService(repo, noImages(t)).Update(context.Background(), 7, mentengInput())
+			got, err := subdistricts.NewService(repo, noMedia(t)).Update(context.Background(), 7, mentengInput())
 			require.ErrorIs(t, err, tc.wantErr)
 			if tc.wantErr == nil {
 				require.NotNil(t, got, "stored sub-district was not returned")
@@ -488,7 +488,7 @@ func TestService_Delete(t *testing.T) {
 			// The repository queues the images, so the service deletes none.
 			repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(tc.repoErr)
 
-			err := subdistricts.NewService(repo, noImages(t)).Delete(context.Background(), 7)
+			err := subdistricts.NewService(repo, noMedia(t)).Delete(context.Background(), 7)
 			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
@@ -497,10 +497,10 @@ func TestService_Delete(t *testing.T) {
 func TestService_Delete_QueuesImages(t *testing.T) {
 	// The repository queues every image for deletion, so the service must not
 	// delete any of them itself.
-	repo, images := newMocks(t)
+	repo, media := newMocks(t)
 	repo.EXPECT().Delete(gomock.Any(), int64(7)).Return(nil)
 
-	err := subdistricts.NewService(repo, images).Delete(context.Background(), 7)
+	err := subdistricts.NewService(repo, media).Delete(context.Background(), 7)
 	require.NoError(t, err, "the sub-district was deleted")
 }
 
@@ -513,7 +513,7 @@ const oldStaticMapKey = "subdistricts/7/static-map/1a2b3c4d-5e6f-4a7b-8c9d-0e1f2
 // slotCase is one of a sub-district's image slots, with its storage prefix
 // and keys for sub-district 7.
 type slotCase struct {
-	slot      subdistricts.ImageSlot
+	slot      subdistricts.MediaSlot
 	prefix    string
 	uploadKey string
 	newKey    string
@@ -535,27 +535,28 @@ var (
 	slotCases = []slotCase{mediasSlot, staticMapSlot}
 )
 
-func TestService_ImageUploadURL(t *testing.T) {
+func TestService_MediaUploadURL(t *testing.T) {
 	for _, sc := range slotCases {
 		t.Run(string(sc.slot), func(t *testing.T) {
-			repo, images := newMocks(t)
+			repo, media := newMocks(t)
 			upload := storage.Upload{
-				Key:             sc.uploadKey,
-				PresignedUpload: storage.PresignedUpload{URL: "http://localhost:3900/signed", Method: "PUT"},
+				Key:    sc.uploadKey,
+				URL:    "http://localhost:3900/signed",
+				Method: "PUT",
 			}
 			gomock.InOrder(
 				repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(savedMenteng(), nil),
-				images.EXPECT().PresignUpload(gomock.Any(), sc.prefix, "image/webp").Return(upload, nil),
+				media.EXPECT().PresignUpload(gomock.Any(), sc.prefix, "image/webp").Return(upload, nil),
 			)
 
-			got, err := subdistricts.NewService(repo, images).ImageUploadURL(context.Background(), 7, sc.slot, "image/webp")
+			got, err := subdistricts.NewService(repo, media).MediaUploadURL(context.Background(), 7, sc.slot, "image/webp")
 			require.NoError(t, err)
 			assert.Equal(t, upload, got)
 		})
 	}
 }
 
-func TestService_ImageUploadURL_LookupFailure(t *testing.T) {
+func TestService_MediaUploadURL_LookupFailure(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
@@ -573,30 +574,30 @@ func TestService_ImageUploadURL_LookupFailure(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(nil, tc.getErr)
 
-			_, err := subdistricts.NewService(repo, noImages(t)).ImageUploadURL(context.Background(), 7, subdistricts.SlotMedias, "image/webp")
+			_, err := subdistricts.NewService(repo, noMedia(t)).MediaUploadURL(context.Background(), 7, subdistricts.SlotMedias, "image/webp")
 			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
 
-func TestService_ImageUploadURL_PresignFailure(t *testing.T) {
+func TestService_MediaUploadURL_PresignFailure(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
 		name       string
 		presignErr error
 	}{
-		{name: "invalid image type", presignErr: storage.ErrInvalidImageType},
+		{name: "invalid image type", presignErr: storage.ErrInvalidMediaType},
 		{name: "storage failure is returned", presignErr: boom},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			repo, images := newMocks(t)
+			repo, media := newMocks(t)
 			repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(savedMenteng(), nil)
-			images.EXPECT().PresignUpload(gomock.Any(), "subdistricts/7/medias", "image/gif").Return(storage.Upload{}, tc.presignErr)
+			media.EXPECT().PresignUpload(gomock.Any(), "subdistricts/7/medias", "image/gif").Return(storage.Upload{}, tc.presignErr)
 
-			_, err := subdistricts.NewService(repo, images).ImageUploadURL(context.Background(), 7, subdistricts.SlotMedias, "image/gif")
+			_, err := subdistricts.NewService(repo, media).MediaUploadURL(context.Background(), 7, subdistricts.SlotMedias, "image/gif")
 			require.ErrorIs(t, err, tc.presignErr)
 		})
 	}
@@ -640,29 +641,29 @@ func promotedMedia(key string) storage.Media {
 	return storage.Media{Key: key, ContentType: "image/webp", Size: 2048}
 }
 
-func TestService_StoreImage(t *testing.T) {
+func TestService_StoreMedia(t *testing.T) {
 	for _, op := range storeCases {
 		t.Run(op.name, func(t *testing.T) {
 			// The repository queues any replaced image, so the service deletes
 			// nothing.
-			repo, images := newMocks(t)
+			repo, media := newMocks(t)
 			promoted := promotedMedia(op.sc.newKey)
 			updated := savedMenteng()
 
 			gomock.InOrder(
 				repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(savedMenteng(), nil),
-				images.EXPECT().Promote(gomock.Any(), op.sc.prefix, op.sc.uploadKey).Return(promoted, nil),
+				media.EXPECT().Promote(gomock.Any(), op.sc.prefix, op.sc.uploadKey).Return(promoted, nil),
 				op.expectStore(repo, promoted).Return(updated, nil),
 			)
 
-			got, err := op.run(subdistricts.NewService(repo, images), op.sc.uploadKey)
+			got, err := op.run(subdistricts.NewService(repo, media), op.sc.uploadKey)
 			require.NoError(t, err)
 			assert.Same(t, updated, got, "want the stored sub-district")
 		})
 	}
 }
 
-func TestService_StoreImage_LookupFailure(t *testing.T) {
+func TestService_StoreMedia_LookupFailure(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
@@ -681,23 +682,23 @@ func TestService_StoreImage_LookupFailure(t *testing.T) {
 				repo := mock.NewMockRepository(gomock.NewController(t))
 				repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(nil, tc.getErr)
 
-				_, err := op.run(subdistricts.NewService(repo, noImages(t)), op.sc.uploadKey)
+				_, err := op.run(subdistricts.NewService(repo, noMedia(t)), op.sc.uploadKey)
 				require.ErrorIs(t, err, tc.wantErr)
 			})
 		}
 	}
 }
 
-func TestService_StoreImage_PromoteFailure(t *testing.T) {
+func TestService_StoreMedia_PromoteFailure(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
 		name       string
 		promoteErr error
 	}{
-		{name: "invalid upload key", promoteErr: storage.ErrInvalidImageKey},
-		{name: "image not uploaded", promoteErr: storage.ErrImageNotUploaded},
-		{name: "invalid image type", promoteErr: storage.ErrInvalidImageType},
+		{name: "invalid upload key", promoteErr: storage.ErrInvalidUploadKey},
+		{name: "image not uploaded", promoteErr: storage.ErrMediaNotUploaded},
+		{name: "invalid image type", promoteErr: storage.ErrInvalidMediaType},
 		{name: "image too large", promoteErr: storage.ErrImageTooLarge},
 		{name: "storage failure is returned", promoteErr: boom},
 	}
@@ -706,18 +707,18 @@ func TestService_StoreImage_PromoteFailure(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(op.name+"/"+tc.name, func(t *testing.T) {
 				// Nothing may be stored.
-				repo, images := newMocks(t)
+				repo, media := newMocks(t)
 				repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(savedMenteng(), nil)
-				images.EXPECT().Promote(gomock.Any(), op.sc.prefix, op.sc.uploadKey).Return(storage.Media{}, tc.promoteErr)
+				media.EXPECT().Promote(gomock.Any(), op.sc.prefix, op.sc.uploadKey).Return(storage.Media{}, tc.promoteErr)
 
-				_, err := op.run(subdistricts.NewService(repo, images), op.sc.uploadKey)
+				_, err := op.run(subdistricts.NewService(repo, media), op.sc.uploadKey)
 				require.ErrorIs(t, err, tc.promoteErr)
 			})
 		}
 	}
 }
 
-func TestService_StoreImage_StoreFailure(t *testing.T) {
+func TestService_StoreMedia_StoreFailure(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
@@ -735,16 +736,16 @@ func TestService_StoreImage_StoreFailure(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(op.name+"/"+tc.name, func(t *testing.T) {
 				// The promoted image is removed.
-				repo, images := newMocks(t)
+				repo, media := newMocks(t)
 				promoted := promotedMedia(op.sc.newKey)
 				gomock.InOrder(
 					repo.EXPECT().GetSubDistrict(gomock.Any(), int64(7)).Return(savedMenteng(), nil),
-					images.EXPECT().Promote(gomock.Any(), op.sc.prefix, op.sc.uploadKey).Return(promoted, nil),
+					media.EXPECT().Promote(gomock.Any(), op.sc.prefix, op.sc.uploadKey).Return(promoted, nil),
 					op.expectStore(repo, promoted).Return(nil, tc.storeErr),
-					images.EXPECT().Delete(gomock.Any(), op.sc.newKey).Return(tc.deleteErr),
+					media.EXPECT().Delete(gomock.Any(), op.sc.newKey).Return(tc.deleteErr),
 				)
 
-				_, err := op.run(subdistricts.NewService(repo, images), op.sc.uploadKey)
+				_, err := op.run(subdistricts.NewService(repo, media), op.sc.uploadKey)
 				require.ErrorIs(t, err, tc.storeErr)
 			})
 		}
@@ -770,7 +771,7 @@ func TestService_DeleteMedia(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().DeleteMedia(gomock.Any(), int64(7), int64(3)).Return(tc.repoErr)
 
-			err := subdistricts.NewService(repo, noImages(t)).DeleteMedia(context.Background(), 7, 3)
+			err := subdistricts.NewService(repo, noMedia(t)).DeleteMedia(context.Background(), 7, 3)
 			require.ErrorIs(t, err, tc.repoErr)
 		})
 	}

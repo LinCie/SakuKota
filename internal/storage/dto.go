@@ -5,14 +5,14 @@ import (
 	"time"
 )
 
-// ImageUploadRequest is the API payload for requesting an image upload.
-type ImageUploadRequest struct {
+// MediaUploadRequest is the API payload for requesting an image or video upload.
+type MediaUploadRequest struct {
 	ContentType string `json:"content_type"`
 }
 
-// ImageUploadResponse is a temporary upload link the client sends the image with.
-// The client then confirms it by sending UploadKey in a SetImageRequest.
-type ImageUploadResponse struct {
+// MediaUploadResponse is a temporary upload link the client sends the file with.
+// The client then confirms it by sending UploadKey in a ConfirmUploadRequest.
+type MediaUploadResponse struct {
 	UploadKey string            `json:"upload_key"`
 	UploadURL string            `json:"upload_url"`
 	Method    string            `json:"method"`
@@ -20,8 +20,8 @@ type ImageUploadResponse struct {
 	ExpiresAt time.Time         `json:"expires_at"`
 }
 
-// SetImageRequest is the API payload for confirming an uploaded image.
-type SetImageRequest struct {
+// ConfirmUploadRequest is the API payload for confirming an uploaded file.
+type ConfirmUploadRequest struct {
 	UploadKey string `json:"upload_key"`
 }
 
@@ -34,15 +34,15 @@ type MediaResponse struct {
 	Position    int    `json:"position"`
 }
 
-// ToMediaResponses turns each photo into its response shape, with its key made into a URL.
+// ToMediaResponses turns each media into its response shape, with its key made into a URL.
 // It never returns nil, so an empty list is sent as [] instead of null.
-func ToMediaResponses(medias []Media, imageURL func(key string) string) []MediaResponse {
+func ToMediaResponses(medias []Media, mediaURL func(key string) string) []MediaResponse {
 	responses := make([]MediaResponse, 0, len(medias))
 
 	for _, m := range medias {
 		responses = append(responses, MediaResponse{
 			ID:          m.ID,
-			URL:         imageURL(m.Key),
+			URL:         mediaURL(m.Key),
 			ContentType: m.ContentType,
 			Size:        m.Size,
 			Position:    m.Position,
@@ -52,9 +52,9 @@ func ToMediaResponses(medias []Media, imageURL func(key string) string) []MediaR
 	return responses
 }
 
-// ToImageUploadResponse turns u into the JSON shape sent to the client.
-func ToImageUploadResponse(u Upload) ImageUploadResponse {
-	return ImageUploadResponse{
+// ToMediaUploadResponse turns u into the JSON shape sent to the client.
+func ToMediaUploadResponse(u Upload) MediaUploadResponse {
+	return MediaUploadResponse{
 		UploadKey: u.Key,
 		UploadURL: u.URL,
 		Method:    u.Method,
@@ -63,12 +63,12 @@ func ToImageUploadResponse(u Upload) ImageUploadResponse {
 	}
 }
 
-// IsInvalidImage reports whether err means the client's image was refused.
+// IsInvalidMedia reports whether err means the client's image or video was refused.
 // That covers a wrong type, a file that is too large, a missing upload, or a bad upload key.
-func IsInvalidImage(err error) bool {
-	return errors.Is(err, ErrInvalidImageType) ||
+func IsInvalidMedia(err error) bool {
+	return errors.Is(err, ErrInvalidMediaType) ||
 		errors.Is(err, ErrImageTooLarge) ||
 		errors.Is(err, ErrVideoTooLarge) ||
-		errors.Is(err, ErrImageNotUploaded) ||
-		errors.Is(err, ErrInvalidImageKey)
+		errors.Is(err, ErrMediaNotUploaded) ||
+		errors.Is(err, ErrInvalidUploadKey)
 }

@@ -44,11 +44,11 @@ func toSubDistrict(req SubDistrictRequest) *SubDistrict {
 }
 
 // toSubDistrictResponse turns sd into the JSON shape sent to clients.
-// Image keys become full links using imageURL.
-func toSubDistrictResponse(sd SubDistrict, imageURL func(key string) string) SubDistrictResponse {
+// Media keys become full links using mediaURL.
+func toSubDistrictResponse(sd SubDistrict, mediaURL func(key string) string) SubDistrictResponse {
 	var staticMap *string
 	if sd.StaticMapImageKey != nil {
-		url := imageURL(*sd.StaticMapImageKey)
+		url := mediaURL(*sd.StaticMapImageKey)
 		staticMap = &url
 	}
 
@@ -59,7 +59,7 @@ func toSubDistrictResponse(sd SubDistrict, imageURL func(key string) string) Sub
 		FloodHistory:           sd.FloodHistory,
 		SafetyCrimeInformation: sd.SafetyCrimeInformation,
 		EstimatedDailySpending: sd.EstimatedDailySpending,
-		Medias:                 storage.ToMediaResponses(sd.Medias, imageURL),
+		Medias:                 storage.ToMediaResponses(sd.Medias, mediaURL),
 		StaticMapImageURL:      staticMap,
 	}
 }

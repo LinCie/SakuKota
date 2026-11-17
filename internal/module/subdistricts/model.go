@@ -18,11 +18,11 @@ type SubDistrict struct {
 	Medias []storage.Media `db:"-"`
 }
 
-// ImageSlot names where a sub-district's image is uploaded. It is also the
-// image's path segment in the API and in storage.
-type ImageSlot string
+// MediaSlot names where a sub-district file is uploaded. It is also the
+// file's path segment in the API and in storage.
+type MediaSlot string
 
 const (
-	SlotMedias    ImageSlot = "medias"
-	SlotStaticMap ImageSlot = "static-map"
+	SlotMedias    MediaSlot = "medias"
+	SlotStaticMap MediaSlot = "static-map"
 )

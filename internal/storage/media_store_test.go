@@ -16,23 +16,23 @@ import (
 )
 
 const (
-	publicBaseURL = "http://rantau-images.web.localhost:3902"
+	publicBaseURL = "http://rantau-media.web.localhost:3902"
 	uploadKey     = "uploads/places/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"
 	promotedKey   = "places/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"
 )
 
-func newImages(t *testing.T) (*storage.Images, *mock.MockObjectStore) {
+func newMediaStore(t *testing.T) (*storage.MediaStore, *mock.MockObjectStore) {
 	t.Helper()
 
 	store := mock.NewMockObjectStore(gomock.NewController(t))
-	return storage.NewImages(store, publicBaseURL), store
+	return storage.NewMediaStore(store, publicBaseURL), store
 }
 
 // -----------------------------------------------------------------------------
 // Presigning uploads
 // -----------------------------------------------------------------------------
 
-func TestImages_PresignUpload(t *testing.T) {
+func TestMediaStore_PresignUpload(t *testing.T) {
 	tests := []struct {
 		contentType string
 		wantKey     *regexp.Regexp
@@ -46,8 +46,8 @@ func TestImages_PresignUpload(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.contentType, func(t *testing.T) {
-			images, store := newImages(t)
-			presigned := storage.PresignedUpload{
+			media, store := newMediaStore(t)
+			presigned := storage.Upload{
 				URL:       "http://localhost:3900/rantau-images/signed",
 				Method:    "PUT",
 				Headers:   map[string]string{"Content-Type": tc.contentType},
@@ -55,13 +55,14 @@ func TestImages_PresignUpload(t *testing.T) {
 			}
 
 			var presignedKey string
-			store.EXPECT().PresignPut(gomock.Any(), gomock.Any(), tc.contentType, storage.UploadTTL).DoAndReturn(
-				func(_ context.Context, key, _ string, _ time.Duration) (storage.PresignedUpload, error) {
+			store.EXPECT().PresignPut(gomock.Any(), gomock.Any(), tc.contentType).DoAndReturn(
+				func(_ context.Context, key, _ string) (storage.Upload, error) {
 					presignedKey = key
+					presigned.Key = key
 					return presigned, nil
 				})
 
-			got, err := images.PresignUpload(context.Background(), "places/7", tc.contentType)
+			got, err := media.PresignUpload(context.Background(), "places/7", tc.contentType)
 			require.NoError(t, err)
 			assert.Regexp(t, tc.wantKey, presignedKey)
 			assert.Equal(t, presignedKey, got.Key, "returned key should be the presigned key")
@@ -78,21 +79,23 @@ func uploadKeyPattern(ext string) *regexp.Regexp {
 	return regexp.MustCompile(`^uploads/places/7/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.` + ext + `$`)
 }
 
-func TestImages_PresignUpload_KeysAreUnique(t *testing.T) {
-	images, store := newImages(t)
-	store.EXPECT().PresignPut(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(storage.PresignedUpload{}, nil).Times(2)
+func TestMediaStore_PresignUpload_KeysAreUnique(t *testing.T) {
+	media, store := newMediaStore(t)
+	store.EXPECT().PresignPut(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, key, _ string) (storage.Upload, error) {
+			return storage.Upload{Key: key}, nil
+		}).Times(2)
 
-	first, err := images.PresignUpload(context.Background(), "places/7", "image/png")
+	first, err := media.PresignUpload(context.Background(), "places/7", "image/png")
 	require.NoError(t, err)
-	second, err := images.PresignUpload(context.Background(), "places/7", "image/png")
+	second, err := media.PresignUpload(context.Background(), "places/7", "image/png")
 	require.NoError(t, err)
 
 	assert.NotEmpty(t, first.Key)
 	assert.NotEqual(t, first.Key, second.Key)
 }
 
-func TestImages_PresignUpload_RejectedType(t *testing.T) {
+func TestMediaStore_PresignUpload_RejectedType(t *testing.T) {
 	tests := []struct {
 		name        string
 		contentType string
@@ -110,21 +113,21 @@ func TestImages_PresignUpload_RejectedType(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// The mock fails the test if anything is presigned.
-			images, _ := newImages(t)
+			media, _ := newMediaStore(t)
 
-			_, err := images.PresignUpload(context.Background(), "places/7", tc.contentType)
-			require.ErrorIs(t, err, storage.ErrInvalidImageType)
+			_, err := media.PresignUpload(context.Background(), "places/7", tc.contentType)
+			require.ErrorIs(t, err, storage.ErrInvalidMediaType)
 		})
 	}
 }
 
-func TestImages_PresignUpload_StoreFailure(t *testing.T) {
+func TestMediaStore_PresignUpload_StoreFailure(t *testing.T) {
 	boom := errors.New("connection reset")
-	images, store := newImages(t)
-	store.EXPECT().PresignPut(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(storage.PresignedUpload{}, boom)
+	media, store := newMediaStore(t)
+	store.EXPECT().PresignPut(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(storage.Upload{}, boom)
 
-	_, err := images.PresignUpload(context.Background(), "places/7", "image/png")
+	_, err := media.PresignUpload(context.Background(), "places/7", "image/png")
 	require.ErrorIs(t, err, boom)
 }
 
@@ -132,7 +135,7 @@ func TestImages_PresignUpload_StoreFailure(t *testing.T) {
 // Promoting uploads
 // -----------------------------------------------------------------------------
 
-func TestImages_Promote(t *testing.T) {
+func TestMediaStore_Promote(t *testing.T) {
 	tests := []struct {
 		name      string
 		size      int64
@@ -145,7 +148,7 @@ func TestImages_Promote(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			images, store := newImages(t)
+			media, store := newMediaStore(t)
 			gomock.InOrder(
 				store.EXPECT().Stat(gomock.Any(), uploadKey).
 					Return(storage.ObjectInfo{Size: tc.size, ContentType: "image/webp"}, nil),
@@ -153,7 +156,7 @@ func TestImages_Promote(t *testing.T) {
 				store.EXPECT().Delete(gomock.Any(), uploadKey).Return(tc.deleteErr),
 			)
 
-			got, err := images.Promote(context.Background(), "places/7", uploadKey)
+			got, err := media.Promote(context.Background(), "places/7", uploadKey)
 			require.NoError(t, err)
 			assert.Equal(t, storage.Media{Key: promotedKey, ContentType: "image/webp", Size: tc.size}, got,
 				"the promoted media should carry the new key and the stored type and size")
@@ -161,7 +164,7 @@ func TestImages_Promote(t *testing.T) {
 	}
 }
 
-func TestImages_Promote_Video(t *testing.T) {
+func TestMediaStore_Promote_Video(t *testing.T) {
 	tests := []struct {
 		ext         string
 		contentType string
@@ -176,7 +179,7 @@ func TestImages_Promote_Video(t *testing.T) {
 			src := "uploads/places/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b." + tc.ext
 			dst := "places/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b." + tc.ext
 
-			images, store := newImages(t)
+			media, store := newMediaStore(t)
 			gomock.InOrder(
 				store.EXPECT().Stat(gomock.Any(), src).
 					Return(storage.ObjectInfo{Size: size, ContentType: tc.contentType}, nil),
@@ -184,14 +187,14 @@ func TestImages_Promote_Video(t *testing.T) {
 				store.EXPECT().Delete(gomock.Any(), src).Return(nil),
 			)
 
-			got, err := images.Promote(context.Background(), "places/7", src)
+			got, err := media.Promote(context.Background(), "places/7", src)
 			require.NoError(t, err)
 			assert.Equal(t, storage.Media{Key: dst, ContentType: tc.contentType, Size: size}, got)
 		})
 	}
 }
 
-func TestImages_Promote_InvalidKey(t *testing.T) {
+func TestMediaStore_Promote_InvalidKey(t *testing.T) {
 	const id = "0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b"
 
 	tests := []struct {
@@ -214,46 +217,46 @@ func TestImages_Promote_InvalidKey(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// The mock fails the test if the store is touched.
-			images, _ := newImages(t)
+			media, _ := newMediaStore(t)
 
-			_, err := images.Promote(context.Background(), "places/7", tc.key)
-			require.ErrorIs(t, err, storage.ErrInvalidImageKey)
+			_, err := media.Promote(context.Background(), "places/7", tc.key)
+			require.ErrorIs(t, err, storage.ErrInvalidUploadKey)
 		})
 	}
 }
 
-func TestImages_Promote_NotUploaded(t *testing.T) {
-	images, store := newImages(t)
+func TestMediaStore_Promote_NotUploaded(t *testing.T) {
+	media, store := newMediaStore(t)
 	store.EXPECT().Stat(gomock.Any(), uploadKey).Return(storage.ObjectInfo{}, storage.ErrObjectNotFound)
 
-	_, err := images.Promote(context.Background(), "places/7", uploadKey)
-	require.ErrorIs(t, err, storage.ErrImageNotUploaded)
+	_, err := media.Promote(context.Background(), "places/7", uploadKey)
+	require.ErrorIs(t, err, storage.ErrMediaNotUploaded)
 }
 
-func TestImages_Promote_RejectedImage(t *testing.T) {
+func TestMediaStore_Promote_RejectedImage(t *testing.T) {
 	tests := []struct {
 		name    string
 		info    storage.ObjectInfo
 		wantErr error
 	}{
 		{name: "too large", info: storage.ObjectInfo{Size: storage.MaxImageSize + 1, ContentType: "image/webp"}, wantErr: storage.ErrImageTooLarge},
-		{name: "type not allowed", info: storage.ObjectInfo{Size: 1024, ContentType: "text/html"}, wantErr: storage.ErrInvalidImageType},
-		{name: "type does not match the extension", info: storage.ObjectInfo{Size: 1024, ContentType: "image/png"}, wantErr: storage.ErrInvalidImageType},
+		{name: "type not allowed", info: storage.ObjectInfo{Size: 1024, ContentType: "text/html"}, wantErr: storage.ErrInvalidMediaType},
+		{name: "type does not match the extension", info: storage.ObjectInfo{Size: 1024, ContentType: "image/png"}, wantErr: storage.ErrInvalidMediaType},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			images, store := newImages(t)
+			media, store := newMediaStore(t)
 			store.EXPECT().Stat(gomock.Any(), uploadKey).Return(tc.info, nil)
 			store.EXPECT().Delete(gomock.Any(), uploadKey).Return(nil)
 
-			_, err := images.Promote(context.Background(), "places/7", uploadKey)
+			_, err := media.Promote(context.Background(), "places/7", uploadKey)
 			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
 
-func TestImages_Promote_RejectedVideo(t *testing.T) {
+func TestMediaStore_Promote_RejectedVideo(t *testing.T) {
 	const videoKey = "uploads/places/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.mp4"
 
 	tests := []struct {
@@ -262,60 +265,60 @@ func TestImages_Promote_RejectedVideo(t *testing.T) {
 		wantErr error
 	}{
 		{name: "too large", info: storage.ObjectInfo{Size: storage.MaxVideoSize + 1, ContentType: "video/mp4"}, wantErr: storage.ErrVideoTooLarge},
-		{name: "type does not match the extension", info: storage.ObjectInfo{Size: 1024, ContentType: "video/webm"}, wantErr: storage.ErrInvalidImageType},
-		{name: "image type for a video extension", info: storage.ObjectInfo{Size: 1024, ContentType: "image/png"}, wantErr: storage.ErrInvalidImageType},
+		{name: "type does not match the extension", info: storage.ObjectInfo{Size: 1024, ContentType: "video/webm"}, wantErr: storage.ErrInvalidMediaType},
+		{name: "image type for a video extension", info: storage.ObjectInfo{Size: 1024, ContentType: "image/png"}, wantErr: storage.ErrInvalidMediaType},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			images, store := newImages(t)
+			media, store := newMediaStore(t)
 			store.EXPECT().Stat(gomock.Any(), videoKey).Return(tc.info, nil)
 			store.EXPECT().Delete(gomock.Any(), videoKey).Return(nil)
 
-			_, err := images.Promote(context.Background(), "places/7", videoKey)
+			_, err := media.Promote(context.Background(), "places/7", videoKey)
 			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
 
-func TestImages_Promote_VideoContentTypeForImageExtension(t *testing.T) {
-	images, store := newImages(t)
+func TestMediaStore_Promote_VideoContentTypeForImageExtension(t *testing.T) {
+	media, store := newMediaStore(t)
 	store.EXPECT().Stat(gomock.Any(), uploadKey).
 		Return(storage.ObjectInfo{Size: 1024, ContentType: "video/mp4"}, nil)
 	store.EXPECT().Delete(gomock.Any(), uploadKey).Return(nil)
 
-	_, err := images.Promote(context.Background(), "places/7", uploadKey)
-	require.ErrorIs(t, err, storage.ErrInvalidImageType)
+	_, err := media.Promote(context.Background(), "places/7", uploadKey)
+	require.ErrorIs(t, err, storage.ErrInvalidMediaType)
 }
 
-func TestImages_Promote_RejectedImageCleanupFailure(t *testing.T) {
-	images, store := newImages(t)
+func TestMediaStore_Promote_RejectedImageCleanupFailure(t *testing.T) {
+	media, store := newMediaStore(t)
 	store.EXPECT().Stat(gomock.Any(), uploadKey).
 		Return(storage.ObjectInfo{Size: storage.MaxImageSize + 1, ContentType: "image/webp"}, nil)
 	store.EXPECT().Delete(gomock.Any(), uploadKey).Return(errors.New("connection reset"))
 
-	_, err := images.Promote(context.Background(), "places/7", uploadKey)
+	_, err := media.Promote(context.Background(), "places/7", uploadKey)
 	require.ErrorIs(t, err, storage.ErrImageTooLarge)
 }
 
-func TestImages_Promote_StoreFailure(t *testing.T) {
+func TestMediaStore_Promote_StoreFailure(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	t.Run("stat", func(t *testing.T) {
-		images, store := newImages(t)
+		media, store := newMediaStore(t)
 		store.EXPECT().Stat(gomock.Any(), uploadKey).Return(storage.ObjectInfo{}, boom)
 
-		_, err := images.Promote(context.Background(), "places/7", uploadKey)
+		_, err := media.Promote(context.Background(), "places/7", uploadKey)
 		require.ErrorIs(t, err, boom)
 	})
 
 	t.Run("copy", func(t *testing.T) {
-		images, store := newImages(t)
+		media, store := newMediaStore(t)
 		store.EXPECT().Stat(gomock.Any(), uploadKey).
 			Return(storage.ObjectInfo{Size: 1024, ContentType: "image/webp"}, nil)
 		store.EXPECT().Copy(gomock.Any(), uploadKey, promotedKey).Return(boom)
 
-		_, err := images.Promote(context.Background(), "places/7", uploadKey)
+		_, err := media.Promote(context.Background(), "places/7", uploadKey)
 		require.ErrorIs(t, err, boom)
 	})
 }
@@ -324,7 +327,7 @@ func TestImages_Promote_StoreFailure(t *testing.T) {
 // Deleting and serving images
 // -----------------------------------------------------------------------------
 
-func TestImages_Delete(t *testing.T) {
+func TestMediaStore_Delete(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
@@ -338,16 +341,16 @@ func TestImages_Delete(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			images, store := newImages(t)
+			media, store := newMediaStore(t)
 			store.EXPECT().Delete(gomock.Any(), promotedKey).Return(tc.storeErr)
 
-			err := images.Delete(context.Background(), promotedKey)
+			err := media.Delete(context.Background(), promotedKey)
 			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
 
-func TestImages_PublicURL(t *testing.T) {
+func TestMediaStore_PublicURL(t *testing.T) {
 	tests := []struct {
 		name    string
 		baseURL string
@@ -361,7 +364,7 @@ func TestImages_PublicURL(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store := mock.NewMockObjectStore(gomock.NewController(t))
 
-			got := storage.NewImages(store, tc.baseURL).PublicURL(promotedKey)
+			got := storage.NewMediaStore(store, tc.baseURL).PublicURL(promotedKey)
 			assert.Equal(t, tc.want, got)
 		})
 	}
