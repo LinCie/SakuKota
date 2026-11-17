@@ -20,7 +20,7 @@ const PLACE_ZOOM = 18;
 // Keeps a selected sign this far from the map's edges.
 const SIGN_MARGIN = 72;
 // The map zooms out no further than this, a few kilometres across.
-const MIN_ZOOM = 14;
+const MIN_ZOOM = 15;
 // ZoomPlate replaces Leaflet's zoom control.
 const MAP_OPTIONS: Leaflet.MapOptions = {
   zoomControl: false,
