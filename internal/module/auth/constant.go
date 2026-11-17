@@ -1,5 +1,7 @@
 package auth
 
+import "regexp"
+
 const (
 	refreshCookieName = "refresh_token"
 	// refreshCookiePath scopes the cookie to the auth routes, the only ones
@@ -15,16 +17,14 @@ const (
 	maxEmailLength = 255
 )
 
-// Password lengths in characters. The cap is a sanity limit: it keeps absurd
-// input away from the hash, and a login with a longer password cannot be right.
-const (
-	minPasswordLength = 8
-	maxPasswordLength = 128
-)
+// emailPattern accepts one @ with text on both sides and no spaces.
+var emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+$`)
 
-// maxConcurrentHashes bounds how many argon2id hashes run at once. Each one
-// allocates argonMemory, so unbounded logins could exhaust memory.
-const maxConcurrentHashes = 4
+// minPasswordLength is the fewest characters a password may have.
+const minPasswordLength = 8
+
+// refreshKeyPrefix namespaces refresh token keys in Redis.
+const refreshKeyPrefix = "auth:refresh:"
 
 const refreshTokenBytes = 32
 

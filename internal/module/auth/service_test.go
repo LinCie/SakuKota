@@ -35,12 +35,36 @@ func testConfig() config.Config {
 	}
 }
 
-// newService uses the real password hashing and refresh store; only the
+// fakeRefreshStore keeps refresh tokens in a map and ignores expiry.
+type fakeRefreshStore struct {
+	tokens map[string]int64
+}
+
+func (s *fakeRefreshStore) Save(_ context.Context, tokenHash string, userID int64, _ time.Duration) error {
+	s.tokens[tokenHash] = userID
+	return nil
+}
+
+func (s *fakeRefreshStore) Consume(_ context.Context, tokenHash string) (int64, error) {
+	userID, ok := s.tokens[tokenHash]
+	if !ok {
+		return 0, auth.ErrInvalidRefreshToken
+	}
+	delete(s.tokens, tokenHash)
+	return userID, nil
+}
+
+func (s *fakeRefreshStore) Delete(_ context.Context, tokenHash string) error {
+	delete(s.tokens, tokenHash)
+	return nil
+}
+
+// newService uses the real password hashing and a fake refresh store; only the
 // user service is mocked.
 func newService(t *testing.T) (auth.Service, *usersmock.MockService) {
 	t.Helper()
 	userSvc := usersmock.NewMockService(gomock.NewController(t))
-	return auth.NewService(testConfig(), userSvc, auth.NewMemoryRefreshStore()), userSvc
+	return auth.NewService(testConfig(), userSvc, &fakeRefreshStore{tokens: map[string]int64{}}), userSvc
 }
 
 // issueSession logs in testEmail and returns the issued tokens.
@@ -91,7 +115,6 @@ func TestService_Register_RejectsInvalidInput(t *testing.T) {
 		{name: "empty email", userName: "Ana", email: "", password: "password1", want: auth.ErrInvalidEmail},
 		{name: "7-character password", userName: "Ana", email: testEmail, password: "1234567", want: auth.ErrWeakPassword},
 		{name: "4 multibyte characters are fewer than 8 characters", userName: "Ana", email: testEmail, password: strings.Repeat("é", 4), want: auth.ErrWeakPassword},
-		{name: "129-character password", userName: "Ana", email: testEmail, password: strings.Repeat("a", 129), want: auth.ErrPasswordTooLong},
 		{name: "101-character name", userName: strings.Repeat("a", 101), email: testEmail, password: "password1", want: auth.ErrNameTooLong},
 		{name: "101 multibyte-character name", userName: strings.Repeat("é", 101), email: testEmail, password: "password1", want: auth.ErrNameTooLong},
 		{name: "email over 255 characters", userName: "Ana", email: strings.Repeat("a", 245) + "@example.com", password: "password1", want: auth.ErrEmailTooLong},
@@ -116,25 +139,6 @@ func TestService_Register_AcceptsEightCharacterPassword(t *testing.T) {
 
 	_, err := svc.Register(context.Background(), &users.User{Name: "Ana", Email: testEmail}, "12345678")
 	assert.NoError(t, err, "register")
-}
-
-func TestService_Register_PasswordLengthLimitsCountCharacters(t *testing.T) {
-	for _, password := range []string{strings.Repeat("a", 128), strings.Repeat("é", 8), strings.Repeat("é", 128)} {
-		svc, userSvc := newService(t)
-
-		userSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&users.User{ID: 1}, nil)
-
-		_, err := svc.Register(context.Background(), &users.User{Name: "Ana", Email: testEmail}, password)
-		assert.NoError(t, err, "register with %d bytes", len(password))
-	}
-}
-
-func TestService_Login_PasswordOverMaximumIsInvalidCredentials(t *testing.T) {
-	// No expectations: the password is refused before storage is read.
-	svc, _ := newService(t)
-
-	_, _, err := svc.Login(context.Background(), testEmail, strings.Repeat("a", 129))
-	assert.ErrorIs(t, err, auth.ErrInvalidCredentials)
 }
 
 func TestService_Register_AcceptsHundredCharacterName(t *testing.T) {

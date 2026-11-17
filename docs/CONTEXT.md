@@ -5,8 +5,8 @@
 > behavior or the API contract, once a VERIFICATION phase passes (see
 > [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-16. Updated after removing the `X-Cache` header (see the change log).
->   Verified by `go build`, `go vet`, and the place package unit tests; the web app changes are outside the test workflow.
+> - Last updated: 2026-11-16. Updated after simplifying the auth module (see the change log).
+>   Verified by `go build`, `go vet`, and the auth package tests; the web app changes are outside the test workflow.
 > - Status: verified. All Go tests pass and the API was checked by hand. The web app has not been
 >   updated for medias yet, so its image views and the place image upload are broken until it is.
 
@@ -197,18 +197,16 @@ The test router posts to `/v1/auth`, and the refresh cookie path is
 
 - **Register.** `name`, `email`, and `password` are required. The name is
   trimmed, must not be blank, and has at most 100 code points. The email is
-  trimmed, lower-cased, has at most 255 code points, and must be a bare address
-  such as `ana@example.com`; a display-name form such as `Ana <ana@example.com>`
-  is rejected. The password needs 8 to 128 characters, counted as Unicode code
+  trimmed, lower-cased, has at most 255 code points, and must be one `@` with text
+  on both sides and no spaces, such as `ana@example.com`; a display-name form
+  such as `Ana <ana@example.com>` is rejected. The password needs at least 8 characters, counted as Unicode code
   points, so `é` counts as 1. The password is stored as an argon2id hash.
-  Invalid input (including a password under 8 or over 128 characters) returns
+  Invalid input (including a password under 8 characters) returns
   `400 VALIDATION_ERROR` and never reaches storage. A duplicate email returns `409 EMAIL_TAKEN`. Success returns
   `201` with the user, never the password. The user object is `{id, name,
   email, role, created_at, updated_at}`, where `role` is `user` or `admin`.
 - **Login.** The email is normalized before lookup. An unknown email and a wrong
-  password both return `401 INVALID_CREDENTIALS`, and neither sets a cookie. A
-  password over 128 characters returns `INVALID_CREDENTIALS` without reading
-  storage or hashing.
+  password both return `401 INVALID_CREDENTIALS`, and neither sets a cookie.
   Storage failures and corrupt stored hashes are **not** reported as bad
   credentials: they return 500. Success returns `200 {access_token, user}`.
   The refresh token travels **only** in the `refresh_token` cookie (HttpOnly,
@@ -220,11 +218,6 @@ The test router posts to `/v1/auth`, and the refresh cookie path is
   **rotate**: the old token is consumed, and reusing it fails. An unknown token
   or a deleted user returns `INVALID_REFRESH_TOKEN` and clears the cookie.
   Storage failures return 500 and are not reported as an invalid token.
-  The in-memory store removes expired tokens that were never presented again
-  (a sweep during `Save`, at most once a minute).
-- **Hashing.** At most 4 password hashes (register and login) run at once, so
-  concurrent logins cannot exhaust memory. A request that ends while waiting for
-  a free slot fails without hashing and without a success response.
 - **Logout.** Always returns `204` and clears the cookie. Without a cookie the
   service is not called. If revocation fails, the response is 500 but the
   cookie is still cleared. A revoked token can no longer refresh.
@@ -649,7 +642,7 @@ them.
     field types, and give `PLACE_SUGGESTIONS` the `PLACES` column limits
     (`address` 255, `operating_hours` 255, `estimated_price_range` 100) and its
     attributes-is-an-object `CHECK`.
-- **Refresh-token storage.** Tests use `auth.NewMemoryRefreshStore()`. The API
+- **Refresh-token storage.** Auth tests use a fake map store. The API
   uses `auth.NewRedisRefreshStore` (keys `auth:refresh:<hash>`, expiry set by
   Redis, `Consume` is an atomic `GETDEL`, so it needs Redis 6.2+), so sessions
   survive a restart and are shared between instances. The API pings Redis at
@@ -702,3 +695,4 @@ them.
 | 2026-11-13 | Verification update | Plural module packages. `internal/module/place`, `review`, `subdistrict`, `suggestion`, and `user` renamed to `places`, `reviews`, `subdistricts`, `suggestions`, and `users`, with package names and qualifiers to match; `auth` and `storagecleanup` are unchanged. Verified by `go build`, `go vet`, and `go test ./...` (1248 passed in 30 packages) |
 | 2026-11-15 | Verification update | Places limit pass. `GET /places` caps every page at 40 (`maxLimit`, was 1000), so a client cannot request more. The web map no longer sends a zoom-based `limit` or keeps `limit` in the URL; it sends only the `bbox` and relies on the cap. Verified by the place package tests (418 passed) and the web typecheck, lint, and tests (240 passed) |
 | 2026-11-16 | Verification update | `GET /places` no longer sends the `X-Cache` header, and the cache-status context behind it is removed. The header was never part of this contract, so no section describes it. Verified by `go build`, `go vet` (with the `integration` tag), and the place package unit tests (418 passed); the integration tests were not run. `scripts/k6/get-places.js` still reads the header (§10) |
+| 2026-11-16 | Verification update | Auth simplification. The password has no maximum length (was 128), so a long password is hashed like any other and an over-long login is no longer short-circuited to `INVALID_CREDENTIALS`; the limit of 4 concurrent hashes is gone; the in-memory refresh store and its sweep are removed from production code (auth tests use a fake map store). The email check is a plain pattern (one `@`, no spaces) instead of `net/mail`, and password verification uses the argon2 constants rather than the parameters stored in the hash. Verified by `go build`, `go vet`, and the auth package tests |

@@ -10,10 +10,6 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// -----------------------------------------------------------------------------
-// Password hashing
-// -----------------------------------------------------------------------------
-
 // hashPassword turns password into an argon2id hash.
 // The result is in PHC format: $argon2id$v=19$m=...,t=...,p=...$salt$hash
 func hashPassword(password string) (string, error) {
@@ -33,23 +29,11 @@ func hashPassword(password string) (string, error) {
 }
 
 // verifyPassword reports whether password matches the encoded argon2id hash.
+// shortcut: the m, t, p in the hash are not read back, the argon constants are
+// used. Changing them means rehashing every stored password.
 func verifyPassword(password, encodedHash string) (bool, error) {
 	parts := strings.Split(encodedHash, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" {
-		return false, ErrInvalidHash
-	}
-
-	var version int
-	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil {
-		return false, ErrInvalidHash
-	}
-	if version != argon2.Version {
-		return false, ErrInvalidHash
-	}
-
-	var memory, time uint32
-	var threads uint8
-	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &time, &threads); err != nil {
 		return false, ErrInvalidHash
 	}
 
@@ -63,7 +47,7 @@ func verifyPassword(password, encodedHash string) (bool, error) {
 		return false, ErrInvalidHash
 	}
 
-	otherKey := argon2.IDKey([]byte(password), salt, time, memory, threads, uint32(len(key)))
+	otherKey := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
 
 	return subtle.ConstantTimeCompare(key, otherKey) == 1, nil
 }

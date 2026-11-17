@@ -13,17 +13,16 @@ type Handler struct {
 	service Service
 }
 
-// NewHandler creates a Handler that reads cookie settings from cfg and passes work to the service.
+// -----------------------------------------------------------------------------
+// Exported
+// -----------------------------------------------------------------------------
+
 func NewHandler(cfg config.Config, service Service) *Handler {
 	return &Handler{
 		cfg:     cfg,
 		service: service,
 	}
 }
-
-// -----------------------------------------------------------------------------
-// Handler
-// -----------------------------------------------------------------------------
 
 // Register reads the sign-up body and creates the user.
 // It sends back the new user, or a validation or email-taken error.
@@ -40,8 +39,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 			errors.Is(err, ErrNameTooLong),
 			errors.Is(err, ErrInvalidEmail),
 			errors.Is(err, ErrEmailTooLong),
-			errors.Is(err, ErrWeakPassword),
-			errors.Is(err, ErrPasswordTooLong):
+			errors.Is(err, ErrWeakPassword):
 			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 		case errors.Is(err, ErrEmailTaken):
 			httpx.RespondError(w, http.StatusConflict, httpx.CodeEmailTaken, err.Error())
@@ -104,7 +102,6 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 // Logout revokes the refresh token in the cookie and clears the cookie.
 // The cookie is cleared even if revoking fails.
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-	// The browser drops the cookie even if revoking it server-side fails.
 	h.clearRefreshCookie(w)
 
 	if cookie, err := r.Cookie(refreshCookieName); err == nil {
@@ -118,7 +115,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 // -----------------------------------------------------------------------------
-// Refresh cookie
+// Unexported
 // -----------------------------------------------------------------------------
 
 // setRefreshCookie puts token in the refresh cookie, lasting as long as refresh tokens do.
