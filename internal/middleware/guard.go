@@ -9,7 +9,7 @@ import (
 
 // Guard allows the request only if the role set by WithAuth is one of the
 // given roles. It must be applied after WithAuth.
-func Guard(roles []string) httpx.Constructor {
+func Guard(roles []string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			role, ok := RoleFromContext(r.Context())

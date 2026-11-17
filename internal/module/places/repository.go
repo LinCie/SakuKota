@@ -13,7 +13,6 @@ import (
 
 	"rantau-go/internal/database"
 	"rantau-go/internal/pkg/postgis"
-	"rantau-go/internal/pkg/utils"
 	"rantau-go/internal/storage"
 )
 
@@ -506,6 +505,9 @@ func (r *postgresRepository) checkFilterTargets(ctx context.Context, filter Plac
 	return nil
 }
 
+// likeEscaper escapes LIKE wildcards so a search term matches literally.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
 // placeWhere builds the WHERE clause and its arguments from the filter.
 // Only the filters that are set become conditions, so the database can use its indexes.
 func placeWhere(filter PlaceFilter) (string, []any) {
@@ -525,7 +527,7 @@ func placeWhere(filter PlaceFilter) (string, []any) {
 	}
 
 	if filter.Query != "" {
-		pattern := arg("%" + utils.EscapeLike(filter.Query) + "%")
+		pattern := arg("%" + likeEscaper.Replace(filter.Query) + "%")
 		conditions = append(conditions, fmt.Sprintf(
 			"(p.name ILIKE %[1]s OR p.address ILIKE %[1]s OR p.short_description ILIKE %[1]s OR c.name ILIKE %[1]s)",
 			pattern,

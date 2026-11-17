@@ -13,7 +13,3 @@ func TestMap(t *testing.T) {
 	assert.Equal(t, []string{"1", "2"}, utils.Map([]int{1, 2}, strconv.Itoa))
 	assert.NotNil(t, utils.Map([]int(nil), strconv.Itoa), "nil input must give an empty slice, not nil")
 }
-
-func TestEscapeLike(t *testing.T) {
-	assert.Equal(t, `100\% a\_b \\`, utils.EscapeLike(`100% a_b \`))
-}
