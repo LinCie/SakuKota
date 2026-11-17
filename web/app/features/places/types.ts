@@ -1,8 +1,6 @@
 import type { Media } from "~/shared/image-upload";
 
-// -----------------------------------------------------------------------------
 // Types (see internal/module/place/dto.go and internal/pkg/postgis/point.go)
-// -----------------------------------------------------------------------------
 
 /** A PostGIS point, serialized by the backend as a GeoJSON Point. */
 export type GeoPoint = {

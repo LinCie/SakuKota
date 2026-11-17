@@ -129,13 +129,9 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
 
   const [draft, setDraft] = useState(query);
 
-  function updateParams(changes: HomeSearch) {
-    onSearchChange(changes);
-  }
-
   // Debounce typing into the URL.
   const applyDraft = useEffectEvent(() =>
-    updateParams({ q: draft.trim() || undefined }),
+    onSearchChange({ q: draft.trim() || undefined }),
   );
   useEffect(() => {
     if (draft.trim() === query) return;
@@ -160,7 +156,7 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
       ?.fields ?? [];
 
   function selectPlace(placeId: number | null) {
-    updateParams({ tempat: placeId ?? undefined });
+    onSearchChange({ tempat: placeId ?? undefined });
   }
 
   // Picking from the list teleports the map to the place.
@@ -171,26 +167,29 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
 
   function setView({ bbox, limit }: MapView) {
     if (bbox !== search.bbox || limit !== search.limit) {
-      updateParams({ bbox, limit });
+      onSearchChange({ bbox, limit });
     }
   }
 
   function toggleCategory(slug: string) {
-    const next = activeSlugs.includes(slug)
-      ? activeSlugs.filter((s) => s !== slug)
-      : [...activeSlugs, slug];
+    let next: string[];
+    if (activeSlugs.includes(slug)) {
+      next = activeSlugs.filter((s) => s !== slug);
+    } else {
+      next = [...activeSlugs, slug];
+    }
+    // In the menu's order, so the same filter always makes the same URL.
     const ordered = categories
       .map((category) => category.slug)
       .filter((s) => next.includes(s));
-    updateParams({
-      kategori:
-        ordered.length === categories.length ? undefined : ordered.join(","),
-    });
+    // Every category ticked is the same as no filter at all.
+    const everyCategory = ordered.length === categories.length;
+    onSearchChange({ kategori: everyCategory ? undefined : ordered.join(",") });
   }
 
   function clearSearch() {
     setDraft("");
-    updateParams({ q: undefined });
+    onSearchChange({ q: undefined });
   }
 
   // Escape closes the place details.
@@ -217,25 +216,26 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
   const allActive = activeSlugs.length === 0;
   const areaName = subDistrict?.name ?? "Jakarta";
 
+  // What to say, and the way out to offer, when nothing matches.
   let emptyState: EmptyState | null = null;
-  if (listTotal === 0) {
-    emptyState = needle
-      ? {
-          message: `Tidak ada hasil untuk “${query}” di ${areaName}.`,
-          action: "Hapus pencarian",
-          onAction: clearSearch,
-        }
-      : allActive
-        ? {
-            message: `Belum ada tempat yang tercatat di ${areaName}. Coba kecamatan lain.`,
-            action: "Lihat info kecamatan",
-            onAction: () => setInfoOpen(true),
-          }
-        : {
-            message: `Belum ada tempat untuk kategori ini di ${areaName}.`,
-            action: "Tampilkan semua kategori",
-            onAction: () => updateParams({ kategori: undefined }),
-          };
+  if (listTotal === 0 && needle) {
+    emptyState = {
+      message: `Tidak ada hasil untuk “${query}” di ${areaName}.`,
+      action: "Hapus pencarian",
+      onAction: clearSearch,
+    };
+  } else if (listTotal === 0 && !allActive) {
+    emptyState = {
+      message: `Belum ada tempat untuk kategori ini di ${areaName}.`,
+      action: "Tampilkan semua kategori",
+      onAction: () => onSearchChange({ kategori: undefined }),
+    };
+  } else if (listTotal === 0) {
+    emptyState = {
+      message: `Belum ada tempat yang tercatat di ${areaName}. Coba kecamatan lain.`,
+      action: "Lihat info kecamatan",
+      onAction: () => setInfoOpen(true),
+    };
   }
 
   // Rendered twice: in the header from 640px, in the category strip below.
@@ -243,7 +243,7 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
     <SearchField
       draft={draft}
       onDraftChange={setDraft}
-      onSearch={() => updateParams({ q: draft.trim() || undefined })}
+      onSearch={() => onSearchChange({ q: draft.trim() || undefined })}
       onClearSearch={clearSearch}
     />
   );
@@ -256,7 +256,7 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
         search={searchField}
         onKecamatanChange={(slug) =>
           // The new kecamatan loads without a view, so the map can frame it.
-          updateParams({
+          onSearchChange({
             kecamatan: slug,
             tempat: undefined,
             bbox: undefined,
@@ -270,7 +270,7 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
         categories={categories}
         activeSlugs={activeSlugs}
         onToggle={toggleCategory}
-        onShowAll={() => updateParams({ kategori: undefined })}
+        onShowAll={() => onSearchChange({ kategori: undefined })}
         count={listTotal}
         areaName={areaName}
         query={query}

@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from "react";
+
 import type { ApiResult } from "~/shared/api";
 import { refresh, type RefreshErrorCode } from "./api";
 import type { Session } from "./types";
@@ -25,6 +27,11 @@ export function getSession() {
   return session;
 }
 
+/** The current session; re-renders whenever it changes. */
+export function useSession() {
+  return useSyncExternalStore(subscribeSession, getSession);
+}
+
 export function getAccessToken() {
   return session?.access_token;
 }
@@ -44,24 +51,17 @@ export function clearSession() {
 export function isAdmin(current: Session | null): boolean {
   if (!current) return false;
   try {
+    // A token is "header.payload.signature"; the payload is JSON in base64url,
+    // which writes "-" and "_" where plain base64 writes "+" and "/".
     const payload = current.access_token.split(".")[1] ?? "";
-    const claims: unknown = JSON.parse(
-      atob(payload.replace(/-/g, "+").replace(/_/g, "/")),
-    );
-    return (
-      typeof claims === "object" &&
-      claims !== null &&
-      "role" in claims &&
-      claims.role === "admin"
-    );
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const claims = JSON.parse(atob(base64)) as { role?: unknown } | null;
+    return claims?.role === "admin";
   } catch {
+    // Not a readable token.
     return false;
   }
 }
-
-// -----------------------------------------------------------------------------
-// Refresh
-// -----------------------------------------------------------------------------
 
 // The backend rotates refresh tokens (each one is single-use), so refreshes
 // must never overlap: within a tab, callers share one in-flight refresh;
@@ -75,9 +75,11 @@ let refreshing: Promise<boolean> | null = null;
  * signed in afterwards.
  */
 export function refreshSession(): Promise<boolean> {
-  refreshing ??= withRefreshLock(doRefreshSession).finally(() => {
-    refreshing = null;
-  });
+  if (!refreshing) {
+    refreshing = withRefreshLock(doRefreshSession).finally(() => {
+      refreshing = null;
+    });
+  }
   return refreshing;
 }
 
@@ -89,17 +91,19 @@ let restoring: Promise<boolean> | null = null;
  * await it before reading the session.
  */
 export function restoreSession(): Promise<boolean> {
-  restoring ??= refreshSession();
+  if (!restoring) restoring = refreshSession();
   return restoring;
 }
 
 async function withRefreshLock(
   callback: () => Promise<boolean>,
 ): Promise<boolean> {
-  // Web Locks need a secure context (HTTPS or localhost).
-  return "locks" in navigator
-    ? navigator.locks.request("rantau:refresh", callback)
-    : callback();
+  // Web Locks need a secure context (HTTPS or localhost); without them, the
+  // tabs are not kept apart.
+  if ("locks" in navigator) {
+    return navigator.locks.request("rantau:refresh", callback);
+  }
+  return callback();
 }
 
 async function doRefreshSession(): Promise<boolean> {

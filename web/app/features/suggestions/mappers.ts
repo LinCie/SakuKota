@@ -1,11 +1,20 @@
 import { attributesToValues, toPlaceRequest } from "~/features/places/mappers";
 import type { CategoryField } from "~/features/places/types";
-import type { PlaceValues } from "~/features/places/values";
+import { emptyPlaceValues, type PlaceValues } from "~/features/places/values";
+import type { SubDistrict } from "~/features/subdistricts/types";
 import { orNull } from "~/shared/text";
 
 import type { CreateSuggestionRequest } from "./api";
 import type { Suggestion } from "./types";
-import type { SuggestionValues } from "./values";
+
+/** The suggestion form's values: the place as typed, plus a note to the reviewer. */
+export type SuggestionValues = PlaceValues & { note: string };
+
+export function emptySuggestionValues(
+  subDistricts: SubDistrict[],
+): SuggestionValues {
+  return { ...emptyPlaceValues(subDistricts), note: "" };
+}
 
 /** The request body for suggesting a place. */
 export function toSuggestionRequest(

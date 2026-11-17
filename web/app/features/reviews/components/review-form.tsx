@@ -71,6 +71,13 @@ function StarField({ field }: { field: AnyFieldApi }) {
   const messageId = `${field.name}-message`;
   const value = field.state.value as number;
 
+  // Stars up to the picked one are painted; the rest turn red on an error.
+  function starClass(star: number) {
+    if (star <= value) return "fill-sign text-ink";
+    if (error) return "text-chili";
+    return "text-ink/40";
+  }
+
   return (
     <fieldset aria-describedby={error ? messageId : undefined}>
       <legend className="text-ink mb-1.5 text-sm font-bold">Rating</legend>
@@ -92,14 +99,7 @@ function StarField({ field }: { field: AnyFieldApi }) {
             <Star
               aria-hidden="true"
               strokeWidth={2.5}
-              className={cn(
-                "size-7",
-                star <= value
-                  ? "fill-sign text-ink"
-                  : error
-                    ? "text-chili"
-                    : "text-ink/40",
-              )}
+              className={cn("size-7", starClass(star))}
             />
             <span className="sr-only">{star} bintang</span>
           </label>

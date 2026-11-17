@@ -111,11 +111,9 @@ export function LocatePlate({ leaflet }: { leaflet: LeafletMap | null }) {
   }
 
   const locating = status === "locating";
-  const Icon = locating
-    ? LoaderCircle
-    : status === "located"
-      ? LocateFixed
-      : Locate;
+  let Icon = Locate;
+  if (locating) Icon = LoaderCircle;
+  else if (status === "located") Icon = LocateFixed;
 
   return (
     <div className="pointer-events-none absolute right-3 bottom-6 z-1000 flex flex-col items-end gap-2">

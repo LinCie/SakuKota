@@ -6,34 +6,27 @@ import {
 } from "~/shared/api";
 import type { Session, User } from "./types";
 
-// -----------------------------------------------------------------------------
-// Request bodies / error codes (service-layer concerns, not domain shapes)
-// -----------------------------------------------------------------------------
-
-export type RegisterErrorCode =
+type RegisterErrorCode =
   | CommonApiErrorCode
   | InvalidBodyErrorCode
   | "VALIDATION_ERROR"
   | "EMAIL_TAKEN";
-export type LoginErrorCode =
+type LoginErrorCode =
   CommonApiErrorCode | InvalidBodyErrorCode | "INVALID_CREDENTIALS";
 export type RefreshErrorCode = CommonApiErrorCode | "INVALID_REFRESH_TOKEN";
-export type LogoutErrorCode = CommonApiErrorCode;
 
-export type RegisterRequest = {
+type RegisterRequest = {
   name: string;
   email: string;
   password: string;
 };
 
-export type LoginRequest = {
+type LoginRequest = {
   email: string;
   password: string;
 };
 
-// -----------------------------------------------------------------------------
 // Services (see internal/router/router.go)
-// -----------------------------------------------------------------------------
 
 export function register(
   body: RegisterRequest,
@@ -56,6 +49,6 @@ export function refresh(): Promise<ApiResult<Session, RefreshErrorCode>> {
 }
 
 /** Revokes the refresh cookie sent with the request and clears it. */
-export function logout(): Promise<ApiResult<void, LogoutErrorCode>> {
-  return apiPost<void, LogoutErrorCode>("auth/logout");
+export function logout(): Promise<ApiResult<void, CommonApiErrorCode>> {
+  return apiPost<void, CommonApiErrorCode>("auth/logout");
 }

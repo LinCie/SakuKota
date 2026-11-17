@@ -37,29 +37,25 @@ export type PlaceListParams = Omit<
 
 const PLACES_PAGE_SIZE = 20;
 
-// -----------------------------------------------------------------------------
-// Query keys
-// -----------------------------------------------------------------------------
+// Query keys: the names the fetched data is cached under. Invalidating a key
+// refetches every key that starts with it, so `all` covers everything below.
 
 export const placeKeys = {
   all: ["places"] as const,
-  lists: () => [...placeKeys.all, "list"] as const,
-  list: (params: GetPlacesParams) => [...placeKeys.lists(), params] as const,
-  // Outside `lists()`: paged data has another shape than a `PlacePage`.
+  lists: () => ["places", "list"] as const,
+  list: (params: GetPlacesParams) => ["places", "list", params] as const,
+  // Not under "list": paged data has another shape than a `PlacePage`.
   infinite: (params: PlaceListParams) =>
-    [...placeKeys.all, "infinite", params] as const,
-  detail: (id: number) => [...placeKeys.all, "detail", id] as const,
+    ["places", "infinite", params] as const,
+  detail: (id: number) => ["places", "detail", id] as const,
 };
 
 export const categoryKeys = {
-  all: ["categories"] as const,
-  lists: () => [...categoryKeys.all, "list"] as const,
+  lists: () => ["categories", "list"] as const,
 };
 
-// -----------------------------------------------------------------------------
 // Queries. The options are shared by route loaders (`query`) and the
 // hooks below, which read the data the loader put in the cache.
-// -----------------------------------------------------------------------------
 
 export function placesQuery(params: GetPlacesParams = {}) {
   return queryOptions({
@@ -75,11 +71,14 @@ export function placesInfiniteQuery(params: PlaceListParams = {}) {
     queryFn: ({ pageParam }) =>
       getPlaces({ ...params, limit: PLACES_PAGE_SIZE, offset: pageParam }),
     initialPageParam: 0,
+    // The next page starts after the places loaded so far; `undefined` means
+    // there is nothing more to load.
     getNextPageParam: (lastPage, pages) => {
-      const loaded = pages.reduce((sum, page) => sum + page.places.length, 0);
-      return lastPage.places.length > 0 && loaded < lastPage.total
-        ? loaded
-        : undefined;
+      let loaded = 0;
+      for (const page of pages) loaded += page.places.length;
+
+      const hasMore = lastPage.places.length > 0 && loaded < lastPage.total;
+      return hasMore ? loaded : undefined;
     },
   });
 }
@@ -133,9 +132,7 @@ export function usePlaceData() {
   return { categories, subDistricts, places };
 }
 
-// -----------------------------------------------------------------------------
 // Mutations (admin only). Each resolves once the affected queries refetched.
-// -----------------------------------------------------------------------------
 
 export function useCreatePlace() {
   const queryClient = useQueryClient();
@@ -187,13 +184,15 @@ export function useDeletePlace() {
       // query after navigating away.
       queryClient.setQueriesData<PlacePage>(
         { queryKey: placeKeys.lists() },
-        (page) =>
-          page?.places.some((place) => place.id === id)
-            ? {
-                places: page.places.filter((place) => place.id !== id),
-                total: page.total - 1,
-              }
-            : page,
+        (page) => {
+          if (!page) return page;
+          const hasPlace = page.places.some((place) => place.id === id);
+          if (!hasPlace) return page;
+          return {
+            places: page.places.filter((place) => place.id !== id),
+            total: page.total - 1,
+          };
+        },
       );
       queryClient.removeQueries({
         queryKey: placeKeys.detail(id),

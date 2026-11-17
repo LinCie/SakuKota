@@ -13,9 +13,8 @@ import { toastManager } from "~/shared/toast-manager";
 import { hasErrorCode, writeErrorMessage } from "~/shared/write-error";
 
 import { useCreateSuggestion } from "../queries";
-import { toSuggestionRequest } from "../mappers";
+import { emptySuggestionValues, toSuggestionRequest } from "../mappers";
 import { suggestionSchema } from "../schemas";
-import { emptySuggestionValues } from "../values";
 
 const FORM_ID = "suggestion-form";
 

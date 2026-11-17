@@ -41,6 +41,12 @@ export function CategoryNav({
   );
   const allActive = activeCategories.length === 0;
   const needle = query.trim();
+
+  let triggerLabel = `${activeCategories.length} kategori`;
+  if (allActive) triggerLabel = "Semua kategori";
+  else if (activeCategories.length === 1) {
+    triggerLabel = activeCategories[0].label;
+  }
   const itemClass =
     "data-highlighted:bg-paint-deep flex h-11 cursor-pointer items-center gap-2.5 rounded-[3px] px-2.5 text-sm font-bold outline-none md:h-10";
 
@@ -74,11 +80,7 @@ export function CategoryNav({
               </span>
             )}
             <span className="sr-only flex-1 text-left sm:not-sr-only">
-              {allActive
-                ? "Semua kategori"
-                : activeCategories.length === 1
-                  ? activeCategories[0].label
-                  : `${activeCategories.length} kategori`}
+              {triggerLabel}
             </span>
             <ChevronDown
               aria-hidden="true"

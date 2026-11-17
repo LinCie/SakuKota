@@ -126,19 +126,27 @@ export function CategoryFieldInput({
       );
       break;
     }
-    default:
+    case "number":
       control = (
         <input
           id={id}
-          type={
-            field.data_type === "number"
-              ? "number"
-              : field.data_type === "date"
-                ? "date"
-                : "text"
-          }
-          step={field.data_type === "number" ? "any" : undefined}
-          inputMode={field.data_type === "number" ? "decimal" : undefined}
+          type="number"
+          step="any"
+          inputMode="decimal"
+          value={textOf(value)}
+          onChange={(event) => onChange(event.target.value)}
+          aria-invalid={invalid ? true : undefined}
+          aria-describedby={described}
+          className={inputClass}
+        />
+      );
+      break;
+    default:
+      // Text, and any type this frontend doesn't know yet.
+      control = (
+        <input
+          id={id}
+          type={field.data_type === "date" ? "date" : "text"}
           value={textOf(value)}
           onChange={(event) => onChange(event.target.value)}
           aria-invalid={invalid ? true : undefined}

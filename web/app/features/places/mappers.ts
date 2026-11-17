@@ -11,9 +11,7 @@ import {
 } from "./values";
 import { isRange, type CategoryField, type Place } from "./types";
 
-// -----------------------------------------------------------------------------
 // API → form values
-// -----------------------------------------------------------------------------
 
 /** A place as form values, reading its custom fields by their data type. */
 export function placeToValues(
@@ -73,9 +71,7 @@ export function attributesToValues(
   return values;
 }
 
-// -----------------------------------------------------------------------------
 // Form values → API
-// -----------------------------------------------------------------------------
 
 /** The request body for creating or replacing a place. */
 export function toPlaceRequest(

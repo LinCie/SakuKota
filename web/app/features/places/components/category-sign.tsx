@@ -22,7 +22,7 @@ import {
 import { cn } from "~/shared/cn";
 import type { Category, CategoryColor } from "../types";
 
-export type CategoryStyle = {
+type CategoryStyle = {
   icon: LucideIcon;
   label: string;
   /** Solid painted plate: active filter, map sign, badge. */

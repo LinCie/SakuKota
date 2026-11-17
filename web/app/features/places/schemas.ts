@@ -11,9 +11,7 @@ import {
 
 // Mirrors the backend's rules (internal/module/place/service.go).
 
-// -----------------------------------------------------------------------------
 // Custom fields
-// -----------------------------------------------------------------------------
 
 /** Whether text is a real calendar date in YYYY-MM-DD form. */
 function validDate(text: string): boolean {
@@ -63,9 +61,7 @@ export function attributeErrors(
   return errors;
 }
 
-// -----------------------------------------------------------------------------
 // Place form
-// -----------------------------------------------------------------------------
 
 export function validCoordinate(text: string, limit: number): boolean {
   const value = parseNumber(text);

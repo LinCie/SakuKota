@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 import { field } from "~/features/places/fixtures";
 import { toPlaceRequest } from "~/features/places/mappers";
 
-import { suggestionToPlaceValues, toSuggestionRequest } from "./mappers";
+import {
+  emptySuggestionValues,
+  suggestionToPlaceValues,
+  toSuggestionRequest,
+} from "./mappers";
 import type { Suggestion } from "./types";
-import { emptySuggestionValues } from "./values";
 
 const fields = [
   field({ key: "count", data_type: "number" }),

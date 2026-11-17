@@ -1,7 +1,6 @@
 import { Outlet } from "@tanstack/react-router";
 
-import { useSession } from "~/features/auth/hooks";
-import { isAdmin } from "~/features/auth/session";
+import { isAdmin, useSession } from "~/features/auth/session";
 import { Toaster } from "~/shared/components/toaster";
 
 import { AdminGate } from "./admin-gate";

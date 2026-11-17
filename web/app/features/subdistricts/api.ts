@@ -1,18 +1,7 @@
-import { apiGet, type CommonApiErrorCode, unwrap } from "~/shared/api";
+import { apiGet, unwrap } from "~/shared/api";
 import type { SubDistrict } from "./types";
 
-// -----------------------------------------------------------------------------
-// Error codes (service-layer concerns, not domain shapes).
-// -----------------------------------------------------------------------------
-
-export type SubDistrictErrorCode = CommonApiErrorCode;
-
-// -----------------------------------------------------------------------------
-// Services (see internal/router/router.go)
-// -----------------------------------------------------------------------------
-
+/** Every kecamatan (see internal/router/router.go). Throws an `ApiError` when the backend rejects the request. */
 export async function getSubDistricts(): Promise<SubDistrict[]> {
-  return unwrap(
-    await apiGet<SubDistrict[], SubDistrictErrorCode>("subdistricts"),
-  );
+  return unwrap(await apiGet<SubDistrict[]>("subdistricts"));
 }

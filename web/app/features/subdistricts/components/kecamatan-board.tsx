@@ -8,12 +8,12 @@ import {
 } from "lucide-react";
 import { useEffect, useRef } from "react";
 
+import { ImageFrame } from "~/shared/components/image-frame";
 import { MediaGallery } from "~/shared/components/media-gallery";
 import { MissingSlot } from "~/shared/components/missing-slot";
 import { InfoSection } from "~/shared/components/menu-board";
 import { formatRupiah } from "~/shared/format";
 import type { SubDistrict } from "../types";
-import { AreaMap } from "./area-map";
 
 type KecamatanBoardProps = {
   subDistrict: SubDistrict;
@@ -110,7 +110,13 @@ export function KecamatanBoard({
         </InfoSection>
 
         <InfoSection icon={MapIcon} title="Peta area">
-          <AreaMap key={subDistrict.id} subDistrict={subDistrict} />
+          <ImageFrame
+            key={subDistrict.id}
+            src={subDistrict.static_map_image_url}
+            alt={`Peta area Kecamatan ${subDistrict.name}`}
+            missing="Peta area tidak tersedia"
+            aspect="aspect-8/5"
+          />
         </InfoSection>
       </div>
     </dialog>

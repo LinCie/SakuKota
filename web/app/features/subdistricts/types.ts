@@ -1,8 +1,6 @@
 import type { Media } from "~/shared/image-upload";
 
-// -----------------------------------------------------------------------------
 // Types (see internal/module/subdistrict/dto.go)
-// -----------------------------------------------------------------------------
 
 export type SubDistrict = {
   id: number;

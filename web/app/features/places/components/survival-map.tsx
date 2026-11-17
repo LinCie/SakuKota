@@ -80,14 +80,23 @@ function prefersReducedMotion() {
  * coordinates since a zoomed-out map can show past them.
  */
 function bboxParam(bounds: Leaflet.LatLngBounds) {
-  const edge = (value: number, max: number, round: (n: number) => number) =>
-    (round(Math.min(max, Math.max(-max, value)) * 1e4) / 1e4).toFixed(4);
+  // West and south round down, east and north round up: outward.
+  const west = Math.floor(clamp(bounds.getWest(), 180) * 1e4) / 1e4;
+  const south = Math.floor(clamp(bounds.getSouth(), 90) * 1e4) / 1e4;
+  const east = Math.ceil(clamp(bounds.getEast(), 180) * 1e4) / 1e4;
+  const north = Math.ceil(clamp(bounds.getNorth(), 90) * 1e4) / 1e4;
+
   return [
-    edge(bounds.getWest(), 180, Math.floor),
-    edge(bounds.getSouth(), 90, Math.floor),
-    edge(bounds.getEast(), 180, Math.ceil),
-    edge(bounds.getNorth(), 90, Math.ceil),
+    west.toFixed(4),
+    south.toFixed(4),
+    east.toFixed(4),
+    north.toFixed(4),
   ].join(",");
+}
+
+/** The value, kept between -limit and limit. */
+function clamp(value: number, limit: number) {
+  return Math.min(limit, Math.max(-limit, value));
 }
 
 /**

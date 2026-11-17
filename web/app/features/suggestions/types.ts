@@ -1,18 +1,10 @@
 import type { GeoPoint } from "~/features/places/types";
 
-// -----------------------------------------------------------------------------
 // Types (see internal/module/suggestion/dto.go)
-// -----------------------------------------------------------------------------
 
 /** A suggestion is reviewed once: it leaves pending for approved or rejected. */
 export const SUGGESTION_STATUSES = ["pending", "approved", "rejected"] as const;
 export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number];
-
-/** The user who suggested a place. */
-export type SuggestionAuthor = {
-  id: number;
-  name: string;
-};
 
 export type Suggestion = {
   id: number;
@@ -35,5 +27,6 @@ export type Suggestion = {
   place_id: number | null;
   reviewed_at: string | null;
   created_at: string;
-  user: SuggestionAuthor;
+  /** The user who suggested the place. */
+  user: { id: number; name: string };
 };

@@ -1,12 +1,4 @@
-// -----------------------------------------------------------------------------
 // Types (see internal/module/review/dto.go)
-// -----------------------------------------------------------------------------
-
-/** The user who wrote a review. */
-export type ReviewAuthor = {
-  id: number;
-  name: string;
-};
 
 export type Review = {
   id: number;
@@ -16,5 +8,6 @@ export type Review = {
   /** Null when the review is only a rating. */
   comment: string | null;
   created_at: string;
-  user: ReviewAuthor;
+  /** The user who wrote the review. */
+  user: { id: number; name: string };
 };

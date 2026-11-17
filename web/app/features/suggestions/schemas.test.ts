@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { emptySuggestionValues } from "./values";
+import { emptySuggestionValues } from "./mappers";
 import { rejectSchema, suggestionSchema } from "./schemas";
 
 const valid = () => ({

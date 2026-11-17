@@ -1,7 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { lazy, Suspense, type ReactNode } from "react";
 
-import { useSession } from "~/features/auth/hooks";
+import { useSession } from "~/features/auth/session";
 import { cn } from "~/shared/cn";
 import {
   menuButtonClass,

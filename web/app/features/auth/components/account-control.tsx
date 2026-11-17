@@ -4,8 +4,7 @@ import { LogOut, MapPinPlus, ShieldCheck, UserRound } from "lucide-react";
 
 import { cn } from "~/shared/cn";
 import { logout } from "../api";
-import { useSession } from "../hooks";
-import { clearSession, isAdmin } from "../session";
+import { clearSession, isAdmin, useSession } from "../session";
 
 const plateClass =
   "border-paint/35 text-paint hover:border-paint/60 hover:bg-board-deep focus-visible:outline-sign inline-flex h-11 shrink-0 items-center gap-2 rounded-[3px] border-2 px-3 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2";

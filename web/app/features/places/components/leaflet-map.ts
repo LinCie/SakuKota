@@ -8,9 +8,12 @@ export const MAP_CANVAS_CLASS =
 
 /** The places that have a location, with their latitude and longitude. */
 export function locatedPlaces(places: Place[]) {
-  return places.flatMap((place) => {
-    if (!place.location) return [];
-    const [longitude, latitude] = place.location.coordinates;
-    return [{ place, lat: latitude, lng: longitude }];
-  });
+  const located = [];
+  for (const place of places) {
+    if (!place.location) continue;
+    // GeoJSON orders coordinates as [longitude, latitude].
+    const [lng, lat] = place.location.coordinates;
+    located.push({ place, lat, lng });
+  }
+  return located;
 }

@@ -1,48 +1,10 @@
-import {
-  apiDelete,
-  apiGet,
-  apiPost,
-  apiPut,
-  type AdminWriteErrorCode,
-  type CommonApiErrorCode,
-  unwrap,
-} from "~/shared/api";
-import type { ImageErrorCode, MediaUpload } from "~/shared/image-upload";
+import { apiDelete, apiGet, apiPost, apiPut, unwrap } from "~/shared/api";
+import type { MediaUpload } from "~/shared/image-upload";
 import type { CategoryDetail, GeoPoint, Place, PlacePage } from "./types";
 
-// -----------------------------------------------------------------------------
-// Request params / error codes (service-layer concerns, not domain shapes).
-// Services resolve to the response data and throw an `ApiError` carrying one
-// of these codes when the backend rejects the request.
-// -----------------------------------------------------------------------------
-
-export type PlaceErrorCode =
-  | CommonApiErrorCode
-  | "INVALID_SUB_DISTRICT_ID"
-  | "INVALID_CATEGORY_ID"
-  | "INVALID_LIMIT"
-  | "INVALID_OFFSET"
-  | "INVALID_BBOX"
-  | "SUB_DISTRICT_NOT_FOUND"
-  | "CATEGORY_NOT_FOUND";
-export type GetPlaceErrorCode =
-  CommonApiErrorCode | "INVALID_PLACE_ID" | "PLACE_NOT_FOUND";
-export type CategoryErrorCode = CommonApiErrorCode;
-export type UpdatePlaceErrorCode =
-  | AdminWriteErrorCode
-  | "INVALID_PLACE_ID"
-  | "VALIDATION_ERROR"
-  | "PLACE_NOT_FOUND";
-export type DeletePlaceErrorCode =
-  AdminWriteErrorCode | "INVALID_PLACE_ID" | "PLACE_NOT_FOUND";
-export type CreatePlaceErrorCode = AdminWriteErrorCode | "VALIDATION_ERROR";
-export type PlaceImageErrorCode =
-  ImageErrorCode | "INVALID_PLACE_ID" | "PLACE_NOT_FOUND";
-export type DeletePlaceMediaErrorCode =
-  | AdminWriteErrorCode
-  | "INVALID_PLACE_ID"
-  | "INVALID_MEDIA_ID"
-  | "MEDIA_NOT_FOUND";
+// Every function here calls one backend route (see internal/router/router.go),
+// returns the response data, and throws an `ApiError` when the backend rejects
+// the request.
 
 export type GetPlacesParams = {
   /** Filters places to one sub-district, matching the `sub_district_id` query param. */
@@ -72,45 +34,38 @@ export type PlaceRequest = {
   attributes?: Record<string, unknown>;
 };
 
-// -----------------------------------------------------------------------------
-// Services (see internal/router/router.go)
-// -----------------------------------------------------------------------------
-
 export async function getPlaces(
   params: GetPlacesParams = {},
 ): Promise<PlacePage> {
   const { subDistrictId, categoryIds, q, limit, offset, bbox } = params;
+
+  // Only the filters that are set go into the URL.
   const searchParams = new URLSearchParams();
   if (subDistrictId !== undefined) {
     searchParams.set("sub_district_id", String(subDistrictId));
   }
-  if (categoryIds?.length)
+  if (categoryIds?.length) {
     searchParams.set("category_id", categoryIds.join(","));
+  }
   if (q) searchParams.set("q", q);
   if (limit !== undefined) searchParams.set("limit", String(limit));
   if (offset) searchParams.set("offset", String(offset));
   if (bbox) searchParams.set("bbox", bbox);
 
-  return unwrap(
-    await apiGet<PlacePage, PlaceErrorCode>("places", { searchParams }),
-  );
+  return unwrap(await apiGet<PlacePage>("places", { searchParams }));
 }
 
 export async function getPlace(id: number): Promise<Place> {
-  return unwrap(await apiGet<Place, GetPlaceErrorCode>(`places/${id}`));
+  return unwrap(await apiGet<Place>(`places/${id}`));
 }
 
 export async function getCategories(): Promise<CategoryDetail[]> {
-  return unwrap(
-    await apiGet<CategoryDetail[], CategoryErrorCode>("places/categories"),
-  );
+  return unwrap(await apiGet<CategoryDetail[]>("places/categories"));
 }
 
 /** Admin only. */
 export async function createPlace(body: PlaceRequest): Promise<Place> {
-  return unwrap(
-    await apiPost<Place, CreatePlaceErrorCode>("places", { json: body }),
-  );
+  return unwrap(await apiPost<Place>("places", { json: body }));
 }
 
 /** Admin only. */
@@ -118,16 +73,12 @@ export async function updatePlace(
   id: number,
   body: PlaceRequest,
 ): Promise<Place> {
-  return unwrap(
-    await apiPut<Place, UpdatePlaceErrorCode>(`places/${id}`, {
-      json: body,
-    }),
-  );
+  return unwrap(await apiPut<Place>(`places/${id}`, { json: body }));
 }
 
 /** Admin only. */
 export async function deletePlace(id: number): Promise<void> {
-  unwrap(await apiDelete<void, DeletePlaceErrorCode>(`places/${id}`));
+  unwrap(await apiDelete<void>(`places/${id}`));
 }
 
 /** Admin only. Presigns an upload of a new image of the place. */
@@ -136,10 +87,9 @@ export async function requestPlaceMediaUpload(
   contentType: string,
 ): Promise<MediaUpload> {
   return unwrap(
-    await apiPost<MediaUpload, PlaceImageErrorCode>(
-      `places/${id}/medias/upload-url`,
-      { json: { content_type: contentType } },
-    ),
+    await apiPost<MediaUpload>(`places/${id}/medias/upload-url`, {
+      json: { content_type: contentType },
+    }),
   );
 }
 
@@ -149,7 +99,7 @@ export async function addPlaceMedia(
   uploadKey: string,
 ): Promise<Place> {
   return unwrap(
-    await apiPost<Place, PlaceImageErrorCode>(`places/${id}/medias`, {
+    await apiPost<Place>(`places/${id}/medias`, {
       json: { upload_key: uploadKey },
     }),
   );
@@ -160,9 +110,5 @@ export async function deletePlaceMedia(
   id: number,
   mediaId: number,
 ): Promise<void> {
-  unwrap(
-    await apiDelete<void, DeletePlaceMediaErrorCode>(
-      `places/${id}/medias/${mediaId}`,
-    ),
-  );
+  unwrap(await apiDelete<void>(`places/${id}/medias/${mediaId}`));
 }
