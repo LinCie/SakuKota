@@ -43,6 +43,8 @@ export type HomeSearch = {
   q?: string;
   /** The map's view as "west,south,east,north"; only places inside it are loaded. */
   bbox?: string;
+  /** How many places the map loads, set from its zoom level. */
+  limit?: number;
   tempat?: number;
 };
 
@@ -50,7 +52,10 @@ function activeCategorySlugs(kategori: string | undefined) {
   return (kategori ?? "").split(",").filter(Boolean);
 }
 
-type PlacesFilters = Pick<HomeSearch, "kecamatan" | "kategori" | "q" | "bbox">;
+type PlacesFilters = Pick<
+  HomeSearch,
+  "kecamatan" | "kategori" | "q" | "bbox" | "limit"
+>;
 
 /**
  * The kecamatan on show (the one in the URL, else the first) and the places
@@ -59,7 +64,7 @@ type PlacesFilters = Pick<HomeSearch, "kecamatan" | "kategori" | "q" | "bbox">;
  * no places either.
  */
 export function placesSelection(
-  { kecamatan, kategori, q, bbox }: PlacesFilters,
+  { kecamatan, kategori, q, bbox, limit }: PlacesFilters,
   categories: CategoryDetail[],
   subDistricts: SubDistrict[],
 ) {
@@ -73,7 +78,7 @@ export function placesSelection(
       .map((category) => category.id),
     q: q?.trim(),
   };
-  const params: GetPlacesParams = { ...listParams, bbox };
+  const params: GetPlacesParams = { ...listParams, bbox, limit };
   return { subDistrict, params, listParams };
 }
 
@@ -157,9 +162,9 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
     selectPlace(place.id);
   }
 
-  function setView({ bbox }: MapView) {
-    if (bbox !== search.bbox) {
-      updateParams({ bbox });
+  function setView({ bbox, limit }: MapView) {
+    if (bbox !== search.bbox || limit !== search.limit) {
+      updateParams({ bbox, limit });
     }
   }
 
@@ -248,6 +253,7 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
             kecamatan: slug,
             tempat: undefined,
             bbox: undefined,
+            limit: undefined,
           })
         }
         onOpenInfo={() => setInfoOpen(true)}

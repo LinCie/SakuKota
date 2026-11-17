@@ -44,7 +44,8 @@ type PlaceFilter struct {
 	// Limit is the page size. The service replaces zero or an oversized value
 	// with its maximum, so below the service it is always positive.
 	Limit int
-	// Offset skips this many places before the page starts. Places are ordered by id.
+	// Offset skips this many places before the page starts. Places are ordered by
+	// distance from the centre of Bounds, then by id; without Bounds, by id.
 	Offset int
 }
 
@@ -62,6 +63,11 @@ type BoundingBox struct {
 	MinLat float64
 	MaxLng float64
 	MaxLat float64
+}
+
+// Center returns the longitude and latitude of the middle of the box.
+func (b BoundingBox) Center() (float64, float64) {
+	return (b.MinLng + b.MaxLng) / 2, (b.MinLat + b.MaxLat) / 2
 }
 
 // Category is a row of CATEGORIES. Migrations define categories; the API cannot create them.

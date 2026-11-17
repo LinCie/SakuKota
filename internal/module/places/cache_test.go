@@ -51,12 +51,17 @@ func TestCachedRepository_GetMany(t *testing.T) {
 	create(menteng, tailor, "Penjahit E", postgis.MustPoint(106.83, -6.20))
 
 	box := &places.BoundingBox{MinLng: 106.82, MinLat: -6.21, MaxLng: 106.84, MaxLat: -6.20}
+	// The centre of nearBox is on Penjahit B, so it comes before Laundry A despite its higher id.
+	nearBox := &places.BoundingBox{MinLng: 106.81, MinLat: -6.23, MaxLng: 106.87, MaxLat: -6.19}
 	filters := map[string]places.PlaceFilter{
 		"sub-district":         {SubDistrictID: setiabudi},
 		"categories":           {SubDistrictID: setiabudi, CategoryIDs: []int64{tailor, laundry}},
 		"query":                {SubDistrictID: setiabudi, Query: "laundry"},
 		"bounds":               {SubDistrictID: setiabudi, Bounds: box},
 		"bounds and category":  {SubDistrictID: setiabudi, Bounds: box, CategoryIDs: []int64{laundry}},
+		"bounds by distance":   {SubDistrictID: setiabudi, Bounds: nearBox},
+		"bounds and limit":     {SubDistrictID: setiabudi, Bounds: nearBox, Limit: 1},
+		"bounds and offset":    {SubDistrictID: setiabudi, Bounds: nearBox, Limit: 1, Offset: 1},
 		"limit":                {SubDistrictID: setiabudi, Limit: 2},
 		"offset":               {SubDistrictID: setiabudi, Limit: 2, Offset: 2},
 		"offset past the end":  {SubDistrictID: setiabudi, Limit: 2, Offset: 20},

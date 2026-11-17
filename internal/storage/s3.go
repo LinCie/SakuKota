@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -72,6 +73,17 @@ func (s *S3) PresignPut(ctx context.Context, key, contentType string) (Upload, e
 		Headers:   headers,
 		ExpiresAt: expiresAt,
 	}, nil
+}
+
+// Put stores body under key with contentType, replacing any object already there.
+func (s *S3) Put(ctx context.Context, key, contentType string, body []byte) error {
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(s.bucket),
+		Key:         aws.String(key),
+		ContentType: aws.String(contentType),
+		Body:        bytes.NewReader(body),
+	})
+	return err
 }
 
 // Stat returns the object's size and type, or ErrObjectNotFound if it is missing.

@@ -1,6 +1,7 @@
 package places
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
@@ -115,12 +116,18 @@ func encodeIndex(locations []PlaceLocation) []byte {
 }
 
 // pageFromIndex returns the ids on the filter's page of the index, and the number
-// of places inside the filter's bounds (edges included).
+// of places inside the filter's bounds (edges included). With bounds, the places
+// nearest the centre of the box come first; otherwise the index order is kept.
 func pageFromIndex(index []byte, filter PlaceFilter) ([]int64, int) {
-	var ids []int64
-	total := 0
+	type match struct {
+		id       int64
+		distance float64
+	}
+	var matches []match
 
 	for entry := index; len(entry) >= indexEntrySize; entry = entry[indexEntrySize:] {
+		m := match{id: int64(binary.LittleEndian.Uint64(entry))}
+
 		if b := filter.Bounds; b != nil {
 			longitude := math.Float64frombits(binary.LittleEndian.Uint64(entry[8:]))
 			latitude := math.Float64frombits(binary.LittleEndian.Uint64(entry[16:]))
@@ -129,12 +136,27 @@ func pageFromIndex(index []byte, filter PlaceFilter) ([]int64, int) {
 			if !(longitude >= b.MinLng && longitude <= b.MaxLng && latitude >= b.MinLat && latitude <= b.MaxLat) {
 				continue
 			}
+
+			centerLng, centerLat := b.Center()
+			m.distance = math.Hypot(longitude-centerLng, latitude-centerLat)
 		}
 
-		if total >= filter.Offset && len(ids) < filter.Limit {
-			ids = append(ids, int64(binary.LittleEndian.Uint64(entry)))
-		}
-		total++
+		matches = append(matches, m)
+	}
+
+	if filter.Bounds != nil {
+		slices.SortFunc(matches, func(a, b match) int {
+			return cmp.Or(cmp.Compare(a.distance, b.distance), cmp.Compare(a.id, b.id))
+		})
+	}
+
+	total := len(matches)
+	start := min(filter.Offset, total)
+	end := min(start+filter.Limit, total)
+
+	var ids []int64
+	for _, m := range matches[start:end] {
+		ids = append(ids, m.id)
 	}
 
 	return ids, total

@@ -1,3 +1,6 @@
+-- Load-test data: made-up places, 50,000 of them, over 17 kecamatan. Use
+-- cmd/seed for the real data. Run one or the other on an empty database.
+
 -- Jakarta kecamatan. A temporary table so the bulk places below can use each
 -- one's approximate center.
 CREATE TEMPORARY TABLE SEEDED_SUB_DISTRICTS (

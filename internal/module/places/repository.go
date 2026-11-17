@@ -30,7 +30,7 @@ type Repository interface {
 	// GetLocations returns the id and coordinates of every place matching the filter's
 	// sub-district, categories, and query. Bounds, limit, and offset are ignored.
 	GetLocations(ctx context.Context, filter PlaceFilter) ([]PlaceLocation, error)
-	// GetByIDs returns the places with the given ids, lowest ids first.
+	// GetByIDs returns the places with the given ids, in the order of ids.
 	// Ids that match no place are skipped.
 	GetByIDs(ctx context.Context, ids []int64) ([]Place, error)
 	// GetCategories returns every category with its fields.
@@ -170,9 +170,20 @@ func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([
 	where, args := placeWhere(filter)
 
 	// Clip so the page values are not written into args, which the count reuses.
-	pageArgs := append(slices.Clip(args), filter.Limit, filter.Offset)
-	query := fmt.Sprintf(`SELECT %s%s%s ORDER BY p.id LIMIT $%d OFFSET $%d`,
-		placeColumns, placeFrom, where, len(args)+1, len(args)+2)
+	pageArgs := slices.Clip(args)
+
+	// With bounds, the places nearest the centre of the box come first.
+	order := "p.id"
+	if b := filter.Bounds; b != nil {
+		longitude, latitude := b.Center()
+		pageArgs = append(pageArgs, longitude, latitude)
+		order = fmt.Sprintf("p.location <-> ST_SetSRID(ST_MakePoint($%d, $%d), %d), p.id",
+			len(pageArgs)-1, len(pageArgs), postgis.SRID)
+	}
+
+	pageArgs = append(pageArgs, filter.Limit, filter.Offset)
+	query := fmt.Sprintf(`SELECT %s%s%s ORDER BY %s LIMIT $%d OFFSET $%d`,
+		placeColumns, placeFrom, where, order, len(pageArgs)-1, len(pageArgs))
 
 	places := make([]Place, 0)
 	if err := r.db.SelectContext(ctx, &places, query, pageArgs...); err != nil {
@@ -216,14 +227,14 @@ func (r *postgresRepository) GetLocations(ctx context.Context, filter PlaceFilte
 	return locations, nil
 }
 
-// GetByIDs returns the places with the given ids, with category and photos.
+// GetByIDs returns the places with the given ids, in the order of ids, with category and photos.
 func (r *postgresRepository) GetByIDs(ctx context.Context, ids []int64) ([]Place, error) {
 	places := make([]Place, 0, len(ids))
 
 	err := r.db.SelectContext(
 		ctx,
 		&places,
-		`SELECT `+placeColumns+placeFrom+` WHERE p.id = ANY($1) ORDER BY p.id`,
+		`SELECT `+placeColumns+placeFrom+` WHERE p.id = ANY($1) ORDER BY array_position($1, p.id)`,
 		ids,
 	)
 	if err != nil {

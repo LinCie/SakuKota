@@ -16,11 +16,16 @@ import { ZoomPlate } from "./zoom-plate";
 
 const FIT_OPTIONS = { padding: [56, 56] as [number, number], maxZoom: 16 };
 // A picked place is shown at least this close.
-const PLACE_ZOOM = 16;
+const PLACE_ZOOM = 18;
 // Keeps a selected sign this far from the map's edges.
 const SIGN_MARGIN = 72;
+// The map zooms out no further than this, a few kilometres across.
+const MIN_ZOOM = 16;
 // ZoomPlate replaces Leaflet's zoom control.
-const MAP_OPTIONS: Leaflet.MapOptions = { zoomControl: false };
+const MAP_OPTIONS: Leaflet.MapOptions = {
+  zoomControl: false,
+  minZoom: MIN_ZOOM,
+};
 
 // Signs plant west to east in a quick stagger. Literal class names so
 // Tailwind generates them.
@@ -85,10 +90,20 @@ function bboxParam(bounds: Leaflet.LatLngBounds) {
   ].join(",");
 }
 
+/**
+ * How many places to load at a zoom level: the server's maximum of 100 when
+ * zoomed all the way out, where the view holds the most, down to 40 close in.
+ */
+function placesLimit(zoom: number) {
+  return Math.max(40, 100 - (Math.round(zoom) - MIN_ZOOM) * 20);
+}
+
 /** The part of the map on show, as the places request filters it. */
 export type MapView = {
   /** "west,south,east,north" in degrees. */
   bbox: string;
+  /** How many places to load for the view's zoom level. */
+  limit: number;
 };
 
 /** Asks the map to teleport to a place. A new object each time, so asking again repeats it. */
@@ -145,7 +160,10 @@ export function SurvivalMap({
     if (!leaflet) return;
     const { map } = leaflet;
     const reportView = () =>
-      onViewChangeEvent({ bbox: bboxParam(map.getBounds()) });
+      onViewChangeEvent({
+        bbox: bboxParam(map.getBounds()),
+        limit: placesLimit(map.getZoom()),
+      });
     map.on("moveend", reportView);
     return () => {
       map.off("moveend", reportView);

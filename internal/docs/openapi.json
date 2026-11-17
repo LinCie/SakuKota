@@ -228,7 +228,7 @@
           {
             "name": "bbox",
             "in": "query",
-            "description": "Only return places located inside this box, edges included, as west,south,east,north in degrees. West must not exceed east, nor south north. Places without a location are left out.",
+            "description": "Only return places located inside this box, edges included, as west,south,east,north in degrees. West must not exceed east, nor south north. Places without a location are left out. The places nearest the centre of the box come first, and those at the same distance are ordered by ID.",
             "schema": {
               "type": "string",
               "example": "106.8084,-6.2292,106.8451,-6.2009"
@@ -237,13 +237,13 @@
           {
             "name": "limit",
             "in": "query",
-            "description": "Return at most this many places, lowest IDs first. total still counts every match.",
+            "description": "Return at most this many places: those nearest the centre of bbox, or those with the lowest IDs when there is no bbox. total still counts every match.",
             "schema": { "type": "integer", "minimum": 1 }
           },
           {
             "name": "offset",
             "in": "query",
-            "description": "Skip this many places, lowest IDs first, before limit applies. Use it with limit to page through the places. total still counts every match.",
+            "description": "Skip this many places, in the same order limit uses, before limit applies. Use it with limit to page through the places. total still counts every match.",
             "schema": { "type": "integer", "minimum": 0, "default": 0 }
           }
         ],

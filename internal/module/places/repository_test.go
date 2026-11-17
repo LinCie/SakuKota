@@ -347,6 +347,24 @@ func TestRepository_GetMany(t *testing.T) {
 			wantTotal: 1,
 		},
 		{
+			name:      "bounds order places by distance from the centre of the box, not by id",
+			filter:    places.PlaceFilter{Bounds: &places.BoundingBox{MinLng: 106.81, MinLat: -6.23, MaxLng: 106.87, MaxLat: -6.19}},
+			want:      []string{"Penjahit Maju", "Laundry Bersih"},
+			wantTotal: 2,
+		},
+		{
+			name:      "limit keeps the places nearest the centre of the bounds",
+			filter:    places.PlaceFilter{Bounds: &places.BoundingBox{MinLng: 106.81, MinLat: -6.23, MaxLng: 106.87, MaxLat: -6.19}, Limit: 1},
+			want:      []string{"Penjahit Maju"},
+			wantTotal: 2,
+		},
+		{
+			name:      "offset skips the places nearest the centre of the bounds",
+			filter:    places.PlaceFilter{Bounds: &places.BoundingBox{MinLng: 106.81, MinLat: -6.23, MaxLng: 106.87, MaxLat: -6.19}, Limit: 1, Offset: 1},
+			want:      []string{"Laundry Bersih"},
+			wantTotal: 2,
+		},
+		{
 			name: "filters combine",
 			filter: places.PlaceFilter{
 				SubDistrictID: setiabudi,

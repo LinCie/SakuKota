@@ -46,7 +46,7 @@ Curated micro-services (warung, tailors, local clinics, laundries, pharmacies, p
 
 ## Evidence on Hand
 
-- Seed data in `../cmd/seed/seed.sql`: 2 kecamatan (Setiabudi, Mampang Prapatan), about 10 curated places each across the five categories. Static map images are placeholders (placehold.co).
+- Seed data in `../cmd/seed/seed.sql`: 3 kecamatan (Setiabudi, Mampang Prapatan, Tebet), about 1,070 real places from OpenStreetMap with made-up details filled in, 24 made-up water and gas refills, and about 1,070 made-up reviews. `../cmd/seed-bulk` holds 50,000 generated places for load testing. Static map images are placeholders (placehold.co).
 - No testimonials, user counts, or partner claims exist; do not fabricate them.
 
 ## Product Principles

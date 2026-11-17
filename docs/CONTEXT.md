@@ -5,8 +5,8 @@
 > behavior or the API contract, once a VERIFICATION phase passes (see
 > [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-17. Updated after simplifying and renaming the storage module (see the change log).
->   Verified by `go build`, `go vet`, and the full Go test suite.
+> - Last updated: 2026-11-17. Updated after the seed started uploading images (see the change log).
+>   Verified by `go build`, `go vet`, the full Go test suite, and running `make seed` twice.
 > - Status: verified. All Go tests pass and the API was checked by hand. The web app has not been
 >   updated for medias yet, so its image views and the place image upload are broken until it is.
 
@@ -266,9 +266,12 @@ its key; a place without images has `[]`. Lists and single reads return
   category. Every create validation failure returns `400 VALIDATION_ERROR`,
   including an unknown sub-district or category.
 - **List (`GET /places`).** Returns `{places, total}`, where `total` counts all
-  matches **before** `offset` and `limit`. Places are ordered by ascending id;
-  `offset` skips the lowest ids and `limit` keeps the lowest of the rest. Filters combine with AND, and an empty parameter counts
-  as absent.
+  matches **before** `offset` and `limit`. Without a `bbox`, places are ordered
+  by ascending id. With a `bbox`, the places nearest the centre of the box come
+  first (straight-line distance in degrees), and places at the same distance
+  are ordered by id. `offset` skips the first places in that order and `limit`
+  keeps the first of the rest, so a capped map view shows the places nearest
+  its centre. Filters combine with AND, and an empty parameter counts as absent.
   - `sub_district_id`: a positive int64. An unknown id returns `404
     SUB_DISTRICT_NOT_FOUND`.
   - `category_id`: a comma list of positive int64s that matches any of them.
@@ -278,15 +281,16 @@ its key; a place without images has `[]`. Lists and single reads return
     on name, address, short description, and category name. `%` and `_` are
     literal. Attributes are **not** searched.
   - `limit`: a positive integer, otherwise `INVALID_LIMIT`. An absent limit, or
-    one above 40, is replaced by 40 (`maxLimit`), so no list is unbounded and a
+    one above 100, is replaced by 100 (`maxLimit`), so no list is unbounded and a
     client cannot ask for more. `total` still counts every match, so a client can
-    tell when the list was cut off. The web map sends no limit and relies on
-    this cap.
+    tell when the list was cut off. The web map sends a limit that follows its
+    zoom level: 100 at its widest zoom (14, which it cannot zoom out past), then
+    80, 60, and 40 from zoom 17 inward. The web side is untested.
   - `offset`: a non-negative integer, otherwise `INVALID_OFFSET`.
   - `bbox=west,south,east,north`: four finite numbers with lon in ±180, lat in
     ±90, `west ≤ east`, and `south ≤ north`, otherwise `INVALID_BBOX`. Edges
-    count as inside, and places without a location are excluded. A GiST index
-    on `PLACES.location` is required.
+    count as inside, and places without a location are excluded. It also sets
+    the order (see above). A GiST index on `PLACES.location` is required.
 - **Get (`GET /places/{id}`).** Returns `404 PLACE_NOT_FOUND` for an unknown
   place.
 - **Update (`PUT /places/{id}`).** The body has the same shape and validation as
@@ -579,7 +583,7 @@ body.
 
 | Story | Backend support |
 | ----- | --------------- |
-| US-01 Browse pins in the viewport | `GET /places?bbox=…`; the server returns at most 40 places, and `total` lets the UI show "N results" when the list is truncated. Clustering and empty states are frontend work |
+| US-01 Browse pins in the viewport | `GET /places?bbox=…`; the server returns at most 100 places, those nearest the centre of the viewport, and `total` lets the UI show "N results" when the list is truncated. Clustering and empty states are frontend work |
 | US-02 Pin details (6 fields) | Place response: name, category, address/location, operating hours, price range, description. Missing values are `null`, so the UI can show placeholders |
 | US-03 Kecamatan dropdown | `GET /subdistricts` (ordered by id) |
 | US-04 Kecamatan info modal | Flood, safety, and spending fields plus `static_map_image_url`, with `null` for missing data |
@@ -639,7 +643,8 @@ them.
     `CORS_ALLOWED_ORIGIN` only sets the image bucket's CORS rule.
   - `cmd/cleanup` needs only `DATABASE_URL` and the `STORAGE_*` settings.
     `cmd/migrate` and `cmd/seed` require `DATABASE_URL` and no longer fall back
-    to a default (the Makefile still supplies one).
+    to a default (the Makefile still supplies one). `cmd/seed` also needs the
+    `STORAGE_*` settings and a set-up bucket, as it uploads images.
   - Migrations add a `CHECK` that `CATEGORY_FIELDS.data_type` is one of the six
     field types, and give `PLACE_SUGGESTIONS` the `PLACES` column limits
     (`address` 255, `operating_hours` 255, `estimated_price_range` 100) and its
@@ -701,3 +706,8 @@ them.
 | 2026-11-17 | Verification update | Storage cleanup reads instead of claiming. `ClaimDue` is replaced by `GetDue`, a plain read of the due rows; the 15-minute claim lease and the row locking are removed, so overlapping runs get the same rows (harmless, as the storage delete and `Remove` are idempotent) and no longer split the work. §6.8 and the README updated. Verified by `go build`, `go vet` (with and without the `integration` tag), and the `storagecleanup` unit and integration tests (31 passed) |
 | 2026-11-17 | Verification update | Storage cleanup fixed retry. A failed delete is due again in 1 hour (was `15m × 2^attempts`, capped at 24h); `GetDue` returns keys instead of `Deletion` rows, and the `Deletion` type and the unused `Service` mock are removed. `attempts` is still counted in the table. §6.8 and the README updated. Verified by `go build`, `go vet` (with and without the `integration` tag), and the `storagecleanup` unit and integration tests (23 passed) |
 | 2026-11-17 | Verification update | Storage simplification and renames, no route or status change. The message of a missing upload is now `file has not been uploaded` (was `image has not been uploaded`); the code is still `400 VALIDATION_ERROR`. Go names say media instead of image: `Images` is `MediaStore`, `ErrInvalidImageType`/`ErrImageNotUploaded`/`ErrInvalidImageKey` are `ErrInvalidMediaType`/`ErrMediaNotUploaded`/`ErrInvalidUploadKey`, and the OpenAPI schemas `ImageUpload*` and `SetImageRequest` are `MediaUpload*` and `ConfirmUploadRequest`. Verified by `go build`, `go vet` (with and without the `integration` tag), and the full Go test suite |
+| 2026-11-17 | Seed data | No API change. `make seed` (`cmd/seed`) loads Setiabudi, Mampang Prapatan, and Tebet with researched flood, safety, and spending text, and 1,068 real places from OpenStreetMap (hospitals, puskesmas, and police checked by hand). Missing addresses, hours, prices, descriptions, and attributes are made up, as are 24 water and gas refills, 12 demo users, and 1,066 reviews. The 50,000 generated places moved unchanged to `make seed-bulk` (`cmd/seed-bulk`), which the k6 script now names. Verified by `go build`, `go vet ./cmd/...`, and running both seeds on fresh migrated databases (the real seed twice, adding nothing the second time) |
+| 2026-11-17 | Verification update | `GET /places` orders by distance from the `bbox` centre. With a `bbox`, the nearest places come first (ties by id), so the 40-place cap keeps the places nearest the centre of the map instead of the lowest ids; without a `bbox` the order is still by id. `total`, the filters, and the web app are unchanged. The Redis index is sorted the same way, and `GetByIDs` returns places in the order of the ids given. Verified by `go build`, `go vet` (with and without the `integration` tag), the full Go unit suite, and the place integration tests (508 passed) |
+| 2026-11-17 | Verification update | Places cap raised. `GET /places` caps every page at 100 (`maxLimit`, was 40), and an absent limit also gets 100. The web map cannot zoom out past zoom 13 and sends a zoom-based `limit` again, kept in the URL: 100 at zoom 13, 80 at 14, 60 at 15, and 40 from 16. `scripts/k6/get-places.js` knows the new cap but does not send the zoom-based limit. Verified by `go build`, `go vet` (with and without the `integration` tag), the full Go unit suite (1237 passed), the place integration tests (508 passed), and the web typecheck, lint, and tests (240 passed); the map was not checked in a browser |
+| 2026-11-17 | Web update | No API change. The web map's widest zoom moved from 13 to 14, and its zoom-based `limit` moved with it, so every zoom level asks for 20 more places than before: 100 at zoom 14, 80 at 15, 60 at 16, and 40 from 17. Verified by the web typecheck, lint, and tests (240 passed); the map was not checked in a browser |
+| 2026-11-17 | Seed data | No API change. `make seed` (`cmd/seed`) now uploads images, so it needs the `STORAGE_*` settings and a set-up bucket (`make dev-setup` seeds after `storage-init`). Every place in Setiabudi, Mampang Prapatan, and Tebet, and each of the three kecamatan, gets 2 or 3 generated 640x480 PNGs of one random color (136 bytes each), and each kecamatan gets a static map: an 800x600 PNG stitched from OpenStreetMap tiles, kept in `cmd/seed/images/static-maps`. Keys follow the API's (`places/{id}/`, `subdistricts/{id}/medias/`, `subdistricts/{id}/static-map/`). Reruns skip whatever already has its images; objects uploaded by a failed run stay in the bucket without a row. `storage.S3` gained `Put`, used only by the seed and outside `ObjectStore`. Verified by `go build`, `go vet`, `go test ./...` (1237 passed), and running the seed twice on the local database (2,716 medias the first time, none added the second), with a color image and a static map fetched from the bucket's public URL |

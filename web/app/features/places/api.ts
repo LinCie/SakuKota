@@ -51,9 +51,9 @@ export type GetPlacesParams = {
   categoryIds?: number[];
   /** Case-insensitive search term, matching the `q` query param. */
   q?: string;
-  /** Keeps only the lowest-id places, matching the `limit` query param. The server caps it at 40. */
+  /** Keeps only the first places, matching the `limit` query param. The server caps it at 100. */
   limit?: number;
-  /** Skips the lowest-id places before `limit` applies, matching the `offset` query param. */
+  /** Skips the first places before `limit` applies, matching the `offset` query param. */
   offset?: number;
   /** Keeps places inside "west,south,east,north" (degrees), matching the `bbox` query param. */
   bbox?: string;

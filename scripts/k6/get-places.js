@@ -1,4 +1,4 @@
-// Load test for GET /v1/places replaying a web home page visitor session; run `make seed` first.
+// Load test for GET /v1/places replaying a web home page visitor session; run `make seed-bulk` first.
 // Usage: k6 run -e PROFILE=smoke|load|stress|spike|soak -e RATE=2 -e DURATION=60s -e MAX_VUS=n scripts/k6/get-places.js
 import http from "k6/http";
 import { check, sleep } from "k6";
@@ -15,7 +15,7 @@ const SESSION_SECONDS = 30;
 const LIST_PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE = 0.25; // seconds
 // The server caps every page at this many places.
-const SERVER_LIMIT = 40;
+const SERVER_LIMIT = 100;
 // Framing a sub-district: Leaflet's fitBounds padding and zoom cap, and the
 // view when there is nothing to frame.
 const FIT_PADDING = 56;
@@ -145,7 +145,7 @@ export function setup() {
     categoryIds: ids("places/categories"),
   };
   if (data.subDistrictIds.length === 0 || data.categoryIds.length === 0) {
-    throw new Error("no sub-districts or categories; run `make seed` first");
+    throw new Error("no sub-districts or categories; run `make seed-bulk` first");
   }
   return data;
 }

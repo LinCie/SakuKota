@@ -24,7 +24,7 @@ const (
 )
 
 // maxLimit is the most places one page returns. The total still counts every match.
-const maxLimit = 40
+const maxLimit = 100
 
 // listCacheKeyPrefix namespaces cached place indexes in Redis.
 const listCacheKeyPrefix = "places:index:"

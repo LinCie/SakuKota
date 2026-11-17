@@ -10,6 +10,7 @@ import (
 
 	"rantau-go/internal/config"
 	"rantau-go/internal/database"
+	"rantau-go/internal/storage"
 )
 
 //go:embed seed.sql
@@ -23,7 +24,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	storageConfig, err := config.NewStorageConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Uploading a few thousand images takes most of the time.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	db, err := database.NewPostgresDB(ctx, databaseURL)
@@ -32,7 +39,7 @@ func main() {
 	}
 	defer func() { _ = db.Close() }()
 
-	tx, err := db.BeginTx(ctx, nil)
+	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
 		log.Fatalf("begin seed transaction: %v", err)
 	}
@@ -40,6 +47,12 @@ func main() {
 	if _, err := tx.ExecContext(ctx, seedSQL); err != nil {
 		_ = tx.Rollback()
 		log.Fatalf("run seeds: %v", err)
+	}
+
+	images := imageSeeder{tx: tx, store: storage.NewS3(storageConfig)}
+	if err := images.seedImages(ctx); err != nil {
+		_ = tx.Rollback()
+		log.Fatalf("seed images: %v", err)
 	}
 
 	if err := tx.Commit(); err != nil {

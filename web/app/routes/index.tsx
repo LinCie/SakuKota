@@ -40,22 +40,34 @@ function searchBBox(value: unknown) {
     : undefined;
 }
 
+// A limit must be a whole number from 1 to 100, the most the server returns.
+function searchLimit(value: unknown) {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    1 <= value &&
+    value <= 100
+    ? value
+    : undefined;
+}
+
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>): HomeSearch => ({
     kecamatan: searchString(search.kecamatan),
     kategori: searchString(search.kategori),
     q: searchString(search.q),
     bbox: searchBBox(search.bbox),
+    limit: searchLimit(search.limit),
     tempat: typeof search.tempat === "number" ? search.tempat : undefined,
   }),
   // The kecamatan, categories, and search are applied by the backend; the
   // selected place (`tempat`) is picked from the loaded results, so changing
   // it doesn't reload.
-  loaderDeps: ({ search: { kecamatan, kategori, q, bbox } }) => ({
+  loaderDeps: ({ search: { kecamatan, kategori, q, bbox, limit } }) => ({
     kecamatan,
     kategori,
     q,
     bbox,
+    limit,
   }),
   loader: async ({ context: { queryClient }, deps }) => {
     // The map needs Leaflet; fetch it alongside the data instead of after.

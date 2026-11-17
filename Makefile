@@ -1,4 +1,4 @@
-.PHONY: dev dev-backend dev-frontend start build postgres-up postgres-down redis-up storage-up storage-init cleanup migrate-up migrate-down migrate-status migrate-version migrate-reset migration seed test test-integration
+.PHONY: dev dev-setup dev-backend dev-frontend start build postgres-up postgres-down redis-up storage-up storage-init cleanup migrate-up migrate-down migrate-status migrate-version migrate-reset migration seed seed-bulk test test-integration
 
 -include .env
 
@@ -28,6 +28,18 @@ dev:
 	@bash -c 'trap "trap - EXIT; kill \$$(jobs -p) 2>/dev/null; wait" INT TERM EXIT; \
 		air & pnpm --dir web dev & \
 		wait -n'
+
+# One-time local setup: start the services, then migrate, init storage, and seed
+# (the seed uploads images).
+dev-setup:
+	$(MAKE) postgres-up
+	@until $(COMPOSE) exec -T postgres pg_isready -U $${POSTGRES_USER:-postgres} >/dev/null 2>&1; do echo "waiting for postgres..."; sleep 1; done
+	$(MAKE) migrate-up
+	$(MAKE) storage-up
+	@until $(COMPOSE) exec -T garage /garage status >/dev/null 2>&1; do echo "waiting for garage..."; sleep 1; done
+	$(MAKE) storage-init
+	$(MAKE) seed
+	$(MAKE) redis-up
 
 start:
 	go run ./cmd/api
@@ -71,6 +83,10 @@ migrate-reset:
 
 seed:
 	DATABASE_URL="$(DATABASE_URL)" go run ./cmd/seed
+
+# 50,000 generated places over 17 kecamatan, for load testing only.
+seed-bulk:
+	DATABASE_URL="$(DATABASE_URL)" go run ./cmd/seed-bulk
 
 migration:
 	@test -n "$(name)" || (echo "usage: make migration name=create_users" && exit 1)
