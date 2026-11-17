@@ -3,24 +3,10 @@ package suggestions
 import (
 	"errors"
 	"fmt"
-
-	"rantau-go/internal/module/places"
 )
 
 // The place fields of a suggestion follow the rules of a place, so they fail
-// with the place's errors.
-var (
-	ErrInvalidName                = places.ErrInvalidName
-	ErrNameTooLong                = places.ErrNameTooLong
-	ErrAddressTooLong             = places.ErrAddressTooLong
-	ErrOperatingHoursTooLong      = places.ErrOperatingHoursTooLong
-	ErrEstimatedPriceRangeTooLong = places.ErrEstimatedPriceRangeTooLong
-	ErrSubDistrictNotFound        = places.ErrSubDistrictNotFound
-	ErrCategoryNotFound           = places.ErrCategoryNotFound
-	ErrPlaceInvalidLocation       = places.ErrInvalidLocation
-	ErrPlaceInvalidAttributes     = places.ErrInvalidAttributes
-)
-
+// with the errors of package places. These are the suggestion's own.
 var (
 	ErrInvalidLocation    = errors.New("location is required and must be within Indonesia")
 	ErrNoteTooLong        = fmt.Errorf("note must be %d characters or fewer", maxNoteLength)

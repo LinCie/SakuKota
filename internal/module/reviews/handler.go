@@ -4,33 +4,30 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-
 	"rantau-go/internal/middleware"
 	"rantau-go/internal/pkg/httpx"
+	"rantau-go/internal/pkg/utils"
 )
 
 type Handler struct {
 	service Service
 }
 
-// NewHandler creates a Handler that passes its work to the review service.
+// -----------------------------------------------------------------------------
+// Exported
+// -----------------------------------------------------------------------------
+
 func NewHandler(service Service) *Handler {
 	return &Handler{
 		service: service,
 	}
 }
 
-// -----------------------------------------------------------------------------
-// Handler
-// -----------------------------------------------------------------------------
-
 // CreateReview saves the logged-in user's review of the place in the URL.
 // The route must sit behind middleware.WithAuth, so the user is known.
 func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
-	placeID, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	id, ok := placeID(w, r)
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
 		return
 	}
 
@@ -45,7 +42,7 @@ func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := h.service.Create(r.Context(), toReview(placeID, userID, *req))
+	created, err := h.service.Create(r.Context(), toReview(id, userID, *req))
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidRating),
@@ -67,13 +64,12 @@ func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
 // GetReviews sends back the reviews of the place in the URL, newest first.
 // If there is no such place, it sends a not-found error.
 func (h *Handler) GetReviews(w http.ResponseWriter, r *http.Request) {
-	placeID, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	id, ok := placeID(w, r)
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidPlaceID, "invalid place_id")
 		return
 	}
 
-	reviews, err := h.service.GetByPlace(r.Context(), placeID)
+	reviews, err := h.service.GetByPlace(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrPlaceNotFound) {
 			httpx.RespondError(w, http.StatusNotFound, httpx.CodePlaceNotFound, err.Error())
@@ -83,5 +79,14 @@ func (h *Handler) GetReviews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toReviewResponses(reviews))
+	httpx.RespondJSON(w, http.StatusOK, utils.Map(reviews, toReviewResponse))
+}
+
+// -----------------------------------------------------------------------------
+// Unexported
+// -----------------------------------------------------------------------------
+
+// placeID reads the place id from the URL, or answers 400.
+func placeID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	return httpx.PathID(w, r, "id", httpx.CodeInvalidPlaceID, "invalid place_id")
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"rantau-go/internal/database"
+	"rantau-go/internal/module/places"
 )
 
 // Repository defines the persistence operations required by the service.
@@ -15,7 +16,7 @@ import (
 //go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock
 type Repository interface {
 	// Create saves the suggestion as pending and returns it with its author.
-	// It returns ErrTooManyPending at the limit, or ErrSubDistrictNotFound or ErrCategoryNotFound.
+	// It returns ErrTooManyPending at the limit, or places.ErrSubDistrictNotFound or places.ErrCategoryNotFound.
 	Create(ctx context.Context, s *Suggestion) (*Suggestion, error)
 	// GetSuggestion returns the suggestion with its author, or ErrSuggestionNotFound.
 	GetSuggestion(ctx context.Context, id int64) (*Suggestion, error)
@@ -36,34 +37,15 @@ type postgresRepository struct {
 	db *sqlx.DB
 }
 
-// NewPostgresRepository builds a Repository that stores suggestions in PostgreSQL.
+// -----------------------------------------------------------------------------
+// Exported
+// -----------------------------------------------------------------------------
+
 func NewPostgresRepository(db *sqlx.DB) Repository {
 	return &postgresRepository{
 		db: db,
 	}
 }
-
-// -----------------------------------------------------------------------------
-// postgresRepository
-// -----------------------------------------------------------------------------
-
-// suggestionColumns selects a suggestion from `s` and its author from `u`,
-// aliased to match the nested Suggestion.User fields.
-const suggestionColumns = `s.id, s.user_id, s.sub_district_id, s.category_id, s.name, s.address,
-	s.location, s.operating_hours, s.estimated_price_range, s.short_description,
-	s.attributes, s.note, s.status, s.rejection_reason, s.place_id, s.reviewed_by,
-	s.reviewed_at, s.created_at, u.id AS "user.id", u.name AS "user.name"`
-
-// suggestionFrom is the FROM clause that reads suggestions from `s` with their authors from `u`.
-const suggestionFrom = `FROM PLACE_SUGGESTIONS s JOIN USERS u ON u.id = s.user_id`
-
-// suggestionRowColumns are the PLACE_SUGGESTIONS columns that suggestionColumns
-// reads from `s`. The RETURNING clause of a write lists them so its row can be
-// joined with its author.
-const suggestionRowColumns = `id, user_id, sub_district_id, category_id, name, address,
-	location, operating_hours, estimated_price_range, short_description,
-	attributes, note, status, rejection_reason, place_id, reviewed_by,
-	reviewed_at, created_at`
 
 // Create saves the suggestion as pending and returns it with its author.
 // It locks the user's row while counting, so two submissions at once cannot both pass the limit.
@@ -101,7 +83,7 @@ func (r *postgresRepository) Create(ctx context.Context, s *Suggestion) (*Sugges
 				location, operating_hours, estimated_price_range, short_description,
 				attributes, note)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-			RETURNING `+suggestionRowColumns+`
+			RETURNING *
 		)
 		SELECT `+suggestionColumns+`
 		FROM inserted s
@@ -204,6 +186,20 @@ func (r *postgresRepository) Reject(ctx context.Context, id, adminID int64, reas
 	return r.review(ctx, id, StatusRejected, nil, reason, adminID)
 }
 
+// -----------------------------------------------------------------------------
+// Unexported
+// -----------------------------------------------------------------------------
+
+// suggestionColumns selects a suggestion from `s` and its author from `u`,
+// aliased to match the nested Suggestion.User fields.
+const suggestionColumns = `s.id, s.user_id, s.sub_district_id, s.category_id, s.name, s.address,
+	s.location, s.operating_hours, s.estimated_price_range, s.short_description,
+	s.attributes, s.note, s.status, s.rejection_reason, s.place_id, s.reviewed_by,
+	s.reviewed_at, s.created_at, u.id AS "user.id", u.name AS "user.name"`
+
+// suggestionFrom is the FROM clause that reads suggestions from `s` with their authors from `u`.
+const suggestionFrom = `FROM PLACE_SUGGESTIONS s JOIN USERS u ON u.id = s.user_id`
+
 // review records the outcome of suggestion id and returns it with its author.
 // Only a pending suggestion is updated, so two admins cannot both review it.
 func (r *postgresRepository) review(
@@ -224,7 +220,7 @@ func (r *postgresRepository) review(
 			SET status = $2, place_id = $3, rejection_reason = $4,
 				reviewed_by = $5, reviewed_at = NOW()
 			WHERE id = $1 AND status = 'pending'
-			RETURNING `+suggestionRowColumns+`
+			RETURNING *
 		)
 		SELECT `+suggestionColumns+`
 		FROM updated s
@@ -271,9 +267,9 @@ func mapForeignKeyError(err error) error {
 	if database.IsCode(err, database.ForeignKeyViolation) {
 		switch database.ConstraintName(err) {
 		case "place_suggestions_sub_district_id_fkey":
-			return ErrSubDistrictNotFound
+			return places.ErrSubDistrictNotFound
 		case "place_suggestions_category_id_fkey":
-			return ErrCategoryNotFound
+			return places.ErrCategoryNotFound
 		}
 	}
 

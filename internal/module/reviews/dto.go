@@ -53,14 +53,3 @@ func toReviewResponse(r Review) ReviewResponse {
 		},
 	}
 }
-
-// toReviewResponses turns each review into its response shape.
-func toReviewResponses(reviews []Review) []ReviewResponse {
-	responses := make([]ReviewResponse, 0, len(reviews))
-
-	for _, r := range reviews {
-		responses = append(responses, toReviewResponse(r))
-	}
-
-	return responses
-}

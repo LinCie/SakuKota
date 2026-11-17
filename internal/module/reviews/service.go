@@ -21,18 +21,16 @@ type service struct {
 	repo Repository
 }
 
-// NewService builds the review service on top of the repository.
+// -----------------------------------------------------------------------------
+// Exported
+// -----------------------------------------------------------------------------
+
 func NewService(repo Repository) Service {
 	return &service{
 		repo: repo,
 	}
 }
 
-// -----------------------------------------------------------------------------
-// service
-// -----------------------------------------------------------------------------
-
-// Create checks the rating, trims the comment, then saves the review.
 func (s *service) Create(ctx context.Context, r *Review) (*Review, error) {
 	if r.Rating < minRating || r.Rating > maxRating {
 		return nil, ErrInvalidRating
@@ -47,7 +45,6 @@ func (s *service) Create(ctx context.Context, r *Review) (*Review, error) {
 	return s.repo.Create(ctx, r)
 }
 
-// GetByPlace returns the reviews of the place, newest first.
 func (s *service) GetByPlace(ctx context.Context, placeID int64) ([]Review, error) {
 	return s.repo.GetByPlace(ctx, placeID)
 }

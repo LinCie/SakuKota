@@ -17,49 +17,39 @@ import (
 type Repository interface {
 	// Create saves the sub-district and returns it with its photos and static map.
 	Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error)
+	// AddMedia stores the photo in the sub-district's first free slot and returns the sub-district.
+	// It returns ErrSubDistrictNotFound, or ErrMediaLimitReached if the sub-district is already full.
+	AddMedia(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error)
 	// GetMany returns every sub-district with its photos and static map.
 	GetMany(ctx context.Context) ([]SubDistrict, error)
 	// GetSubDistrict returns the sub-district with its photos and static map.
 	GetSubDistrict(ctx context.Context, id int64) (*SubDistrict, error)
 	// Update saves the sub-district's details and returns it with its photos and static map.
 	Update(ctx context.Context, sd *SubDistrict) (*SubDistrict, error)
-	// Delete removes the sub-district with its photos and static map, and queues their files for deletion.
-	// It returns ErrSubDistrictNotFound, or ErrSubDistrictInUse if places still use it.
-	Delete(ctx context.Context, id int64) error
-	// AddMedia stores the photo in the sub-district's first free slot and returns the sub-district.
-	// It returns ErrSubDistrictNotFound, or ErrMediaLimitReached if the sub-district is already full.
-	AddMedia(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error)
-	// DeleteMedia removes the photo and queues its file for deletion.
-	// Later photos move up one slot to close the gap; it returns ErrMediaNotFound if there is no such photo.
-	DeleteMedia(ctx context.Context, id, mediaID int64) error
 	// SetStaticMap saves the photo as the static map and returns the sub-district.
 	// The previous static map is removed and its file queued for deletion.
 	SetStaticMap(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error)
+	// Delete removes the sub-district with its photos and static map, and queues their files for deletion.
+	// It returns ErrSubDistrictNotFound, or ErrSubDistrictInUse if places still use it.
+	Delete(ctx context.Context, id int64) error
+	// DeleteMedia removes the photo and queues its file for deletion.
+	// Later photos move up one slot to close the gap; it returns ErrMediaNotFound if there is no such photo.
+	DeleteMedia(ctx context.Context, id, mediaID int64) error
 }
 
 type postgresRepository struct {
 	db *sqlx.DB
 }
 
-// NewPostgresRepository builds a Repository that stores sub-districts in PostgreSQL.
+// -----------------------------------------------------------------------------
+// Exported
+// -----------------------------------------------------------------------------
+
 func NewPostgresRepository(db *sqlx.DB) Repository {
 	return &postgresRepository{
 		db: db,
 	}
 }
-
-// -----------------------------------------------------------------------------
-// postgresRepository
-// -----------------------------------------------------------------------------
-
-// subDistrictColumns selects a sub-district from `sd` and the key of its
-// static map from `sm`. Queries add staticMapJoin to provide `sm`.
-const subDistrictColumns = `sd.id, sd.name, sd.slug, sd.flood_history,
-	sd.safety_crime_information, sd.estimated_daily_spending,
-	sm.key AS static_map_image_key`
-
-// staticMapJoin joins the static map of `sd` as `sm`.
-const staticMapJoin = ` LEFT JOIN MEDIAS sm ON sm.id = sd.static_map_media_id`
 
 // Create inserts the sub-district and returns it with its photos and static map.
 // It returns ErrSubDistrictExists if the name or slug is already taken.
@@ -90,6 +80,60 @@ func (r *postgresRepository) Create(ctx context.Context, sd *SubDistrict) (*SubD
 	}
 
 	return r.withMedias(ctx, created)
+}
+
+// AddMedia stores the photo after the sub-district's last one and returns the sub-district.
+// It locks the sub-district row so two uploads at once cannot take the same slot or go over the limit.
+func (r *postgresRepository) AddMedia(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error) {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var locked int64
+	err = tx.GetContext(ctx, &locked, `SELECT id FROM SUB_DISTRICTS WHERE id = $1 FOR NO KEY UPDATE`, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrSubDistrictNotFound
+		}
+		return nil, err
+	}
+
+	// DeleteMedia closes gaps, so the positions in use are 1..count and the next free one is count+1.
+	var count int
+	err = tx.GetContext(ctx, &count, `SELECT COUNT(*) FROM SUB_DISTRICT_MEDIAS WHERE sub_district_id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+	if count >= storage.MaxMedias {
+		return nil, storage.ErrMediaLimitReached
+	}
+
+	_, err = tx.ExecContext(
+		ctx,
+		`WITH media AS (
+			INSERT INTO MEDIAS (key, content_type, size_bytes)
+			VALUES ($2, $3, $4)
+			RETURNING id
+		)
+		INSERT INTO SUB_DISTRICT_MEDIAS (sub_district_id, media_id, position)
+		SELECT $1, id, $5 FROM media`,
+		id,
+		m.Key,
+		m.ContentType,
+		m.Size,
+		count+1,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return r.GetSubDistrict(ctx, id)
 }
 
 // GetMany returns every sub-district in id order, with its photos and static map.
@@ -168,159 +212,6 @@ func (r *postgresRepository) Update(ctx context.Context, sd *SubDistrict) (*SubD
 	return r.withMedias(ctx, updated)
 }
 
-// Delete removes the sub-district with its photos and static map, and queues their files for deletion.
-// It returns ErrSubDistrictNotFound, or ErrSubDistrictInUse if places still use it, and removes nothing.
-func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
-	var deleted int
-
-	err := r.db.GetContext(
-		ctx,
-		&deleted,
-		`WITH medias AS (
-			DELETE FROM MEDIAS
-			WHERE id IN (SELECT media_id FROM SUB_DISTRICT_MEDIAS WHERE sub_district_id = $1)
-				OR id = (SELECT static_map_media_id FROM SUB_DISTRICTS WHERE id = $1)
-			RETURNING key
-		), deleted AS (
-			DELETE FROM SUB_DISTRICTS WHERE id = $1 RETURNING id
-		), queued AS (
-			INSERT INTO STORAGE_DELETIONS (key)
-			SELECT key FROM medias
-			ON CONFLICT (key) DO NOTHING
-		)
-		SELECT COUNT(*) FROM deleted`,
-		id,
-	)
-	if err != nil {
-		if database.IsCode(err, database.ForeignKeyViolation) &&
-			database.ConstraintName(err) == "places_sub_district_id_fkey" {
-			return ErrSubDistrictInUse
-		}
-		return err
-	}
-	if deleted == 0 {
-		return ErrSubDistrictNotFound
-	}
-
-	return nil
-}
-
-// AddMedia stores the photo in the sub-district's first free slot and returns the sub-district.
-// It locks the sub-district row so two uploads at once cannot take the same slot or go over the limit.
-func (r *postgresRepository) AddMedia(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error) {
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	var locked int64
-	err = tx.GetContext(ctx, &locked, `SELECT id FROM SUB_DISTRICTS WHERE id = $1 FOR NO KEY UPDATE`, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrSubDistrictNotFound
-		}
-		return nil, err
-	}
-
-	var position *int
-	err = tx.GetContext(
-		ctx,
-		&position,
-		`SELECT MIN(free) FROM generate_series(1, $2::int) AS free
-		WHERE free NOT IN (SELECT position FROM SUB_DISTRICT_MEDIAS WHERE sub_district_id = $1)`,
-		id,
-		storage.MaxMedias,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if position == nil {
-		return nil, storage.ErrMediaLimitReached
-	}
-
-	_, err = tx.ExecContext(
-		ctx,
-		`WITH media AS (
-			INSERT INTO MEDIAS (key, content_type, size_bytes)
-			VALUES ($2, $3, $4)
-			RETURNING id
-		)
-		INSERT INTO SUB_DISTRICT_MEDIAS (sub_district_id, media_id, position)
-		SELECT $1, id, $5 FROM media`,
-		id,
-		m.Key,
-		m.ContentType,
-		m.Size,
-		*position,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-
-	return r.GetSubDistrict(ctx, id)
-}
-
-// DeleteMedia removes the photo, queues its file for deletion, and shifts later photos up one slot.
-// The shift closes the gap, so the next added photo goes to the end, not into the hole.
-func (r *postgresRepository) DeleteMedia(ctx context.Context, id, mediaID int64) error {
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	var locked int64
-	err = tx.GetContext(ctx, &locked, `SELECT id FROM SUB_DISTRICTS WHERE id = $1 FOR NO KEY UPDATE`, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return storage.ErrMediaNotFound
-		}
-		return err
-	}
-
-	var position *int
-	err = tx.GetContext(
-		ctx,
-		&position,
-		`WITH deleted AS (
-			DELETE FROM MEDIAS m
-			USING SUB_DISTRICT_MEDIAS sdm
-			WHERE sdm.media_id = m.id AND sdm.sub_district_id = $1 AND m.id = $2
-			RETURNING m.key, sdm.position
-		), queued AS (
-			INSERT INTO STORAGE_DELETIONS (key)
-			SELECT key FROM deleted
-			ON CONFLICT (key) DO NOTHING
-		)
-		SELECT MAX(position) FROM deleted`,
-		id,
-		mediaID,
-	)
-	if err != nil {
-		return err
-	}
-	if position == nil {
-		return storage.ErrMediaNotFound
-	}
-
-	_, err = tx.ExecContext(
-		ctx,
-		`UPDATE SUB_DISTRICT_MEDIAS SET position = position - 1 WHERE sub_district_id = $1 AND position > $2`,
-		id,
-		*position,
-	)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit()
-}
-
 // SetStaticMap saves the photo as the static map, removes the old one, and returns the sub-district.
 // It locks the row so two replaces at once cannot leave an old file unqueued.
 func (r *postgresRepository) SetStaticMap(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error) {
@@ -380,6 +271,112 @@ func (r *postgresRepository) SetStaticMap(ctx context.Context, id int64, m stora
 
 	return r.GetSubDistrict(ctx, id)
 }
+
+// Delete removes the sub-district with its photos and static map, and queues their files for deletion.
+// It returns ErrSubDistrictNotFound, or ErrSubDistrictInUse if places still use it, and removes nothing.
+func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
+	var deleted int
+
+	err := r.db.GetContext(
+		ctx,
+		&deleted,
+		`WITH medias AS (
+			DELETE FROM MEDIAS
+			WHERE id IN (SELECT media_id FROM SUB_DISTRICT_MEDIAS WHERE sub_district_id = $1)
+				OR id = (SELECT static_map_media_id FROM SUB_DISTRICTS WHERE id = $1)
+			RETURNING key
+		), deleted AS (
+			DELETE FROM SUB_DISTRICTS WHERE id = $1 RETURNING id
+		), queued AS (
+			INSERT INTO STORAGE_DELETIONS (key)
+			SELECT key FROM medias
+			ON CONFLICT (key) DO NOTHING
+		)
+		SELECT COUNT(*) FROM deleted`,
+		id,
+	)
+	if err != nil {
+		if database.IsCode(err, database.ForeignKeyViolation) &&
+			database.ConstraintName(err) == "places_sub_district_id_fkey" {
+			return ErrSubDistrictInUse
+		}
+		return err
+	}
+	if deleted == 0 {
+		return ErrSubDistrictNotFound
+	}
+
+	return nil
+}
+
+// DeleteMedia removes the photo, queues its file for deletion, and shifts later photos up one slot.
+// The shift closes the gap, so the next added photo goes to the end, not into the hole.
+func (r *postgresRepository) DeleteMedia(ctx context.Context, id, mediaID int64) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var locked int64
+	err = tx.GetContext(ctx, &locked, `SELECT id FROM SUB_DISTRICTS WHERE id = $1 FOR NO KEY UPDATE`, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return storage.ErrMediaNotFound
+		}
+		return err
+	}
+
+	var position int
+	err = tx.GetContext(
+		ctx,
+		&position,
+		`WITH deleted AS (
+			DELETE FROM MEDIAS m
+			USING SUB_DISTRICT_MEDIAS sdm
+			WHERE sdm.media_id = m.id AND sdm.sub_district_id = $1 AND m.id = $2
+			RETURNING m.key, sdm.position
+		), queued AS (
+			INSERT INTO STORAGE_DELETIONS (key)
+			SELECT key FROM deleted
+			ON CONFLICT (key) DO NOTHING
+		)
+		SELECT position FROM deleted`,
+		id,
+		mediaID,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return storage.ErrMediaNotFound
+		}
+		return err
+	}
+
+	_, err = tx.ExecContext(
+		ctx,
+		`UPDATE SUB_DISTRICT_MEDIAS SET position = position - 1 WHERE sub_district_id = $1 AND position > $2`,
+		id,
+		position,
+	)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// -----------------------------------------------------------------------------
+// Unexported
+// -----------------------------------------------------------------------------
+
+// subDistrictColumns selects a sub-district from `sd` and the key of its
+// static map from `sm`. Queries add staticMapJoin to provide `sm`.
+const subDistrictColumns = `sd.id, sd.name, sd.slug, sd.flood_history,
+	sd.safety_crime_information, sd.estimated_daily_spending,
+	sm.key AS static_map_image_key`
+
+// staticMapJoin joins the static map of `sd` as `sm`.
+const staticMapJoin = ` LEFT JOIN MEDIAS sm ON sm.id = sd.static_map_media_id`
 
 // withMedias returns sd with its photos attached.
 func (r *postgresRepository) withMedias(ctx context.Context, sd SubDistrict) (*SubDistrict, error) {

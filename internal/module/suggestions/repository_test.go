@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"rantau-go/internal/database"
+	"rantau-go/internal/module/places"
 	"rantau-go/internal/module/suggestions"
 	"rantau-go/internal/pkg/postgis"
 	"rantau-go/internal/testutil/pgtest"
@@ -164,7 +165,7 @@ func TestRepository_Create(t *testing.T) {
 
 		got, err := f.repo.Create(ctx, s)
 
-		assert.ErrorIs(t, err, suggestions.ErrSubDistrictNotFound)
+		assert.ErrorIs(t, err, places.ErrSubDistrictNotFound)
 		assert.Nil(t, got)
 	})
 
@@ -175,7 +176,7 @@ func TestRepository_Create(t *testing.T) {
 
 		got, err := f.repo.Create(ctx, s)
 
-		assert.ErrorIs(t, err, suggestions.ErrCategoryNotFound)
+		assert.ErrorIs(t, err, places.ErrCategoryNotFound)
 		assert.Nil(t, got)
 	})
 

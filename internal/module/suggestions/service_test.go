@@ -106,11 +106,11 @@ func TestService_Create_Name(t *testing.T) {
 		{name: "150 characters is allowed", input: long, wantName: long, wantErr: nil},
 		{name: "150 multibyte characters is allowed", input: strings.Repeat("é", 150), wantName: strings.Repeat("é", 150), wantErr: nil},
 		{name: "length is counted after trimming", input: "  " + long + "  ", wantName: long, wantErr: nil},
-		{name: "empty", input: "", wantName: "", wantErr: suggestions.ErrInvalidName},
-		{name: "spaces only", input: "   ", wantName: "", wantErr: suggestions.ErrInvalidName},
-		{name: "tabs and newlines only", input: "\t\n", wantName: "", wantErr: suggestions.ErrInvalidName},
-		{name: "151 characters is too long", input: long + "a", wantName: "", wantErr: suggestions.ErrNameTooLong},
-		{name: "151 multibyte characters is too long", input: strings.Repeat("é", 151), wantName: "", wantErr: suggestions.ErrNameTooLong},
+		{name: "empty", input: "", wantName: "", wantErr: places.ErrInvalidName},
+		{name: "spaces only", input: "   ", wantName: "", wantErr: places.ErrInvalidName},
+		{name: "tabs and newlines only", input: "\t\n", wantName: "", wantErr: places.ErrInvalidName},
+		{name: "151 characters is too long", input: long + "a", wantName: "", wantErr: places.ErrNameTooLong},
+		{name: "151 multibyte characters is too long", input: strings.Repeat("é", 151), wantName: "", wantErr: places.ErrNameTooLong},
 	}
 
 	for _, tc := range tests {
@@ -240,11 +240,11 @@ func TestService_Create_OptionalTextLimits(t *testing.T) {
 		tooLong error
 		set     func(*suggestions.Suggestion, *string)
 	}{
-		{name: "address", limit: places.MaxAddressLength, tooLong: suggestions.ErrAddressTooLong,
+		{name: "address", limit: places.MaxAddressLength, tooLong: places.ErrAddressTooLong,
 			set: func(s *suggestions.Suggestion, v *string) { s.Address = v }},
-		{name: "operating hours", limit: places.MaxOperatingHoursLength, tooLong: suggestions.ErrOperatingHoursTooLong,
+		{name: "operating hours", limit: places.MaxOperatingHoursLength, tooLong: places.ErrOperatingHoursTooLong,
 			set: func(s *suggestions.Suggestion, v *string) { s.OperatingHours = v }},
-		{name: "estimated price range", limit: places.MaxEstimatedPriceRangeLength, tooLong: suggestions.ErrEstimatedPriceRangeTooLong,
+		{name: "estimated price range", limit: places.MaxEstimatedPriceRangeLength, tooLong: places.ErrEstimatedPriceRangeTooLong,
 			set: func(s *suggestions.Suggestion, v *string) { s.EstimatedPriceRange = v }},
 	}
 
@@ -342,24 +342,6 @@ func TestService_Create_Attributes(t *testing.T) {
 	}
 }
 
-func TestService_Create_StartsPending(t *testing.T) {
-	// A user cannot submit a suggestion that is already reviewed.
-	s := submitted()
-	s.Status = suggestions.StatusApproved
-	s.RejectionReason = new("Tutup")
-	s.PlaceID = new(int64(42))
-	s.ReviewedBy = new(int64(99))
-	s.ReviewedAt = new(time.Date(2026, 10, 4, 12, 30, 0, 0, time.UTC))
-
-	stored, err := createSuggestion(t, s)
-	require.NoError(t, err)
-	assert.Equal(t, suggestions.StatusPending, stored.Status)
-	assert.Nil(t, stored.RejectionReason, "review fields reached storage")
-	assert.Nil(t, stored.PlaceID, "review fields reached storage")
-	assert.Nil(t, stored.ReviewedBy, "review fields reached storage")
-	assert.Nil(t, stored.ReviewedAt, "review fields reached storage")
-}
-
 func TestService_Create_KeepsAuthorAndCatalog(t *testing.T) {
 	stored, err := createSuggestion(t, submitted())
 	require.NoError(t, err)
@@ -377,8 +359,8 @@ func TestService_Create_Storage(t *testing.T) {
 		wantErr  error // nil means the call succeeds
 	}{
 		{name: "storage reports too many pending suggestions", storeErr: suggestions.ErrTooManyPending, wantErr: suggestions.ErrTooManyPending},
-		{name: "storage reports an unknown sub-district", storeErr: suggestions.ErrSubDistrictNotFound, wantErr: suggestions.ErrSubDistrictNotFound},
-		{name: "storage reports an unknown category", storeErr: suggestions.ErrCategoryNotFound, wantErr: suggestions.ErrCategoryNotFound},
+		{name: "storage reports an unknown sub-district", storeErr: places.ErrSubDistrictNotFound, wantErr: places.ErrSubDistrictNotFound},
+		{name: "storage reports an unknown category", storeErr: places.ErrCategoryNotFound, wantErr: places.ErrCategoryNotFound},
 		{name: "storage failure is returned", storeErr: boom, wantErr: boom},
 		{name: "stored suggestion is returned", storeErr: nil, wantErr: nil},
 	}

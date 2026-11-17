@@ -4,26 +4,25 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-
 	"rantau-go/internal/middleware"
+	"rantau-go/internal/module/places"
 	"rantau-go/internal/pkg/httpx"
+	"rantau-go/internal/pkg/utils"
 )
 
 type Handler struct {
 	service Service
 }
 
-// NewHandler creates a Handler that passes its work to the suggestion service.
+// -----------------------------------------------------------------------------
+// Exported
+// -----------------------------------------------------------------------------
+
 func NewHandler(service Service) *Handler {
 	return &Handler{
 		service: service,
 	}
 }
-
-// -----------------------------------------------------------------------------
-// Handler
-// -----------------------------------------------------------------------------
 
 // CreateSuggestion saves the logged-in user's suggestion as pending review.
 // The route must sit behind middleware.WithAuth, so the user is known.
@@ -63,7 +62,7 @@ func (h *Handler) GetMySuggestions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toSuggestionResponses(suggestions))
+	httpx.RespondJSON(w, http.StatusOK, utils.Map(suggestions, toSuggestionResponse))
 }
 
 // GetSuggestions sends back all suggestions, oldest first.
@@ -77,15 +76,14 @@ func (h *Handler) GetSuggestions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toSuggestionResponses(suggestions))
+	httpx.RespondJSON(w, http.StatusOK, utils.Map(suggestions, toSuggestionResponse))
 }
 
 // GetSuggestion sends back the suggestion whose id is in the URL.
 // It sends an error if the id is invalid or the suggestion does not exist.
 func (h *Handler) GetSuggestion(w http.ResponseWriter, r *http.Request) {
-	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	id, ok := suggestionID(w, r)
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidSuggestionID, "invalid suggestion_id")
 		return
 	}
 
@@ -101,9 +99,8 @@ func (h *Handler) GetSuggestion(w http.ResponseWriter, r *http.Request) {
 // ApproveSuggestion makes the suggestion in the URL a place, using the body as its details.
 // The route must sit behind middleware.WithAuth, so the admin is known.
 func (h *Handler) ApproveSuggestion(w http.ResponseWriter, r *http.Request) {
-	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	id, ok := suggestionID(w, r)
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidSuggestionID, "invalid suggestion_id")
 		return
 	}
 
@@ -114,12 +111,12 @@ func (h *Handler) ApproveSuggestion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// The body is the place to create, in the shape of POST /places.
-	req, ok := httpx.DecodeJSON[ApproveSuggestionRequest](w, r)
+	req, ok := httpx.DecodeJSON[places.PlaceRequest](w, r)
 	if !ok {
 		return
 	}
 
-	approved, err := h.service.Approve(r.Context(), id, adminID, toPlace(*req))
+	approved, err := h.service.Approve(r.Context(), id, adminID, places.ToPlace(*req))
 	if err != nil {
 		respondError(w, err)
 		return
@@ -131,9 +128,8 @@ func (h *Handler) ApproveSuggestion(w http.ResponseWriter, r *http.Request) {
 // RejectSuggestion marks the suggestion in the URL as rejected, with an optional reason.
 // The route must sit behind middleware.WithAuth, so the admin is known.
 func (h *Handler) RejectSuggestion(w http.ResponseWriter, r *http.Request) {
-	id, ok := httpx.ParseID(chi.URLParam(r, "id"))
+	id, ok := suggestionID(w, r)
 	if !ok {
-		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidSuggestionID, "invalid suggestion_id")
 		return
 	}
 
@@ -157,6 +153,15 @@ func (h *Handler) RejectSuggestion(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toSuggestionResponse(*rejected))
 }
 
+// -----------------------------------------------------------------------------
+// Unexported
+// -----------------------------------------------------------------------------
+
+// suggestionID reads the suggestion id from the URL, or answers 400.
+func suggestionID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	return httpx.PathID(w, r, "id", httpx.CodeInvalidSuggestionID, "invalid suggestion_id")
+}
+
 // respondError sends the right error response for a failed service call.
 // Approving can also fail with place errors, which are shown as validation errors.
 func respondError(w http.ResponseWriter, err error) {
@@ -169,19 +174,13 @@ func respondError(w http.ResponseWriter, err error) {
 		httpx.RespondError(w, http.StatusTooManyRequests, httpx.CodeTooManyPendingSuggestions, err.Error())
 	case errors.Is(err, ErrInvalidStatus):
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidStatus, err.Error())
-	case errors.Is(err, ErrInvalidName),
-		errors.Is(err, ErrNameTooLong),
-		errors.Is(err, ErrAddressTooLong),
-		errors.Is(err, ErrOperatingHoursTooLong),
-		errors.Is(err, ErrEstimatedPriceRangeTooLong),
-		errors.Is(err, ErrInvalidLocation),
+	case errors.Is(err, ErrInvalidLocation),
 		errors.Is(err, ErrNoteTooLong),
 		errors.Is(err, ErrInvalidAttributes),
 		errors.Is(err, ErrReasonTooLong),
-		errors.Is(err, ErrSubDistrictNotFound),
-		errors.Is(err, ErrCategoryNotFound),
-		errors.Is(err, ErrPlaceInvalidLocation),
-		errors.Is(err, ErrPlaceInvalidAttributes):
+		errors.Is(err, places.ErrSubDistrictNotFound),
+		errors.Is(err, places.ErrCategoryNotFound),
+		places.IsValidationError(err):
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 	default:
 		httpx.RespondInternalError(w)

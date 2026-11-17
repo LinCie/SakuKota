@@ -63,14 +63,3 @@ func toSubDistrictResponse(sd SubDistrict, imageURL func(key string) string) Sub
 		StaticMapImageURL:      staticMap,
 	}
 }
-
-// toSubDistrictResponses turns each sub-district into its response shape.
-func toSubDistrictResponses(subDistricts []SubDistrict, imageURL func(key string) string) []SubDistrictResponse {
-	responses := make([]SubDistrictResponse, 0, len(subDistricts))
-
-	for _, sd := range subDistricts {
-		responses = append(responses, toSubDistrictResponse(sd, imageURL))
-	}
-
-	return responses
-}

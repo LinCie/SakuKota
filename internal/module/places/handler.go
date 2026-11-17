@@ -323,14 +323,7 @@ func respondError(w http.ResponseWriter, err error) {
 		httpx.RespondError(w, http.StatusNotFound, httpx.CodeMediaNotFound, err.Error())
 	case errors.Is(err, storage.ErrMediaLimitReached):
 		httpx.RespondError(w, http.StatusConflict, httpx.CodeMediaLimitReached, err.Error())
-	case errors.Is(err, ErrInvalidName),
-		errors.Is(err, ErrNameTooLong),
-		errors.Is(err, ErrAddressTooLong),
-		errors.Is(err, ErrOperatingHoursTooLong),
-		errors.Is(err, ErrEstimatedPriceRangeTooLong),
-		errors.Is(err, ErrInvalidAttributes),
-		errors.Is(err, ErrInvalidLocation),
-		storage.IsInvalidImage(err):
+	case IsValidationError(err), storage.IsInvalidImage(err):
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 	default:
 		httpx.RespondInternalError(w)

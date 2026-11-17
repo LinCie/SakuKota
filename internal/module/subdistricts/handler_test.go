@@ -32,10 +32,10 @@ func newRouter(svc subdistricts.Service) http.Handler {
 		r.Post("/", h.CreateSubDistrict)
 		r.Put("/{id}", h.PutSubDistrict)
 		r.Delete("/{id}", h.DeleteSubDistrict)
-		r.Post("/{id}/medias/upload-url", h.CreateImageUpload(subdistricts.SlotMedias))
+		r.Post("/{id}/medias/upload-url", h.CreateMediaUpload)
 		r.Post("/{id}/medias", h.AddMedia)
 		r.Delete("/{id}/medias/{mediaId}", h.DeleteMedia)
-		r.Post("/{id}/static-map/upload-url", h.CreateImageUpload(subdistricts.SlotStaticMap))
+		r.Post("/{id}/static-map/upload-url", h.CreateStaticMapUpload)
 		r.Put("/{id}/static-map", h.SetStaticMap)
 	})
 	return r

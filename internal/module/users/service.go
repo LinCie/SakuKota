@@ -20,28 +20,24 @@ type service struct {
 	repo Repository
 }
 
-// NewService builds the user service on top of the repository.
+// -----------------------------------------------------------------------------
+// Exported
+// -----------------------------------------------------------------------------
+
 func NewService(repo Repository) Service {
 	return &service{
 		repo: repo,
 	}
 }
 
-// -----------------------------------------------------------------------------
-// service
-// -----------------------------------------------------------------------------
-
-// Create saves the user through the repository.
 func (s *service) Create(ctx context.Context, u *User) (*User, error) {
 	return s.repo.Create(ctx, u)
 }
 
-// GetByEmail returns the user with the email, through the repository.
 func (s *service) GetByEmail(ctx context.Context, email string) (*User, error) {
 	return s.repo.GetByEmail(ctx, email)
 }
 
-// GetUser returns the user with the id, through the repository.
 func (s *service) GetUser(ctx context.Context, id int64) (*User, error) {
 	return s.repo.GetUser(ctx, id)
 }

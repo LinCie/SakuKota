@@ -26,16 +26,15 @@ type postgresRepository struct {
 	db *sqlx.DB
 }
 
-// NewPostgresRepository builds a Repository that stores users in PostgreSQL.
+// -----------------------------------------------------------------------------
+// Exported
+// -----------------------------------------------------------------------------
+
 func NewPostgresRepository(db *sqlx.DB) Repository {
 	return &postgresRepository{
 		db: db,
 	}
 }
-
-// -----------------------------------------------------------------------------
-// postgresRepository
-// -----------------------------------------------------------------------------
 
 // Create inserts the user and returns it with its generated fields, or
 // ErrEmailTaken if the email is already registered.

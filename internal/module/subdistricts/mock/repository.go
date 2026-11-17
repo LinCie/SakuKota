@@ -11,7 +11,7 @@ package mock
 
 import (
 	context "context"
-	"rantau-go/internal/module/subdistricts"
+	subdistricts "rantau-go/internal/module/subdistricts"
 	storage "rantau-go/internal/storage"
 	reflect "reflect"
 

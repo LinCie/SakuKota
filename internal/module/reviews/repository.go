@@ -24,21 +24,15 @@ type postgresRepository struct {
 	db *sqlx.DB
 }
 
-// NewPostgresRepository builds a Repository that stores reviews in PostgreSQL.
+// -----------------------------------------------------------------------------
+// Exported
+// -----------------------------------------------------------------------------
+
 func NewPostgresRepository(db *sqlx.DB) Repository {
 	return &postgresRepository{
 		db: db,
 	}
 }
-
-// -----------------------------------------------------------------------------
-// postgresRepository
-// -----------------------------------------------------------------------------
-
-// reviewColumns selects a review from `r` and its author from `u`, aliased to
-// match the nested Review.User fields.
-const reviewColumns = `r.id, r.place_id, r.user_id, r.rating, r.comment, r.created_at,
-	u.id AS "user.id", u.name AS "user.name"`
 
 // Create saves the review and adds its rating to the place's totals in one statement.
 // Adding to the totals, not recounting them, means two reviews at once both count.
@@ -51,7 +45,7 @@ func (r *postgresRepository) Create(ctx context.Context, review *Review) (*Revie
 		`WITH inserted AS (
 			INSERT INTO PLACE_REVIEWS (place_id, user_id, rating, comment)
 			VALUES ($1, $2, $3, $4)
-			RETURNING id, place_id, user_id, rating, comment, created_at
+			RETURNING *
 		), rated AS (
 			UPDATE PLACES p
 			SET rating_count = p.rating_count + 1, rating_sum = p.rating_sum + i.rating
@@ -108,6 +102,15 @@ func (r *postgresRepository) GetByPlace(ctx context.Context, placeID int64) ([]R
 
 	return reviews, nil
 }
+
+// -----------------------------------------------------------------------------
+// Unexported
+// -----------------------------------------------------------------------------
+
+// reviewColumns selects a review from `r` and its author from `u`, aliased to
+// match the nested Review.User fields.
+const reviewColumns = `r.id, r.place_id, r.user_id, r.rating, r.comment, r.created_at,
+	u.id AS "user.id", u.name AS "user.name"`
 
 // mapCreateError maps a repeat review to ErrAlreadyReviewed and a missing place to ErrPlaceNotFound.
 // Any other error is returned unchanged.

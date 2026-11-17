@@ -382,16 +382,16 @@ func TestHandler_CreateSuggestion(t *testing.T) {
 			wantStatus int
 			wantCode   string
 		}{
-			{name: "blank name", err: suggestions.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "name too long", err: suggestions.ErrNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "blank name", err: places.ErrInvalidName, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "name too long", err: places.ErrNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "missing or outside location", err: suggestions.ErrInvalidLocation, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "note too long", err: suggestions.ErrNoteTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "address too long", err: suggestions.ErrAddressTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "operating hours too long", err: suggestions.ErrOperatingHoursTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "estimated price range too long", err: suggestions.ErrEstimatedPriceRangeTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "address too long", err: places.ErrAddressTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "operating hours too long", err: places.ErrOperatingHoursTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "estimated price range too long", err: places.ErrEstimatedPriceRangeTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "attributes not an object", err: suggestions.ErrInvalidAttributes, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "unknown sub-district", err: suggestions.ErrSubDistrictNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "unknown category", err: suggestions.ErrCategoryNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "unknown sub-district", err: places.ErrSubDistrictNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "unknown category", err: places.ErrCategoryNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "too many pending", err: suggestions.ErrTooManyPending, wantStatus: http.StatusTooManyRequests, wantCode: "TOO_MANY_PENDING_SUGGESTIONS"},
 			{name: "wrapped too many pending", err: fmt.Errorf("create: %w", suggestions.ErrTooManyPending), wantStatus: http.StatusTooManyRequests, wantCode: "TOO_MANY_PENDING_SUGGESTIONS"},
 			{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},

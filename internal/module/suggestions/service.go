@@ -43,7 +43,10 @@ type service struct {
 	places PlaceService
 }
 
-// NewService builds the suggestion service from the repository and the place service.
+// -----------------------------------------------------------------------------
+// Exported
+// -----------------------------------------------------------------------------
+
 func NewService(repo Repository, places PlaceService) Service {
 	return &service{
 		repo:   repo,
@@ -51,11 +54,6 @@ func NewService(repo Repository, places PlaceService) Service {
 	}
 }
 
-// -----------------------------------------------------------------------------
-// service
-// -----------------------------------------------------------------------------
-
-// Create checks the suggestion's fields, then saves it as pending.
 func (s *service) Create(ctx context.Context, sg *Suggestion) (*Suggestion, error) {
 	name, err := places.NormalizeName(sg.Name)
 	if err != nil {
@@ -87,35 +85,25 @@ func (s *service) Create(ctx context.Context, sg *Suggestion) (*Suggestion, erro
 		return nil, ErrNoteTooLong
 	}
 
-	// Only the submitted fields are stored, so the suggestion starts pending
-	// whatever the client sent for its review.
-	return s.repo.Create(ctx, &Suggestion{
-		UserID:              sg.UserID,
-		SubDistrictID:       sg.SubDistrictID,
-		CategoryID:          sg.CategoryID,
-		Name:                name,
-		Address:             place.Address,
-		Location:            sg.Location,
-		OperatingHours:      place.OperatingHours,
-		EstimatedPriceRange: place.EstimatedPriceRange,
-		ShortDescription:    place.ShortDescription,
-		Attributes:          attributes,
-		Note:                note,
-		Status:              StatusPending,
-	})
+	sg.Name = name
+	sg.Address = place.Address
+	sg.OperatingHours = place.OperatingHours
+	sg.EstimatedPriceRange = place.EstimatedPriceRange
+	sg.ShortDescription = place.ShortDescription
+	sg.Attributes = attributes
+	sg.Note = note
+
+	return s.repo.Create(ctx, sg)
 }
 
-// GetSuggestion returns the suggestion with the given id.
 func (s *service) GetSuggestion(ctx context.Context, id int64) (*Suggestion, error) {
 	return s.repo.GetSuggestion(ctx, id)
 }
 
-// GetByUser returns the user's suggestions, newest first.
 func (s *service) GetByUser(ctx context.Context, userID int64) ([]Suggestion, error) {
 	return s.repo.GetByUser(ctx, userID)
 }
 
-// GetMany checks the status filter, then returns the matching suggestions.
 func (s *service) GetMany(ctx context.Context, filter SuggestionFilter) ([]Suggestion, error) {
 	switch filter.Status {
 	case "", StatusPending, StatusApproved, StatusRejected:
@@ -160,7 +148,6 @@ func (s *service) Approve(ctx context.Context, id, adminID int64, p *places.Plac
 	return approved, nil
 }
 
-// Reject marks a pending suggestion as rejected, after checking the reason's length.
 func (s *service) Reject(ctx context.Context, id, adminID int64, reason *string) (*Suggestion, error) {
 	trimmed, ok := text.TrimOptionalMax(reason, maxReasonLength)
 	if !ok {
@@ -169,6 +156,10 @@ func (s *service) Reject(ctx context.Context, id, adminID int64, reason *string)
 
 	return s.repo.Reject(ctx, id, adminID, trimmed)
 }
+
+// -----------------------------------------------------------------------------
+// Unexported
+// -----------------------------------------------------------------------------
 
 // normalizeAttributes checks that raw is a JSON object and returns it as sent.
 // A missing or null value becomes an empty object.
