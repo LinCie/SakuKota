@@ -77,9 +77,11 @@ export function FormDrawer({
               </Drawer.Close>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5">
+            {/* Content: a mouse press on the form never starts the swipe, which
+                would capture the pointer and swallow the click. */}
+            <Drawer.Content className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5">
               {children}
-            </div>
+            </Drawer.Content>
 
             <footer className="border-ink/15 flex justify-end gap-2 border-t px-5 py-3">
               <Drawer.Close

@@ -145,7 +145,11 @@ export function LocationPicker({
   }, [leaflet, category]);
 
   return (
-    <div className="border-ink bg-paint-deep relative isolate h-64 overflow-hidden rounded-[3px] border-2">
+    // Inside a drawer, a drag here pans the map instead of swiping the drawer.
+    <div
+      data-base-ui-swipe-ignore
+      className="border-ink bg-paint-deep relative isolate h-64 overflow-hidden rounded-[3px] border-2"
+    >
       <div
         ref={containerRef}
         role="application"
