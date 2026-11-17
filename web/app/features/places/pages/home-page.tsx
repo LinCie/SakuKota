@@ -60,8 +60,10 @@ type PlacesFilters = Pick<
 /**
  * The kecamatan on show (the one in the URL, else the first) and the places
  * queries for the filters: `params` for the map, which follows its view, and
- * `listParams` for the list, which does not. With no kecamatan at all there are
- * no places either.
+ * `listParams` for the list, which does not. The map is bound to the kecamatan
+ * only until it has a view (`bbox`): that first request is what it frames, and
+ * from then on it shows every place in view, whatever its kecamatan. With no
+ * kecamatan at all there are no places either.
  */
 export function placesSelection(
   { kecamatan, kategori, q, bbox, limit }: PlacesFilters,
@@ -78,7 +80,12 @@ export function placesSelection(
       .map((category) => category.id),
     q: q?.trim(),
   };
-  const params: GetPlacesParams = { ...listParams, bbox, limit };
+  const params: GetPlacesParams = {
+    ...listParams,
+    subDistrictId: bbox ? undefined : listParams.subDistrictId,
+    bbox,
+    limit,
+  };
   return { subDistrict, params, listParams };
 }
 
