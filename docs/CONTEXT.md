@@ -5,7 +5,7 @@
 > behavior or the API contract, once a VERIFICATION phase passes (see
 > [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-22. Sub-district boundaries replace the static map (see the change log).
+> - Last updated: 2026-11-22. `GET /places` spreads a page with a `bbox` over the box (see the change log).
 >   Verified by `go build`, `go vet` (with and without the `integration` tag), and the full Go
 >   unit and integration suites.
 > - Status: verified. All Go unit and integration tests pass. The web app draws the
@@ -269,11 +269,24 @@ its key; a place without images has `[]`. Lists and single reads return
   including an unknown sub-district or category.
 - **List (`GET /places`).** Returns `{places, total}`, where `total` counts all
   matches **before** `offset` and `limit`. Without a `bbox`, places are ordered
-  by ascending id. With a `bbox`, the places nearest the centre of the box come
-  first (straight-line distance in degrees), and places at the same distance
-  are ordered by id. `offset` skips the first places in that order and `limit`
-  keeps the first of the rest, so a capped map view shows the places nearest
-  its centre. Filters combine with AND, and an empty parameter counts as absent.
+  by ascending id. With a `bbox`, the places are **spread over the box**:
+  - The box is split into square cells whose side is the smallest power of two
+    (in degrees, at least `1e-5`) that makes at most about `limit` cells. The
+    grid is counted from longitude and latitude 0, so it does not move as the
+    box pans.
+  - Each cell takes its categories in turns, starting at a different one in
+    neighboring cells (category index by ascending id, minus cell x, minus
+    cell y, modulo the cell's number of categories). Within a category, the
+    places nearest the cell's centre come first.
+  - Round 1 is the first place of every cell, round 2 the second, and so on.
+    Within a round, the places nearest the centre of the box come first
+    (straight-line distance in degrees); remaining ties are ordered by id.
+
+  `offset` skips the first places in that order and `limit` keeps the first of
+  the rest. Because `limit` sizes the grid, the order depends on it, so pages
+  must share one `limit`. A capped map view shows one place per cell before a
+  second from any, instead of the places nearest its centre. Filters combine
+  with AND, and an empty parameter counts as absent.
   - `sub_district_id`: a positive int64. An unknown id returns `404
     SUB_DISTRICT_NOT_FOUND`.
   - `category_id`: a comma list of positive int64s that matches any of them.
@@ -285,15 +298,19 @@ its key; a place without images has `[]`. Lists and single reads return
   - `limit`: a positive integer, otherwise `INVALID_LIMIT`. An absent limit, or
     one above 100, is replaced by 100 (`maxLimit`), so no list is unbounded and a
     client cannot ask for more. `total` still counts every match, so a client can
-    tell when the list was cut off. The web map sends a fixed limit of
-    20 at every zoom level. The web side is untested.
+    tell when the list was cut off. The web map sends a limit set from its
+    size on screen: one place per 120×120 px square, from 20 to 100, kept
+    across kecamatan changes (20 on a first visit until the map is moved).
+    Before the map has a view, it sends the `sub_district_id` with its
+    boundary's extent as `bbox`, so the first page is spread over the
+    kecamatan too. The web side is untested.
   - `offset`: a non-negative integer, otherwise `INVALID_OFFSET`.
   - `bbox=west,south,east,north`: four finite numbers with lon in ±180, lat in
     ±90, `west ≤ east`, and `south ≤ north`, otherwise `INVALID_BBOX`. Edges
     count as inside, and places without a location are excluded. It also sets
     the order (see above). A GiST index on `PLACES.location` is required.
   - **Cache.** A list with a `sub_district_id` is served from an index of place
-    ids and coordinates kept in Redis, one entry per sub-district, category
+    ids, categories, and coordinates kept in Redis, one entry per sub-district, category
     set, and search term. `bbox`, `limit`, and `offset` are applied to the
     index, so they share that entry. A cached list has the same places, order,
     and `total` as the uncached one, on the first read and on later ones. A
@@ -601,7 +618,7 @@ body.
 
 | Story | Backend support |
 | ----- | --------------- |
-| US-01 Browse pins in the viewport | `GET /places?bbox=…`; the server returns at most 100 places, those nearest the centre of the viewport, and `total` lets the UI show "N results" when the list is truncated. Clustering and empty states are frontend work |
+| US-01 Browse pins in the viewport | `GET /places?bbox=…`; the server returns at most 100 places, spread over the viewport by grid cell and category, and `total` lets the UI show "N results" when the list is truncated. Clustering and empty states are frontend work |
 | US-02 Pin details (6 fields) | Place response: name, category, address/location, operating hours, price range, description. Missing values are `null`, so the UI can show placeholders |
 | US-03 Kecamatan dropdown | `GET /subdistricts` (ordered by id) |
 | US-04 Kecamatan info modal | Flood, safety, and spending fields plus a GeoJSON `boundary` in place of the static map image, with `null` for missing data |
@@ -675,7 +692,7 @@ them.
   startup and exits if `REDIS_URL` is invalid or unreachable. None of this is
   tested: no auth test runs against a real Redis.
 - **Places list cache, untested parts.** The cached index (keys
-  `places:index:<hash>`) lives for 30 seconds and nothing clears it sooner, so
+  `places:index:v2:<hash>`) lives for 30 seconds and nothing clears it sooner, so
   a cached list can miss a place created, edited, or deleted in the last 30
   seconds. A Redis failure is meant to fall back to PostgreSQL without failing
   the request. Neither the lifetime nor the fallback is tested.
@@ -698,9 +715,11 @@ them.
 - **Static map leftovers (2026-11-22).** The migration was edited in place,
   so existing databases must be rebuilt; static map objects already in a
   bucket are not queued for deletion.
-- **Kecamatan overlay, web.** At the widest zoom (13) a whole kecamatan is in
-  view, but the map still loads only the 100 places nearest the centre, so the
-  signs bunch up in the middle of the outline. There is no clustering.
+- **Spread cost.** Ordering a page with a `bbox` ranks every place in the box
+  (window functions in PostgreSQL, a sort in the cache), so it no longer stops
+  early on the GiST index. It took about 4 ms over the 1,092 seeded places;
+  it is untested at the 50,000 of `make seed-bulk`. There is still no
+  clustering.
 - **Load test script.** `scripts/k6/get-places.js` still reads the `X-Cache`
   header, which `GET /places` no longer sends (removed 2026-11-16), so its
   `cache_hit` metric always reports `none`. Not updated yet.
@@ -745,3 +764,5 @@ them.
 | 2026-11-22 | Verification update | Sub-district boundary replaces the static map. `SUB_DISTRICTS.static_map_media_id` is replaced by `boundary GEOMETRY(MultiPolygon, 4326)` with a `CHECK (ST_IsValid(boundary))`, edited into the `create_sub_districts` migration (which now creates the PostGIS extension), so databases must be rebuilt. The response field `static_map_image_url` became `boundary` (GeoJSON MultiPolygon or `null`), and `POST .../static-map/upload-url` and `PUT .../static-map` became `PUT /v1/subdistricts/{id}/boundary` (admin), which takes a GeoJSON Polygon or MultiPolygon: malformed GeoJSON is `INVALID_BODY`, and an area outside Indonesia or crossing itself is `VALIDATION_ERROR` (`ErrInvalidBoundary`). Create and update ignore the boundary and keep it. New `postgis.MultiPolygon` type and `database.CheckViolation`. OpenAPI updated. Verified by `go build`, `go vet` (with and without the `integration` tag), `go test ./...` (1236 passed), and `go test -tags integration ./...` (1453 passed). The seed and web app are not updated yet (§10) |
 | 2026-11-22 | Seed data | No API change. `make seed` sets the boundaries of Setiabudi, Mampang Prapatan, and Tebet from their OpenStreetMap `admin_level=6` relations (5802434, 5802428, 5802418; ODbL), joined into one MultiPolygon each and not simplified, so neighbors share edges exactly (about 21 KB of GeoJSON in all). A rerun keeps a boundary already set. The static map PNGs (`cmd/seed/images/static-maps`) and their upload are removed. Verified by `go build`, `go vet ./cmd/...`, and running the seed twice on a fresh migrated database (2,718 medias, 1,092 places, and 3 boundaries the first time, nothing added the second); every seeded place lies inside its kecamatan's boundary, and the boundaries read back through `postgis.MultiPolygon` |
 | 2026-11-22 | Web update | No API change. The web app reads `boundary` instead of `static_map_image_url`. The survival map outlines every kecamatan that has a boundary: the one on show solid with a light fill, the others dashed, named in a tooltip on hover, and picked when clicked (the same as choosing it in the header). A kecamatan is framed by its boundary, or by its places when it has none. The widest zoom moved from 15 to 13 so a whole kecamatan fits on a phone, and the zoom-based `limit` moved with it: 100 at 13, 80 at 14, 60 at 15, and 40 from 16 (§6.3 was out of date, saying 16). The info modal's "Peta area" section is removed. Verified by the web typecheck, lint, format check, and tests (240 passed), and by headless Chrome screenshots against a freshly seeded API at 1366×800 and 390×844; clicking and hovering an outline were not checked |
+| 2026-11-22 | Verification update | `GET /places` spreads a page with a `bbox` over the box instead of taking the places nearest its centre. The box is split into a grid of about `limit` power-of-two cells fixed to longitude and latitude 0; each cell takes its categories in turns (starting at a different one in neighboring cells), and the first place of every cell comes before any second one, nearest the box's centre first within a round (§6.3). The order now depends on `limit`. The Redis index entries gained the category id (32 bytes each) and the keys moved to `places:index:v2:<hash>`. The web map's first request for a kecamatan sends its boundary's extent as `bbox` with the `sub_district_id`, so it is spread too. The §10 item about signs bunching up in the kecamatan is replaced by the untested cost of the spread. OpenAPI updated. Verified by `go build`, `go vet` (with and without the `integration` tag), `go test ./...` (1250 passed), the place integration tests (525 passed, including SQL/cache parity on spread pages), and the web typecheck, lint, and tests (240 passed); the map was not checked in a browser |
+| 2026-11-22 | Web update | No API change. The web map's `limit` is set from its size on screen instead of a fixed 20: one place per 120×120 px square, from 20 to 100, so a desktop map loads about 50 and a phone about 20. It is kept in the URL across kecamatan changes; a first visit loads 20 until the map is moved. Verified by the web typecheck, lint, and tests (240 passed); the map was not checked in a browser |

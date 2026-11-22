@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"rantau-go/internal/pkg/postgis"
 	"rantau-go/internal/storage"
@@ -44,17 +45,19 @@ type PlaceFilter struct {
 	// Limit is the page size. The service replaces zero or an oversized value
 	// with its maximum, so below the service it is always positive.
 	Limit int
-	// Offset skips this many places before the page starts. Places are ordered by
-	// distance from the centre of Bounds, then by id; without Bounds, by id.
+	// Offset skips this many places before the page starts. Without Bounds,
+	// places are ordered by id; with Bounds, they are spread over the box (see
+	// spreadPlaces).
 	Offset int
 }
 
-// PlaceLocation is a place's id and coordinates in degrees.
+// PlaceLocation is a place's id, category, and coordinates in degrees.
 // The coordinates are nil for a place without a location.
 type PlaceLocation struct {
-	ID        int64    `db:"id"`
-	Longitude *float64 `db:"longitude"`
-	Latitude  *float64 `db:"latitude"`
+	ID         int64    `db:"id"`
+	CategoryID int64    `db:"category_id"`
+	Longitude  *float64 `db:"longitude"`
+	Latitude   *float64 `db:"latitude"`
 }
 
 // BoundingBox is an area in degrees.
@@ -68,6 +71,16 @@ type BoundingBox struct {
 // Center returns the longitude and latitude of the middle of the box.
 func (b BoundingBox) Center() (float64, float64) {
 	return (b.MinLng + b.MaxLng) / 2, (b.MinLat + b.MaxLat) / 2
+}
+
+// gridCell returns the side in degrees of the square cells a page of limit places
+// is spread over: the smallest power of two that splits the box into at most about
+// limit cells. A power of two keeps the grid the same while the box pans at one
+// zoom level. It is never below minGridCell, so an empty box still has a grid.
+func (b BoundingBox) gridCell(limit int) float64 {
+	side := math.Sqrt((b.MaxLng - b.MinLng) * (b.MaxLat - b.MinLat) / float64(limit))
+
+	return math.Exp2(math.Ceil(math.Log2(max(side, minGridCell))))
 }
 
 // Category is a row of CATEGORIES. Migrations define categories; the API cannot create them.

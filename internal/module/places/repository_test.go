@@ -352,16 +352,19 @@ func TestRepository_GetMany(t *testing.T) {
 			want:      []string{"Penjahit Maju", "Laundry Bersih"},
 			wantTotal: 2,
 		},
+		// With a limit of 1 both places share one 0.0625° grid cell, (1709, -100).
+		// Its categories take turns from (index - 1709 - -100) mod 2, where tailor is
+		// index 0 and laundry index 1 (by id), so laundry goes first.
 		{
-			name:      "limit keeps the places nearest the centre of the bounds",
+			name:      "limit sizes the grid, and a cell takes its categories in turns",
 			filter:    places.PlaceFilter{Bounds: &places.BoundingBox{MinLng: 106.81, MinLat: -6.23, MaxLng: 106.87, MaxLat: -6.19}, Limit: 1},
-			want:      []string{"Penjahit Maju"},
+			want:      []string{"Laundry Bersih"},
 			wantTotal: 2,
 		},
 		{
-			name:      "offset skips the places nearest the centre of the bounds",
+			name:      "offset skips into the same order",
 			filter:    places.PlaceFilter{Bounds: &places.BoundingBox{MinLng: 106.81, MinLat: -6.23, MaxLng: 106.87, MaxLat: -6.19}, Limit: 1, Offset: 1},
-			want:      []string{"Laundry Bersih"},
+			want:      []string{"Penjahit Maju"},
 			wantTotal: 2,
 		},
 		{
@@ -475,6 +478,37 @@ func TestRepository_GetMany(t *testing.T) {
 		assert.Empty(t, got)
 		assert.Zero(t, total)
 	})
+}
+
+func TestRepository_GetMany_Spread(t *testing.T) {
+	ctx := context.Background()
+	repo := newRepository(t)
+	setiabudi := insertSubDistrict(t, "Setiabudi")
+	laundry := categoryID(t, "laundry")
+
+	create := func(name string, longitude, latitude float64) {
+		p := newPlace(setiabudi, laundry, name)
+		p.Location = postgis.MustPoint(longitude, latitude)
+		mustCreate(t, repo, p)
+	}
+	// The box is 0.125° square, so a limit of 4 splits it into four 0.0625° cells.
+	// Four places crowd the centre, all in the south-west cell.
+	create("Tengah 1", 106.81, -6.19)
+	create("Tengah 2", 106.809, -6.19)
+	create("Tengah 3", 106.811, -6.19)
+	create("Tengah 4", 106.808, -6.192)
+	create("Barat Laut", 106.76, -6.13)
+	create("Timur Laut", 106.87, -6.13)
+	box := &places.BoundingBox{MinLng: 106.75, MinLat: -6.25, MaxLng: 106.875, MaxLat: -6.125}
+
+	got, total, err := repo.GetMany(ctx, places.PlaceFilter{Bounds: box, Limit: 4})
+
+	// One place from each cell (the one nearest the cell's centre), nearest the
+	// box's centre first, then the crowded cell's next, instead of the four
+	// places nearest the box's centre.
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Tengah 4", "Barat Laut", "Timur Laut", "Tengah 2"}, names(got))
+	assert.Equal(t, 6, total)
 }
 
 func TestRepository_GetCategories(t *testing.T) {

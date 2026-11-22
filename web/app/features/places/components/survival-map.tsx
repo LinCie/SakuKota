@@ -117,8 +117,20 @@ function clamp(value: number, limit: number) {
   return Math.min(limit, Math.max(-limit, value));
 }
 
-/** How many places the map loads, whatever its zoom level. */
+/** The fewest places the map loads, and how many before it has a size. */
 export const PLACES_LIMIT = 20;
+
+/** The most places the map loads: the server returns no more. */
+const MAX_PLACES_LIMIT = 100;
+
+/** The side in pixels of the square each sign gets to itself. */
+const SIGN_ROOM = 120;
+
+/** How many places a map of this size loads: one per square of SIGN_ROOM. */
+function placesLimit({ x, y }: Leaflet.Point) {
+  const fits = Math.floor(x / SIGN_ROOM) * Math.floor(y / SIGN_ROOM);
+  return Math.min(MAX_PLACES_LIMIT, Math.max(PLACES_LIMIT, fits));
+}
 
 /** The part of the map on show, as the places request filters it. */
 export type MapView = {
@@ -199,7 +211,7 @@ export function SurvivalMap({
       }
       onViewChangeEvent({
         bbox: bboxParam(map.getBounds()),
-        limit: PLACES_LIMIT,
+        limit: placesLimit(map.getSize()),
       });
     };
     // Dragging stops a flight without a moveend; the drag's own is reported.

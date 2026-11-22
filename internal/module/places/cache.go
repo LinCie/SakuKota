@@ -1,7 +1,6 @@
 package places
 
 import (
-	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
@@ -13,7 +12,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// cachedRepository serves GetMany from a Redis index of place ids and coordinates.
+// cachedRepository serves GetMany from a Redis index of place ids, categories, and coordinates.
 // Entries expire only after listCacheTTL, so a list can be that stale.
 type cachedRepository struct {
 	Repository
@@ -108,6 +107,7 @@ func encodeIndex(locations []PlaceLocation) []byte {
 		}
 
 		data = binary.LittleEndian.AppendUint64(data, uint64(l.ID))
+		data = binary.LittleEndian.AppendUint64(data, uint64(l.CategoryID))
 		data = binary.LittleEndian.AppendUint64(data, math.Float64bits(longitude))
 		data = binary.LittleEndian.AppendUint64(data, math.Float64bits(latitude))
 	}
@@ -117,37 +117,29 @@ func encodeIndex(locations []PlaceLocation) []byte {
 
 // pageFromIndex returns the ids on the filter's page of the index, and the number
 // of places inside the filter's bounds (edges included). With bounds, the places
-// nearest the centre of the box come first; otherwise the index order is kept.
+// are spread over the box (see spreadPlaces); otherwise the index order is kept.
 func pageFromIndex(index []byte, filter PlaceFilter) ([]int64, int) {
-	type match struct {
-		id       int64
-		distance float64
-	}
-	var matches []match
+	var matches []spreadPlace
 
 	for entry := index; len(entry) >= indexEntrySize; entry = entry[indexEntrySize:] {
-		m := match{id: int64(binary.LittleEndian.Uint64(entry))}
+		m := spreadPlace{
+			id:         int64(binary.LittleEndian.Uint64(entry)),
+			categoryID: int64(binary.LittleEndian.Uint64(entry[8:])),
+			longitude:  math.Float64frombits(binary.LittleEndian.Uint64(entry[16:])),
+			latitude:   math.Float64frombits(binary.LittleEndian.Uint64(entry[24:])),
+		}
 
-		if b := filter.Bounds; b != nil {
-			longitude := math.Float64frombits(binary.LittleEndian.Uint64(entry[8:]))
-			latitude := math.Float64frombits(binary.LittleEndian.Uint64(entry[16:]))
-
-			// Written as "not inside" so NaN (no location) is excluded: every NaN comparison is false.
-			if !(longitude >= b.MinLng && longitude <= b.MaxLng && latitude >= b.MinLat && latitude <= b.MaxLat) {
-				continue
-			}
-
-			centerLng, centerLat := b.Center()
-			m.distance = math.Hypot(longitude-centerLng, latitude-centerLat)
+		// Written as "not inside" so NaN (no location) is excluded: every NaN comparison is false.
+		if b := filter.Bounds; b != nil &&
+			!(m.longitude >= b.MinLng && m.longitude <= b.MaxLng && m.latitude >= b.MinLat && m.latitude <= b.MaxLat) {
+			continue
 		}
 
 		matches = append(matches, m)
 	}
 
 	if filter.Bounds != nil {
-		slices.SortFunc(matches, func(a, b match) int {
-			return cmp.Or(cmp.Compare(a.distance, b.distance), cmp.Compare(a.id, b.id))
-		})
+		matches = spreadPlaces(matches, *filter.Bounds, filter.Limit)
 	}
 
 	total := len(matches)

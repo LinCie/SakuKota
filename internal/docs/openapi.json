@@ -228,7 +228,7 @@
           {
             "name": "bbox",
             "in": "query",
-            "description": "Only return places located inside this box, edges included, as west,south,east,north in degrees. West must not exceed east, nor south north. Places without a location are left out. The places nearest the centre of the box come first, and those at the same distance are ordered by ID.",
+            "description": "Only return places located inside this box, edges included, as west,south,east,north in degrees. West must not exceed east, nor south north. Places without a location are left out. The places are spread over the box: it is split into a grid of about limit square cells (sized by a power of two and fixed to longitude and latitude 0, so it does not move as the box pans), each cell takes its categories in turns, and the first place of every cell comes before any second one. Within a round, the places nearest the centre of the box come first; remaining ties are ordered by ID.",
             "schema": {
               "type": "string",
               "example": "106.8084,-6.2292,106.8451,-6.2009"
@@ -237,7 +237,7 @@
           {
             "name": "limit",
             "in": "query",
-            "description": "Return at most this many places: those nearest the centre of bbox, or those with the lowest IDs when there is no bbox. total still counts every match.",
+            "description": "Return at most this many places: the first of the spread over bbox (which this limit sizes the grid of), or those with the lowest IDs when there is no bbox. total still counts every match.",
             "schema": { "type": "integer", "minimum": 1 }
           },
           {

@@ -28,7 +28,7 @@ import {
 import type { CategoryDetail, Place } from "~/features/places/types";
 import { PlaceReviews } from "~/features/reviews/components/place-reviews";
 import { useSubDistricts } from "~/features/subdistricts/queries";
-import type { SubDistrict } from "~/features/subdistricts/types";
+import type { Boundary, SubDistrict } from "~/features/subdistricts/types";
 import { KecamatanBoard } from "~/features/subdistricts/components/kecamatan-board";
 import { cn } from "~/shared/cn";
 import { ErrorBoard } from "~/shared/components/error-board";
@@ -44,13 +44,26 @@ export type HomeSearch = {
   q?: string;
   /** The map's view as "west,south,east,north"; only places inside it are loaded. */
   bbox?: string;
-  /** How many places the map loads, set from its zoom level. */
+  /** How many places the map loads, set from its size on screen. */
   limit?: number;
   tempat?: number;
 };
 
 function activeCategorySlugs(kategori: string | undefined) {
   return (kategori ?? "").split(",").filter(Boolean);
+}
+
+/** The boundary's extent as "west,south,east,north". */
+function boundaryBBox(boundary: Boundary) {
+  const points = boundary.coordinates.flat(2);
+  const lngs = points.map(([lng]) => lng);
+  const lats = points.map(([, lat]) => lat);
+  return [
+    Math.min(...lngs),
+    Math.min(...lats),
+    Math.max(...lngs),
+    Math.max(...lats),
+  ].join(",");
 }
 
 type PlacesFilters = Pick<
@@ -65,7 +78,9 @@ type PlacesFilters = Pick<
  * only until it has a view (`bbox`): that first request is what it frames, and
  * from then on it shows every place in view, whatever its kecamatan. With no
  * kecamatan at all there are no places either. Before the map reports a
- * view, it loads as many places as it will afterwards.
+ * view, it loads the limit it last reported (else the fewest it loads), inside
+ * the kecamatan's boundary extent if it has one, so the server spreads them
+ * over it.
  */
 export function placesSelection(
   { kecamatan, kategori, q, bbox, limit }: PlacesFilters,
@@ -82,10 +97,11 @@ export function placesSelection(
       .map((category) => category.id),
     q: q?.trim(),
   };
+  const boundary = subDistrict?.boundary;
   const params: GetPlacesParams = {
     ...listParams,
     subDistrictId: bbox ? undefined : listParams.subDistrictId,
-    bbox,
+    bbox: bbox ?? (boundary ? boundaryBBox(boundary) : undefined),
     limit: limit ?? PLACES_LIMIT,
   };
   return { subDistrict, params, listParams };
@@ -174,13 +190,9 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
   }
 
   function changeKecamatan(slug: string) {
-    // The new kecamatan loads without a view, so the map can frame it.
-    onSearchChange({
-      kecamatan: slug,
-      tempat: undefined,
-      bbox: undefined,
-      limit: undefined,
-    });
+    // The new kecamatan loads without a view, so the map can frame it. The
+    // limit stays: the map's size has not changed.
+    onSearchChange({ kecamatan: slug, tempat: undefined, bbox: undefined });
   }
 
   function toggleCategory(slug: string) {

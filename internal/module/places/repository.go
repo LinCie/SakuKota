@@ -27,8 +27,8 @@ type Repository interface {
 	AddMedia(ctx context.Context, id int64, m storage.Media) (*Place, error)
 	// GetMany returns one page of places matching the filter, plus the total match count.
 	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error)
-	// GetLocations returns the id and coordinates of every place matching the filter's
-	// sub-district, categories, and query. Bounds, limit, and offset are ignored.
+	// GetLocations returns the id, category, and coordinates of every place matching the
+	// filter's sub-district, categories, and query. Bounds, limit, and offset are ignored.
 	GetLocations(ctx context.Context, filter PlaceFilter) ([]PlaceLocation, error)
 	// GetByIDs returns the places with the given ids, in the order of ids.
 	// Ids that match no place are skipped.
@@ -172,18 +172,18 @@ func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([
 	// Clip so the page values are not written into args, which the count reuses.
 	pageArgs := slices.Clip(args)
 
-	// With bounds, the places nearest the centre of the box come first.
-	order := "p.id"
+	var query string
 	if b := filter.Bounds; b != nil {
+		// With bounds, the places are spread over the box, as spreadPlaces orders them.
 		longitude, latitude := b.Center()
-		pageArgs = append(pageArgs, longitude, latitude)
-		order = fmt.Sprintf("p.location <-> ST_SetSRID(ST_MakePoint($%d, $%d), %d), p.id",
-			len(pageArgs)-1, len(pageArgs), postgis.SRID)
+		n := len(pageArgs)
+		pageArgs = append(pageArgs, b.gridCell(filter.Limit), longitude, latitude, filter.Limit, filter.Offset)
+		query = fmt.Sprintf(spreadQuery, where, postgis.SRID, n+1, n+2, n+3, n+4, n+5)
+	} else {
+		pageArgs = append(pageArgs, filter.Limit, filter.Offset)
+		query = fmt.Sprintf(`SELECT %s%s%s ORDER BY p.id LIMIT $%d OFFSET $%d`,
+			placeColumns, placeFrom, where, len(pageArgs)-1, len(pageArgs))
 	}
-
-	pageArgs = append(pageArgs, filter.Limit, filter.Offset)
-	query := fmt.Sprintf(`SELECT %s%s%s ORDER BY %s LIMIT $%d OFFSET $%d`,
-		placeColumns, placeFrom, where, order, len(pageArgs)-1, len(pageArgs))
 
 	places := make([]Place, 0)
 	if err := r.db.SelectContext(ctx, &places, query, pageArgs...); err != nil {
@@ -202,8 +202,8 @@ func (r *postgresRepository) GetMany(ctx context.Context, filter PlaceFilter) ([
 	return places, total, nil
 }
 
-// GetLocations returns the id and coordinates of every place matching the filter's
-// sub-district, categories, and query. Bounds, limit, and offset are ignored.
+// GetLocations returns the id, category, and coordinates of every place matching the
+// filter's sub-district, categories, and query. Bounds, limit, and offset are ignored.
 func (r *postgresRepository) GetLocations(ctx context.Context, filter PlaceFilter) ([]PlaceLocation, error) {
 	if err := r.checkFilterTargets(ctx, filter); err != nil {
 		return nil, err
@@ -216,7 +216,7 @@ func (r *postgresRepository) GetLocations(ctx context.Context, filter PlaceFilte
 	err := r.db.SelectContext(
 		ctx,
 		&locations,
-		`SELECT p.id, ST_X(p.location) AS longitude, ST_Y(p.location) AS latitude`+
+		`SELECT p.id, p.category_id, ST_X(p.location) AS longitude, ST_Y(p.location) AS latitude`+
 			placeFrom+where+` ORDER BY p.id`,
 		args...,
 	)
@@ -471,6 +471,40 @@ const placeRowColumns = `id, sub_district_id, category_id, name, address,
 
 // placeFrom is the FROM clause the filters are written against.
 const placeFrom = ` FROM PLACES p JOIN CATEGORIES c ON c.id = p.category_id`
+
+// spreadQuery is a page of places spread over a bounding box, ordered as
+// spreadPlaces orders them. Its fmt arguments are the WHERE clause, the SRID,
+// and the parameter numbers of the grid cell size, the longitude and latitude
+// of the box's centre, the limit, and the offset.
+const spreadQuery = `WITH located AS (
+	SELECT p.id, p.category_id, p.location,
+		floor(ST_X(p.location) / $%[3]d::float8)::bigint AS cell_x,
+		floor(ST_Y(p.location) / $%[3]d::float8)::bigint AS cell_y` + placeFrom + `%[1]s
+), measured AS (
+	SELECT id, category_id, cell_x, cell_y,
+		location <-> ST_SetSRID(ST_MakePoint(
+			(cell_x + 0.5::float8) * $%[3]d::float8, (cell_y + 0.5::float8) * $%[3]d::float8), %[2]d) AS cell_distance,
+		location <-> ST_SetSRID(ST_MakePoint($%[4]d::float8, $%[5]d::float8), %[2]d) AS center_distance,
+		dense_rank() OVER (PARTITION BY cell_x, cell_y ORDER BY category_id) - 1 AS category_index
+	FROM located
+), counted AS (
+	SELECT *,
+		row_number() OVER (PARTITION BY cell_x, cell_y, category_id ORDER BY cell_distance, id) AS category_round,
+		max(category_index) OVER (PARTITION BY cell_x, cell_y) + 1 AS category_count
+	FROM measured
+), ranked AS (
+	SELECT id, center_distance,
+		row_number() OVER (
+			PARTITION BY cell_x, cell_y
+			ORDER BY category_round,
+				((category_index - cell_x - cell_y) %% category_count + category_count) %% category_count,
+				cell_distance, id
+		) AS round
+	FROM counted
+)
+SELECT ` + placeColumns + placeFrom + ` JOIN ranked r ON r.id = p.id
+ORDER BY r.round, r.center_distance, p.id
+LIMIT $%[6]d OFFSET $%[7]d`
 
 // checkFilterTargets returns ErrSubDistrictNotFound or ErrCategoryNotFound if the filter
 // names one that does not exist. An unknown target is a 404, not an empty list.

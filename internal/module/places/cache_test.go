@@ -49,10 +49,16 @@ func TestCachedRepository_GetMany(t *testing.T) {
 	create(setiabudi, laundry, "Laundry C", nil)
 	create(setiabudi, laundry, "Laundry D", postgis.MustPoint(106.90, -6.30))
 	create(menteng, tailor, "Penjahit E", postgis.MustPoint(106.83, -6.20))
+	// A crowd of both categories, so cells hold several places and take turns.
+	create(setiabudi, tailor, "Penjahit F", postgis.MustPoint(106.821, -6.201))
+	create(setiabudi, laundry, "Laundry G", postgis.MustPoint(106.822, -6.202))
+	create(setiabudi, tailor, "Penjahit H", postgis.MustPoint(106.823, -6.201))
+	create(setiabudi, laundry, "Laundry I", postgis.MustPoint(106.88, -6.25))
 
 	box := &places.BoundingBox{MinLng: 106.82, MinLat: -6.21, MaxLng: 106.84, MaxLat: -6.20}
 	// The centre of nearBox is on Penjahit B, so it comes before Laundry A despite its higher id.
 	nearBox := &places.BoundingBox{MinLng: 106.81, MinLat: -6.23, MaxLng: 106.87, MaxLat: -6.19}
+	wideBox := &places.BoundingBox{MinLng: 106.80, MinLat: -6.32, MaxLng: 106.92, MaxLat: -6.18}
 	filters := map[string]places.PlaceFilter{
 		"sub-district":         {SubDistrictID: setiabudi},
 		"categories":           {SubDistrictID: setiabudi, CategoryIDs: []int64{tailor, laundry}},
@@ -62,6 +68,8 @@ func TestCachedRepository_GetMany(t *testing.T) {
 		"bounds by distance":   {SubDistrictID: setiabudi, Bounds: nearBox},
 		"bounds and limit":     {SubDistrictID: setiabudi, Bounds: nearBox, Limit: 1},
 		"bounds and offset":    {SubDistrictID: setiabudi, Bounds: nearBox, Limit: 1, Offset: 1},
+		"spread":               {SubDistrictID: setiabudi, Bounds: wideBox, Limit: 3},
+		"spread and offset":    {SubDistrictID: setiabudi, Bounds: wideBox, Limit: 3, Offset: 3},
 		"limit":                {SubDistrictID: setiabudi, Limit: 2},
 		"offset":               {SubDistrictID: setiabudi, Limit: 2, Offset: 2},
 		"offset past the end":  {SubDistrictID: setiabudi, Limit: 2, Offset: 20},
