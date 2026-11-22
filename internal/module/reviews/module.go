@@ -2,7 +2,11 @@
 // reviews.
 package reviews
 
-import "github.com/jmoiron/sqlx"
+import (
+	"github.com/jmoiron/sqlx"
+
+	"rantau-go/internal/database"
+)
 
 // Module bundles the service and handler of the reviews feature.
 type Module struct {
@@ -10,9 +14,10 @@ type Module struct {
 	Handler *Handler
 }
 
-// New builds the reviews module on db.
-func New(db *sqlx.DB) *Module {
-	service := NewService(NewPostgresRepository(db))
+// New builds the reviews module on db. Ratings are added to place totals
+// through places, in the same transaction as the review.
+func New(db *sqlx.DB, places PlaceService) *Module {
+	service := NewService(NewPostgresRepository(db), database.NewTransactor(db), places)
 
 	return &Module{
 		Service: service,

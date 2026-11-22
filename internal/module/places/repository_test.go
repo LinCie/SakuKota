@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"rantau-go/internal/database"
 	"rantau-go/internal/domain"
 	"rantau-go/internal/module/places"
 	"rantau-go/internal/pkg/postgis"
@@ -720,6 +721,74 @@ func newPlaceWithID(p *domain.Place, name string) *domain.Place {
 	update.ID = p.ID
 
 	return update
+}
+
+// ratingTotals returns the stored place's rating count and sum.
+func ratingTotals(t *testing.T, repo places.Repository, id int64) [2]int {
+	t.Helper()
+
+	p, err := repo.Fetch(t.Context(), id)
+	require.NoError(t, err, "Fetch(%d)", id)
+	return [2]int{p.RatingCount, p.RatingSum}
+}
+
+func TestRepository_AddRating(t *testing.T) {
+	t.Run("adds_each_rating_to_totals", func(t *testing.T) {
+		repo := newRepository(t)
+		subDistrictID := insertSubDistrict(t, "Setiabudi")
+		place := mustCreate(t, repo, newPlace(subDistrictID, categoryID(t, "laundry"), "Laundry"))
+		other := mustCreate(t, repo, newPlace(subDistrictID, categoryID(t, "laundry"), "Other"))
+
+		for _, rating := range []int{5, 3, 1} {
+			require.NoError(t, repo.AddRating(t.Context(), place.ID, rating), "AddRating(%d)", rating)
+		}
+
+		assert.Equal(t, [2]int{3, 9}, ratingTotals(t, repo, place.ID))
+		// Other places are untouched.
+		assert.Equal(t, [2]int{0, 0}, ratingTotals(t, repo, other.ID))
+	})
+
+	t.Run("concurrent_ratings_lose_none", func(t *testing.T) {
+		repo := newRepository(t)
+		place := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
+		const raters = 20
+
+		var wg sync.WaitGroup
+		errs := make([]error, raters)
+		for i := range raters {
+			wg.Go(func() {
+				errs[i] = repo.AddRating(t.Context(), place.ID, 4)
+			})
+		}
+		wg.Wait()
+
+		for i, err := range errs {
+			require.NoError(t, err, "AddRating() by rater %d", i)
+		}
+		assert.Equal(t, [2]int{raters, raters * 4}, ratingTotals(t, repo, place.ID))
+	})
+
+	t.Run("unknown_place", func(t *testing.T) {
+		repo := newRepository(t)
+
+		assert.ErrorIs(t, repo.AddRating(t.Context(), 999, 4), domain.ErrPlaceNotFound)
+	})
+
+	t.Run("joins_the_transaction_in_ctx", func(t *testing.T) {
+		repo := newRepository(t)
+		place := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
+		errBoom := errors.New("boom")
+
+		err := database.NewTransactor(testDB).WithinTx(t.Context(), func(ctx context.Context) error {
+			if err := repo.AddRating(ctx, place.ID, 4); err != nil {
+				return err
+			}
+			return errBoom
+		})
+
+		assert.ErrorIs(t, err, errBoom)
+		assert.Equal(t, [2]int{0, 0}, ratingTotals(t, repo, place.ID), "the rating outlived the rollback")
+	})
 }
 
 func TestRepository_Delete(t *testing.T) {

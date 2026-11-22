@@ -1127,6 +1127,28 @@ func TestService_Fetch(t *testing.T) {
 	}
 }
 
+func TestService_AddRating(t *testing.T) {
+	tests := []struct {
+		name    string
+		repoErr error
+		wantErr error
+	}{
+		{name: "added", repoErr: nil, wantErr: nil},
+		{name: "unknown_place", repoErr: domain.ErrPlaceNotFound, wantErr: domain.ErrPlaceNotFound},
+		{name: "storage_failure", repoErr: errBoom, wantErr: errBoom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, media := newMocks(t)
+			repo.EXPECT().AddRating(gomock.Any(), int64(7), 4).Return(tc.repoErr)
+
+			err := places.NewService(repo, media).AddRating(t.Context(), 7, 4)
+			assert.ErrorIs(t, err, tc.wantErr, "AddRating(7, 4)")
+		})
+	}
+}
+
 func TestService_FetchCategory(t *testing.T) {
 	tests := []struct {
 		name    string

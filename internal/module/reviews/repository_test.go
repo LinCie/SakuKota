@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -109,48 +108,6 @@ func TestPostgresRepository_Create(t *testing.T) {
 		assert.Nil(t, got.Comment)
 	})
 
-	t.Run("adds_each_rating_to_totals", func(t *testing.T) {
-		repo := newRepository(t)
-		placeID := insertPlace(t, "Laundry")
-		otherPlaceID := insertPlace(t, "Other")
-
-		for i, rating := range []int{5, 3, 1} {
-			userID := pgtest.InsertUser(t, testDB, fmt.Sprintf("User%d", i))
-			mustCreate(t, repo, &domain.Review{PlaceID: placeID, UserID: userID, Rating: rating})
-		}
-
-		assert.Equal(t, [2]int{3, 9}, ratingTotals(t, placeID))
-		// Other places are untouched.
-		assert.Equal(t, [2]int{0, 0}, ratingTotals(t, otherPlaceID))
-	})
-
-	t.Run("concurrent_reviews_lose_no_rating", func(t *testing.T) {
-		repo := newRepository(t)
-		placeID := insertPlace(t, "Laundry")
-		const reviewers = 20
-
-		userIDs := make([]int64, reviewers)
-		for i := range userIDs {
-			userIDs[i] = pgtest.InsertUser(t, testDB, fmt.Sprintf("User%d", i))
-		}
-
-		var wg sync.WaitGroup
-		errs := make([]error, reviewers)
-		for i, userID := range userIDs {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				_, errs[i] = repo.Create(t.Context(), &domain.Review{PlaceID: placeID, UserID: userID, Rating: 4})
-			}()
-		}
-		wg.Wait()
-
-		for i, err := range errs {
-			require.NoError(t, err, "Create() by reviewer %d", i)
-		}
-		assert.Equal(t, [2]int{reviewers, reviewers * 4}, ratingTotals(t, placeID))
-	})
-
 	t.Run("second_review_by_user", func(t *testing.T) {
 		repo := newRepository(t)
 		placeID := insertPlace(t, "Laundry")
@@ -161,7 +118,6 @@ func TestPostgresRepository_Create(t *testing.T) {
 
 		assert.ErrorIs(t, err, domain.ErrPlaceAlreadyReviewed)
 		assert.Nil(t, got)
-		assert.Equal(t, [2]int{1, 5}, ratingTotals(t, placeID))
 	})
 
 	t.Run("user_reviews_different_places", func(t *testing.T) {
@@ -191,7 +147,6 @@ func TestPostgresRepository_Create(t *testing.T) {
 
 		assert.True(t, database.IsCode(err, database.ForeignKeyViolation), "Create() error = %v, want a foreign key violation", err)
 		assert.Nil(t, got)
-		assert.Equal(t, [2]int{0, 0}, ratingTotals(t, placeID))
 	})
 
 	t.Run("rating_outside_range", func(t *testing.T) {
@@ -204,7 +159,6 @@ func TestPostgresRepository_Create(t *testing.T) {
 
 				assert.True(t, database.IsCode(err, checkViolation), "Create(rating %d) error = %v, want a check violation", rating, err)
 				assert.Nil(t, got, "Create(rating %d)", rating)
-				assert.Equal(t, [2]int{0, 0}, ratingTotals(t, placeID))
 			})
 		}
 	})

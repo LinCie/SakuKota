@@ -172,12 +172,13 @@ const suggestionColumns = `s.id, s.user_id, s.sub_district_id, s.category_id, s.
 // suggestionFrom is the FROM clause that reads suggestions from `s` with their authors from `u`.
 const suggestionFrom = `FROM PLACE_SUGGESTIONS s JOIN USERS u ON u.id = s.user_id`
 
-// review records the outcome of suggestion id and returns it with its author.
+// review records the outcome of suggestion id and returns it with its author,
+// in the transaction carried by ctx if there is one.
 // Only a pending suggestion is updated, so two admins cannot both review it.
 func (r *PostgresRepository) review(ctx context.Context, id int64, status domain.Status, placeID *int64, reason *string, adminID int64) (*domain.Suggestion, error) {
 	var reviewed domain.Suggestion
 
-	err := r.db.GetContext(
+	err := database.Conn(ctx, r.db).GetContext(
 		ctx,
 		&reviewed,
 		`WITH updated AS (
@@ -210,7 +211,7 @@ func (r *PostgresRepository) review(ctx context.Context, id int64, status domain
 // exist, or it is no longer pending.
 func (r *PostgresRepository) unreviewableError(ctx context.Context, id int64) error {
 	var exists bool
-	err := r.db.GetContext(
+	err := database.Conn(ctx, r.db).GetContext(
 		ctx,
 		&exists,
 		`SELECT EXISTS (SELECT 1 FROM PLACE_SUGGESTIONS WHERE id = $1)`,

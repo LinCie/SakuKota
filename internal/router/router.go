@@ -44,7 +44,7 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 	userModule := users.New(db)
 	authModule := auth.New(cfg, userModule.Service, rdb)
 	placeModule := places.New(db, rdb, media)
-	reviewModule := reviews.New(db)
+	reviewModule := reviews.New(db, placeModule.Service)
 	subdistrictModule := subdistricts.New(db, media)
 	suggestionModule := suggestions.New(db, placeModule.Service)
 

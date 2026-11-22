@@ -19,23 +19,17 @@ func NewPostgresRepository(db *sqlx.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
-// Create saves the review and adds its rating to the place's totals in one statement.
-// Adding to the totals, not recounting them, means two reviews at once both count.
+// Create saves the review, in the transaction carried by ctx if there is one.
 func (r *PostgresRepository) Create(ctx context.Context, review *domain.Review) (*domain.Review, error) {
 	var created domain.Review
 
-	err := r.db.GetContext(
+	err := database.Conn(ctx, r.db).GetContext(
 		ctx,
 		&created,
 		`WITH inserted AS (
 			INSERT INTO PLACE_REVIEWS (place_id, user_id, rating, comment)
 			VALUES ($1, $2, $3, $4)
 			RETURNING *
-		), rated AS (
-			UPDATE PLACES p
-			SET rating_count = p.rating_count + 1, rating_sum = p.rating_sum + i.rating
-			FROM inserted i
-			WHERE p.id = i.place_id
 		)
 		SELECT `+reviewColumns+`
 		FROM inserted r

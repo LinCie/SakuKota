@@ -28,12 +28,13 @@ func NewPostgresRepository(db *sqlx.DB) *PostgresRepository {
 	}
 }
 
-// Create inserts the place and returns it with its category and photos.
+// Create inserts the place and returns it with its category and photos, in the
+// transaction carried by ctx if there is one.
 // The CTE returns the new row joined with its category in one query.
 func (r *PostgresRepository) Create(ctx context.Context, p *domain.Place) (*domain.Place, error) {
 	var created domain.Place
 
-	err := r.db.GetContext(
+	err := database.Conn(ctx, r.db).GetContext(
 		ctx,
 		&created,
 		`WITH inserted AS (
@@ -322,6 +323,32 @@ func (r *PostgresRepository) Update(ctx context.Context, p *domain.Place) (*doma
 	return r.withMedias(ctx, updated)
 }
 
+// AddRating adds one review rating to the place's rating totals, in the
+// transaction carried by ctx if there is one. Adding to the totals, not
+// recounting them, means two ratings at once both count.
+// It returns domain.ErrPlaceNotFound if there is no such place.
+func (r *PostgresRepository) AddRating(ctx context.Context, id int64, rating int) error {
+	res, err := database.Conn(ctx, r.db).ExecContext(
+		ctx,
+		`UPDATE PLACES SET rating_count = rating_count + 1, rating_sum = rating_sum + $2 WHERE id = $1`,
+		id,
+		rating,
+	)
+	if err != nil {
+		return err
+	}
+
+	updated, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if updated == 0 {
+		return domain.ErrPlaceNotFound
+	}
+
+	return nil
+}
+
 // Delete removes the place and its photos and queues the photo files for deletion.
 // It returns domain.ErrPlaceNotFound if there is no such place.
 func (r *PostgresRepository) Delete(ctx context.Context, id int64) error {
@@ -582,7 +609,7 @@ func (r *PostgresRepository) attachMedias(ctx context.Context, places []domain.P
 		domain.Media
 	}
 
-	err := r.db.SelectContext(
+	err := database.Conn(ctx, r.db).SelectContext(
 		ctx,
 		&rows,
 		`SELECT pm.place_id, m.id, m.key, m.content_type, m.size_bytes, pm.position

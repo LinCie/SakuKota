@@ -58,6 +58,20 @@ func (mr *MockRepositoryMockRecorder) AddMedia(ctx, id, m any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMedia", reflect.TypeOf((*MockRepository)(nil).AddMedia), ctx, id, m)
 }
 
+// AddRating mocks base method.
+func (m *MockRepository) AddRating(ctx context.Context, id int64, rating int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddRating", ctx, id, rating)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddRating indicates an expected call of AddRating.
+func (mr *MockRepositoryMockRecorder) AddRating(ctx, id, rating any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRating", reflect.TypeOf((*MockRepository)(nil).AddRating), ctx, id, rating)
+}
+
 // Create mocks base method.
 func (m *MockRepository) Create(ctx context.Context, p *domain.Place) (*domain.Place, error) {
 	m.ctrl.T.Helper()

@@ -70,3 +70,79 @@ func (mr *MockRepositoryMockRecorder) ListByPlace(ctx, placeID any) *gomock.Call
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByPlace", reflect.TypeOf((*MockRepository)(nil).ListByPlace), ctx, placeID)
 }
+
+// MockTransactor is a mock of Transactor interface.
+type MockTransactor struct {
+	ctrl     *gomock.Controller
+	recorder *MockTransactorMockRecorder
+	isgomock struct{}
+}
+
+// MockTransactorMockRecorder is the mock recorder for MockTransactor.
+type MockTransactorMockRecorder struct {
+	mock *MockTransactor
+}
+
+// NewMockTransactor creates a new mock instance.
+func NewMockTransactor(ctrl *gomock.Controller) *MockTransactor {
+	mock := &MockTransactor{ctrl: ctrl}
+	mock.recorder = &MockTransactorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockTransactor) EXPECT() *MockTransactorMockRecorder {
+	return m.recorder
+}
+
+// WithinTx mocks base method.
+func (m *MockTransactor) WithinTx(ctx context.Context, fn func(context.Context) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithinTx", ctx, fn)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithinTx indicates an expected call of WithinTx.
+func (mr *MockTransactorMockRecorder) WithinTx(ctx, fn any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithinTx", reflect.TypeOf((*MockTransactor)(nil).WithinTx), ctx, fn)
+}
+
+// MockPlaceService is a mock of PlaceService interface.
+type MockPlaceService struct {
+	ctrl     *gomock.Controller
+	recorder *MockPlaceServiceMockRecorder
+	isgomock struct{}
+}
+
+// MockPlaceServiceMockRecorder is the mock recorder for MockPlaceService.
+type MockPlaceServiceMockRecorder struct {
+	mock *MockPlaceService
+}
+
+// NewMockPlaceService creates a new mock instance.
+func NewMockPlaceService(ctrl *gomock.Controller) *MockPlaceService {
+	mock := &MockPlaceService{ctrl: ctrl}
+	mock.recorder = &MockPlaceServiceMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPlaceService) EXPECT() *MockPlaceServiceMockRecorder {
+	return m.recorder
+}
+
+// AddRating mocks base method.
+func (m *MockPlaceService) AddRating(ctx context.Context, placeID int64, rating int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddRating", ctx, placeID, rating)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddRating indicates an expected call of AddRating.
+func (mr *MockPlaceServiceMockRecorder) AddRating(ctx, placeID, rating any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRating", reflect.TypeOf((*MockPlaceService)(nil).AddRating), ctx, placeID, rating)
+}

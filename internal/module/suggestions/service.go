@@ -38,21 +38,29 @@ type Repository interface {
 type PlaceService interface {
 	// Create saves a new place, which approval uses to make a place from a suggestion.
 	Create(ctx context.Context, p *domain.Place) (*domain.Place, error)
-	// Delete removes the place again, which is used to undo a failed approval.
-	Delete(ctx context.Context, id int64) error
+}
+
+// Transactor runs functions in one database transaction.
+type Transactor interface {
+	// WithinTx runs fn in a transaction carried by the context passed to fn.
+	// It commits if fn returns nil, and otherwise rolls back and returns fn's
+	// error.
+	WithinTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
 // Service implements the suggestion use cases.
 type Service struct {
 	repo   Repository
+	tx     Transactor
 	places PlaceService
 }
 
 // NewService returns a Service that stores suggestions in repo and creates
-// approved places through places.
-func NewService(repo Repository, places PlaceService) *Service {
+// approved places through places, approving in one transaction run by tx.
+func NewService(repo Repository, tx Transactor, places PlaceService) *Service {
 	return &Service{
 		repo:   repo,
+		tx:     tx,
 		places: places,
 	}
 }
@@ -123,9 +131,9 @@ func (s *Service) List(ctx context.Context, filter Filter) ([]domain.Suggestion,
 	return s.repo.List(ctx, filter)
 }
 
-// Approve creates the place p from a pending suggestion, then marks the
-// suggestion approved as that place. p must have a location.
-// If marking fails, the new place is deleted again, so it is not left unlinked.
+// Approve creates the place p from a pending suggestion and marks the
+// suggestion approved as that place, in one transaction. p must have a
+// location. If either step fails, neither is kept.
 func (s *Service) Approve(ctx context.Context, id, adminID int64, p *domain.Place) (*domain.Suggestion, error) {
 	// Checked before the suggestion is read: a place without a location is
 	// refused without touching storage.
@@ -141,17 +149,17 @@ func (s *Service) Approve(ctx context.Context, id, adminID int64, p *domain.Plac
 		return nil, domain.ErrSuggestionAlreadyReviewed
 	}
 
-	created, err := s.places.Create(ctx, p)
-	if err != nil {
-		return nil, err
-	}
+	var approved *domain.Suggestion
+	err = s.tx.WithinTx(ctx, func(ctx context.Context) error {
+		created, err := s.places.Create(ctx, p)
+		if err != nil {
+			return err
+		}
 
-	approved, err := s.repo.MarkApproved(ctx, id, created.ID, adminID)
+		approved, err = s.repo.MarkApproved(ctx, id, created.ID, adminID)
+		return err
+	})
 	if err != nil {
-		// A failure to delete the place is ignored: the place is left without
-		// a suggestion, but the approval itself has failed either way. The
-		// delete ignores cancellation so a dropped request still cleans up.
-		_ = s.places.Delete(context.WithoutCancel(ctx), created.ID)
 		return nil, err
 	}
 

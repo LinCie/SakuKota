@@ -15,19 +15,38 @@ import (
 	"rantau-go/internal/module/reviews/mock"
 )
 
+// txKey marks the context that newTransactor passes to the transaction's function.
+type txKey struct{}
+
+// inTx matches a context carrying the transaction newTransactor started.
+var inTx = gomock.Cond(func(ctx context.Context) bool { return ctx.Value(txKey{}) != nil })
+
+// newTransactor returns a mock Transactor that runs each function it is given
+// with a context marked by txKey, returning the function's error.
+func newTransactor(ctrl *gomock.Controller) *mock.MockTransactor {
+	tx := mock.NewMockTransactor(ctrl)
+	tx.EXPECT().WithinTx(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, fn func(context.Context) error) error {
+		return fn(context.WithValue(ctx, txKey{}, true))
+	}).AnyTimes()
+	return tx
+}
+
 // createReview runs Service.Create for r. It returns the review the repository
 // was asked to store, or nil if storage was never reached.
 func createReview(t *testing.T, r *domain.Review) (*domain.Review, error) {
 	t.Helper()
 
+	ctrl := gomock.NewController(t)
 	var stored *domain.Review
-	repo := mock.NewMockRepository(gomock.NewController(t))
+	repo := mock.NewMockRepository(ctrl)
 	repo.EXPECT().Create(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, got *domain.Review) (*domain.Review, error) {
 		stored = got
 		return got, nil
 	}).AnyTimes()
+	places := mock.NewMockPlaceService(ctrl)
+	places.EXPECT().AddRating(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	_, err := reviews.NewService(repo).Create(t.Context(), r)
+	_, err := reviews.NewService(repo, newTransactor(ctrl), places).Create(t.Context(), r)
 	return stored, err
 }
 
@@ -128,24 +147,34 @@ func TestService_Create_Storage(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
-		name     string
-		storeErr error // returned when the review is stored
-		wantErr  error // nil means the call succeeds
+		name      string
+		storeErr  error // returned when the review is stored
+		ratingErr error // returned when the rating is added; not reached if storeErr is set
+		wantErr   error // nil means the call succeeds
 	}{
-		{name: "unknown_place", storeErr: domain.ErrPlaceNotFound, wantErr: domain.ErrPlaceNotFound},
-		{name: "earlier_review", storeErr: domain.ErrPlaceAlreadyReviewed, wantErr: domain.ErrPlaceAlreadyReviewed},
-		{name: "storage_failure", storeErr: boom, wantErr: boom},
-		{name: "stored_review_is_returned", storeErr: nil, wantErr: nil},
+		{name: "unknown_place", storeErr: domain.ErrPlaceNotFound, ratingErr: nil, wantErr: domain.ErrPlaceNotFound},
+		{name: "earlier_review", storeErr: domain.ErrPlaceAlreadyReviewed, ratingErr: nil, wantErr: domain.ErrPlaceAlreadyReviewed},
+		{name: "storage_failure", storeErr: boom, ratingErr: nil, wantErr: boom},
+		{name: "place_gone_before_rating", storeErr: nil, ratingErr: domain.ErrPlaceNotFound, wantErr: domain.ErrPlaceNotFound},
+		{name: "rating_failure", storeErr: nil, ratingErr: boom, wantErr: boom},
+		{name: "stored_review_is_returned", storeErr: nil, ratingErr: nil, wantErr: nil},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			repo := mock.NewMockRepository(gomock.NewController(t))
-			repo.EXPECT().Create(gomock.Any(), &domain.Review{PlaceID: 3, UserID: 7, Rating: 4}).Return(&domain.Review{ID: 9}, tc.storeErr)
+			ctrl := gomock.NewController(t)
+			repo := mock.NewMockRepository(ctrl)
+			places := mock.NewMockPlaceService(ctrl)
+			// Both writes run, in order, inside the one transaction.
+			store := repo.EXPECT().Create(inTx, &domain.Review{PlaceID: 3, UserID: 7, Rating: 4}).Return(&domain.Review{ID: 9}, tc.storeErr)
+			if tc.storeErr == nil {
+				places.EXPECT().AddRating(inTx, int64(3), 4).Return(tc.ratingErr).After(store)
+			}
 
-			got, err := reviews.NewService(repo).Create(t.Context(), &domain.Review{PlaceID: 3, UserID: 7, Rating: 4})
+			got, err := reviews.NewService(repo, newTransactor(ctrl), places).Create(t.Context(), &domain.Review{PlaceID: 3, UserID: 7, Rating: 4})
 			if tc.wantErr != nil {
 				assert.ErrorIs(t, err, tc.wantErr)
+				assert.Nil(t, got)
 				return
 			}
 			require.NoError(t, err)
@@ -153,6 +182,27 @@ func TestService_Create_Storage(t *testing.T) {
 			assert.EqualValues(t, 9, got.ID)
 		})
 	}
+}
+
+func TestService_Create_InvalidReviewStartsNoTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	service := reviews.NewService(mock.NewMockRepository(ctrl), mock.NewMockTransactor(ctrl), mock.NewMockPlaceService(ctrl))
+
+	_, err := service.Create(t.Context(), &domain.Review{PlaceID: 3, UserID: 7, Rating: 0})
+
+	assert.ErrorIs(t, err, domain.ErrReviewRatingInvalid)
+}
+
+func TestService_Create_TransactionFailure(t *testing.T) {
+	boom := errors.New("connection reset")
+	ctrl := gomock.NewController(t)
+	tx := mock.NewMockTransactor(ctrl)
+	tx.EXPECT().WithinTx(gomock.Any(), gomock.Any()).Return(boom)
+
+	got, err := reviews.NewService(mock.NewMockRepository(ctrl), tx, mock.NewMockPlaceService(ctrl)).Create(t.Context(), &domain.Review{PlaceID: 3, UserID: 7, Rating: 4})
+
+	assert.ErrorIs(t, err, boom)
+	assert.Nil(t, got)
 }
 
 func TestService_ListByPlace(t *testing.T) {
@@ -175,7 +225,7 @@ func TestService_ListByPlace(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().ListByPlace(gomock.Any(), int64(3)).Return(tc.reviews, tc.repoErr)
 
-			got, err := reviews.NewService(repo).ListByPlace(t.Context(), 3)
+			got, err := reviews.NewService(repo, nil, nil).ListByPlace(t.Context(), 3)
 			if tc.repoErr != nil {
 				assert.ErrorIs(t, err, tc.repoErr)
 				return

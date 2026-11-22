@@ -18,15 +18,28 @@ import (
 	"rantau-go/internal/pkg/postgis"
 )
 
-// newService returns a Service over mock collaborators.
+// txKey marks the context that newService's transactor passes to the
+// transaction's function.
+type txKey struct{}
+
+// inTx matches a context carrying the transaction newService's transactor started.
+var inTx = gomock.Cond(func(ctx context.Context) bool { return ctx.Value(txKey{}) != nil })
+
+// newService returns a Service over mock collaborators. Its transactor runs
+// each function it is given with a context marked by txKey, returning the
+// function's error.
 func newService(t *testing.T) (*suggestions.Service, *mock.MockRepository, *mock.MockPlaceService) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
 	repo := mock.NewMockRepository(ctrl)
 	places := mock.NewMockPlaceService(ctrl)
+	tx := mock.NewMockTransactor(ctrl)
+	tx.EXPECT().WithinTx(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, fn func(context.Context) error) error {
+		return fn(context.WithValue(ctx, txKey{}, true))
+	}).AnyTimes()
 
-	return suggestions.NewService(repo, places), repo, places
+	return suggestions.NewService(repo, tx, places), repo, places
 }
 
 // submitted is what user 7 submits with only the required fields set: a warung
@@ -508,8 +521,9 @@ func TestService_Approve(t *testing.T) {
 	svc, repo, places := newService(t)
 	gomock.InOrder(
 		repo.EXPECT().Fetch(gomock.Any(), int64(3)).Return(pending(), nil),
-		places.EXPECT().Create(gomock.Any(), finalPlace()).Return(&domain.Place{ID: 42}, nil),
-		repo.EXPECT().MarkApproved(gomock.Any(), int64(3), int64(42), adminID).Return(want, nil),
+		// The place and the approval are written in the one transaction.
+		places.EXPECT().Create(inTx, finalPlace()).Return(&domain.Place{ID: 42}, nil),
+		repo.EXPECT().MarkApproved(inTx, int64(3), int64(42), adminID).Return(want, nil),
 	)
 
 	got, err := svc.Approve(t.Context(), 3, adminID, finalPlace())
@@ -605,32 +619,44 @@ func TestService_Approve_MarkFailure(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
-		name      string
-		markErr   error
-		deleteErr error
+		name    string
+		markErr error
 	}{
-		{name: "reviewed_meanwhile", markErr: domain.ErrSuggestionAlreadyReviewed, deleteErr: nil},
-		{name: "deleted_meanwhile", markErr: domain.ErrSuggestionNotFound, deleteErr: nil},
-		{name: "storage_failure", markErr: boom, deleteErr: nil},
-		{name: "place_delete_failure_ignored", markErr: domain.ErrSuggestionAlreadyReviewed, deleteErr: errors.New("timeout")},
+		{name: "reviewed_meanwhile", markErr: domain.ErrSuggestionAlreadyReviewed},
+		{name: "deleted_meanwhile", markErr: domain.ErrSuggestionNotFound},
+		{name: "storage_failure", markErr: boom},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// The created place is removed, so no place exists without an
-			// approved suggestion.
+			// The error rolls back the transaction that created the place, so
+			// no place exists without an approved suggestion.
 			svc, repo, places := newService(t)
 			gomock.InOrder(
 				repo.EXPECT().Fetch(gomock.Any(), int64(3)).Return(pending(), nil),
-				places.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&domain.Place{ID: 42}, nil),
-				repo.EXPECT().MarkApproved(gomock.Any(), int64(3), int64(42), adminID).Return(nil, tc.markErr),
-				places.EXPECT().Delete(gomock.Any(), int64(42)).Return(tc.deleteErr),
+				places.EXPECT().Create(inTx, gomock.Any()).Return(&domain.Place{ID: 42}, nil),
+				repo.EXPECT().MarkApproved(inTx, int64(3), int64(42), adminID).Return(nil, tc.markErr),
 			)
 
-			_, err := svc.Approve(t.Context(), 3, adminID, finalPlace())
+			got, err := svc.Approve(t.Context(), 3, adminID, finalPlace())
 			assert.ErrorIs(t, err, tc.markErr)
+			assert.Nil(t, got)
 		})
 	}
+}
+
+func TestService_Approve_TransactionFailure(t *testing.T) {
+	boom := errors.New("connection reset")
+	ctrl := gomock.NewController(t)
+	repo := mock.NewMockRepository(ctrl)
+	repo.EXPECT().Fetch(gomock.Any(), int64(3)).Return(pending(), nil)
+	tx := mock.NewMockTransactor(ctrl)
+	tx.EXPECT().WithinTx(gomock.Any(), gomock.Any()).Return(boom)
+
+	got, err := suggestions.NewService(repo, tx, mock.NewMockPlaceService(ctrl)).Approve(t.Context(), 3, adminID, finalPlace())
+
+	assert.ErrorIs(t, err, boom)
+	assert.Nil(t, got)
 }
 
 func TestService_Reject_Reason(t *testing.T) {
