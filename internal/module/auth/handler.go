@@ -19,8 +19,8 @@ const (
 
 //go:generate mockgen -source=handler.go -destination=mock/handler.go -package=mock
 
-// authService is the part of Service the Handler uses.
-type authService interface {
+// Service is the service the Handler uses.
+type Service interface {
 	Register(ctx context.Context, u *domain.User, password string) (*domain.User, error)
 	Login(ctx context.Context, email, password string) (*domain.User, *Tokens, error)
 	Refresh(ctx context.Context, refreshToken string) (*domain.User, *Tokens, error)
@@ -30,14 +30,14 @@ type authService interface {
 // Handler serves the auth endpoints.
 type Handler struct {
 	cfg     config.Config
-	service authService
+	service Service
 }
 
-// NewHandler returns a Handler that uses service and sets cookies as cfg says.
-func NewHandler(cfg config.Config, service authService) *Handler {
+// NewHandler returns a Handler that uses svc and sets cookies as cfg says.
+func NewHandler(cfg config.Config, svc Service) *Handler {
 	return &Handler{
 		cfg:     cfg,
-		service: service,
+		service: svc,
 	}
 }
 

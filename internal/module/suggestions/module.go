@@ -9,7 +9,7 @@ import (
 
 // Module bundles the suggestion service and its HTTP handler.
 type Module struct {
-	Service *Service
+	Service Service
 	Handler *Handler
 }
 
@@ -17,11 +17,11 @@ type Module struct {
 // suggestion is approved, in the same transaction as the approval.
 func New(db *sqlx.DB, places PlaceService) *Module {
 	repo := NewPostgresRepository(db)
-	service := NewService(repo, database.NewTransactor(db), places)
-	handler := NewHandler(service)
+	svc := NewService(repo, database.NewTransactor(db), places)
+	handler := NewHandler(svc)
 
 	return &Module{
-		Service: service,
+		Service: svc,
 		Handler: handler,
 	}
 }

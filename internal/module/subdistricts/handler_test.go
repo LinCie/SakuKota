@@ -25,10 +25,10 @@ import (
 // newRouter serves the sub-district handlers on the paths the API uses for
 // them, so URL parameters resolve as they do in production. It returns the
 // router and the mock of the service behind it.
-func newRouter(t *testing.T) (http.Handler, *mock.MocksubDistrictService) {
+func newRouter(t *testing.T) (http.Handler, *mock.MockService) {
 	t.Helper()
 
-	svc := mock.NewMocksubDistrictService(gomock.NewController(t))
+	svc := mock.NewMockService(gomock.NewController(t))
 	h := subdistricts.NewHandler(svc, testMediaURL)
 	r := chi.NewRouter()
 	r.Route("/subdistricts", func(r chi.Router) {
@@ -379,14 +379,14 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 		method string
 		target string
 		body   string
-		fail   func(svc *mock.MocksubDistrictService)
+		fail   func(svc *mock.MockService)
 	}{
 		{
 			name:   "list",
 			method: http.MethodGet,
 			target: "/subdistricts",
 			body:   "",
-			fail: func(s *mock.MocksubDistrictService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().List(gomock.Any()).Return(nil, dbErr)
 			},
 		},
@@ -395,7 +395,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			method: http.MethodGet,
 			target: "/subdistricts/1",
 			body:   "",
-			fail: func(s *mock.MocksubDistrictService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().Fetch(gomock.Any(), int64(1)).Return(nil, dbErr)
 			},
 		},
@@ -404,7 +404,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			method: http.MethodPost,
 			target: "/subdistricts",
 			body:   `{"name":"Menteng","slug":"menteng"}`,
-			fail: func(s *mock.MocksubDistrictService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().Create(gomock.Any(), &domain.SubDistrict{Name: "Menteng", Slug: "menteng"}).Return(nil, dbErr)
 			},
 		},
@@ -413,7 +413,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			method: http.MethodPut,
 			target: "/subdistricts/1",
 			body:   `{"name":"Menteng Atas","slug":"menteng"}`,
-			fail: func(s *mock.MocksubDistrictService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().Update(gomock.Any(), int64(1), &domain.SubDistrict{Name: "Menteng Atas", Slug: "menteng"}).Return(nil, dbErr)
 			},
 		},
@@ -422,7 +422,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			method: http.MethodPut,
 			target: "/subdistricts/1/boundary",
 			body:   squareJSON,
-			fail: func(s *mock.MocksubDistrictService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().SetBoundary(gomock.Any(), int64(1), mustBoundary(t, squareJSON)).Return(nil, dbErr)
 			},
 		},
@@ -431,7 +431,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			method: http.MethodDelete,
 			target: "/subdistricts/1",
 			body:   "",
-			fail: func(s *mock.MocksubDistrictService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().Delete(gomock.Any(), int64(1)).Return(dbErr)
 			},
 		},

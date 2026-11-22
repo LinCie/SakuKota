@@ -25,7 +25,7 @@ import (
 
 // newRouter serves the place handlers on the paths the API uses for them, so
 // URL parameters resolve as they do in production.
-func newRouter(svc *mock.MockplaceService) http.Handler {
+func newRouter(svc *mock.MockService) http.Handler {
 	h := places.NewHandler(svc, testMediaURL)
 	r := chi.NewRouter()
 	r.Route("/places", func(r chi.Router) {
@@ -47,10 +47,10 @@ func newRouter(svc *mock.MockplaceService) http.Handler {
 
 // newService returns a mock service that fails the test when it ends if an
 // expected call did not happen, or when an unexpected one does.
-func newService(t *testing.T) *mock.MockplaceService {
+func newService(t *testing.T) *mock.MockService {
 	t.Helper()
 
-	return mock.NewMockplaceService(gomock.NewController(t))
+	return mock.NewMockService(gomock.NewController(t))
 }
 
 // testMediaURL stands in for the storage's public URLs.
@@ -1064,14 +1064,14 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 		method string
 		target string
 		body   string
-		fail   func(svc *mock.MockplaceService)
+		fail   func(svc *mock.MockService)
 	}{
 		{
 			name:   "list_places",
 			method: http.MethodGet,
 			target: "/places",
 			body:   "",
-			fail: func(s *mock.MockplaceService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().List(gomock.Any(), places.Filter{}).Return(nil, 0, dbErr)
 			},
 		},
@@ -1080,7 +1080,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			method: http.MethodGet,
 			target: "/categories",
 			body:   "",
-			fail: func(s *mock.MockplaceService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().ListCategories(gomock.Any()).Return(nil, dbErr)
 			},
 		},
@@ -1089,7 +1089,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			method: http.MethodPost,
 			target: "/places",
 			body:   `{"name":"Kopi","sub_district_id":1,"category_id":2}`,
-			fail: func(s *mock.MockplaceService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().Create(gomock.Any(), &domain.Place{Name: "Kopi", SubDistrictID: 1, CategoryID: 2}).Return(nil, dbErr)
 			},
 		},
@@ -1098,7 +1098,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			method: http.MethodGet,
 			target: "/places/1",
 			body:   "",
-			fail: func(s *mock.MockplaceService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().Fetch(gomock.Any(), int64(1)).Return(nil, dbErr)
 			},
 		},
@@ -1107,7 +1107,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			method: http.MethodGet,
 			target: "/categories/1",
 			body:   "",
-			fail: func(s *mock.MockplaceService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().FetchCategory(gomock.Any(), int64(1)).Return(nil, dbErr)
 			},
 		},

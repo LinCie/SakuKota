@@ -34,7 +34,7 @@ var testConfig = config.Config{JWTSecret: "test-secret", JWTExpiry: time.Hour}
 // Every route requires an access token, as it does in production. The admin
 // role is checked by the API router in front of the admin routes, not by the
 // handlers.
-func newRouter(svc *mock.MocksuggestionService) http.Handler {
+func newRouter(svc *mock.MockService) http.Handler {
 	h := suggestions.NewHandler(svc)
 	r := chi.NewRouter()
 	r.Route("/suggestions", func(r chi.Router) {
@@ -57,9 +57,9 @@ func newRouter(svc *mock.MocksuggestionService) http.Handler {
 
 // newMockService returns a mock suggestion service that fails the test on any
 // call without an expectation.
-func newMockService(t *testing.T) *mock.MocksuggestionService {
+func newMockService(t *testing.T) *mock.MockService {
 	t.Helper()
-	return mock.NewMocksuggestionService(gomock.NewController(t))
+	return mock.NewMockService(gomock.NewController(t))
 }
 
 // serve runs req through h. A panic fails the test instead of the whole binary.
@@ -943,14 +943,14 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 	tests := []struct {
 		name string
 		req  func(t *testing.T) *http.Request
-		fail func(svc *mock.MocksuggestionService)
+		fail func(svc *mock.MockService)
 	}{
 		{
 			name: "create_suggestion",
 			req: func(t *testing.T) *http.Request {
 				return authRequest(t, http.MethodPost, "/suggestions", minimalBody, 7)
 			},
-			fail: func(s *mock.MocksuggestionService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, dbErr)
 			},
 		},
@@ -959,7 +959,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			req: func(t *testing.T) *http.Request {
 				return authRequest(t, http.MethodGet, "/suggestions/mine", "", 7)
 			},
-			fail: func(s *mock.MocksuggestionService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().ListByUser(gomock.Any(), int64(7)).Return(nil, dbErr)
 			},
 		},
@@ -968,7 +968,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			req: func(t *testing.T) *http.Request {
 				return adminRequest(t, http.MethodGet, "/suggestions", "", 99)
 			},
-			fail: func(s *mock.MocksuggestionService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().List(gomock.Any(), suggestions.Filter{}).Return(nil, dbErr)
 			},
 		},
@@ -977,7 +977,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			req: func(t *testing.T) *http.Request {
 				return adminRequest(t, http.MethodGet, "/suggestions/3", "", 99)
 			},
-			fail: func(s *mock.MocksuggestionService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().Fetch(gomock.Any(), int64(3)).Return(nil, dbErr)
 			},
 		},
@@ -986,7 +986,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			req: func(t *testing.T) *http.Request {
 				return adminRequest(t, http.MethodPost, "/suggestions/3/approve", approveBody, 99)
 			},
-			fail: func(s *mock.MocksuggestionService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().Approve(gomock.Any(), int64(3), int64(99), gomock.Any()).Return(nil, dbErr)
 			},
 		},
@@ -995,7 +995,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			req: func(t *testing.T) *http.Request {
 				return adminRequest(t, http.MethodPost, "/suggestions/3/reject", `{}`, 99)
 			},
-			fail: func(s *mock.MocksuggestionService) {
+			fail: func(s *mock.MockService) {
 				s.EXPECT().Reject(gomock.Any(), int64(3), int64(99), nil).Return(nil, dbErr)
 			},
 		},

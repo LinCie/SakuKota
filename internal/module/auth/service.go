@@ -45,17 +45,17 @@ type Tokens struct {
 	RefreshToken string
 }
 
-// Service holds the business rules of registration and sessions.
-type Service struct {
+// service holds the business rules of registration and sessions.
+type service struct {
 	cfg   config.Config
 	users UserService
 	store RefreshStore
 }
 
-// NewService returns a Service that issues tokens signed with cfg, loads users
+// NewService returns a service that issues tokens signed with cfg, loads users
 // from userService, and keeps refresh tokens in store.
-func NewService(cfg config.Config, userService UserService, store RefreshStore) *Service {
-	return &Service{
+func NewService(cfg config.Config, userService UserService, store RefreshStore) Service {
+	return &service{
 		cfg:   cfg,
 		users: userService,
 		store: store,
@@ -63,7 +63,7 @@ func NewService(cfg config.Config, userService UserService, store RefreshStore) 
 }
 
 // Register checks the sign-up details, then saves the user with a hashed password.
-func (s *Service) Register(ctx context.Context, u *domain.User, password string) (*domain.User, error) {
+func (s *service) Register(ctx context.Context, u *domain.User, password string) (*domain.User, error) {
 	u.Name = strings.TrimSpace(u.Name)
 	switch {
 	case u.Name == "":
@@ -94,7 +94,7 @@ func (s *Service) Register(ctx context.Context, u *domain.User, password string)
 }
 
 // Login checks the email and password, then issues a new pair of tokens.
-func (s *Service) Login(ctx context.Context, email, password string) (*domain.User, *Tokens, error) {
+func (s *service) Login(ctx context.Context, email, password string) (*domain.User, *Tokens, error) {
 	u, err := s.users.FetchByEmail(ctx, normalizeEmail(email))
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
@@ -121,7 +121,7 @@ func (s *Service) Login(ctx context.Context, email, password string) (*domain.Us
 
 // Refresh trades a refresh token for the user and a new token pair.
 // The old refresh token stops working.
-func (s *Service) Refresh(ctx context.Context, refreshToken string) (*domain.User, *Tokens, error) {
+func (s *service) Refresh(ctx context.Context, refreshToken string) (*domain.User, *Tokens, error) {
 	userID, err := s.store.Consume(ctx, hashToken(refreshToken))
 	if err != nil {
 		return nil, nil, err
@@ -145,13 +145,13 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*domain.Use
 }
 
 // Logout revokes a refresh token so it cannot be used again.
-func (s *Service) Logout(ctx context.Context, refreshToken string) error {
+func (s *service) Logout(ctx context.Context, refreshToken string) error {
 	return s.store.Delete(ctx, hashToken(refreshToken))
 }
 
 // issueTokens makes a new access token and refresh token for u.
 // The refresh token is saved by its hash, never as it is.
-func (s *Service) issueTokens(ctx context.Context, u *domain.User) (*Tokens, error) {
+func (s *service) issueTokens(ctx context.Context, u *domain.User) (*Tokens, error) {
 	accessToken, err := jwt.GenerateToken(s.cfg, u.ID, u.Role)
 	if err != nil {
 		return nil, err

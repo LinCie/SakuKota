@@ -6,7 +6,7 @@ import "github.com/jmoiron/sqlx"
 
 // Module wires up the storage cleanup module's repository and service.
 type Module struct {
-	Service *Service
+	Service *service
 }
 
 // New builds the storage cleanup module's repository and service, linked together.

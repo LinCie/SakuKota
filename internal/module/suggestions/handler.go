@@ -22,8 +22,8 @@ const (
 
 //go:generate mockgen -source=handler.go -destination=mock/handler.go -package=mock
 
-// suggestionService is the service the handler consumes.
-type suggestionService interface {
+// Service is the service the Handler uses.
+type Service interface {
 	Create(ctx context.Context, s *domain.Suggestion) (*domain.Suggestion, error)
 	Fetch(ctx context.Context, id int64) (*domain.Suggestion, error)
 	ListByUser(ctx context.Context, userID int64) ([]domain.Suggestion, error)
@@ -34,13 +34,13 @@ type suggestionService interface {
 
 // Handler serves the suggestion endpoints.
 type Handler struct {
-	service suggestionService
+	service Service
 }
 
-// NewHandler returns a Handler that calls service.
-func NewHandler(service suggestionService) *Handler {
+// NewHandler returns a Handler that calls svc.
+func NewHandler(svc Service) *Handler {
 	return &Handler{
-		service: service,
+		service: svc,
 	}
 }
 

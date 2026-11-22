@@ -32,8 +32,9 @@ const (
 
 //go:generate mockgen -source=handler.go -destination=mock/handler.go -package=mock
 
-// placeService is the service the handler calls.
-type placeService interface {
+// Service is the service the Handler uses. AddRating is not called by the
+// Handler; it is part of Service so Module.Service can be wired into reviews.
+type Service interface {
 	Create(ctx context.Context, p *domain.Place) (*domain.Place, error)
 	MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error)
 	AddMedia(ctx context.Context, id int64, uploadKey string) (*domain.Place, error)
@@ -44,20 +45,21 @@ type placeService interface {
 	Update(ctx context.Context, id int64, p *domain.Place) (*domain.Place, error)
 	Delete(ctx context.Context, id int64) error
 	DeleteMedia(ctx context.Context, id, mediaID int64) error
+	AddRating(ctx context.Context, id int64, rating int) error
 }
 
 // Handler serves the place and category endpoints.
 type Handler struct {
-	service placeService
+	service Service
 
 	// mediaURL turns a stored media key into its public URL.
 	mediaURL func(key string) string
 }
 
-// NewHandler returns a Handler that calls service and builds media links with mediaURL.
-func NewHandler(service placeService, mediaURL func(key string) string) *Handler {
+// NewHandler returns a Handler that calls svc and builds media links with mediaURL.
+func NewHandler(svc Service, mediaURL func(key string) string) *Handler {
 	return &Handler{
-		service:  service,
+		service:  svc,
 		mediaURL: mediaURL,
 	}
 }

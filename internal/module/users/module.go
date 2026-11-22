@@ -5,7 +5,7 @@ import "github.com/jmoiron/sqlx"
 
 // Module wires up the users module's repository and service.
 type Module struct {
-	Service *Service
+	Service *service
 }
 
 // New builds the users module's repository and service, linked together.

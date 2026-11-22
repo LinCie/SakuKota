@@ -6,17 +6,17 @@ import "github.com/jmoiron/sqlx"
 
 // Module wires the service and handler of sub-districts.
 type Module struct {
-	Service *Service
+	Service Service
 	Handler *Handler
 }
 
 // New builds a Module over db and media. The handler uses media.PublicURL to
 // build image links.
 func New(db *sqlx.DB, media MediaStorage) *Module {
-	service := NewService(NewPostgresRepository(db), media)
+	svc := NewService(NewPostgresRepository(db), media)
 
 	return &Module{
-		Service: service,
-		Handler: NewHandler(service, media.PublicURL),
+		Service: svc,
+		Handler: NewHandler(svc, media.PublicURL),
 	}
 }

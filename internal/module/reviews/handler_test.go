@@ -28,7 +28,7 @@ var testConfig = config.Config{JWTSecret: "test-secret", JWTExpiry: time.Hour}
 
 // newRouter serves the review handlers on the paths the API uses for them.
 // Creating a review requires an access token, as it does in production.
-func newRouter(svc *mock.MockreviewService) http.Handler {
+func newRouter(svc *mock.MockService) http.Handler {
 	h := reviews.NewHandler(svc)
 	r := chi.NewRouter()
 	r.Route("/places", func(r chi.Router) {
@@ -73,9 +73,9 @@ func authRequest(t *testing.T, method, target, body string, userID int64) *http.
 
 // newService returns a mock service that fails the test on any call that has
 // no expectation.
-func newService(t *testing.T) *mock.MockreviewService {
+func newService(t *testing.T) *mock.MockService {
 	t.Helper()
-	return mock.NewMockreviewService(gomock.NewController(t))
+	return mock.NewMockService(gomock.NewController(t))
 }
 
 // errorResult summarizes an error response: its status, whether it is JSON,
@@ -383,13 +383,13 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 		method string
 		target string
 		body   string
-		expect func(svc *mock.MockreviewService)
+		expect func(svc *mock.MockService)
 	}{
 		{
 			name:   "list_reviews",
 			method: http.MethodGet,
 			target: "/places/3/reviews",
-			expect: func(svc *mock.MockreviewService) {
+			expect: func(svc *mock.MockService) {
 				svc.EXPECT().ListByPlace(gomock.Any(), int64(3)).Return(nil, dbErr)
 			},
 		},
@@ -398,7 +398,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			method: http.MethodPost,
 			target: "/places/3/reviews",
 			body:   `{"rating":4}`,
-			expect: func(svc *mock.MockreviewService) {
+			expect: func(svc *mock.MockService) {
 				svc.EXPECT().Create(gomock.Any(), &domain.Review{PlaceID: 3, UserID: 7, Rating: 4}).Return(nil, dbErr)
 			},
 		},

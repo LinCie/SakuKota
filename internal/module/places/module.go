@@ -9,18 +9,18 @@ import (
 
 // Module is the places service and its HTTP handler.
 type Module struct {
-	Service *Service
+	Service Service
 	Handler *Handler
 }
 
 // New wires places on db, with Redis caching of the place index and photos kept in media.
 func New(db *sqlx.DB, rdb *redis.Client, media MediaStorage) *Module {
 	repo := NewCachedRepository(NewPostgresRepository(db), rdb)
-	service := NewService(repo, media)
-	handler := NewHandler(service, media.PublicURL)
+	svc := NewService(repo, media)
+	handler := NewHandler(svc, media.PublicURL)
 
 	return &Module{
-		Service: service,
+		Service: svc,
 		Handler: handler,
 	}
 }

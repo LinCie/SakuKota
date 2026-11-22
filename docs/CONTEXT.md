@@ -4,8 +4,8 @@
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-23 (suggestion approval creates the place and marks
->   the suggestion in one service-owned transaction; no contract change).
+> - Last updated: 2026-11-23 (handlers declare an exported `Service` interface;
+>   services are unexported `service` structs; no contract change).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
@@ -276,7 +276,11 @@ rows, which is harmless because deletes are idempotent.
 Entities, shared rules and every sentinel error live in `internal/domain`.
 Modules never import each other: a module that needs another (auth → users,
 suggestions → places, reviews → places) declares the interface it consumes, and
-`internal/router` wires the concrete services. Services own transactions that
+`internal/router` wires the concrete services. Each handler declares the
+`Service` interface it consumes, and `NewService` returns it, backed by the
+unexported `service` struct (`places.Service` also carries `AddRating` for
+reviews). Users and storage cleanup have no handler, so their `NewService`
+returns `*service`. Services own transactions that
 span repositories or services through `database.Transactor.WithinTx`, which
 carries the transaction in `ctx`; repositories run queries on
 `database.Conn(ctx, db)` to join it, and a nested `WithinTx` joins the outer
@@ -379,3 +383,4 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-22 | Documentation simplified; no contract change |
 | 2026-11-23 | Shared `internal/domain`; no module-to-module imports; consumer-side interfaces; module-owned error codes; testify and gomock tests with generated mocks; no contract change |
 | 2026-11-23 | Reviews add ratings through the place service in a service-owned transaction (`database.Transactor`); no contract change |
+| 2026-11-23 | Handler-owned exported `Service` interfaces returned by `NewService`; unexported `service` structs; no contract change |

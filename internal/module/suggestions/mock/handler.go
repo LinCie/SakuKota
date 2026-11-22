@@ -18,32 +18,32 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MocksuggestionService is a mock of suggestionService interface.
-type MocksuggestionService struct {
+// MockService is a mock of Service interface.
+type MockService struct {
 	ctrl     *gomock.Controller
-	recorder *MocksuggestionServiceMockRecorder
+	recorder *MockServiceMockRecorder
 	isgomock struct{}
 }
 
-// MocksuggestionServiceMockRecorder is the mock recorder for MocksuggestionService.
-type MocksuggestionServiceMockRecorder struct {
-	mock *MocksuggestionService
+// MockServiceMockRecorder is the mock recorder for MockService.
+type MockServiceMockRecorder struct {
+	mock *MockService
 }
 
-// NewMocksuggestionService creates a new mock instance.
-func NewMocksuggestionService(ctrl *gomock.Controller) *MocksuggestionService {
-	mock := &MocksuggestionService{ctrl: ctrl}
-	mock.recorder = &MocksuggestionServiceMockRecorder{mock}
+// NewMockService creates a new mock instance.
+func NewMockService(ctrl *gomock.Controller) *MockService {
+	mock := &MockService{ctrl: ctrl}
+	mock.recorder = &MockServiceMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocksuggestionService) EXPECT() *MocksuggestionServiceMockRecorder {
+func (m *MockService) EXPECT() *MockServiceMockRecorder {
 	return m.recorder
 }
 
 // Approve mocks base method.
-func (m *MocksuggestionService) Approve(ctx context.Context, id, adminID int64, p *domain.Place) (*domain.Suggestion, error) {
+func (m *MockService) Approve(ctx context.Context, id, adminID int64, p *domain.Place) (*domain.Suggestion, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Approve", ctx, id, adminID, p)
 	ret0, _ := ret[0].(*domain.Suggestion)
@@ -52,13 +52,13 @@ func (m *MocksuggestionService) Approve(ctx context.Context, id, adminID int64, 
 }
 
 // Approve indicates an expected call of Approve.
-func (mr *MocksuggestionServiceMockRecorder) Approve(ctx, id, adminID, p any) *gomock.Call {
+func (mr *MockServiceMockRecorder) Approve(ctx, id, adminID, p any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Approve", reflect.TypeOf((*MocksuggestionService)(nil).Approve), ctx, id, adminID, p)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Approve", reflect.TypeOf((*MockService)(nil).Approve), ctx, id, adminID, p)
 }
 
 // Create mocks base method.
-func (m *MocksuggestionService) Create(ctx context.Context, s *domain.Suggestion) (*domain.Suggestion, error) {
+func (m *MockService) Create(ctx context.Context, s *domain.Suggestion) (*domain.Suggestion, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Create", ctx, s)
 	ret0, _ := ret[0].(*domain.Suggestion)
@@ -67,13 +67,13 @@ func (m *MocksuggestionService) Create(ctx context.Context, s *domain.Suggestion
 }
 
 // Create indicates an expected call of Create.
-func (mr *MocksuggestionServiceMockRecorder) Create(ctx, s any) *gomock.Call {
+func (mr *MockServiceMockRecorder) Create(ctx, s any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MocksuggestionService)(nil).Create), ctx, s)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockService)(nil).Create), ctx, s)
 }
 
 // Fetch mocks base method.
-func (m *MocksuggestionService) Fetch(ctx context.Context, id int64) (*domain.Suggestion, error) {
+func (m *MockService) Fetch(ctx context.Context, id int64) (*domain.Suggestion, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Fetch", ctx, id)
 	ret0, _ := ret[0].(*domain.Suggestion)
@@ -82,13 +82,13 @@ func (m *MocksuggestionService) Fetch(ctx context.Context, id int64) (*domain.Su
 }
 
 // Fetch indicates an expected call of Fetch.
-func (mr *MocksuggestionServiceMockRecorder) Fetch(ctx, id any) *gomock.Call {
+func (mr *MockServiceMockRecorder) Fetch(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fetch", reflect.TypeOf((*MocksuggestionService)(nil).Fetch), ctx, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fetch", reflect.TypeOf((*MockService)(nil).Fetch), ctx, id)
 }
 
 // List mocks base method.
-func (m *MocksuggestionService) List(ctx context.Context, filter suggestions.Filter) ([]domain.Suggestion, error) {
+func (m *MockService) List(ctx context.Context, filter suggestions.Filter) ([]domain.Suggestion, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "List", ctx, filter)
 	ret0, _ := ret[0].([]domain.Suggestion)
@@ -97,13 +97,13 @@ func (m *MocksuggestionService) List(ctx context.Context, filter suggestions.Fil
 }
 
 // List indicates an expected call of List.
-func (mr *MocksuggestionServiceMockRecorder) List(ctx, filter any) *gomock.Call {
+func (mr *MockServiceMockRecorder) List(ctx, filter any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MocksuggestionService)(nil).List), ctx, filter)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockService)(nil).List), ctx, filter)
 }
 
 // ListByUser mocks base method.
-func (m *MocksuggestionService) ListByUser(ctx context.Context, userID int64) ([]domain.Suggestion, error) {
+func (m *MockService) ListByUser(ctx context.Context, userID int64) ([]domain.Suggestion, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListByUser", ctx, userID)
 	ret0, _ := ret[0].([]domain.Suggestion)
@@ -112,13 +112,13 @@ func (m *MocksuggestionService) ListByUser(ctx context.Context, userID int64) ([
 }
 
 // ListByUser indicates an expected call of ListByUser.
-func (mr *MocksuggestionServiceMockRecorder) ListByUser(ctx, userID any) *gomock.Call {
+func (mr *MockServiceMockRecorder) ListByUser(ctx, userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByUser", reflect.TypeOf((*MocksuggestionService)(nil).ListByUser), ctx, userID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByUser", reflect.TypeOf((*MockService)(nil).ListByUser), ctx, userID)
 }
 
 // Reject mocks base method.
-func (m *MocksuggestionService) Reject(ctx context.Context, id, adminID int64, reason *string) (*domain.Suggestion, error) {
+func (m *MockService) Reject(ctx context.Context, id, adminID int64, reason *string) (*domain.Suggestion, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Reject", ctx, id, adminID, reason)
 	ret0, _ := ret[0].(*domain.Suggestion)
@@ -127,7 +127,7 @@ func (m *MocksuggestionService) Reject(ctx context.Context, id, adminID int64, r
 }
 
 // Reject indicates an expected call of Reject.
-func (mr *MocksuggestionServiceMockRecorder) Reject(ctx, id, adminID, reason any) *gomock.Call {
+func (mr *MockServiceMockRecorder) Reject(ctx, id, adminID, reason any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reject", reflect.TypeOf((*MocksuggestionService)(nil).Reject), ctx, id, adminID, reason)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reject", reflect.TypeOf((*MockService)(nil).Reject), ctx, id, adminID, reason)
 }

@@ -57,23 +57,23 @@ type MediaStorage interface {
 	PublicURL(key string) string
 }
 
-// Service validates places and coordinates their storage. It is safe for
+// service validates places and coordinates their storage. It is safe for
 // concurrent use if its repository and media storage are.
-type Service struct {
+type service struct {
 	repo  Repository
 	media MediaStorage
 }
 
-// NewService returns a Service that stores places in repo and photos in media.
-func NewService(repo Repository, media MediaStorage) *Service {
-	return &Service{
+// NewService returns a service that stores places in repo and photos in media.
+func NewService(repo Repository, media MediaStorage) Service {
+	return &service{
 		repo:  repo,
 		media: media,
 	}
 }
 
 // Create validates and saves a new place.
-func (s *Service) Create(ctx context.Context, p *domain.Place) (*domain.Place, error) {
+func (s *service) Create(ctx context.Context, p *domain.Place) (*domain.Place, error) {
 	if err := s.validate(ctx, p); err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func (s *Service) Create(ctx context.Context, p *domain.Place) (*domain.Place, e
 }
 
 // MediaUploadURL returns a temporary link to upload a photo for the place.
-func (s *Service) MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error) {
+func (s *service) MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error) {
 	if _, err := s.repo.Fetch(ctx, id); err != nil {
 		return storage.Upload{}, err
 	}
@@ -91,7 +91,7 @@ func (s *Service) MediaUploadURL(ctx context.Context, id int64, contentType stri
 }
 
 // AddMedia attaches an uploaded photo to the place and returns the place.
-func (s *Service) AddMedia(ctx context.Context, id int64, uploadKey string) (*domain.Place, error) {
+func (s *service) AddMedia(ctx context.Context, id int64, uploadKey string) (*domain.Place, error) {
 	if _, err := s.repo.Fetch(ctx, id); err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (s *Service) AddMedia(ctx context.Context, id int64, uploadKey string) (*do
 
 // List returns one page of places matching the filter, plus the total match
 // count. It caps the page size so no list is unbounded.
-func (s *Service) List(ctx context.Context, filter Filter) ([]domain.Place, int, error) {
+func (s *service) List(ctx context.Context, filter Filter) ([]domain.Place, int, error) {
 	if filter.Limit <= 0 || filter.Limit > maxLimit {
 		filter.Limit = maxLimit
 	}
@@ -123,29 +123,29 @@ func (s *Service) List(ctx context.Context, filter Filter) ([]domain.Place, int,
 }
 
 // Fetch returns the place with the given id.
-func (s *Service) Fetch(ctx context.Context, id int64) (*domain.Place, error) {
+func (s *service) Fetch(ctx context.Context, id int64) (*domain.Place, error) {
 	return s.repo.Fetch(ctx, id)
 }
 
 // ListCategories returns every category with its fields.
-func (s *Service) ListCategories(ctx context.Context) ([]domain.Category, error) {
+func (s *service) ListCategories(ctx context.Context) ([]domain.Category, error) {
 	return s.repo.ListCategories(ctx)
 }
 
 // FetchCategory returns the category with the given id.
-func (s *Service) FetchCategory(ctx context.Context, id int64) (*domain.Category, error) {
+func (s *service) FetchCategory(ctx context.Context, id int64) (*domain.Category, error) {
 	return s.repo.FetchCategory(ctx, id)
 }
 
 // AddRating adds one review rating to the place's rating totals. It joins a
 // transaction carried by ctx, so a review and its rating commit together.
 // It returns domain.ErrPlaceNotFound if there is no such place.
-func (s *Service) AddRating(ctx context.Context, id int64, rating int) error {
+func (s *service) AddRating(ctx context.Context, id int64, rating int) error {
 	return s.repo.AddRating(ctx, id, rating)
 }
 
 // Update validates p and overwrites the place with the given id.
-func (s *Service) Update(ctx context.Context, id int64, p *domain.Place) (*domain.Place, error) {
+func (s *service) Update(ctx context.Context, id int64, p *domain.Place) (*domain.Place, error) {
 	if err := s.validate(ctx, p); err != nil {
 		return nil, err
 	}
@@ -156,19 +156,19 @@ func (s *Service) Update(ctx context.Context, id int64, p *domain.Place) (*domai
 
 // Delete removes the place with the given id. The repository also queues the
 // place's photo files for deletion.
-func (s *Service) Delete(ctx context.Context, id int64) error {
+func (s *service) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
 }
 
 // DeleteMedia removes a photo from the place. The repository also queues the
 // photo file for deletion.
-func (s *Service) DeleteMedia(ctx context.Context, id, mediaID int64) error {
+func (s *service) DeleteMedia(ctx context.Context, id, mediaID int64) error {
 	return s.repo.DeleteMedia(ctx, id, mediaID)
 }
 
 // validate cleans the place's text and checks its location and its attributes
 // against the fields of its category.
-func (s *Service) validate(ctx context.Context, p *domain.Place) error {
+func (s *service) validate(ctx context.Context, p *domain.Place) error {
 	name, err := domain.NormalizePlaceName(p.Name)
 	if err != nil {
 		return err

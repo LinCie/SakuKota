@@ -17,14 +17,14 @@ const testEmail = "ana@example.com"
 
 var errBoom = errors.New("boom")
 
-func newService(t *testing.T) (*users.Service, *mock.MockRepository) {
+func newRepo(t *testing.T) *mock.MockRepository {
 	t.Helper()
-	repo := mock.NewMockRepository(gomock.NewController(t))
-	return users.NewService(repo), repo
+	return mock.NewMockRepository(gomock.NewController(t))
 }
 
 func TestService_Create_ReturnsCreatedUser(t *testing.T) {
-	svc, repo := newService(t)
+	repo := newRepo(t)
+	svc := users.NewService(repo)
 	in := &domain.User{Name: "Ana", Email: testEmail, PasswordHash: "hash"}
 	want := &domain.User{ID: 1, Name: "Ana", Email: testEmail, PasswordHash: "hash", Role: "user"}
 	repo.EXPECT().Create(gomock.Any(), in).Return(want, nil)
@@ -45,7 +45,8 @@ func TestService_Create_PropagatesErrors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			svc, repo := newService(t)
+			repo := newRepo(t)
+			svc := users.NewService(repo)
 			in := &domain.User{Name: "Ana", Email: testEmail}
 			repo.EXPECT().Create(gomock.Any(), in).Return(nil, tc.want)
 
@@ -56,7 +57,8 @@ func TestService_Create_PropagatesErrors(t *testing.T) {
 }
 
 func TestService_FetchByEmail_ReturnsUser(t *testing.T) {
-	svc, repo := newService(t)
+	repo := newRepo(t)
+	svc := users.NewService(repo)
 	want := &domain.User{ID: 7, Email: testEmail}
 	repo.EXPECT().FetchByEmail(gomock.Any(), testEmail).Return(want, nil)
 
@@ -76,7 +78,8 @@ func TestService_FetchByEmail_PropagatesErrors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			svc, repo := newService(t)
+			repo := newRepo(t)
+			svc := users.NewService(repo)
 			repo.EXPECT().FetchByEmail(gomock.Any(), testEmail).Return(nil, tc.want)
 
 			_, err := svc.FetchByEmail(t.Context(), testEmail)
@@ -86,7 +89,8 @@ func TestService_FetchByEmail_PropagatesErrors(t *testing.T) {
 }
 
 func TestService_Fetch_ReturnsUser(t *testing.T) {
-	svc, repo := newService(t)
+	repo := newRepo(t)
+	svc := users.NewService(repo)
 	want := &domain.User{ID: 7, Email: testEmail}
 	repo.EXPECT().Fetch(gomock.Any(), int64(7)).Return(want, nil)
 
@@ -106,7 +110,8 @@ func TestService_Fetch_PropagatesErrors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			svc, repo := newService(t)
+			repo := newRepo(t)
+			svc := users.NewService(repo)
 			repo.EXPECT().Fetch(gomock.Any(), int64(7)).Return(nil, tc.want)
 
 			_, err := svc.Fetch(t.Context(), 7)

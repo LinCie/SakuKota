@@ -67,6 +67,7 @@ Before finishing a change, the code must pass:
 - Make the zero value useful where practical. Use `var x T` for values ready to use without initialization.
 - Prefer concrete types. Accept interfaces where a function needs only behavior, and return concrete types.
 - Define interfaces in the package that consumes them, not in the package that implements them. Keep them small, with the methods the consumer actually uses.
+- Exception for `internal/module/*`: each module's `handler.go` declares the exported `Service` interface, the implementation is the unexported `service` struct, and `NewService` returns `Service`. A method another module needs (e.g. `places.Service.AddRating`) joins `Service` so `Module.Service` can be wired by the router. Modules without a handler (`users`, `storagecleanup`) return `*service`.
 - Do not create an interface before it has a real need: two or more implementations, or a genuine dependency-break. Do not export test doubles or mocks from the production package; generated mocks live in a `mock` subpackage (see Testing). Test through the real public API.
 - Use an option struct when a function takes many arguments, or when most callers set only a few fields. Use functional options for large, evolving APIs. Do not pass a `context.Context` inside an option struct.
 - Avoid global mutable state, including package-level registries, singletons, and `init`-time side effects. Pass dependencies explicitly through constructors, function parameters, or struct fields.

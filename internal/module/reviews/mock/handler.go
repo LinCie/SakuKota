@@ -17,32 +17,32 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockreviewService is a mock of reviewService interface.
-type MockreviewService struct {
+// MockService is a mock of Service interface.
+type MockService struct {
 	ctrl     *gomock.Controller
-	recorder *MockreviewServiceMockRecorder
+	recorder *MockServiceMockRecorder
 	isgomock struct{}
 }
 
-// MockreviewServiceMockRecorder is the mock recorder for MockreviewService.
-type MockreviewServiceMockRecorder struct {
-	mock *MockreviewService
+// MockServiceMockRecorder is the mock recorder for MockService.
+type MockServiceMockRecorder struct {
+	mock *MockService
 }
 
-// NewMockreviewService creates a new mock instance.
-func NewMockreviewService(ctrl *gomock.Controller) *MockreviewService {
-	mock := &MockreviewService{ctrl: ctrl}
-	mock.recorder = &MockreviewServiceMockRecorder{mock}
+// NewMockService creates a new mock instance.
+func NewMockService(ctrl *gomock.Controller) *MockService {
+	mock := &MockService{ctrl: ctrl}
+	mock.recorder = &MockServiceMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockreviewService) EXPECT() *MockreviewServiceMockRecorder {
+func (m *MockService) EXPECT() *MockServiceMockRecorder {
 	return m.recorder
 }
 
 // Create mocks base method.
-func (m *MockreviewService) Create(ctx context.Context, r *domain.Review) (*domain.Review, error) {
+func (m *MockService) Create(ctx context.Context, r *domain.Review) (*domain.Review, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Create", ctx, r)
 	ret0, _ := ret[0].(*domain.Review)
@@ -51,13 +51,13 @@ func (m *MockreviewService) Create(ctx context.Context, r *domain.Review) (*doma
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockreviewServiceMockRecorder) Create(ctx, r any) *gomock.Call {
+func (mr *MockServiceMockRecorder) Create(ctx, r any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockreviewService)(nil).Create), ctx, r)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockService)(nil).Create), ctx, r)
 }
 
 // ListByPlace mocks base method.
-func (m *MockreviewService) ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error) {
+func (m *MockService) ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListByPlace", ctx, placeID)
 	ret0, _ := ret[0].([]domain.Review)
@@ -66,7 +66,7 @@ func (m *MockreviewService) ListByPlace(ctx context.Context, placeID int64) ([]d
 }
 
 // ListByPlace indicates an expected call of ListByPlace.
-func (mr *MockreviewServiceMockRecorder) ListByPlace(ctx, placeID any) *gomock.Call {
+func (mr *MockServiceMockRecorder) ListByPlace(ctx, placeID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByPlace", reflect.TypeOf((*MockreviewService)(nil).ListByPlace), ctx, placeID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByPlace", reflect.TypeOf((*MockService)(nil).ListByPlace), ctx, placeID)
 }

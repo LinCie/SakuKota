@@ -28,7 +28,7 @@ var inTx = gomock.Cond(func(ctx context.Context) bool { return ctx.Value(txKey{}
 // newService returns a Service over mock collaborators. Its transactor runs
 // each function it is given with a context marked by txKey, returning the
 // function's error.
-func newService(t *testing.T) (*suggestions.Service, *mock.MockRepository, *mock.MockPlaceService) {
+func newService(t *testing.T) (suggestions.Service, *mock.MockRepository, *mock.MockPlaceService) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)

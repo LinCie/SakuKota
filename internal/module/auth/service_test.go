@@ -45,7 +45,7 @@ func hashToken(token string) string {
 
 // newService uses the real password hashing; the user service and the refresh
 // store are mocks that fail the test on any call without an expectation.
-func newService(t *testing.T) (*auth.Service, *mock.MockUserService, *mock.MockRefreshStore) {
+func newService(t *testing.T) (auth.Service, *mock.MockUserService, *mock.MockRefreshStore) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 	users := mock.NewMockUserService(ctrl)
@@ -66,7 +66,7 @@ func expectSave(store *mock.MockRefreshStore, userID int64) *string {
 }
 
 // issueSession logs in testEmail and returns the issued tokens.
-func issueSession(t *testing.T, svc *auth.Service, users *mock.MockUserService, store *mock.MockRefreshStore) *auth.Tokens {
+func issueSession(t *testing.T, svc auth.Service, users *mock.MockUserService, store *mock.MockRefreshStore) *auth.Tokens {
 	t.Helper()
 
 	users.EXPECT().FetchByEmail(gomock.Any(), testEmail).Return(&domain.User{ID: 7, Email: testEmail, PasswordHash: testPasswordHash}, nil)

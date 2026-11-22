@@ -20,20 +20,20 @@ const (
 
 //go:generate mockgen -source=handler.go -destination=mock/handler.go -package=mock
 
-// reviewService is the part of Service the Handler uses.
-type reviewService interface {
+// Service is the service the Handler uses.
+type Service interface {
 	Create(ctx context.Context, r *domain.Review) (*domain.Review, error)
 	ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error)
 }
 
 // Handler serves the review endpoints.
 type Handler struct {
-	service reviewService
+	service Service
 }
 
-// NewHandler returns a Handler that uses service.
-func NewHandler(service reviewService) *Handler {
-	return &Handler{service: service}
+// NewHandler returns a Handler that uses svc.
+func NewHandler(svc Service) *Handler {
+	return &Handler{service: svc}
 }
 
 // Create saves the logged-in user's review of the place in the URL.

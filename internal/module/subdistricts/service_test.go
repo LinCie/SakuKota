@@ -22,7 +22,7 @@ const family = "\U0001F468\u200D\U0001F469\u200D\U0001F467"
 
 // newService returns a Service over mocks of its repository and media storage.
 // Any call without an expectation fails the test.
-func newService(t *testing.T) (*subdistricts.Service, *mock.MockRepository, *mock.MockMediaStorage) {
+func newService(t *testing.T) (subdistricts.Service, *mock.MockRepository, *mock.MockMediaStorage) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
@@ -593,7 +593,7 @@ type storeCase struct {
 	// expectStore expects the repository method that stores the image to be
 	// called once with sub-district 7 and the promoted media.
 	expectStore func(repo *mock.MockRepository, promoted domain.Media) *gomock.Call
-	run         func(s *subdistricts.Service, uploadKey string) (*domain.SubDistrict, error)
+	run         func(s subdistricts.Service, uploadKey string) (*domain.SubDistrict, error)
 }
 
 func storeCases(t *testing.T) []storeCase {
@@ -604,7 +604,7 @@ func storeCases(t *testing.T) []storeCase {
 			expectStore: func(repo *mock.MockRepository, promoted domain.Media) *gomock.Call {
 				return repo.EXPECT().AddMedia(gomock.Any(), int64(7), promoted)
 			},
-			run: func(s *subdistricts.Service, uploadKey string) (*domain.SubDistrict, error) {
+			run: func(s subdistricts.Service, uploadKey string) (*domain.SubDistrict, error) {
 				return s.AddMedia(t.Context(), 7, uploadKey)
 			},
 		},

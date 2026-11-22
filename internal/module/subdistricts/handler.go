@@ -25,8 +25,8 @@ const (
 
 //go:generate mockgen -source=handler.go -destination=mock/handler.go -package=mock
 
-// subDistrictService defines the operations the handler requires.
-type subDistrictService interface {
+// Service is the service the Handler uses.
+type Service interface {
 	Create(ctx context.Context, sd *domain.SubDistrict) (*domain.SubDistrict, error)
 	MediaUploadURL(ctx context.Context, id int64, slot MediaSlot, contentType string) (storage.Upload, error)
 	AddMedia(ctx context.Context, id int64, uploadKey string) (*domain.SubDistrict, error)
@@ -40,16 +40,16 @@ type subDistrictService interface {
 
 // Handler serves the sub-district HTTP endpoints.
 type Handler struct {
-	service subDistrictService
+	service Service
 
 	// mediaURL returns the public URL of the file stored under a key.
 	mediaURL func(key string) string
 }
 
-// NewHandler builds a Handler over service. It uses mediaURL to build image links.
-func NewHandler(service subDistrictService, mediaURL func(key string) string) *Handler {
+// NewHandler builds a Handler over svc. It uses mediaURL to build image links.
+func NewHandler(svc Service, mediaURL func(key string) string) *Handler {
 	return &Handler{
-		service:  service,
+		service:  svc,
 		mediaURL: mediaURL,
 	}
 }

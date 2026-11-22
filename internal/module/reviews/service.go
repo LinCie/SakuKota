@@ -9,7 +9,7 @@ import (
 
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
 
-// Repository is the persistence the Service needs.
+// Repository is the persistence the service needs.
 type Repository interface {
 	// Create saves the review. It returns the saved review with its author,
 	// or domain.ErrPlaceNotFound or domain.ErrPlaceAlreadyReviewed.
@@ -33,17 +33,17 @@ type PlaceService interface {
 	AddRating(ctx context.Context, placeID int64, rating int) error
 }
 
-// Service holds the business rules of reviews.
-type Service struct {
+// service holds the business rules of reviews.
+type service struct {
 	repo   Repository
 	tx     Transactor
 	places PlaceService
 }
 
-// NewService returns a Service that stores reviews in repo and adds their
+// NewService returns a service that stores reviews in repo and adds their
 // ratings through places, both in one transaction run by tx.
-func NewService(repo Repository, tx Transactor, places PlaceService) *Service {
-	return &Service{
+func NewService(repo Repository, tx Transactor, places PlaceService) Service {
+	return &service{
 		repo:   repo,
 		tx:     tx,
 		places: places,
@@ -54,7 +54,7 @@ func NewService(repo Repository, tx Transactor, places PlaceService) *Service {
 // comment (at most domain.MaxReviewCommentLength characters), then saves the
 // review and adds its rating to the place's totals in one transaction. A blank
 // comment is saved as nothing.
-func (s *Service) Create(ctx context.Context, r *domain.Review) (*domain.Review, error) {
+func (s *service) Create(ctx context.Context, r *domain.Review) (*domain.Review, error) {
 	if r.Rating < domain.MinRating || r.Rating > domain.MaxRating {
 		return nil, domain.ErrReviewRatingInvalid
 	}
@@ -82,6 +82,6 @@ func (s *Service) Create(ctx context.Context, r *domain.Review) (*domain.Review,
 }
 
 // ListByPlace returns the place's reviews, newest first.
-func (s *Service) ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error) {
+func (s *service) ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error) {
 	return s.repo.ListByPlace(ctx, placeID)
 }

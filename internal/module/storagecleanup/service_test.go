@@ -19,17 +19,18 @@ const (
 
 var errReset = errors.New("connection reset")
 
-// newMocks returns the queue and object storage mocks, and a service over them.
-func newMocks(t *testing.T) (*storagecleanup.Service, *mock.MockRepository, *mock.MockMediaStorage) {
+// newMocks returns the queue and object storage mocks.
+func newMocks(t *testing.T) (*mock.MockRepository, *mock.MockMediaStorage) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 	repo := mock.NewMockRepository(ctrl)
 	objects := mock.NewMockMediaStorage(ctrl)
-	return storagecleanup.NewService(repo, objects), repo, objects
+	return repo, objects
 }
 
 func TestService_Run_DeletesDueObjects(t *testing.T) {
-	svc, repo, objects := newMocks(t)
+	repo, objects := newMocks(t)
+	svc := storagecleanup.NewService(repo, objects)
 	gomock.InOrder(
 		repo.EXPECT().ListDue(gomock.Any(), 100).Return([]string{keyA, keyB}, nil),
 		objects.EXPECT().Delete(gomock.Any(), keyA).Return(nil),
@@ -43,7 +44,8 @@ func TestService_Run_DeletesDueObjects(t *testing.T) {
 
 func TestService_Run_EmptyQueue(t *testing.T) {
 	// Nothing is due, so nothing may be deleted.
-	svc, repo, _ := newMocks(t)
+	repo, objects := newMocks(t)
+	svc := storagecleanup.NewService(repo, objects)
 	repo.EXPECT().ListDue(gomock.Any(), 100).Return(nil, nil)
 
 	assert.NoError(t, svc.Run(t.Context()))
@@ -51,7 +53,8 @@ func TestService_Run_EmptyQueue(t *testing.T) {
 
 func TestService_Run_ListDueFailure(t *testing.T) {
 	// Nothing may be deleted when the queue cannot be read.
-	svc, repo, _ := newMocks(t)
+	repo, objects := newMocks(t)
+	svc := storagecleanup.NewService(repo, objects)
 	repo.EXPECT().ListDue(gomock.Any(), 100).Return(nil, errReset)
 
 	err := svc.Run(t.Context())
@@ -61,7 +64,8 @@ func TestService_Run_ListDueFailure(t *testing.T) {
 func TestService_Run_DeleteFailureIsRescheduled(t *testing.T) {
 	// A failed delete is retried an hour later. It does not fail the run, and
 	// the run carries on with the next key.
-	svc, repo, objects := newMocks(t)
+	repo, objects := newMocks(t)
+	svc := storagecleanup.NewService(repo, objects)
 	gomock.InOrder(
 		repo.EXPECT().ListDue(gomock.Any(), 100).Return([]string{keyA, keyB}, nil),
 		objects.EXPECT().Delete(gomock.Any(), keyA).Return(errReset),
@@ -102,7 +106,8 @@ func TestService_Run_QueueUpdateFailure(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			svc, repo, objects := newMocks(t)
+			repo, objects := newMocks(t)
+			svc := storagecleanup.NewService(repo, objects)
 			repo.EXPECT().ListDue(gomock.Any(), 100).Return([]string{keyA}, nil)
 			tc.setup(repo, objects)
 

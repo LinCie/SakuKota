@@ -64,9 +64,9 @@ func readError(t *testing.T, rec *httptest.ResponseRecorder) errorResult {
 
 // newHandler returns a Handler over a mock service that fails the test on any
 // call without an expectation.
-func newHandler(t *testing.T) (*auth.Handler, *mock.MockauthService) {
+func newHandler(t *testing.T) (*auth.Handler, *mock.MockService) {
 	t.Helper()
-	svc := mock.NewMockauthService(gomock.NewController(t))
+	svc := mock.NewMockService(gomock.NewController(t))
 	return auth.NewHandler(testConfig(), svc), svc
 }
 
@@ -309,13 +309,13 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 		handler func(*auth.Handler) http.HandlerFunc
 		body    string
 		cookies []*http.Cookie
-		expect  func(svc *mock.MockauthService)
+		expect  func(svc *mock.MockService)
 	}{
 		{
 			name:    "register",
 			handler: func(h *auth.Handler) http.HandlerFunc { return h.Register },
 			body:    `{"name":"Ana","email":"` + testEmail + `","password":"password123"}`,
-			expect: func(svc *mock.MockauthService) {
+			expect: func(svc *mock.MockService) {
 				svc.EXPECT().Register(gomock.Any(), &domain.User{Name: "Ana", Email: testEmail}, "password123").Return(nil, dbErr)
 			},
 		},
@@ -323,7 +323,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			name:    "login",
 			handler: func(h *auth.Handler) http.HandlerFunc { return h.Login },
 			body:    `{"email":"` + testEmail + `","password":"password123"}`,
-			expect: func(svc *mock.MockauthService) {
+			expect: func(svc *mock.MockService) {
 				svc.EXPECT().Login(gomock.Any(), testEmail, "password123").Return(nil, nil, dbErr)
 			},
 		},
@@ -331,7 +331,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			name:    "refresh",
 			handler: func(h *auth.Handler) http.HandlerFunc { return h.Refresh },
 			cookies: []*http.Cookie{cookie},
-			expect: func(svc *mock.MockauthService) {
+			expect: func(svc *mock.MockService) {
 				svc.EXPECT().Refresh(gomock.Any(), "refresh-1").Return(nil, nil, dbErr)
 			},
 		},
@@ -339,7 +339,7 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			name:    "logout",
 			handler: func(h *auth.Handler) http.HandlerFunc { return h.Logout },
 			cookies: []*http.Cookie{cookie},
-			expect: func(svc *mock.MockauthService) {
+			expect: func(svc *mock.MockService) {
 				svc.EXPECT().Logout(gomock.Any(), "refresh-1").Return(dbErr)
 			},
 		},

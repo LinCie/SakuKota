@@ -10,16 +10,16 @@ import (
 
 // Module bundles the service and handler of the auth feature.
 type Module struct {
-	Service *Service
+	Service Service
 	Handler *Handler
 }
 
 // New builds the auth module. Refresh tokens are kept in rdb.
 func New(cfg config.Config, userService UserService, rdb *redis.Client) *Module {
-	service := NewService(cfg, userService, NewRedisRefreshStore(rdb))
+	svc := NewService(cfg, userService, NewRedisRefreshStore(rdb))
 
 	return &Module{
-		Service: service,
-		Handler: NewHandler(cfg, service),
+		Service: svc,
+		Handler: NewHandler(cfg, svc),
 	}
 }

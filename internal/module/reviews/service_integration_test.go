@@ -22,7 +22,7 @@ import (
 
 // newWiredService returns a Service over an emptied database, wired as in
 // production: ratings go through the place service in the review's transaction.
-func newWiredService(t *testing.T) *reviews.Service {
+func newWiredService(t *testing.T) reviews.Service {
 	t.Helper()
 	pgtest.Reset(t, testDB)
 	placeService := places.NewService(places.NewPostgresRepository(testDB), nil)

@@ -21,7 +21,7 @@ import (
 )
 
 // newPlaceService returns the place service as production wires it, without media storage.
-func newPlaceService() *places.Service {
+func newPlaceService() places.Service {
 	return places.NewService(places.NewPostgresRepository(testDB), nil)
 }
 

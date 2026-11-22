@@ -18,32 +18,32 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockauthService is a mock of authService interface.
-type MockauthService struct {
+// MockService is a mock of Service interface.
+type MockService struct {
 	ctrl     *gomock.Controller
-	recorder *MockauthServiceMockRecorder
+	recorder *MockServiceMockRecorder
 	isgomock struct{}
 }
 
-// MockauthServiceMockRecorder is the mock recorder for MockauthService.
-type MockauthServiceMockRecorder struct {
-	mock *MockauthService
+// MockServiceMockRecorder is the mock recorder for MockService.
+type MockServiceMockRecorder struct {
+	mock *MockService
 }
 
-// NewMockauthService creates a new mock instance.
-func NewMockauthService(ctrl *gomock.Controller) *MockauthService {
-	mock := &MockauthService{ctrl: ctrl}
-	mock.recorder = &MockauthServiceMockRecorder{mock}
+// NewMockService creates a new mock instance.
+func NewMockService(ctrl *gomock.Controller) *MockService {
+	mock := &MockService{ctrl: ctrl}
+	mock.recorder = &MockServiceMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockauthService) EXPECT() *MockauthServiceMockRecorder {
+func (m *MockService) EXPECT() *MockServiceMockRecorder {
 	return m.recorder
 }
 
 // Login mocks base method.
-func (m *MockauthService) Login(ctx context.Context, email, password string) (*domain.User, *auth.Tokens, error) {
+func (m *MockService) Login(ctx context.Context, email, password string) (*domain.User, *auth.Tokens, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Login", ctx, email, password)
 	ret0, _ := ret[0].(*domain.User)
@@ -53,13 +53,13 @@ func (m *MockauthService) Login(ctx context.Context, email, password string) (*d
 }
 
 // Login indicates an expected call of Login.
-func (mr *MockauthServiceMockRecorder) Login(ctx, email, password any) *gomock.Call {
+func (mr *MockServiceMockRecorder) Login(ctx, email, password any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Login", reflect.TypeOf((*MockauthService)(nil).Login), ctx, email, password)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Login", reflect.TypeOf((*MockService)(nil).Login), ctx, email, password)
 }
 
 // Logout mocks base method.
-func (m *MockauthService) Logout(ctx context.Context, refreshToken string) error {
+func (m *MockService) Logout(ctx context.Context, refreshToken string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Logout", ctx, refreshToken)
 	ret0, _ := ret[0].(error)
@@ -67,13 +67,13 @@ func (m *MockauthService) Logout(ctx context.Context, refreshToken string) error
 }
 
 // Logout indicates an expected call of Logout.
-func (mr *MockauthServiceMockRecorder) Logout(ctx, refreshToken any) *gomock.Call {
+func (mr *MockServiceMockRecorder) Logout(ctx, refreshToken any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Logout", reflect.TypeOf((*MockauthService)(nil).Logout), ctx, refreshToken)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Logout", reflect.TypeOf((*MockService)(nil).Logout), ctx, refreshToken)
 }
 
 // Refresh mocks base method.
-func (m *MockauthService) Refresh(ctx context.Context, refreshToken string) (*domain.User, *auth.Tokens, error) {
+func (m *MockService) Refresh(ctx context.Context, refreshToken string) (*domain.User, *auth.Tokens, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Refresh", ctx, refreshToken)
 	ret0, _ := ret[0].(*domain.User)
@@ -83,13 +83,13 @@ func (m *MockauthService) Refresh(ctx context.Context, refreshToken string) (*do
 }
 
 // Refresh indicates an expected call of Refresh.
-func (mr *MockauthServiceMockRecorder) Refresh(ctx, refreshToken any) *gomock.Call {
+func (mr *MockServiceMockRecorder) Refresh(ctx, refreshToken any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Refresh", reflect.TypeOf((*MockauthService)(nil).Refresh), ctx, refreshToken)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Refresh", reflect.TypeOf((*MockService)(nil).Refresh), ctx, refreshToken)
 }
 
 // Register mocks base method.
-func (m *MockauthService) Register(ctx context.Context, u *domain.User, password string) (*domain.User, error) {
+func (m *MockService) Register(ctx context.Context, u *domain.User, password string) (*domain.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Register", ctx, u, password)
 	ret0, _ := ret[0].(*domain.User)
@@ -98,7 +98,7 @@ func (m *MockauthService) Register(ctx context.Context, u *domain.User, password
 }
 
 // Register indicates an expected call of Register.
-func (mr *MockauthServiceMockRecorder) Register(ctx, u, password any) *gomock.Call {
+func (mr *MockServiceMockRecorder) Register(ctx, u, password any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockauthService)(nil).Register), ctx, u, password)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockService)(nil).Register), ctx, u, password)
 }

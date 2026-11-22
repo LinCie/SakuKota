@@ -48,17 +48,17 @@ type Transactor interface {
 	WithinTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
-// Service implements the suggestion use cases.
-type Service struct {
+// service implements the suggestion use cases.
+type service struct {
 	repo   Repository
 	tx     Transactor
 	places PlaceService
 }
 
-// NewService returns a Service that stores suggestions in repo and creates
+// NewService returns a service that stores suggestions in repo and creates
 // approved places through places, approving in one transaction run by tx.
-func NewService(repo Repository, tx Transactor, places PlaceService) *Service {
-	return &Service{
+func NewService(repo Repository, tx Transactor, places PlaceService) Service {
+	return &service{
 		repo:   repo,
 		tx:     tx,
 		places: places,
@@ -67,7 +67,7 @@ func NewService(repo Repository, tx Transactor, places PlaceService) *Service {
 
 // Create checks the name, location, and attributes, then saves the suggestion as pending.
 // Blank optional text is saved as nothing.
-func (s *Service) Create(ctx context.Context, sg *domain.Suggestion) (*domain.Suggestion, error) {
+func (s *service) Create(ctx context.Context, sg *domain.Suggestion) (*domain.Suggestion, error) {
 	name, err := domain.NormalizePlaceName(sg.Name)
 	if err != nil {
 		return nil, err
@@ -110,18 +110,18 @@ func (s *Service) Create(ctx context.Context, sg *domain.Suggestion) (*domain.Su
 }
 
 // Fetch returns the suggestion with the given ID.
-func (s *Service) Fetch(ctx context.Context, id int64) (*domain.Suggestion, error) {
+func (s *service) Fetch(ctx context.Context, id int64) (*domain.Suggestion, error) {
 	return s.repo.Fetch(ctx, id)
 }
 
 // ListByUser returns the user's suggestions, newest first.
-func (s *Service) ListByUser(ctx context.Context, userID int64) ([]domain.Suggestion, error) {
+func (s *service) ListByUser(ctx context.Context, userID int64) ([]domain.Suggestion, error) {
 	return s.repo.ListByUser(ctx, userID)
 }
 
 // List returns the suggestions matching the filter, oldest first.
 // It returns domain.ErrSuggestionStatusInvalid for an unknown status.
-func (s *Service) List(ctx context.Context, filter Filter) ([]domain.Suggestion, error) {
+func (s *service) List(ctx context.Context, filter Filter) ([]domain.Suggestion, error) {
 	switch filter.Status {
 	case "", domain.StatusPending, domain.StatusApproved, domain.StatusRejected:
 	default:
@@ -134,7 +134,7 @@ func (s *Service) List(ctx context.Context, filter Filter) ([]domain.Suggestion,
 // Approve creates the place p from a pending suggestion and marks the
 // suggestion approved as that place, in one transaction. p must have a
 // location. If either step fails, neither is kept.
-func (s *Service) Approve(ctx context.Context, id, adminID int64, p *domain.Place) (*domain.Suggestion, error) {
+func (s *service) Approve(ctx context.Context, id, adminID int64, p *domain.Place) (*domain.Suggestion, error) {
 	// Checked before the suggestion is read: a place without a location is
 	// refused without touching storage.
 	if p.Location == nil {
@@ -168,7 +168,7 @@ func (s *Service) Approve(ctx context.Context, id, adminID int64, p *domain.Plac
 
 // Reject marks a pending suggestion rejected. The reason is trimmed and
 // stored as nil when blank, and must be at most 1000 characters.
-func (s *Service) Reject(ctx context.Context, id, adminID int64, reason *string) (*domain.Suggestion, error) {
+func (s *service) Reject(ctx context.Context, id, adminID int64, reason *string) (*domain.Suggestion, error) {
 	trimmed, ok := text.TrimOptionalMax(reason, domain.MaxSuggestionReasonLength)
 	if !ok {
 		return nil, domain.ErrSuggestionReasonTooLong
