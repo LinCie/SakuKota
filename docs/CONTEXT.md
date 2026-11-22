@@ -1,768 +1,360 @@
 # Rantau — Project Context
 
-> **Living document.** This file states what the project is *for* and what the
-> backend is *specified to do*. Update it in the same task as any change to backend
-> behavior or the API contract, once a VERIFICATION phase passes (see
-> [Maintaining this file](#maintaining-this-file)).
+> **Living document.** What the project is for and what the backend is specified
+> to do. Update it in the same task as any verified change to backend behavior or
+> the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-22. `GET /places` spreads a page with a `bbox` over the box (see the change log).
->   Verified by `go build`, `go vet` (with and without the `integration` tag), and the full Go
->   unit and integration suites.
-> - Status: verified. All Go unit and integration tests pass. The web app draws the
->   kecamatan boundaries; it is untested, like the rest of `web/`.
-
-## Contents
-
-1. [Why the project exists](#1-why-the-project-exists)
-2. [Glossary](#2-glossary)
-3. [Sources of truth](#3-sources-of-truth)
-4. [Scope: planned vs. delivered](#4-scope-planned-vs-delivered)
-5. [Cross-cutting API contract](#5-cross-cutting-api-contract)
-6. [Behavior by module](#6-behavior-by-module)
-7. [Error code catalogue](#7-error-code-catalogue)
-8. [User stories → backend support](#8-user-stories--backend-support)
-9. [Where the design docs and the tests disagree](#9-where-the-design-docs-and-the-tests-disagree)
-10. [Gaps and open questions](#10-gaps-and-open-questions)
-11. [Maintaining this file](#maintaining-this-file)
-
----
+> - Last updated: 2026-11-22 (documentation simplified; no contract change).
+> - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
 
-The source docs (not published) call the project **Perantau Helper**.
-In this repo it is called **Rantau** / `rantau-go`.
+The design docs (not published) call it **Perantau Helper**; here it
+is **Rantau** / `rantau-go`.
 
 - **Problem.** People who move to Jakarta for work (*perantau*) struggle to find
-  cheap everyday essentials: warung, tailors, local clinics, laundries,
-  pharmacies, and the places a newcomer soon needs (mosques, police posts,
-  hospitals, puskesmas, banks and ATMs, minimarkets, transit stops, public
-  service offices, water and gas refills, print shops). Mainstream maps either miss these places or bury them. Newcomers
-  also know little about each neighbourhood: flood risk, safety, and the cost
-  of daily life. Today they rely on trial and error or word of mouth.
-- **Target users.** Fresh graduates, trainees, and young professionals moving to
-  Jakarta.
-- **Persona.** Dimas, 23, a corporate trainee who moved from Surabaya to Setiabudi.
-  He mostly uses the app on his phone after work. He wants a cheap dinner and a
-  nearby laundry, and he wants to check his kecamatan's flood, safety, and
-  spending information.
-- **Unique value.** A hyper-local "survival map" that combines curated daily
-  essentials with practical safety and cost information for each neighbourhood.
-- **Hard non-goal.** Kost or boarding-house listings ("Won't Have"). The app
-  should not compete with property apps.
-- **Quality stance.** Data quality beats volume. The docs favour admin-verified
-  pins backed by community signals over unverified clutter, and placeholders
-  over broken layouts when data is missing.
+  cheap everyday essentials (warung, laundry, clinics, pharmacies, mosques,
+  transit, ATMs, public offices, …) and know little about each neighbourhood's
+  flood risk, safety, and cost of living.
+- **Users.** Fresh graduates, trainees, and young professionals. Persona: Dimas,
+  23, a trainee in Setiabudi, using the app on his phone after work.
+- **Value.** A hyper-local "survival map": curated essentials plus safety and
+  cost information per kecamatan.
+- **Non-goal.** Kost / boarding-house listings. Do not add them.
+- **Quality stance.** Admin-verified data over volume; placeholders over broken
+  layouts when data is missing.
 
 ## 2. Glossary
 
 | Term | Meaning |
 | ---- | ------- |
-| Perantau | A person who has moved away from home for work or study |
-| Kecamatan / sub-district | Jakarta administrative district. The code and API call it `subdistrict` / `sub_district` |
-| Place / pin | A curated essential spot shown on the map |
-| Category | Place type, e.g. Warung. Defined in migrations, never created through the API. Each category has `code`, `label`, and `color` (a palette key the frontend maps to styles) plus custom **fields** |
-| Attributes | A place's values for its category's custom fields (a JSON object) |
-| Suggestion | A place proposed by a signed-in user that waits for admin review |
-| Review | A user's 1–5 star rating of a place, with an optional comment |
+| Kecamatan / sub-district | Jakarta district; `subdistrict` / `sub_district` in code and API |
+| Place / pin | A curated spot on the map |
+| Category | Place type (e.g. Warung), defined in migrations with `code`, `label`, `color` (palette key) and custom **fields** |
+| Attributes | A place's values for its category's fields (JSON object) |
+| Suggestion | A user-proposed place awaiting admin review |
+| Review | A user's 1–5 star rating of a place, with optional comment |
 
 ## 3. Sources of truth
 
-1. **Tests (`*_test.go`) are the executable specification.** They decide what
-   the backend must and may do. Production code never counts as evidence of
-   intent (see the root `AGENTS.md`).
-2. **This file** summarizes the intent behind the docs and the current tested
-   contract. When this file and a test disagree, the test wins until PLANNING
-   resolves the disagreement with the user.
-3. **Design docs** (not published): `ideation_scope.md`,
-   `user_stories.md`, `erd.md`, `wireframe/`, and `weekly_report/week_2..11.md`.
-   They explain the original *why*, but some parts are out of date (see §9).
+1. **Tests (`*_test.go`)** are the executable specification. Production code is
+   never evidence of intent.
+2. **This file** summarizes intent and the tested contract. If it disagrees with
+   a test, the test wins.
+3. **Design docs** (not published) explain the original *why* but
+   are partly outdated (§9).
 
-## 4. Scope: planned vs. delivered
+## 4. Scope
 
-MoSCoW scope agreed with the mentor in Week 3:
+| Tier | Feature | Status |
+| ---- | ------- | ------ |
+| Must | Survival map and pins | Delivered: places API with filters, `bbox`, `limit`, `total` |
+| Must | Kecamatan dropdown and info modal | Delivered: sub-districts API with medias and a GeoJSON boundary |
+| Must | Category filter and search | Delivered: `category_id` (any of), `q` |
+| Should | Admin verification panel | Backend delivered (admin CRUD, suggestion review) |
+| Could | Place suggestion form | Delivered, with a pending limit |
+| Could | Up/down votes | Delivered as 1–5 star reviews |
+| Could | Kecamatan GeoJSON overlay | Delivered; the web map outlines and frames kecamatan |
+| Won't | Kost listings | Absent |
 
-| Tier | Feature | Backend status (per tests) |
-| ---- | ------- | -------------------------- |
-| Must | Interactive survival map and essential pins | Delivered: places API with filters, bbox, limit, total |
-| Must | Kecamatan dropdown and info modal (flood, safety/crime, daily spending, static map image) | Delivered: sub-districts API with up to 10 uploaded images. The static map image was replaced by a GeoJSON boundary (see below) |
-| Must | Category filter and search | Delivered: `category_id` (any of several), `q` |
-| Should | Basic admin verification panel | Backend delivered: admin review of suggestions; create/update/delete for places and sub-districts, all admin-only (route access is tested, see §5) |
-| Could | Place suggestion form | Delivered: suggestions with a pending limit |
-| Could | Upvote/downvote and review system | Delivered as **1–5 star reviews** with comments (not up/down votes) |
-| Could | Kecamatan GeoJSON overlay | Backend delivered: each sub-district has an optional GeoJSON MultiPolygon `boundary`, set by an admin. The web map outlines every kecamatan with a boundary, frames the one on show by it, and switches kecamatan when another outline is clicked (untested, like the rest of `web/`) |
-| Won't | Kost listings | Not present (keep it that way) |
-
-Also delivered, beyond the docs: authentication with JWT access tokens and
-rotating refresh cookies, up to 10 images per place and per sub-district
-uploaded to S3-compatible storage (Garage), and a durable cleanup queue for
-deleting stored objects.
-
-Every user story in the docs is a Must Have. The Should and Could features have
-**no user stories or acceptance criteria in the docs**. Their requirements exist
-only as tests.
+Beyond the docs: JWT auth with rotating refresh cookies, up to 10 medias per
+place and per sub-district in S3-compatible storage (Garage), and a cleanup queue
+for deleted objects. Only the Must features have user stories; the rest are
+specified only by tests.
 
 ## 5. Cross-cutting API contract
 
-These rules apply to every HTTP module unless §6 says otherwise.
+Applies to every module unless §6 says otherwise. All routes live under `/v1`.
 
-- **Envelopes.** A success response is `{"data": ...}`. An error response is
-  `{"code": "UPPER_SNAKE", "message": "<non-empty>"}` with
-  `Content-Type: application/json`.
-- **Status codes.** Create returns `201` with the created resource. Read,
-  update, and actions return `200`. Delete returns `204` with an empty body.
-- **500s never leak internals.** A response body never contains driver or SQL
-  details (`pq:`, relation names, "database is closed"), and its code is
-  always `INTERNAL_ERROR`.
-- **Path IDs.** An ID must be a positive integer that fits in 64 bits.
-  Non-numeric, fractional, zero, negative, or overflowing IDs return `400
-  INVALID_<RESOURCE>_ID`, and the service is never called.
-- **`INVALID_BODY` vs `VALIDATION_ERROR`.** A body that cannot be decoded
-  returns `400 INVALID_BODY`. That covers an empty body, malformed JSON, a body
-  that is not an object (array or `null`), data after the object, wrong JSON types, a non-Point
-  GeoJSON where a location is expected, a boundary that is not a well-formed
-  GeoJSON Polygon or MultiPolygon, or coordinates outside WGS84 (lat > 90,
-  lon > 180). A body that
-  decodes but breaks a business rule returns `400 VALIDATION_ERROR`. Requests
-  with invalid bodies never reach the service. The rule applies to every JSON
-  endpoint, including register, login, create, approve, reject, and review, and
-  a `null` body counts as an invalid body.
-- **Client-controlled fields are ignored.** The server ignores `id`,
-  `created_at`, `user_id`, `status`, review fields, and any unknown keys sent
-  by the client. The author always comes from the access token, and the
-  resource ID always comes from the path.
-- **PUT semantics.** Updates (`PUT /places/{id}`, `PUT /subdistricts/{id}`) take
-  the same body as create and replace every editable field. A nullable field
-  that is absent or `null` is cleared. Required fields (`name`, `slug`,
-  `sub_district_id`, `category_id`) are checked as in create, so a missing or
-  `null` one returns `400 VALIDATION_ERROR`, and an empty object `{}` is
-  rejected. A body with the wrong shape still returns `INVALID_BODY`. A failed
-  update leaves stored data unchanged.
-- **Text normalization.** Names and free-text inputs are trimmed of surrounding
-  whitespace, including tabs and newlines. Inner whitespace and line breaks are
-  kept. Length limits count Unicode **code points after trimming**, so `é`
-  counts as 1 and a ZWJ family emoji counts as 5. Optional text on places,
-  sub-districts, and suggestions is trimmed the same way. Empty or blank optional
-  text is stored as absent (`null`).
-- **Length limits.** Every text field with a column limit is checked against it
-  using the same count: user name 100, user email 255, sub-district name and slug
-  100, place name 150, place address 255, operating hours 255, estimated price
-  range 100, suggestion name 150 (with the same address, hours, and price limits
-  as places), suggestion note and rejection reason 1000, and review comment 1000.
-  A value over its limit returns `400 VALIDATION_ERROR` and never reaches storage.
-  Free text without a column limit (place short description, sub-district flood
-  history and safety information) has no length check.
-- **Locations.** A location is a GeoJSON `{"type":"Point","coordinates":[lon, lat]}`.
-  A domain location must fall inside the **Indonesia box**: lon 95–141 and lat
-  −11–6, edges included. `[0,0]` is rejected. Locations come back exactly as
-  they were sent.
-- **JSON fidelity.** Attribute JSON round-trips exactly: big integers keep every
-  digit, `1.50` stays `1.50`, and quotes, emoji, and SQL-like text are kept
-  verbatim.
-- **Context.** Every service call receives the request's context. A cancelled
-  request or an expired deadline must not produce a success response.
-- **Auth.** Protected routes use `middleware.WithAuth`, which requires
-  `Authorization: Bearer <JWT>`. The JWT carries the user ID and role (`user` or
-  `admin`). A request without a valid token returns `401 UNAUTHORIZED`. A
-  handler that needs a user but finds none in the context returns `401
-  UNAUTHORIZED`. A valid token without the admin role on an admin-only route
-  returns `403 FORBIDDEN`. Admin-only routes are guarded by the **API router**,
-  not by the handlers.
-- **Access tokens.** A token is accepted only if it is signed with HS256 and the
-  configured secret, names the issuer `rantau-go`, and has an expiry that has
-  not passed. Tokens with another algorithm (including `none`), another or no
-  issuer, no expiry, or another secret are rejected.
-- **Route access.** The router test builds the real router and fails if a route
-  is missing from, or extra in, its access table. Every route is one of:
-  - *Public:* `/docs`, `/openapi.json`, the four `/v1/auth/*` routes,
-    `GET /v1/places`, `GET /v1/places/{id}`, `GET /v1/places/{id}/reviews`,
-    `GET /v1/places/categories` and `/{id}`, `GET /v1/subdistricts` and `/{id}`.
-  - *Any signed-in user:* `POST /v1/places/{id}/reviews`, `POST /v1/suggestions`,
-    `GET /v1/suggestions/mine`.
-  - *Admin only:* `POST /v1/places`, `PUT` and `DELETE /v1/places/{id}`, the
-    place media routes (`POST .../medias/upload-url`, `POST .../medias`,
-    `DELETE .../medias/{mediaId}`), `GET /v1/suggestions`, `GET
-    /v1/suggestions/{id}`, `.../approve`, `.../reject`, `POST /v1/subdistricts`,
-    `PUT` and `DELETE /v1/subdistricts/{id}`, the same three sub-district media
-    routes, and `PUT /v1/subdistricts/{id}/boundary`.
-- **Privacy.** The only place a user's email appears is the caller's own user
-  object in the register, login, and refresh responses. No other response
-  exposes user emails. A nested author appears as `{"id", "name"}`. Password
-  material never appears in any response.
+- **Envelopes.** Success: `{"data": ...}`. Error: `{"code": "UPPER_SNAKE",
+  "message": "..."}`, JSON.
+- **Status codes.** Create `201`, read/update/action `200`, delete `204` (empty).
+- **500s** are always `INTERNAL_ERROR` and never leak driver/SQL details.
+- **Path IDs** must be positive int64s, else `400 INVALID_<RESOURCE>_ID` before
+  the service is called.
+- **`INVALID_BODY` vs `VALIDATION_ERROR`.** An undecodable body (empty, malformed,
+  not an object, `null`, trailing data, wrong JSON types, wrong GeoJSON type,
+  coordinates outside WGS84) is `400 INVALID_BODY` and never reaches the service.
+  A decodable body that breaks a business rule is `400 VALIDATION_ERROR`.
+- **Ignored fields.** `id`, `created_at`, `user_id`, `status`, review fields, and
+  unknown keys are ignored. The author comes from the token, the ID from the path.
+- **PUT** takes the same body as create and replaces every editable field: absent
+  or `null` nullable fields are cleared; missing required fields are
+  `VALIDATION_ERROR`. A failed update changes nothing.
+- **Text.** Inputs are trimmed (inner whitespace kept). Blank optional text is
+  stored as `null`. Length limits count Unicode code points after trimming.
+- **Length limits** (`VALIDATION_ERROR` when exceeded): user name 100, email 255;
+  sub-district name/slug 100; place/suggestion name 150, address 255, operating
+  hours 255, price range 100; suggestion note, rejection reason, review comment
+  1000. Descriptions and sub-district free text are unlimited.
+- **Locations** are GeoJSON Points `[lon, lat]` inside the **Indonesia box**
+  (lon 95–141, lat −11–6, edges included) and round-trip exactly.
+- **JSON fidelity.** Attributes round-trip exactly (big ints, `1.50`, any text).
+- **Context.** Every service call gets the request context; a cancelled request
+  never produces a success.
+- **Auth.** `Authorization: Bearer <JWT>` (HS256, configured secret, issuer
+  `rantau-go`, unexpired; anything else rejected). The token carries user ID and
+  role (`user`/`admin`). No valid token → `401 UNAUTHORIZED`; non-admin on an
+  admin route → `403 FORBIDDEN`. Admin checks live in the router.
+- **Route access** (the router test fails on any missing or extra route):
+  - *Public:* `/docs`, `/openapi.json`, `/v1/auth/*`, `GET /places`,
+    `GET /places/{id}`, `GET /places/{id}/reviews`, `GET /places/categories[/{id}]`,
+    `GET /subdistricts[/{id}]`.
+  - *Signed in:* `POST /places/{id}/reviews`, `POST /suggestions`,
+    `GET /suggestions/mine`.
+  - *Admin:* place and sub-district create/update/delete and media routes,
+    `PUT /subdistricts/{id}/boundary`, `GET /suggestions[/{id}]`, approve, reject.
+- **Privacy.** Emails appear only in the caller's own user object from register,
+  login, and refresh. Nested authors are `{id, name}`. No password material.
 
 ## 6. Behavior by module
 
 ### 6.1 Auth (`internal/module/auth`)
 
-The test router posts to `/v1/auth`, and the refresh cookie path is
-`/v1/auth`. Configuration: `JWTSecret`, `JWTExpiry` (access token),
-`RefreshTokenExpiry`, `CookieSecure`.
+Routes under `/v1/auth`. Config: `JWTSecret`, `JWTExpiry`, `RefreshTokenExpiry`,
+`CookieSecure`.
 
-- **Register.** `name`, `email`, and `password` are required. The name is
-  trimmed, must not be blank, and has at most 100 code points. The email is
-  trimmed, lower-cased, has at most 255 code points, and must be one `@` with text
-  on both sides and no spaces, such as `ana@example.com`; a display-name form
-  such as `Ana <ana@example.com>` is rejected. The password needs at least 8 characters, counted as Unicode code
-  points, so `é` counts as 1. The password is stored as an argon2id hash.
-  Invalid input (including a password under 8 characters) returns
-  `400 VALIDATION_ERROR` and never reaches storage. A duplicate email returns `409 EMAIL_TAKEN`. Success returns
-  `201` with the user, never the password. The user object is `{id, name,
-  email, role, created_at, updated_at}`, where `role` is `user` or `admin`.
-- **Login.** The email is normalized before lookup. An unknown email and a wrong
-  password both return `401 INVALID_CREDENTIALS`, and neither sets a cookie.
-  Storage failures and corrupt stored hashes are **not** reported as bad
-  credentials: they return 500. Success returns `200 {access_token, user}`.
-  The refresh token travels **only** in the `refresh_token` cookie (HttpOnly,
-  `Path=/v1/auth`, `SameSite=Strict`, `Secure=CookieSecure`,
-  `MaxAge=RefreshTokenExpiry`).
-- **Refresh.** Reads the cookie. Without a cookie it returns `401
-  INVALID_REFRESH_TOKEN`, clears the cookie, and does not call the service.
-  Refresh tokens
-  **rotate**: the old token is consumed, and reusing it fails. An unknown token
-  or a deleted user returns `INVALID_REFRESH_TOKEN` and clears the cookie.
-  Storage failures return 500 and are not reported as an invalid token.
-- **Logout.** Always returns `204` and clears the cookie. Without a cookie the
-  service is not called. If revocation fails, the response is 500 but the
-  cookie is still cleared. A revoked token can no longer refresh.
+- **Register.** `name` (1–100), `email` (trimmed, lower-cased, ≤255, one `@`
+  with text on both sides, no spaces), `password` (≥8 code points, argon2id).
+  Invalid → `VALIDATION_ERROR`; duplicate → `409 EMAIL_TAKEN`. Returns `201` with
+  `{id, name, email, role, created_at, updated_at}`.
+- **Login.** Unknown email or wrong password → `401 INVALID_CREDENTIALS`, no
+  cookie. Storage errors and corrupt hashes → 500. Success: `200 {access_token,
+  user}`; the refresh token is only in the `refresh_token` cookie (HttpOnly,
+  `Path=/v1/auth`, `SameSite=Strict`, `Secure=CookieSecure`).
+- **Refresh.** No cookie, unknown token, or deleted user → `401
+  INVALID_REFRESH_TOKEN` and the cookie is cleared. Tokens rotate; reuse fails.
+  Storage errors → 500.
+- **Logout.** Always clears the cookie; `204`, or 500 if revocation fails.
 
 ### 6.2 Users (`internal/module/users`)
 
-This is a service only, with no HTTP handler. It offers `Create`, `GetByEmail`,
-and `GetUser`, which pass repository results and errors (`ErrEmailTaken`,
-`ErrNotFound`) through unchanged. Stored users carry a `Role`, which defaults
-to `"user"`.
+Service only (`Create`, `GetByEmail`, `GetUser`); passes `ErrEmailTaken` and
+`ErrNotFound` through. Role defaults to `user`.
 
 ### 6.3 Places and categories (`internal/module/places`)
 
-**Place response:** `id, sub_district_id, name, address, location,
-operating_hours, estimated_price_range, short_description, attributes,
-rating_average, rating_count, medias, category{id,name,slug,code,label,color}`.
-Missing optional values are `null` and attributes default to `{}`.
-`rating_average` is `rating_sum / rating_count`, or `null` when the place has
-no ratings. `medias` is the place's images ordered by position, each
-`{id, url, content_type, size, position}` with `url` the storage public URL of
-its key; a place without images has `[]`. Lists and single reads return
-`medias` alike.
+**Response:** `id, sub_district_id, name, address, location, operating_hours,
+estimated_price_range, short_description, attributes, rating_average,
+rating_count, medias, category{id,name,slug,code,label,color}`. Missing values
+are `null`, attributes default to `{}`, `rating_average` is `null` without
+ratings, `medias` is `[]` without images.
 
-- **Name.** Required, trimmed, at most 150 code points (`ErrInvalidName`,
-  `ErrNameTooLong`). Names may repeat, even in the same district and
-  regardless of case.
-- **Location.** Optional for places. When given, it must lie in the Indonesia
-  box (`ErrInvalidLocation`).
-- **Optional text.** `address` (at most 255 code points), `operating_hours`
-  (255), and `estimated_price_range` (100) are trimmed and checked with
-  `ErrAddressTooLong`, `ErrOperatingHoursTooLong`, and
-  `ErrEstimatedPriceRangeTooLong`. `short_description` is trimmed. Blank values
-  are stored as `null`. Updates follow the same rules.
-- **Attributes** are validated against the category's fields:
-  - Field types are `text`, `number`, `boolean`, `select` (one of `options`),
-    `range` (exactly `{min, max}`, both numbers, `min ≤ max`), and `date`
-    (a real date in `YYYY-MM-DD` form, without a time).
-  - Required fields must be present and non-null. Required text must not be
-    blank.
-  - Unknown keys are rejected. A `null` optional field is dropped.
-  - Absent or `null` attributes are stored as `{}`. Anything other than an
-    object is rejected.
-  - Violations return `ErrInvalidAttributes`.
-- **Create (`POST /places`).** The category is looked up first; an unknown
-  category stops before storage. Storage may report an unknown sub-district or
-  category. Every create validation failure returns `400 VALIDATION_ERROR`,
-  including an unknown sub-district or category.
-- **List (`GET /places`).** Returns `{places, total}`, where `total` counts all
-  matches **before** `offset` and `limit`. Without a `bbox`, places are ordered
-  by ascending id. With a `bbox`, the places are **spread over the box**:
-  - The box is split into square cells whose side is the smallest power of two
-    (in degrees, at least `1e-5`) that makes at most about `limit` cells. The
-    grid is counted from longitude and latitude 0, so it does not move as the
-    box pans.
-  - Each cell takes its categories in turns, starting at a different one in
-    neighboring cells (category index by ascending id, minus cell x, minus
-    cell y, modulo the cell's number of categories). Within a category, the
-    places nearest the cell's centre come first.
-  - Round 1 is the first place of every cell, round 2 the second, and so on.
-    Within a round, the places nearest the centre of the box come first
-    (straight-line distance in degrees); remaining ties are ordered by id.
+- **Fields.** Name required (may repeat). Location optional, in the Indonesia box.
+- **Attributes** are validated against the category's fields: types `text`,
+  `number`, `boolean`, `select` (one of `options`), `range` (`{min, max}`,
+  `min ≤ max`), `date` (`YYYY-MM-DD`). Required fields must be present and
+  non-null (text non-blank); unknown keys are rejected; `null` optional fields
+  are dropped; non-objects are rejected.
+- **Create/Update.** Every validation failure, including an unknown category or
+  sub-district, is `400 VALIDATION_ERROR`. Update validates before looking up the
+  place (unknown → `404 PLACE_NOT_FOUND`) and keeps the rating and medias.
+- **Get.** Unknown → `404 PLACE_NOT_FOUND`.
+- **Delete.** `204`, then `404`. Medias are deleted and their keys queued in
+  `STORAGE_DELETIONS` in the same statement; reviews are deleted; approved
+  suggestions keep their status with `place_id = null`.
+- **List (`GET /places`)** returns `{places, total}`; `total` counts all matches
+  before paging. Filters combine with AND; empty parameters count as absent.
+  - `sub_district_id`: unknown → `404 SUB_DISTRICT_NOT_FOUND`.
+  - `category_id`: comma list, matches any; unknown → `404 CATEGORY_NOT_FOUND`,
+    malformed → `INVALID_CATEGORY_ID`.
+  - `q`: case-insensitive literal substring of name, address, description, or
+    category name (not attributes).
+  - `limit`: positive integer (`INVALID_LIMIT`); absent or >100 becomes 100.
+  - `offset`: non-negative integer (`INVALID_OFFSET`).
+  - `bbox=west,south,east,north`: valid lon/lat with `west ≤ east`,
+    `south ≤ north` (`INVALID_BBOX`); edges inclusive; places without a location
+    are excluded.
+  - **Order.** Without `bbox`, by id. With `bbox`, **spread over the box**: the
+    box is split into about `limit` power-of-two cells anchored at 0,0; each
+    cell rotates through its categories (starting offset varies by cell), nearest
+    to the cell centre first; round *n* takes the *n*-th place of every cell,
+    nearest the box centre first, ties by id. The order depends on `limit`, so
+    pages must share one.
+  - **Cache.** Lists with a `sub_district_id` are served from a Redis index and
+    must match the uncached result exactly. Others are never cached.
+- **Medias** (max 10, positions `1..n`):
+  - `POST /places/{id}/medias/upload-url {content_type}` presigns an upload under
+    `places/{id}` (unknown place → 404).
+  - `POST /places/{id}/medias {upload_key}` promotes and appends it, returning
+    the place. Concurrent adds never exceed 10. An 11th → `409
+    MEDIA_LIMIT_REACHED`. If storing fails, the promoted object is deleted.
+  - `DELETE /places/{id}/medias/{mediaId}` → `204`, queues the key, shifts later
+    medias down. Not this place's / unknown → `404 MEDIA_NOT_FOUND`.
+  - Upload errors → `400 VALIDATION_ERROR`. No reordering.
+- **Categories.** `GET /places/categories[/{id}]` return
+  `{id,name,slug,code,label,color,fields[]}`, ordered by id, fields by
+  `sort_order`. Each field: `{id, category_id, key, label, data_type, required,
+  options|null, sort_order}`. Unknown → `404 CATEGORY_NOT_FOUND`.
 
-  `offset` skips the first places in that order and `limit` keeps the first of
-  the rest. Because `limit` sizes the grid, the order depends on it, so pages
-  must share one `limit`. A capped map view shows one place per cell before a
-  second from any, instead of the places nearest its centre. Filters combine
-  with AND, and an empty parameter counts as absent.
-  - `sub_district_id`: a positive int64. An unknown id returns `404
-    SUB_DISTRICT_NOT_FOUND`.
-  - `category_id`: a comma list of positive int64s that matches any of them.
-    Repeated ids add no duplicate rows. An unknown id returns `404
-    CATEGORY_NOT_FOUND`. A malformed list returns `INVALID_CATEGORY_ID`.
-  - `q`: trimmed, and blank means no search. Case-insensitive substring match
-    on name, address, short description, and category name. `%` and `_` are
-    literal. Attributes are **not** searched.
-  - `limit`: a positive integer, otherwise `INVALID_LIMIT`. An absent limit, or
-    one above 100, is replaced by 100 (`maxLimit`), so no list is unbounded and a
-    client cannot ask for more. `total` still counts every match, so a client can
-    tell when the list was cut off. The web map sends a limit set from its
-    size on screen: one place per 120×120 px square, from 20 to 100, kept
-    across kecamatan changes (20 on a first visit until the map is moved).
-    Before the map has a view, it sends the `sub_district_id` with its
-    boundary's extent as `bbox`, so the first page is spread over the
-    kecamatan too. The web side is untested.
-  - `offset`: a non-negative integer, otherwise `INVALID_OFFSET`.
-  - `bbox=west,south,east,north`: four finite numbers with lon in ±180, lat in
-    ±90, `west ≤ east`, and `south ≤ north`, otherwise `INVALID_BBOX`. Edges
-    count as inside, and places without a location are excluded. It also sets
-    the order (see above). A GiST index on `PLACES.location` is required.
-  - **Cache.** A list with a `sub_district_id` is served from an index of place
-    ids, categories, and coordinates kept in Redis, one entry per sub-district, category
-    set, and search term. `bbox`, `limit`, and `offset` are applied to the
-    index, so they share that entry. A cached list has the same places, order,
-    and `total` as the uncached one, on the first read and on later ones. A
-    list without a `sub_district_id` is never cached, and an unknown
-    sub-district is still `404` and is not cached. See §10 for how stale a
-    cached list can be.
-- **Get (`GET /places/{id}`).** Returns `404 PLACE_NOT_FOUND` for an unknown
-  place.
-- **Update (`PUT /places/{id}`).** The body has the same shape and validation as
-  `POST /places`.
-  - Nullable fields are `address`, `location`, `operating_hours`,
-    `estimated_price_range`, and `short_description`. Absent or `null` attributes
-    become `{}`.
-  - The attributes in the body are validated against the category in the body.
-  - Unknown category or sub-district returns `400 VALIDATION_ERROR`. An unknown
-    place returns `404` when the body is valid; validation runs before the place
-    is looked up.
-  - Edits keep the rating and the medias.
-- **Delete (`DELETE /places/{id}`).** Returns `204`, and a second delete
-  returns `404`. The place's medias are deleted with it and the **repository
-  queues their keys in `STORAGE_DELETIONS`** in the same statement; the
-  service deletes nothing directly. Other places' medias are untouched. The
-  place's reviews are deleted with it. Approved suggestions that point to the
-  place keep their status, with `place_id = null`.
-- **Medias.** A place has at most `storage.MaxMedias` (10) images, each a
-  `MEDIAS` row linked through `PLACE_MEDIAS` at a position 1–10.
-  - `POST /places/{id}/medias/upload-url {content_type}` presigns an upload
-    under `places/{id}` and returns `{upload_key, upload_url, method, headers,
-    expires_at}`. An unknown place returns 404 before anything is presigned.
-  - `POST /places/{id}/medias {upload_key}` promotes the upload, stores the
-    media **after the last one** (position `n + 1`), and returns `200` with the
-    place.
-    The place row is locked while the position is chosen, so concurrent adds
-    never share a position or exceed the limit (14 concurrent adds: exactly
-    10 succeed).
-  - An 11th media returns `409 MEDIA_LIMIT_REACHED` and stores nothing.
-  - If storing fails after promotion (including the limit), the promoted
-    object is deleted (best effort, failures ignored).
-  - `DELETE /places/{id}/medias/{mediaId}` returns `204`, deletes the media,
-    and queues its key in `STORAGE_DELETIONS`. Later medias shift down one
-    position, so positions stay `1..n` and the next add goes to the end. A
-    media of another place, an
-    unknown media, or an unknown place returns `404 MEDIA_NOT_FOUND`; an
-    invalid media id returns `400 INVALID_MEDIA_ID`.
-  - Promotion and type errors return `400 VALIDATION_ERROR`.
-  - There is no reorder endpoint.
-- **Categories.** `GET /categories` and `GET /categories/{id}` (served in
-  production at `/v1/places/categories` and `/v1/places/categories/{id}`, see §9) return
-  `{id,name,slug,code,label,color,fields[]}`. `fields` is always an array,
-  sorted by `sort_order` 1..n. `GET /categories` lists categories ordered by
-  id. Each field is `{id, category_id, key, label,
-  data_type, required, options|null, sort_order}`. Invalid ids return
-  `INVALID_CATEGORY_ID`, and unknown ids return `404 CATEGORY_NOT_FOUND`.
-
-  The categories are defined by migrations, so the set below is not covered by
-  the unit tests (see §10). `color` is grouped by theme, and the web app tells
-  categories of one hue apart by their `code` and icon.
-
-  | Slug | Label | Code | Color | Required fields |
-  | ---- | ----- | ---- | ----- | --------------- |
-  | `affordable-food-warung` | Warung | W | chili | `halal`, `serving_style` |
-  | `minimarket` | Minimarket | T | chili | `store_type` |
-  | `water-gas` | Air & Gas | G | chili | `service` |
-  | `tailor` | Penjahit | J | plum | `specialty`, `turnaround_days` |
-  | `print-copy` | Fotokopi | F | plum | none |
-  | `local-clinic` | Klinik | K | cat | `bpjs_accepted` |
-  | `hospital` | Rumah Sakit | R | cat | `igd_24h`, `bpjs_accepted`, `ownership` |
-  | `puskesmas` | Puskesmas | S | cat | `open_24h` |
-  | `police-post` | Pos Polisi | P | cat | `facility_type`, `open_24h` |
-  | `laundry` | Laundry | L | sign | `service_type`, `turnaround_hours` |
-  | `bank-atm` | Bank & ATM | B | sign | `banks` |
-  | `transit-stop` | Halte/Stasiun | H | sign | `mode` |
-  | `public-service` | Layanan Publik | U | sign | `office_type` |
-  | `pharmacy` | Apotek | A | board | `accepts_prescriptions` |
-  | `mosque` | Masjid | M | board | `facility_type`, `friday_prayer` |
-  | `worship-other` | Ibadah Lain | I | board | `religion` |
+  The 16 categories come from migrations (untested): Warung, Minimarket, Air &
+  Gas (chili); Penjahit, Fotokopi (plum); Klinik, Rumah Sakit, Puskesmas, Pos
+  Polisi (cat); Laundry, Bank & ATM, Halte/Stasiun, Layanan Publik (sign);
+  Apotek, Masjid, Ibadah Lain (board).
 
 ### 6.4 Reviews (`internal/module/reviews`)
 
-- **`GET /places/{id}/reviews`** is public. It lists newest first, and on a
-  tie the higher id comes first. An unknown place returns `404
-  PLACE_NOT_FOUND`. A place without reviews returns `[]`.
-- **`POST /places/{id}/reviews`** requires auth. The body is `{rating, comment?}`.
-  - The place comes from the path and the author from the token.
-  - `rating` must be an integer from 1 to 5. A string or fractional rating
-    returns `INVALID_BODY`. A missing or out-of-range rating returns
-    `VALIDATION_ERROR`.
-  - The comment is trimmed, a blank comment is stored as absent, and the limit
-    is 1000 code points.
-  - **One review per user per place**, so a second review returns `409
-    ALREADY_REVIEWED`. Under concurrent double submits, exactly one review is
-    created.
-  - Each review atomically updates the place's `rating_count` and
-    `rating_sum`. The totals always match the stored reviews, including under
-    concurrency.
-- **Review response:** `{id, place_id, rating, comment, created_at (RFC 3339),
-  user{id,name}}`.
-- There are no edit or delete endpoints for reviews.
+- `GET /places/{id}/reviews` (public): newest first, ties by higher id; unknown
+  place → 404.
+- `POST /places/{id}/reviews {rating, comment?}` (signed in): `rating` integer
+  1–5 (wrong type → `INVALID_BODY`, missing/out of range → `VALIDATION_ERROR`).
+  One review per user per place (`409 ALREADY_REVIEWED`, holds under
+  concurrency). Updates `rating_count`/`rating_sum` atomically.
+- Response: `{id, place_id, rating, comment, created_at, user{id,name}}`. No
+  edit or delete.
 
-### 6.5 Sub-districts / kecamatan (`internal/module/subdistricts`)
+### 6.5 Sub-districts (`internal/module/subdistricts`)
 
 **Response:** `id, name, slug, flood_history, safety_crime_information,
-estimated_daily_spending, medias, boundary`. `medias` has the same
-shape and ordering as a place's (`[]` when there are none). `boundary` is a
-GeoJSON `MultiPolygon` or `null`; it is **not** writable through create and
-update bodies, which ignore it (see **Boundary** below).
+estimated_daily_spending, medias, boundary` (GeoJSON MultiPolygon or `null`).
 
-- **Validation.** The name is trimmed and must have 1–100 code points;
-  violations return `ErrInvalidName`, which covers both blank and too long. The
-  slug is trimmed and must have 1–100 code points (`ErrInvalidSlug`).
-  `estimated_daily_spending` must be between 0 and 99,999,999.99, the range of
-  `DECIMAL(10,2)` (`ErrInvalidEstimatedDailySpending`).
-  `flood_history` and `safety_crime_information` are trimmed, and blank values
-  are stored as `null`.
-- **Uniqueness.** Names are unique **case-insensitively**, compared after
-  trimming. Slugs are unique **case-sensitively**, so `MENTENG` is allowed next
-  to `menteng`. A conflict returns `409 SUB_DISTRICT_EXISTS`, and the check
-  holds under concurrent creates. Renaming a sub-district to its own name, or
-  changing only the case, is allowed. Deleting a sub-district frees its name
-  and slug.
-- **List.** Ordered by id.
-- **Update (`PUT /subdistricts/{id}`).** The body has the same shape and
-  validation as `POST /subdistricts`. `flood_history`,
-  `safety_crime_information`, and `estimated_daily_spending` are nullable, and
-  are cleared when absent or `null`. The medias and the boundary are kept.
-- **Delete.**
-  - A sub-district that places still reference returns `409
-    SUB_DISTRICT_IN_USE` and is not deleted.
-  - Suggestions do **not** block deletion; they are deleted with the
-    sub-district.
-  - The medias are deleted with it, and the repository
-    **queues their keys in `STORAGE_DELETIONS`** in the same statement; the
-    service deletes nothing directly. The cleanup worker removes the objects.
-    A sub-district that is still in use keeps all its images and queues
-    nothing.
-- **Medias.** The same rules and routes as place medias, under
-  `/subdistricts/{id}/medias` (stored under `subdistricts/{id}/medias`, linked
-  through `SUB_DISTRICT_MEDIAS`): presign, add after the last media up to 10
-  (`409 MEDIA_LIMIT_REACHED`), and delete, which shifts later medias down one
-  position (`404 MEDIA_NOT_FOUND`, `400 INVALID_MEDIA_ID`). Adding a media
-  never touches the boundary.
-- **Boundary (`PUT /subdistricts/{id}/boundary`, admin).** The body is a
-  GeoJSON `Polygon` or `MultiPolygon`; a Polygon is stored and returned as a
-  MultiPolygon with the same coordinates. It replaces any previous boundary,
-  leaves every other field and the medias unchanged, and returns `200` with the
-  sub-district. There is no way to clear a boundary.
-  - `400 INVALID_BODY`: any other GeoJSON type, no type, no polygons, a polygon
-    without rings, a ring that is not closed or has fewer than four positions,
-    a position that is not `[lon, lat]`, or coordinates outside WGS84. Such a
-    body never reaches the service.
-  - `400 VALIDATION_ERROR` (`ErrInvalidBoundary`): a vertex outside the
-    Indonesia box (edges included), checked by the service before storage, or
-    an area that crosses itself (for example a bow tie), rejected by a `CHECK
-    (ST_IsValid(boundary))` on `SUB_DISTRICTS`. A rejected boundary leaves the
-    stored one unchanged. Holes and several polygons are allowed.
-  - `404 SUB_DISTRICT_NOT_FOUND` for an unknown sub-district.
+- **Validation.** Name and slug 1–100; `estimated_daily_spending` 0 to
+  99,999,999.99.
+- **Uniqueness.** Name case-insensitive, slug case-sensitive; conflict → `409
+  SUB_DISTRICT_EXISTS` (holds under concurrency).
+- **List** by id. **Update** is a PUT that keeps medias and boundary; create and
+  update ignore `boundary`.
+- **Delete.** Referenced by places → `409 SUB_DISTRICT_IN_USE`, nothing changes.
+  Otherwise its suggestions are deleted and its media keys queued.
+- **Medias.** Same rules as places under `/subdistricts/{id}/medias`.
+- **Boundary (`PUT /subdistricts/{id}/boundary`, admin).** Body is a GeoJSON
+  Polygon or MultiPolygon (stored as MultiPolygon), replacing the old one and
+  returning the sub-district. Malformed GeoJSON → `INVALID_BODY`; a vertex
+  outside Indonesia or a self-crossing shape → `VALIDATION_ERROR`; unknown → 404.
+  Holes and multiple polygons are fine. A boundary cannot be cleared.
 
 ### 6.6 Suggestions (`internal/module/suggestions`)
 
-Any signed-in user can submit suggestions and list their own. Admins can list,
-read, approve, and reject them. The admin role check happens in the API router.
+- **Submit (`POST /suggestions`).** Place fields plus `note`. **Location is
+  required.** Attributes must be an object but are not checked against the
+  category until approval. Status is always `pending`. Unknown sub-district or
+  category → `VALIDATION_ERROR`. Never creates a place.
+- **Pending limit.** 5 per user → `429 TOO_MANY_PENDING_SUGGESTIONS` (holds
+  under concurrency).
+- **Response:** place fields plus `note, status, rejection_reason, place_id,
+  reviewed_at, created_at, user{id,name}`. `reviewed_by` is never exposed.
+- **Listing.** `/suggestions/mine`: newest first. `/suggestions?status=` (admin):
+  oldest first; `pending|approved|rejected` or empty, else `400 INVALID_STATUS`.
+  `/suggestions/{id}` (admin): unknown → `404 SUGGESTION_NOT_FOUND`.
+- **Approve (admin).** Body is the final place (same shape as `POST /places`).
+  Not pending → `409 ALREADY_REVIEWED`. The place is created through the place
+  service (validation errors leave it pending), then the suggestion is marked
+  approved; if marking fails, the place is deleted. Concurrent approvals create
+  exactly one place. The original submission is kept.
+- **Reject (admin) `{reason?}`.** Not pending → 409. The author sees the reason.
+- Reviewed suggestions are immutable. Deleting a user or sub-district deletes
+  their suggestions.
 
-- **Submit (`POST /suggestions`).** The body has the place fields plus `note`.
-  - **Location is required** (unlike places) and must lie in the Indonesia box.
-    Missing or out-of-range locations return `ErrInvalidLocation`.
-  - The name is trimmed and limited to 150 code points.
-  - The optional texts (`address`, `operating_hours`, `estimated_price_range`,
-    `short_description`, `note`) are trimmed, and blank values are stored as
-    absent. The note is limited to 1000 code points. `address` is limited to 255,
-    `operating_hours` to 255, and `estimated_price_range` to 100.
-  - Attributes must be a JSON object (absent or `null` become `{}`). They are
-    **not** checked against the category until approval, so unknown keys and
-    missing required fields are accepted at submit time.
-  - The status is always `pending` and client-sent review fields are ignored.
-  - An unknown sub-district or category returns `400 VALIDATION_ERROR`.
-  - Submitting never creates a place.
-- **Pending limit.** `MaxPendingPerUser = 5` per user. Exceeding it returns
-  `429 TOO_MANY_PENDING_SUGGESTIONS`, and the limit holds under concurrent
-  submits. Approved and rejected suggestions do not count toward it.
-- **Response:** `id, sub_district_id, category_id, name, address, location,
-  operating_hours, estimated_price_range, short_description, attributes, note,
-  status, rejection_reason, place_id, reviewed_at, created_at, user{id,name}`.
-  `reviewed_by` is **never** exposed.
-- **Listing.**
-  - `GET /suggestions/mine` lists the caller's own suggestions, newest first;
-    on a tie the higher id comes first.
-  - `GET /suggestions?status=` (admin) lists oldest first; on a tie the lower id
-    comes first. `status` accepts `pending`, `approved`, or `rejected`. It is
-    case-sensitive, an empty value means all, and anything else returns
-    `400 INVALID_STATUS`.
-  - `GET /suggestions/{id}` (admin) returns `INVALID_SUGGESTION_ID` for an
-    invalid id and `404 SUGGESTION_NOT_FOUND` for an unknown one.
-- **Approve (`POST /suggestions/{id}/approve`, admin).** The body is the
-  **final place**, in the same shape as `POST /places`, so the admin can
-  correct the suggestion.
-  1. A place without a location returns `ErrInvalidLocation` before anything
-     is read.
-  2. The suggestion must exist (`404`) and be pending; otherwise the response
-     is `409 ALREADY_REVIEWED` and no place is created.
-  3. The place is created through the **place service**, with full place
-     validation. Validation errors return `400 VALIDATION_ERROR` and the
-     suggestion stays pending.
-  4. The suggestion is marked approved with `place_id`, `reviewed_by`, and
-     `reviewed_at`.
-  5. If marking fails (another admin reviewed it, or it was deleted), the
-     created place is deleted (best effort). Under concurrent approvals exactly
-     one place exists.
-  6. The suggestion keeps the content the user originally submitted.
-- **Reject (`POST /suggestions/{id}/reject {reason?}`, admin).** The body must
-  be a JSON object. The reason is trimmed, a blank reason is stored as absent,
-  and the limit is 1000 code points (`ErrReasonTooLong`, which returns 400).
-  The suggestion must be pending, otherwise `409`. The author sees the reason
-  through `/mine`.
-- **Reviewed suggestions are immutable.** Any second approve or reject returns
-  `409` and changes nothing.
-- **Cascades.** Deleting a sub-district or a user deletes their suggestions.
-  Deleting an approved place keeps the suggestion approved with
-  `place_id = null`.
+### 6.7 Media storage (`internal/storage`)
 
-### 6.7 Image storage (`internal/storage`)
+- **Types:** `image/jpeg`, `image/png`, `image/webp` (≤5 MB), `video/mp4`,
+  `video/webm` (≤50 MB). Anything else, or parameters → `ErrInvalidMediaType`.
+- **Presign** returns a unique key `uploads/{prefix}/{uuid}.{ext}` and a presigned
+  PUT URL on the public endpoint, valid for `UploadTTL`, with the content type
+  signed.
+- **Promote** checks the key format (`ErrInvalidUploadKey`), existence
+  (`ErrMediaNotUploaded`), size, and type/extension match; rejected uploads are
+  deleted. Otherwise it copies to `{prefix}/{name}`, deletes the upload, and
+  returns a `Media`. All errors map to `400 VALIDATION_ERROR`.
+- Media responses are `{id, url, content_type, size, position}`; `url` is the
+  public base plus key.
 
-- **Allowed types.** Exactly `image/jpeg` (`.jpg`), `image/png` (`.png`),
-  `image/webp` (`.webp`), `video/mp4` (`.mp4`), and `video/webm` (`.webm`).
-  Content types with parameters are rejected. Any other type (including
-  `video/quicktime`) returns `ErrInvalidMediaType` without touching the store.
-- **Presign.** The key is `uploads/{prefix}/{lowercase-uuid}.{ext}` and is
-  unique on every call. The URL is a presigned PUT on the **public endpoint**,
-  valid for `UploadTTL`. The Content-Type is signed, so uploading with a
-  different type returns 403, and expired URLs are refused.
-- **Promote(prefix, uploadKey).**
-  1. The key must be exactly `uploads/{prefix}/{lowercase-uuid}.{allowed-ext}`.
-     Other prefixes, nesting, traversal, already-promoted keys, non-UUID names,
-     and missing extensions return `ErrInvalidUploadKey` without touching the
-     store.
-  2. If the object is missing, the result is `ErrMediaNotUploaded`.
-  3. If an image is larger than `MaxImageSize` (5 MB), the result is
-     `ErrImageTooLarge`; if a video is larger than `MaxVideoSize` (50 MB), it
-     is `ErrVideoTooLarge`. Both map to `400 VALIDATION_ERROR`. A disallowed
-     type, or a type that does not match the extension (including an image
-     type for a video extension and the reverse), returns
-     `ErrInvalidMediaType`. In these rejected cases the
-     upload is deleted (best effort).
-  4. Otherwise the object is copied to `{prefix}/{name}`, the upload is deleted
-     (failures ignored), and a `Media` with the new key and the stored content
-     type and size is returned.
-- **Media.** `Media{ID, Key, ContentType, Size, Position}` is a `MEDIAS` row
-  (`key` unique, `content_type`, `size_bytes`). `ToMediaResponses` turns medias
-  into `{id, url, content_type, size, position}` in order and never returns
-  `nil`, so no medias encode as `[]`. `MaxMedias` is 10, matching the
-  position `CHECK`s of `PLACE_MEDIAS` and `SUB_DISTRICT_MEDIAS`.
-- **PublicURL** is `base + "/" + key`; a trailing slash on the base is
-  tolerated.
-- **S3 adapter** (Garage locally and in tests). `Stat` returns size and content
-  type, or `ErrObjectNotFound`. `Copy` fails when the source is missing.
-  `Delete` is idempotent.
+### 6.8 Storage cleanup (`internal/module/storagecleanup`)
 
-### 6.8 Storage cleanup queue (`internal/module/storagecleanup`)
+`STORAGE_DELETIONS` queues keys of deleted medias. `cmd/cleanup` runs one batch
+of up to 100 due keys: success removes the row; failure records the error and
+retries in 1 hour without failing the run. Overlapping runs may read the same
+rows, which is harmless because deletes are idempotent.
 
-The `STORAGE_DELETIONS` table has columns `key`, `attempts`, `next_attempt_at`,
-and `last_error`. Images enter the queue when a place or sub-district media is
-deleted, and when a place or
-sub-district is deleted. `cmd/cleanup`
-runs one batch and exits, so it must be scheduled.
+## 7. Error codes
 
-- **`Run`** gets up to 100 due rows and deletes each object.
-  - When a delete succeeds, the row is removed from the queue.
-  - When a delete fails, the row is rescheduled to be due again in 1 hour,
-    whatever the number of earlier failures, and the error message is recorded.
-  - A failed delete does not fail the run, and processing continues with the
-    next row.
-  - If getting the due rows fails, nothing is deleted and the error is
-    returned. If removing or rescheduling a row fails, the error is returned.
-- **`GetDue(limit)`** returns the keys of due rows, longest overdue first. It does not
-  change the queue, so the rows stay due until they are removed or
-  rescheduled, and runs that overlap get the same rows. That is harmless,
-  because the storage delete and `Remove` are idempotent.
-- **`Remove`** is idempotent.
-- **`Reschedule`** increments `attempts`, sets `last_error`, and moves
-  `next_attempt_at` to now + delay.
-
-## 7. Error code catalogue
-
-| Code | Status | Raised by |
-| ---- | ------ | --------- |
-| `INVALID_BODY` | 400 | Every JSON endpoint (undecodable or wrongly-typed body) |
-| `VALIDATION_ERROR` | 400 | Business-rule violations: names, passwords, attributes, locations, sub-district boundaries outside Indonesia or crossing themselves, ratings, lengths, unknown referenced sub-district or category on writes, and image type, key, size, or upload errors |
-| `INVALID_PLACE_ID` / `INVALID_SUB_DISTRICT_ID` / `INVALID_CATEGORY_ID` / `INVALID_SUGGESTION_ID` / `INVALID_MEDIA_ID` | 400 | Bad path id, or a bad list filter for places |
+| Code | Status | When |
+| ---- | ------ | ---- |
+| `INVALID_BODY` | 400 | Undecodable or wrongly typed body |
+| `VALIDATION_ERROR` | 400 | Business-rule violations, unknown referenced sub-district/category in writes, upload errors |
+| `INVALID_*_ID` (place, sub-district, category, suggestion, media) | 400 | Bad path id or `GET /places` filter |
 | `INVALID_LIMIT` / `INVALID_OFFSET` / `INVALID_BBOX` | 400 | `GET /places` |
 | `INVALID_STATUS` | 400 | `GET /suggestions` |
-| `UNAUTHORIZED` | 401 | A missing, malformed, expired, or otherwise invalid access token, or no authenticated user in the request context |
-| `FORBIDDEN` | 403 | A valid token whose role is not allowed on an admin-only route |
+| `UNAUTHORIZED` | 401 | Missing or invalid access token |
 | `INVALID_CREDENTIALS` / `INVALID_REFRESH_TOKEN` | 401 | Auth |
-| `PLACE_NOT_FOUND` / `SUB_DISTRICT_NOT_FOUND` / `CATEGORY_NOT_FOUND` / `SUGGESTION_NOT_FOUND` | 404 | Unknown resource in the path. For `GET /places`, also unknown filter ids |
-| `MEDIA_NOT_FOUND` | 404 | Deleting a media its place or sub-district does not have |
-| `EMAIL_TAKEN` / `SUB_DISTRICT_EXISTS` / `SUB_DISTRICT_IN_USE` / `ALREADY_REVIEWED` | 409 | Conflicts (`ALREADY_REVIEWED` covers both reviews and suggestions) |
-| `MEDIA_LIMIT_REACHED` | 409 | Adding an 11th media to a place or sub-district |
-| `TOO_MANY_PENDING_SUGGESTIONS` | 429 | Suggestion pending limit |
-| `INTERNAL_ERROR` | 500 | Anything unexpected, with no details |
+| `FORBIDDEN` | 403 | Non-admin on an admin route |
+| `*_NOT_FOUND` (place, sub-district, category, suggestion, media) | 404 | Unknown resource, or unknown `GET /places` filter id |
+| `EMAIL_TAKEN` / `SUB_DISTRICT_EXISTS` / `SUB_DISTRICT_IN_USE` / `ALREADY_REVIEWED` / `MEDIA_LIMIT_REACHED` | 409 | Conflicts |
+| `TOO_MANY_PENDING_SUGGESTIONS` | 429 | Pending limit |
+| `INTERNAL_ERROR` | 500 | Anything unexpected |
 
-Note that a missing sub-district or category returns **404** when used as a
-`GET /places` filter but **400 VALIDATION_ERROR** when referenced in a write
-body.
+An unknown sub-district or category is **404** as a `GET /places` filter but
+**400 VALIDATION_ERROR** in a write body.
 
-## 8. User stories → backend support
+## 8. User stories
 
 | Story | Backend support |
 | ----- | --------------- |
-| US-01 Browse pins in the viewport | `GET /places?bbox=…`; the server returns at most 100 places, spread over the viewport by grid cell and category, and `total` lets the UI show "N results" when the list is truncated. Clustering and empty states are frontend work |
-| US-02 Pin details (6 fields) | Place response: name, category, address/location, operating hours, price range, description. Missing values are `null`, so the UI can show placeholders |
-| US-03 Kecamatan dropdown | `GET /subdistricts` (ordered by id) |
-| US-04 Kecamatan info modal | Flood, safety, and spending fields plus a GeoJSON `boundary` in place of the static map image, with `null` for missing data |
-| US-05 Category filter | `GET /categories`; `category_id=1,2` matches any of the listed ids |
-| US-06 Keyword search | `q` matches name, address, description, and category name, case-insensitively and literally |
-| US-07 Filters stay in sync with the map | All filters and `bbox` combine with AND; `total` reflects the combined filter |
+| US-01 Browse pins in viewport | `GET /places?bbox=…`, ≤100 spread places, `total` |
+| US-02 Pin details | Place response, `null` for missing values |
+| US-03 Kecamatan dropdown | `GET /subdistricts` |
+| US-04 Kecamatan info | Flood, safety, spending, boundary |
+| US-05 Category filter | `category_id=1,2` |
+| US-06 Keyword search | `q` |
+| US-07 Filters synced with map | Filters and `bbox` AND together; `total` reflects them |
 
-## 9. Where the design docs and the tests disagree
+## 9. Design docs vs. tests
 
-When they disagree, the tests win. The docs record the history:
-
-- **One category per place.** The ERD's many-to-many `PLACE_CATEGORY` was
-  replaced: a place has one `category_id`, and categories define typed custom
-  fields stored as `attributes`.
-- **Kecamatan info is folded into `SUB_DISTRICTS`** (Week 8). The ERD's
-  `static_map_image_url` text column became an uploaded image and was then
-  replaced by a PostGIS `boundary GEOMETRY(MultiPolygon, 4326)` (the Could
-  Have GeoJSON overlay). Up to 10 general images (medias) were added.
-- **Coordinates.** The ERD's lat/lng columns became one PostGIS
-  `GEOMETRY(Point, 4326)`. The API uses GeoJSON.
-- **Paths and error codes.** Week 9–10 reports list `/places/`,
-  `/places/categories/`, and lower-case codes such as `invalid_sub_district_id`.
-  The handler tests use `/places`, `/categories`, `/subdistricts`, and UPPER_SNAKE
-  codes. The real router (checked by the router test) serves everything under
-  `/v1`, and the categories live at `/v1/places/categories`, not `/v1/categories`.
-- **Scope.** The ERD and Week 9 report exclude users, reviews, admin, and
-  suggestions, and describe a read-only API. Those features now exist (see §4).
-- **Voting.** "Upvote / downvote" became 1–5 star reviews.
+- A place has **one** `category_id` with typed `attributes` (not the ERD's
+  many-to-many).
+- Kecamatan info lives in `SUB_DISTRICTS`; the static map image became a PostGIS
+  `boundary`.
+- Coordinates are PostGIS points exposed as GeoJSON, not lat/lng columns.
+- Routes are under `/v1` with UPPER_SNAKE codes; categories are at
+  `/v1/places/categories`.
+- Users, reviews, admin, and suggestions exist despite the ERD's read-only scope.
+- Up/down votes became 1–5 star reviews.
 
 ## 10. Gaps and open questions
 
-These are observations, not decisions. Raise them in PLANNING before relying on
-them.
-
-- **No tests cover:** middleware beyond what the router test exercises
-  (`WithAuth` edge cases, recovery, the request-body cap), `config`,
-  `httpx` (except `DecodeJSON`), `postgis`, `database`, `cmd/*` (API, migrate, seed), seed data, the
-  SQL in the repositories, and the set of categories and fields that the
-  migrations define (including the category list order).
-- **Specified but untested** (changed in the 2026-11-09 hardening pass, so they
-  are not yet part of the tested contract):
-  - Request bodies over 1 MiB fail as `400 INVALID_BODY` (`WithMaxBody`).
-  - The server sets read-header (10s), read (30s), write (30s), and idle (120s)
-    timeouts.
-  - Startup fails on an invalid `JWT_EXPIRES_MINUTES`,
-    `REFRESH_TOKEN_EXPIRES_DAYS`, or `COOKIE_SECURE`, and on a `JWT_SECRET`
-    shorter than 32 bytes.
-  - Migrations add indexes on `PLACES(sub_district_id)`, `PLACES(category_id)`,
-    `PLACE_SUGGESTIONS(user_id, status)`, and `PLACE_SUGGESTIONS(place_id)`,
-    and a `CHECK` that `USERS.role` is `user` or `admin`.
-  - Cleanup after a failed approval or image store ignores request
-    cancellation, so a dropped request still removes the orphan.
-  - Every command logs through `slog`, and the `log` package and chi's request
-    log share its format.
-- **Specified but untested** (changed in the 2026-11-11 cleanup pass):
-  - The API sends no CORS headers: the web app reaches it through a
-    same-origin proxy (Vite in development, the web container in production).
-    `CORS_ALLOWED_ORIGIN` only sets the image bucket's CORS rule.
-  - `cmd/cleanup` needs only `DATABASE_URL` and the `STORAGE_*` settings.
-    `cmd/migrate` and `cmd/seed` require `DATABASE_URL` and no longer fall back
-    to a default (the Makefile still supplies one). `cmd/seed` also needs the
-    `STORAGE_*` settings and a set-up bucket, as it uploads images.
-  - Migrations add a `CHECK` that `CATEGORY_FIELDS.data_type` is one of the six
-    field types, and give `PLACE_SUGGESTIONS` the `PLACES` column limits
-    (`address` 255, `operating_hours` 255, `estimated_price_range` 100) and its
-    attributes-is-an-object `CHECK`.
-- **Refresh-token storage.** Auth tests use a fake map store. The API
-  uses `auth.NewRedisRefreshStore` (keys `auth:refresh:<hash>`, expiry set by
-  Redis, `Consume` is an atomic `GETDEL`, so it needs Redis 6.2+), so sessions
-  survive a restart and are shared between instances. The API pings Redis at
-  startup and exits if `REDIS_URL` is invalid or unreachable. None of this is
-  tested: no auth test runs against a real Redis.
-- **Places list cache, untested parts.** The cached index (keys
-  `places:index:v2:<hash>`) lives for 30 seconds and nothing clears it sooner, so
-  a cached list can miss a place created, edited, or deleted in the last 30
-  seconds. A Redis failure is meant to fall back to PostgreSQL without failing
-  the request. Neither the lifetime nor the fallback is tested.
-- **Video medias, web.** The web app accepts the same five types with the
-  same limits, plays videos with controls in the media card and gallery, and
-  labels the add button "Tambah file". Untested, like the rest of `web/`.
-- **Medias, known gaps.**
-  - If a media add commits at the moment its place or sub-district is
-    deleted, that media row and its object can be left behind without being
-    queued for deletion.
-  - Media positions cannot be reordered.
-  - `MEDIAS` has no owner type: a row belongs to whichever link references it.
-- **Unspecified values:** `UploadTTL`, `MaxImageSize`, `MaxVideoSize`, how and when the
-  cleanup worker runs, and how long access tokens last in production.
-- **Unspecified behaviors:** review editing or deletion; a "current user" endpoint; listing users.
-- **Frontend (`web/`)** is outside the backend test workflow. US-01
-  clustering, placeholders, and filter/viewport sync are untested there. Its
-  admin area covers places and suggestions; it has no screens for creating or
-  editing sub-districts, their medias, or their boundary.
-- **Static map leftovers (2026-11-22).** The migration was edited in place,
-  so existing databases must be rebuilt; static map objects already in a
-  bucket are not queued for deletion.
-- **Spread cost.** Ordering a page with a `bbox` ranks every place in the box
-  (window functions in PostgreSQL, a sort in the cache), so it no longer stops
-  early on the GiST index. It took about 4 ms over the 1,092 seeded places;
-  it is untested at the 50,000 of `make seed-bulk`. There is still no
-  clustering.
-- **Load test script.** `scripts/k6/get-places.js` still reads the `X-Cache`
-  header, which `GET /places` no longer sends (removed 2026-11-16), so its
-  `cache_hit` metric always reports `none`. Not updated yet.
+- **Untested code:** middleware beyond the router test, `config`, most of
+  `httpx`, `postgis`, `database`, `cmd/*`, seed data, repository SQL, and the
+  migration-defined categories.
+- **Specified but untested:**
+  - 1 MiB body cap (`INVALID_BODY`); server timeouts (10s/30s/30s/120s).
+  - Startup fails on invalid env values or a `JWT_SECRET` under 32 bytes.
+  - Migration indexes and `CHECK`s (role, field data type, suggestion limits).
+  - Orphan cleanup ignores request cancellation.
+  - No CORS headers: the web app uses a same-origin proxy.
+  - Refresh tokens live in Redis (`GETDEL`, Redis 6.2+); the API exits if Redis
+    is unreachable at startup.
+  - The places cache lives 30 s with no invalidation, so lists can be 30 s
+    stale; Redis failure should fall back to PostgreSQL.
+- **Known gaps:** a media added while its owner is deleted can be orphaned;
+  medias cannot be reordered; `MEDIAS` has no owner type; bucket objects from the
+  old static maps were not queued (the migration was edited in place, so
+  databases must be rebuilt).
+- **Unspecified:** `UploadTTL`, production token lifetime, cleanup schedule,
+  review edit/delete, a current-user endpoint, listing users.
+- **Performance:** the `bbox` spread ranks every place in the box (~4 ms on
+  1,092 seeded places; untested at 50,000).
+- **Web (`web/`):** untested. No admin screens for sub-districts. The map sends
+  a `limit` sized to its screen area (20–100).
+- **`scripts/k6/get-places.js`** still reads the removed `X-Cache` header.
 
 ## Maintaining this file
 
-- Update this file in the same task as any change to backend behavior or the
-  API contract, **only after a VERIFICATION phase passes**, so it reflects the
-  verified contract. Do not update it for planned or unverified behavior.
-- Every behavior stated here must trace to a test. If a test changes the
-  contract, update the matching section and remove resolved items from §10.
-- Derive content from tests and from the user's approved specification, never
-  from production code.
-- Bump "Last updated" at the top and add an entry to the log below.
+- Update only after VERIFICATION passes, and only for verified behavior.
+- Every stated behavior must trace to a test or the user's approved spec, never
+  to production code. Remove resolved items from §10.
+- Bump "Last updated" and add a one-line change log entry.
 
 ### Change log
 
-| Date | Phase / change | Summary |
-| ---- | -------------- | ------- |
-| 2026-11-01 | Initial draft | Written from the planning docs and all 19 `*_test.go` files |
-| 2026-11-01 | Verification update | Null bodies on JSON endpoints return `INVALID_BODY`; length limits and bare-address email are validated; optional place and sub-district text is trimmed and blank is stored as absent; sub-district image deletes and replacements are queued in `STORAGE_DELETIONS`; a missing refresh cookie clears the cookie; §6.3 error name corrected; resolved §10 items removed |
-| 2026-11-05 | Verification update | Categories grew from 5 to 16 (migration `add_perantau_categories`) with themed colors, and `GET /categories` is ordered by id; seed data covers every new category; the web category filter became a Base UI dropdown |
-| 2026-11-09 | Verification update | Update routes changed from `PATCH` to `PUT`: an update takes the same body as create and replaces every editable field, so absent nullable fields are cleared and `{}` or a `null` required field is a `400 VALIDATION_ERROR`. The partial-update type `httpx.Optional` was removed |
-| 2026-11-09 | Verification update | Hardening pass. Route access (public, signed-in, admin) is now tested against the real router; `403 FORBIDDEN` added to the catalogue; the access-token rules (HS256, issuer, expiry) are tested; passwords are 8 to 128 code points, with an over-long login returning `INVALID_CREDENTIALS`, and at most 4 hashes run at once; `GET /places` limit defaults to and is capped at 1000; expired refresh tokens are swept from the in-memory store; the privacy rule now allows the caller's own email in auth responses; production paths (`/v1/places/categories`) recorded in §9; untested hardening (body cap, timeouts, env checks, indexes, role `CHECK`, logging) listed in §10 |
-| 2026-11-09 | Update | Production refresh tokens moved from process memory to Redis (`auth.NewRedisRefreshStore`); `cmd/api` pings Redis at startup and exits early on a bad `REDIS_URL`. Untested against a real Redis, so recorded in §10 only |
-| 2026-11-13 | Verification update | Multiple images (medias). New `MEDIAS`, `PLACE_MEDIAS`, and `SUB_DISTRICT_MEDIAS` tables replace `PLACES.image_key` and `SUB_DISTRICTS.image_key`; the static map is `SUB_DISTRICTS.static_map_media_id`. Places and sub-districts take up to 10 medias through `POST .../medias/upload-url`, `POST .../medias`, and `DELETE .../medias/{mediaId}` (`INVALID_MEDIA_ID`, `MEDIA_NOT_FOUND`, `MEDIA_LIMIT_REACHED`); `image_url` became `medias`; the old `/image` routes are gone; `Promote` returns a `Media`. Known gaps listed in §10. The web app is not updated yet |
-| 2026-11-11 | Verification update | Review cleanup pass. Every JSON body goes through `httpx.DecodeJSON`, which also rejects data after the object (`INVALID_BODY`); auth user objects include `role`; `GET /places` `offset` and `INVALID_OFFSET` recorded (already tested); a category field with an unknown data type fails as a server error rather than `ErrInvalidAttributes`; `internal/module/users` renamed to `internal/module/user`; untested changes (no API CORS, per-command config, new migration checks) listed in §10 |
-| 2026-11-13 | Verification update | Video medias. `internal/storage` also allows `video/mp4` and `video/webm` (50 MB `MaxVideoSize`, `ErrVideoTooLarge`, a `400 VALIDATION_ERROR`); §6.7 updated and covered by new storage and place handler tests. The web app change (upload, playback) is untested and noted in §10 |
-| 2026-11-13 | Verification update | Plural module packages. `internal/module/place`, `review`, `subdistrict`, `suggestion`, and `user` renamed to `places`, `reviews`, `subdistricts`, `suggestions`, and `users`, with package names and qualifiers to match; `auth` and `storagecleanup` are unchanged. Verified by `go build`, `go vet`, and `go test ./...` (1248 passed in 30 packages) |
-| 2026-11-15 | Verification update | Places limit pass. `GET /places` caps every page at 40 (`maxLimit`, was 1000), so a client cannot request more. The web map no longer sends a zoom-based `limit` or keeps `limit` in the URL; it sends only the `bbox` and relies on the cap. Verified by the place package tests (418 passed) and the web typecheck, lint, and tests (240 passed) |
-| 2026-11-16 | Verification update | `GET /places` no longer sends the `X-Cache` header, and the cache-status context behind it is removed. The header was never part of this contract, so no section describes it. Verified by `go build`, `go vet` (with the `integration` tag), and the place package unit tests (418 passed); the integration tests were not run. `scripts/k6/get-places.js` still reads the header (§10) |
-| 2026-11-16 | Verification update | Auth simplification. The password has no maximum length (was 128), so a long password is hashed like any other and an over-long login is no longer short-circuited to `INVALID_CREDENTIALS`; the limit of 4 concurrent hashes is gone; the in-memory refresh store and its sweep are removed from production code (auth tests use a fake map store). The email check is a plain pattern (one `@`, no spaces) instead of `net/mail`, and password verification uses the argon2 constants rather than the parameters stored in the hash. Verified by `go build`, `go vet`, and the auth package tests |
-| 2026-11-17 | Verification update | Storage cleanup reads instead of claiming. `ClaimDue` is replaced by `GetDue`, a plain read of the due rows; the 15-minute claim lease and the row locking are removed, so overlapping runs get the same rows (harmless, as the storage delete and `Remove` are idempotent) and no longer split the work. §6.8 and the README updated. Verified by `go build`, `go vet` (with and without the `integration` tag), and the `storagecleanup` unit and integration tests (31 passed) |
-| 2026-11-17 | Verification update | Storage cleanup fixed retry. A failed delete is due again in 1 hour (was `15m × 2^attempts`, capped at 24h); `GetDue` returns keys instead of `Deletion` rows, and the `Deletion` type and the unused `Service` mock are removed. `attempts` is still counted in the table. §6.8 and the README updated. Verified by `go build`, `go vet` (with and without the `integration` tag), and the `storagecleanup` unit and integration tests (23 passed) |
-| 2026-11-17 | Verification update | Storage simplification and renames, no route or status change. The message of a missing upload is now `file has not been uploaded` (was `image has not been uploaded`); the code is still `400 VALIDATION_ERROR`. Go names say media instead of image: `Images` is `MediaStore`, `ErrInvalidImageType`/`ErrImageNotUploaded`/`ErrInvalidImageKey` are `ErrInvalidMediaType`/`ErrMediaNotUploaded`/`ErrInvalidUploadKey`, and the OpenAPI schemas `ImageUpload*` and `SetImageRequest` are `MediaUpload*` and `ConfirmUploadRequest`. Verified by `go build`, `go vet` (with and without the `integration` tag), and the full Go test suite |
-| 2026-11-17 | Seed data | No API change. `make seed` (`cmd/seed`) loads Setiabudi, Mampang Prapatan, and Tebet with researched flood, safety, and spending text, and 1,068 real places from OpenStreetMap (hospitals, puskesmas, and police checked by hand). Missing addresses, hours, prices, descriptions, and attributes are made up, as are 24 water and gas refills, 12 demo users, and 1,066 reviews. The 50,000 generated places moved unchanged to `make seed-bulk` (`cmd/seed-bulk`), which the k6 script now names. Verified by `go build`, `go vet ./cmd/...`, and running both seeds on fresh migrated databases (the real seed twice, adding nothing the second time) |
-| 2026-11-17 | Verification update | `GET /places` orders by distance from the `bbox` centre. With a `bbox`, the nearest places come first (ties by id), so the 40-place cap keeps the places nearest the centre of the map instead of the lowest ids; without a `bbox` the order is still by id. `total`, the filters, and the web app are unchanged. The Redis index is sorted the same way, and `GetByIDs` returns places in the order of the ids given. Verified by `go build`, `go vet` (with and without the `integration` tag), the full Go unit suite, and the place integration tests (508 passed) |
-| 2026-11-17 | Verification update | Places cap raised. `GET /places` caps every page at 100 (`maxLimit`, was 40), and an absent limit also gets 100. The web map cannot zoom out past zoom 13 and sends a zoom-based `limit` again, kept in the URL: 100 at zoom 13, 80 at 14, 60 at 15, and 40 from 16. `scripts/k6/get-places.js` knows the new cap but does not send the zoom-based limit. Verified by `go build`, `go vet` (with and without the `integration` tag), the full Go unit suite (1237 passed), the place integration tests (508 passed), and the web typecheck, lint, and tests (240 passed); the map was not checked in a browser |
-| 2026-11-17 | Web update | No API change. The web map's widest zoom moved from 13 to 14, and its zoom-based `limit` moved with it, so every zoom level asks for 20 more places than before: 100 at zoom 14, 80 at 15, 60 at 16, and 40 from 17. Verified by the web typecheck, lint, and tests (240 passed); the map was not checked in a browser |
-| 2026-11-17 | Seed data | No API change. `make seed` (`cmd/seed`) now uploads images, so it needs the `STORAGE_*` settings and a set-up bucket (`make dev-setup` seeds after `storage-init`). Every place in Setiabudi, Mampang Prapatan, and Tebet, and each of the three kecamatan, gets 2 or 3 generated 640x480 PNGs of one random color (136 bytes each), and each kecamatan gets a static map: an 800x600 PNG stitched from OpenStreetMap tiles, kept in `cmd/seed/images/static-maps`. Keys follow the API's (`places/{id}/`, `subdistricts/{id}/medias/`, `subdistricts/{id}/static-map/`). Reruns skip whatever already has its images; objects uploaded by a failed run stay in the bucket without a row. `storage.S3` gained `Put`, used only by the seed and outside `ObjectStore`. Verified by `go build`, `go vet`, `go test ./...` (1237 passed), and running the seed twice on the local database (2,716 medias the first time, none added the second), with a color image and a static map fetched from the bucket's public URL |
-| 2026-11-17 | Documentation update | No behavior change; this file was brought in line with the tests and the web app. Media positions: an add goes after the last media and a delete shifts later medias down, so positions stay `1..n` (§6.3, §6.5; the "gap" item is removed from §10). The Redis index behind `GET /places` with a `sub_district_id` is recorded in §6.3, with its untested 30-second lifetime and fallback in §10. The web map's widest zoom is 16, so its `limit` is 100 at 16, 80 at 17, 60 at 18, and 40 at 19. §10 names the two single-column `PLACES` indexes and notes that the web admin has no sub-district screens. The header no longer says the web app lacks medias. Verified by `go build`, `go vet` (with and without the `integration` tag), and the Go unit tests; the integration tests, which cover the media positions and the cache, were not run |
-| 2026-11-22 | Verification update | Sub-district boundary replaces the static map. `SUB_DISTRICTS.static_map_media_id` is replaced by `boundary GEOMETRY(MultiPolygon, 4326)` with a `CHECK (ST_IsValid(boundary))`, edited into the `create_sub_districts` migration (which now creates the PostGIS extension), so databases must be rebuilt. The response field `static_map_image_url` became `boundary` (GeoJSON MultiPolygon or `null`), and `POST .../static-map/upload-url` and `PUT .../static-map` became `PUT /v1/subdistricts/{id}/boundary` (admin), which takes a GeoJSON Polygon or MultiPolygon: malformed GeoJSON is `INVALID_BODY`, and an area outside Indonesia or crossing itself is `VALIDATION_ERROR` (`ErrInvalidBoundary`). Create and update ignore the boundary and keep it. New `postgis.MultiPolygon` type and `database.CheckViolation`. OpenAPI updated. Verified by `go build`, `go vet` (with and without the `integration` tag), `go test ./...` (1236 passed), and `go test -tags integration ./...` (1453 passed). The seed and web app are not updated yet (§10) |
-| 2026-11-22 | Seed data | No API change. `make seed` sets the boundaries of Setiabudi, Mampang Prapatan, and Tebet from their OpenStreetMap `admin_level=6` relations (5802434, 5802428, 5802418; ODbL), joined into one MultiPolygon each and not simplified, so neighbors share edges exactly (about 21 KB of GeoJSON in all). A rerun keeps a boundary already set. The static map PNGs (`cmd/seed/images/static-maps`) and their upload are removed. Verified by `go build`, `go vet ./cmd/...`, and running the seed twice on a fresh migrated database (2,718 medias, 1,092 places, and 3 boundaries the first time, nothing added the second); every seeded place lies inside its kecamatan's boundary, and the boundaries read back through `postgis.MultiPolygon` |
-| 2026-11-22 | Web update | No API change. The web app reads `boundary` instead of `static_map_image_url`. The survival map outlines every kecamatan that has a boundary: the one on show solid with a light fill, the others dashed, named in a tooltip on hover, and picked when clicked (the same as choosing it in the header). A kecamatan is framed by its boundary, or by its places when it has none. The widest zoom moved from 15 to 13 so a whole kecamatan fits on a phone, and the zoom-based `limit` moved with it: 100 at 13, 80 at 14, 60 at 15, and 40 from 16 (§6.3 was out of date, saying 16). The info modal's "Peta area" section is removed. Verified by the web typecheck, lint, format check, and tests (240 passed), and by headless Chrome screenshots against a freshly seeded API at 1366×800 and 390×844; clicking and hovering an outline were not checked |
-| 2026-11-22 | Verification update | `GET /places` spreads a page with a `bbox` over the box instead of taking the places nearest its centre. The box is split into a grid of about `limit` power-of-two cells fixed to longitude and latitude 0; each cell takes its categories in turns (starting at a different one in neighboring cells), and the first place of every cell comes before any second one, nearest the box's centre first within a round (§6.3). The order now depends on `limit`. The Redis index entries gained the category id (32 bytes each) and the keys moved to `places:index:v2:<hash>`. The web map's first request for a kecamatan sends its boundary's extent as `bbox` with the `sub_district_id`, so it is spread too. The §10 item about signs bunching up in the kecamatan is replaced by the untested cost of the spread. OpenAPI updated. Verified by `go build`, `go vet` (with and without the `integration` tag), `go test ./...` (1250 passed), the place integration tests (525 passed, including SQL/cache parity on spread pages), and the web typecheck, lint, and tests (240 passed); the map was not checked in a browser |
-| 2026-11-22 | Web update | No API change. The web map's `limit` is set from its size on screen instead of a fixed 20: one place per 120×120 px square, from 20 to 100, so a desktop map loads about 50 and a phone about 20. It is kept in the URL across kecamatan changes; a first visit loads 20 until the map is moved. Verified by the web typecheck, lint, and tests (240 passed); the map was not checked in a browser |
+| Date | Change |
+| ---- | ------ |
+| 2026-11-01 | Initial draft from the planning docs and tests; null bodies, length limits, trimming, cleanup queue |
+| 2026-11-05 | 16 categories with themed colors |
+| 2026-11-09 | `PATCH` → `PUT`; route access and JWT rules tested; refresh tokens in Redis |
+| 2026-11-11 | Shared `DecodeJSON`; `role` in user objects; no API CORS |
+| 2026-11-13 | Multiple medias (images and video) per place and sub-district; plural module packages |
+| 2026-11-15 | `GET /places` limit cap lowered |
+| 2026-11-16 | `X-Cache` header removed; auth simplified (no max password length) |
+| 2026-11-17 | Cleanup reads instead of claiming, fixed 1 h retry; storage renames; real seed data; places ordered by distance; cap 100 |
+| 2026-11-22 | Static map replaced by GeoJSON `boundary`; `bbox` pages spread over the box; seed and web updated |
+| 2026-11-22 | Documentation simplified; no contract change |
