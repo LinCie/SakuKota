@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
@@ -19,6 +20,9 @@ func NewPostgresDB(
 	if err != nil {
 		return nil, err
 	}
+	// Traces and times every query through the global OpenTelemetry
+	// providers, which do nothing until a command sets them.
+	config.Tracer = otelpgx.NewTracer()
 
 	db := sqlx.NewDb(
 		stdlib.OpenDB(*config),

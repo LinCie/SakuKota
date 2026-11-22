@@ -50,6 +50,8 @@ func (s *service) Run(ctx context.Context) error {
 		}
 	}
 
+	// Logged even when nothing is due, so every run leaves a line.
+	slog.InfoContext(ctx, "storage cleanup run", "due", len(keys))
 	return nil
 }
 

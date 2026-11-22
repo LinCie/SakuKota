@@ -1,6 +1,7 @@
 package router
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -26,11 +27,14 @@ import (
 func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 	r := chi.NewRouter()
 
-	// Logger comes before Recoverer so a recovered panic is logged as a 500.
+	// Telemetry and the request log come before Recoverer so a recovered panic
+	// is recorded and logged as a 500. Telemetry comes first so each log line
+	// carries its request's trace.
 	// The web app reaches the API through a same-origin proxy, so no CORS
 	// headers are needed.
 	r.Use(
-		chimiddleware.Logger,
+		middleware.WithTelemetry(cfg.Port),
+		middleware.WithRequestLog(slog.Default()),
 		chimiddleware.Recoverer,
 		chimiddleware.StripSlashes,
 		middleware.WithMaxBody(),

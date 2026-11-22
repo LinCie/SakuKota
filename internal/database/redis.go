@@ -2,7 +2,10 @@ package database
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -15,6 +18,12 @@ func NewRedisClient(ctx context.Context, redisURL string) (*redis.Client, error)
 	}
 
 	client := redis.NewClient(opt)
+	// Traces commands and reports pool usage through the global OpenTelemetry
+	// providers, which do nothing until a command sets them.
+	if err := errors.Join(redisotel.InstrumentTracing(client), redisotel.InstrumentMetrics(client)); err != nil {
+		_ = client.Close()
+		return nil, fmt.Errorf("instrument redis: %w", err)
+	}
 
 	if err := client.Ping(ctx).Err(); err != nil {
 		_ = client.Close()

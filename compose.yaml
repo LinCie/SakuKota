@@ -72,6 +72,11 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-rantaugo}?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       STORAGE_ENDPOINT: http://garage:3900
+      # Scraped by prometheus; not published to the host.
+      METRICS_ADDR: ":9464"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://loki:3100/otlp/v1/logs
+      OTEL_SERVICE_NAME: rantau-go
     depends_on:
       postgres:
         condition: service_healthy
@@ -89,8 +94,47 @@ services:
     depends_on:
       - api
 
+  prometheus:
+    image: docker.io/prom/prometheus:v3
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - api
+
+  grafana:
+    image: docker.io/grafana/grafana:13.2
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./docker/grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - ./docker/grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ./docker/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+
+  # Keeps traces in the container, so they are gone when it is removed.
+  tempo:
+    image: docker.io/grafana/tempo:3.1.1
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./docker/tempo/tempo.yaml:/etc/tempo.yaml:ro
+
+  loki:
+    image: docker.io/grafana/loki:3.7.10
+    volumes:
+      - loki_data:/loki
+
 volumes:
   postgres_data:
   redis_data:
   garage_meta:
   garage_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
