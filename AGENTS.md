@@ -65,9 +65,9 @@ Before finishing a change, the code must pass:
 - Use one file per cohesive concept, not one file per type. Put the package comment in exactly one file, typically `doc.go` for long comments.
 - Export only what clients need. Exported identifiers are a maintenance contract.
 - Make the zero value useful where practical. Use `var x T` for values ready to use without initialization.
-- Prefer concrete types. Accept interfaces where a function needs only behavior, and return concrete types.
+- Accept interfaces where a function needs only behavior. Return concrete types, except from service constructors (see below).
 - Define interfaces in the package that consumes them, not in the package that implements them. Keep them small, with the methods the consumer actually uses.
-- Exception for `internal/module/*`: each module's `handler.go` declares the exported `Service` interface, the implementation is the unexported `service` struct, and `NewService` returns `Service`. A method another module needs (e.g. `places.Service.AddRating`) joins `Service` so `Module.Service` can be wired by the router. Modules without a handler (`users`, `storagecleanup`) return `*service`.
+- Services follow one pattern. The handler, as the service's consumer, declares the exported `Service` interface in `handler.go`. The implementation is the unexported `service` struct in `service.go`, and `NewService` returns `Service`. A method another package needs (e.g. `places.Service.AddRating`) is part of `Service`, so the wired `Module.Service` satisfies that package's interface. A package without a handler (`users`, `storagecleanup`) has no `Service` interface, and its `NewService` returns `*service`.
 - Do not create an interface before it has a real need: two or more implementations, or a genuine dependency-break. Do not export test doubles or mocks from the production package; generated mocks live in a `mock` subpackage (see Testing). Test through the real public API.
 - Use an option struct when a function takes many arguments, or when most callers set only a few fields. Use functional options for large, evolving APIs. Do not pass a `context.Context` inside an option struct.
 - Avoid global mutable state, including package-level registries, singletons, and `init`-time side effects. Pass dependencies explicitly through constructors, function parameters, or struct fields.
