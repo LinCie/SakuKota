@@ -2,6 +2,7 @@ import { createFileRoute, Navigate, redirect } from "@tanstack/react-router";
 
 import {
   getSession,
+  isAdmin,
   restoreSession,
   useSession,
 } from "~/features/auth/session";
@@ -26,6 +27,8 @@ export const Route = createFileRoute("/usulan")({
         replace: true,
       });
     }
+    // Admins review suggestions instead of making them.
+    if (isAdmin(session)) throw redirect({ to: "/admin", replace: true });
     return { userId: session.user.id };
   },
   // The places are for the form's map, which shows what a kecamatan already has.

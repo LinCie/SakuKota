@@ -14,7 +14,7 @@ const itemClass =
 
 /**
  * The header's account corner: a "Masuk" plate when signed out (returning to
- * the current page afterwards), a "Usulkan" plate, the user's first name, and
+ * the current page afterwards), a "Usulkan" plate (not for admins), the user's first name, and
  * "Keluar" when signed in. On phones it is a single icon plate; signed in, it
  * opens a menu of the same actions.
  */
@@ -52,8 +52,10 @@ export function AccountControl({ className }: { className?: string }) {
   }
 
   const firstName = session.user.name.split(" ")[0];
-  const adminLink = isAdmin(session) && !pathname.startsWith("/admin");
-  const suggestLink = pathname !== "/usulan" && !pathname.startsWith("/admin");
+  const admin = isAdmin(session);
+  const adminLink = admin && !pathname.startsWith("/admin");
+  const suggestLink =
+    !admin && pathname !== "/usulan" && !pathname.startsWith("/admin");
 
   return (
     <div className={cn("flex items-center gap-3", className)}>
