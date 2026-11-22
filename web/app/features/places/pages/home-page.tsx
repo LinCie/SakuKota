@@ -13,6 +13,7 @@ import { PlaceDetails } from "~/features/places/components/place-details";
 import { PlaceList } from "~/features/places/components/place-list";
 import { SearchField } from "~/features/places/components/search-field";
 import {
+  PLACES_LIMIT,
   SurvivalMap,
   type FlyRequest,
   type MapView,
@@ -63,7 +64,8 @@ type PlacesFilters = Pick<
  * `listParams` for the list, which does not. The map is bound to the kecamatan
  * only until it has a view (`bbox`): that first request is what it frames, and
  * from then on it shows every place in view, whatever its kecamatan. With no
- * kecamatan at all there are no places either.
+ * kecamatan at all there are no places either. Before the map reports a
+ * view, it loads as many places as it will afterwards.
  */
 export function placesSelection(
   { kecamatan, kategori, q, bbox, limit }: PlacesFilters,
@@ -84,7 +86,7 @@ export function placesSelection(
     ...listParams,
     subDistrictId: bbox ? undefined : listParams.subDistrictId,
     bbox,
-    limit,
+    limit: limit ?? PLACES_LIMIT,
   };
   return { subDistrict, params, listParams };
 }
@@ -288,6 +290,7 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
           <SurvivalMap
             places={mapPlaces}
             focusKey={subDistrict?.slug ?? ""}
+            hasView={search.bbox !== undefined}
             subDistricts={subDistricts}
             onSubDistrictSelect={changeKecamatan}
             selectedId={selectedPlace?.id ?? null}

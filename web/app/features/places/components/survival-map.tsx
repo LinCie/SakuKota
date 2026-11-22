@@ -118,7 +118,7 @@ function clamp(value: number, limit: number) {
 }
 
 /** How many places the map loads, whatever its zoom level. */
-const PLACES_LIMIT = 20;
+export const PLACES_LIMIT = 20;
 
 /** The part of the map on show, as the places request filters it. */
 export type MapView = {
@@ -136,6 +136,8 @@ type SurvivalMapProps = {
   places: Place[];
   /** The slug of the kecamatan on show; a change triggers a fly-to. */
   focusKey: string;
+  /** Whether the places follow a view already; if so, framing the kecamatan is reported too. */
+  hasView: boolean;
   /** Every kecamatan. Those with a boundary are outlined, and clicking another one picks it. */
   subDistricts: SubDistrict[];
   onSubDistrictSelect: (slug: string) => void;
@@ -143,7 +145,7 @@ type SurvivalMapProps = {
   onSelect: (placeId: number) => void;
   /** Flies to the place and keeps it clear of the sheet; null until asked. */
   flyRequest: FlyRequest | null;
-  /** Reports the view after each pan or zoom, so the places can follow it. */
+  /** Reports the view after each pan or zoom, so the places can follow it. Framing a kecamatan is not reported unless `hasView`. */
   onViewChange: (view: MapView) => void;
   /** A bottom sheet that may cover the map; the selected sign is kept above it. */
   sheetRef?: RefObject<HTMLElement | null>;
@@ -154,6 +156,7 @@ type SurvivalMapProps = {
 export function SurvivalMap({
   places,
   focusKey,
+  hasView,
   subDistricts,
   onSubDistrictSelect,
   selectedId,
@@ -168,6 +171,8 @@ export function SurvivalMap({
   const focusedKeyRef = useRef<string | null>(null);
   // True from a fly request until the map settles; panning to the selected sign meanwhile would cancel it.
   const flyingRef = useRef(false);
+  // True from framing a kecamatan without a view until the map settles; that move is not reported.
+  const framingRef = useRef(false);
   const leaflet = useLeafletMap(containerRef, MAP_OPTIONS);
   const onSelectEvent = useEffectEvent(onSelect);
   const onViewChangeEvent = useEffectEvent(onViewChange);
@@ -183,18 +188,29 @@ export function SurvivalMap({
   }, [leaflet]);
 
   // Registered before the framing effect below, so the move its fitBounds
-  // causes is reported.
+  // causes is seen, and skipped when the kecamatan's places are loaded.
   useEffect(() => {
     if (!leaflet) return;
     const { map } = leaflet;
-    const reportView = () =>
+    const reportView = () => {
+      if (framingRef.current) {
+        framingRef.current = false;
+        return;
+      }
       onViewChangeEvent({
         bbox: bboxParam(map.getBounds()),
         limit: PLACES_LIMIT,
       });
+    };
+    // Dragging stops a flight without a moveend; the drag's own is reported.
+    const stopFraming = () => {
+      framingRef.current = false;
+    };
     map.on("moveend", reportView);
+    map.on("dragstart", stopFraming);
     return () => {
       map.off("moveend", reportView);
+      map.off("dragstart", stopFraming);
     };
   }, [leaflet]);
 
@@ -207,7 +223,10 @@ export function SurvivalMap({
     const boundary = subDistricts.find((sd) => sd.slug === focusKey)?.boundary;
     const located = locatedPlaces(places);
     if (!boundary && located.length === 0) {
-      if (focusedKeyRef.current === null) map.setView(JAKARTA_CENTER, 14);
+      if (focusedKeyRef.current === null) {
+        framingRef.current = !hasView;
+        map.setView(JAKARTA_CENTER, 14);
+      }
       focusedKeyRef.current = focusKey;
       return;
     }
@@ -217,13 +236,15 @@ export function SurvivalMap({
       ? L.geoJSON(boundary).getBounds()
       : L.latLngBounds(located.map(({ lat, lng }) => L.latLng(lat, lng)));
 
+    // Set after invalidateSize, whose own moveend (if the size changed) is reported.
+    framingRef.current = !hasView;
     if (focusedKeyRef.current === null || prefersReducedMotion()) {
       map.fitBounds(bounds, FIT_OPTIONS);
     } else {
       map.flyToBounds(bounds, { ...FIT_OPTIONS, duration: 0.9 });
     }
     focusedKeyRef.current = focusKey;
-  }, [leaflet, focusKey, places, subDistricts]);
+  }, [leaflet, focusKey, hasView, places, subDistricts]);
 
   // Outline every kecamatan: the one on show in bold, the others dashed,
   // named on hover, and picked on click.
