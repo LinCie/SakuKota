@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"embed"
 	"fmt"
 	"image"
 	"image/color"
@@ -16,12 +15,6 @@ import (
 	"rantau-go/internal/storage"
 )
 
-// staticMaps holds one map per seeded sub-district, named {slug}.png. Each is
-// stitched from OpenStreetMap tiles (© OpenStreetMap contributors, ODbL).
-//
-//go:embed images/static-maps/*.png
-var staticMaps embed.FS
-
 // imageSeeder uploads the seed images and records them in the seed transaction.
 type imageSeeder struct {
 	tx    *sqlx.Tx
@@ -29,9 +22,9 @@ type imageSeeder struct {
 }
 
 // seedImages gives every place of the seeded sub-districts, and each of those
-// sub-districts, 2-3 images of one random color, and each sub-district its
-// static map. Reruns skip whatever already has its images. An object uploaded
-// before a failed run stays in the bucket without a row.
+// sub-districts, 2-3 images of one random color. Reruns skip whatever already
+// has its images. An object uploaded before a failed run stays in the bucket
+// without a row.
 func (s imageSeeder) seedImages(ctx context.Context) error {
 	var placeIDs []int64
 	err := s.tx.SelectContext(ctx, &placeIDs, `
@@ -53,46 +46,23 @@ func (s imageSeeder) seedImages(ctx context.Context) error {
 	}
 
 	var subDistricts []struct {
-		ID           int64  `db:"id"`
-		Slug         string `db:"slug"`
-		HasMedias    bool   `db:"has_medias"`
-		HasStaticMap bool   `db:"has_static_map"`
+		ID   int64  `db:"id"`
+		Slug string `db:"slug"`
 	}
 	err = s.tx.SelectContext(ctx, &subDistricts, `
-		SELECT
-			sd.id,
-			sd.slug,
-			EXISTS (SELECT 1 FROM SUB_DISTRICT_MEDIAS sm WHERE sm.sub_district_id = sd.id) AS has_medias,
-			sd.static_map_media_id IS NOT NULL AS has_static_map
+		SELECT sd.id, sd.slug
 		FROM SUB_DISTRICTS sd
 		WHERE sd.slug IN ('setiabudi', 'mampang-prapatan', 'tebet')
+		  AND NOT EXISTS (SELECT 1 FROM SUB_DISTRICT_MEDIAS sm WHERE sm.sub_district_id = sd.id)
 		ORDER BY sd.id`)
 	if err != nil {
-		return fmt.Errorf("list sub-districts: %w", err)
+		return fmt.Errorf("list sub-districts without medias: %w", err)
 	}
 	for _, sd := range subDistricts {
-		if !sd.HasMedias {
-			err := s.addColorMedias(ctx, fmt.Sprintf("subdistricts/%d/medias", sd.ID),
-				`INSERT INTO SUB_DISTRICT_MEDIAS (sub_district_id, media_id, position) VALUES ($1, $2, $3)`, sd.ID)
-			if err != nil {
-				return fmt.Errorf("seed medias of sub-district %s: %w", sd.Slug, err)
-			}
-		}
-
-		if !sd.HasStaticMap {
-			staticMap, err := staticMaps.ReadFile("images/static-maps/" + sd.Slug + ".png")
-			if err != nil {
-				return fmt.Errorf("read static map of sub-district %s: %w", sd.Slug, err)
-			}
-			mediaID, err := s.addMedia(ctx, fmt.Sprintf("subdistricts/%d/static-map", sd.ID), staticMap)
-			if err != nil {
-				return fmt.Errorf("seed static map of sub-district %s: %w", sd.Slug, err)
-			}
-			_, err = s.tx.ExecContext(ctx,
-				`UPDATE SUB_DISTRICTS SET static_map_media_id = $1 WHERE id = $2`, mediaID, sd.ID)
-			if err != nil {
-				return fmt.Errorf("set static map of sub-district %s: %w", sd.Slug, err)
-			}
+		err := s.addColorMedias(ctx, fmt.Sprintf("subdistricts/%d/medias", sd.ID),
+			`INSERT INTO SUB_DISTRICT_MEDIAS (sub_district_id, media_id, position) VALUES ($1, $2, $3)`, sd.ID)
+		if err != nil {
+			return fmt.Errorf("seed medias of sub-district %s: %w", sd.Slug, err)
 		}
 	}
 

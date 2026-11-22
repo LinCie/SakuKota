@@ -12,6 +12,9 @@ const UniqueViolation = "23505"
 // ForeignKeyViolation is the PostgreSQL error code for foreign key constraint violations.
 const ForeignKeyViolation = "23503"
 
+// CheckViolation is the PostgreSQL error code for check constraint violations.
+const CheckViolation = "23514"
+
 // IsCode reports whether err is a PostgreSQL error with the given SQLSTATE code.
 func IsCode(err error, code string) bool {
 	var pgErr *pgconn.PgError

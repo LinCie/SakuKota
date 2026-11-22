@@ -80,7 +80,7 @@ func TestRepository_Create(t *testing.T) {
 		assert.Equal(t, new(75000.5), got.EstimatedDailySpending)
 		assert.NotNil(t, got.Medias, "a new sub-district has an empty media list")
 		assert.Empty(t, got.Medias)
-		assert.Nil(t, got.StaticMapImageKey)
+		assert.Nil(t, got.Boundary)
 
 		stored, err := repo.GetSubDistrict(ctx, got.ID)
 		require.NoError(t, err)
@@ -216,17 +216,17 @@ func TestRepository_Update(t *testing.T) {
 		assert.Nil(t, got.EstimatedDailySpending)
 	})
 
-	t.Run("keeps the images", func(t *testing.T) {
+	t.Run("keeps the images and the boundary", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
 		m := mustAddMedia(t, repo, created.ID, "photo.jpg")
-		mustSetStaticMap(t, repo, created.ID, "map.png")
+		mustSetBoundary(t, repo, created.ID)
 
 		got, err := repo.Update(ctx, &subdistricts.SubDistrict{ID: created.ID, Name: "Renamed", Slug: "renamed"})
 
 		require.NoError(t, err)
 		assert.Equal(t, []storage.Media{m}, got.Medias)
-		assert.Equal(t, new("map.png"), got.StaticMapImageKey)
+		assert.Equal(t, mustBoundary(t, squareJSON), got.Boundary)
 	})
 
 	t.Run("accepts the sub-district's own name and slug, even in another case", func(t *testing.T) {
@@ -286,30 +286,19 @@ func TestRepository_Delete(t *testing.T) {
 		assert.Empty(t, pgtest.QueuedKeys(t, testDB), "no images, nothing queued")
 	})
 
-	t.Run("removes the medias and the static map and queues their images", func(t *testing.T) {
+	t.Run("removes the medias and queues their images", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
 		kept := mustCreate(t, repo, newSubDistrict("Kemang", "kemang"))
 		mustAddMedia(t, repo, created.ID, "a.jpg")
 		mustAddMedia(t, repo, created.ID, "b.jpg")
-		mustSetStaticMap(t, repo, created.ID, "map.png")
+		mustSetBoundary(t, repo, created.ID)
 		mustAddMedia(t, repo, kept.ID, "kept.jpg")
-		mustSetStaticMap(t, repo, kept.ID, "kept-map.png")
 
 		require.NoError(t, repo.Delete(ctx, created.ID))
 
-		assert.Equal(t, []string{"a.jpg", "b.jpg", "map.png"}, pgtest.QueuedKeys(t, testDB))
-		assert.ElementsMatch(t, []string{"kept.jpg", "kept-map.png"}, storedMediaKeys(t), "only the other sub-district's images are left")
-	})
-
-	t.Run("queues only the static map when it has no medias", func(t *testing.T) {
-		repo := newRepository(t)
-		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
-		mustSetStaticMap(t, repo, created.ID, "map.png")
-
-		require.NoError(t, repo.Delete(ctx, created.ID))
-
-		assert.Equal(t, []string{"map.png"}, pgtest.QueuedKeys(t, testDB))
+		assert.Equal(t, []string{"a.jpg", "b.jpg"}, pgtest.QueuedKeys(t, testDB))
+		assert.Equal(t, []string{"kept.jpg"}, storedMediaKeys(t), "only the other sub-district's images are left")
 	})
 
 	t.Run("tolerates images that are already queued", func(t *testing.T) {
@@ -328,7 +317,7 @@ func TestRepository_Delete(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
 		m := mustAddMedia(t, repo, created.ID, "photo.jpg")
-		mustSetStaticMap(t, repo, created.ID, "map.png")
+		mustSetBoundary(t, repo, created.ID)
 		pgtest.InsertPlace(t, testDB, created.ID, pgtest.CategoryID(t, testDB, "laundry"), "Laundry")
 
 		err := repo.Delete(ctx, created.ID)
@@ -337,7 +326,7 @@ func TestRepository_Delete(t *testing.T) {
 		stored, err := repo.GetSubDistrict(ctx, created.ID)
 		require.NoError(t, err)
 		assert.Equal(t, []storage.Media{m}, stored.Medias)
-		assert.Equal(t, new("map.png"), stored.StaticMapImageKey)
+		assert.Equal(t, mustBoundary(t, squareJSON), stored.Boundary)
 		assert.Empty(t, pgtest.QueuedKeys(t, testDB), "the images are still in use")
 	})
 
@@ -377,11 +366,11 @@ func mustAddMedia(t *testing.T, repo subdistricts.Repository, id int64, key stri
 	return storage.Media{}
 }
 
-// mustSetStaticMap stores an image under key as the sub-district's static map.
-func mustSetStaticMap(t *testing.T, repo subdistricts.Repository, id int64, key string) {
+// mustSetBoundary stores squareJSON as the sub-district's boundary.
+func mustSetBoundary(t *testing.T, repo subdistricts.Repository, id int64) {
 	t.Helper()
 
-	_, err := repo.SetStaticMap(context.Background(), id, newMedia(key))
+	_, err := repo.SetBoundary(context.Background(), id, mustBoundary(t, squareJSON))
 	require.NoError(t, err)
 }
 
@@ -431,7 +420,6 @@ func TestRepository_AddMedia(t *testing.T) {
 		assert.Equal(t, "image/webp", got.Medias[0].ContentType)
 		assert.Equal(t, int64(2048), got.Medias[0].Size)
 		assert.Equal(t, 1, got.Medias[0].Position)
-		assert.Nil(t, got.StaticMapImageKey, "the static map is not touched")
 		assert.Empty(t, pgtest.QueuedKeys(t, testDB))
 
 		stored, err := repo.GetSubDistrict(ctx, created.ID)
@@ -557,21 +545,6 @@ func TestRepository_DeleteMedia(t *testing.T) {
 		assert.Empty(t, pgtest.QueuedKeys(t, testDB))
 	})
 
-	t.Run("returns ErrMediaNotFound for the static map", func(t *testing.T) {
-		repo := newRepository(t)
-		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
-		mustSetStaticMap(t, repo, created.ID, "map.png")
-		var staticMapID int64
-		require.NoError(t, testDB.Get(&staticMapID, `SELECT id FROM MEDIAS WHERE key = 'map.png'`))
-
-		err := repo.DeleteMedia(ctx, created.ID, staticMapID)
-
-		assert.ErrorIs(t, err, storage.ErrMediaNotFound)
-		stored, err := repo.GetSubDistrict(ctx, created.ID)
-		require.NoError(t, err)
-		assert.Equal(t, new("map.png"), stored.StaticMapImageKey)
-	})
-
 	t.Run("returns ErrMediaNotFound for an unknown media or sub-district", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
@@ -583,62 +556,76 @@ func TestRepository_DeleteMedia(t *testing.T) {
 	})
 }
 
-func TestRepository_SetStaticMap(t *testing.T) {
+func TestRepository_SetBoundary(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("stores the static map and leaves the medias alone", func(t *testing.T) {
+	t.Run("stores the boundary and leaves the rest alone", func(t *testing.T) {
 		repo := newRepository(t)
-		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+		created := mustCreate(t, repo, &subdistricts.SubDistrict{Name: "Menteng", Slug: "menteng", FloodHistory: new("Banjir")})
 		m := mustAddMedia(t, repo, created.ID, "photo.webp")
 
-		got, err := repo.SetStaticMap(ctx, created.ID, newMedia("map.png"))
+		got, err := repo.SetBoundary(ctx, created.ID, mustBoundary(t, squareJSON))
 
 		require.NoError(t, err)
 		assert.Equal(t, created.ID, got.ID)
-		assert.Equal(t, new("map.png"), got.StaticMapImageKey)
+		assert.Equal(t, new("Banjir"), got.FloodHistory)
 		assert.Equal(t, []storage.Media{m}, got.Medias)
-		assert.Empty(t, pgtest.QueuedKeys(t, testDB), "a first static map replaces nothing")
+		assert.Equal(t, mustBoundary(t, squareJSON), got.Boundary)
 
 		stored, err := repo.GetSubDistrict(ctx, created.ID)
 		require.NoError(t, err)
 		assert.Equal(t, got, stored)
 	})
 
-	t.Run("removes and queues the static map it replaces", func(t *testing.T) {
+	t.Run("replaces the previous boundary", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
-		mustSetStaticMap(t, repo, created.ID, "old.png")
+		mustSetBoundary(t, repo, created.ID)
+		two := mustBoundary(t, `{"type":"MultiPolygon","coordinates":[`+
+			`[[[106.8,-6.2],[106.85,-6.2],[106.85,-6.25],[106.8,-6.2]]],`+
+			`[[[106.9,-6.2],[106.95,-6.2],[106.95,-6.25],[106.9,-6.2]]]]}`)
 
-		got, err := repo.SetStaticMap(ctx, created.ID, newMedia("new.png"))
+		got, err := repo.SetBoundary(ctx, created.ID, two)
 
 		require.NoError(t, err)
-		assert.Equal(t, new("new.png"), got.StaticMapImageKey)
-		assert.Equal(t, []string{"new.png"}, storedMediaKeys(t))
-		assert.Equal(t, []string{"old.png"}, pgtest.QueuedKeys(t, testDB))
+		assert.Equal(t, two, got.Boundary)
 	})
 
-	t.Run("tolerates a replaced image that is already queued", func(t *testing.T) {
+	t.Run("keeps a hole in a polygon", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
-		mustSetStaticMap(t, repo, created.ID, "old.png")
-		_, err := testDB.Exec(`INSERT INTO STORAGE_DELETIONS (key) VALUES ('old.png')`)
-		require.NoError(t, err)
+		holed := mustBoundary(t, `{"type":"Polygon","coordinates":[`+
+			`[[106.8,-6.2],[106.9,-6.2],[106.9,-6.3],[106.8,-6.3],[106.8,-6.2]],`+
+			`[[106.84,-6.24],[106.86,-6.24],[106.86,-6.26],[106.84,-6.24]]]}`)
 
-		_, err = repo.SetStaticMap(ctx, created.ID, newMedia("new.png"))
+		got, err := repo.SetBoundary(ctx, created.ID, holed)
 
 		require.NoError(t, err)
-		assert.Equal(t, []string{"old.png"}, pgtest.QueuedKeys(t, testDB))
+		assert.Equal(t, holed, got.Boundary)
+	})
+
+	t.Run("returns ErrInvalidBoundary for an area that crosses itself and keeps the old one", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newSubDistrict("Menteng", "menteng"))
+		mustSetBoundary(t, repo, created.ID)
+		bowTie := mustBoundary(t, `{"type":"Polygon","coordinates":[[[106.8,-6.2],[106.9,-6.3],[106.9,-6.2],[106.8,-6.3],[106.8,-6.2]]]}`)
+
+		got, err := repo.SetBoundary(ctx, created.ID, bowTie)
+
+		assert.ErrorIs(t, err, subdistricts.ErrInvalidBoundary)
+		assert.Nil(t, got)
+		stored, err := repo.GetSubDistrict(ctx, created.ID)
+		require.NoError(t, err)
+		assert.Equal(t, mustBoundary(t, squareJSON), stored.Boundary)
 	})
 
 	t.Run("returns ErrSubDistrictNotFound for an unknown id", func(t *testing.T) {
 		repo := newRepository(t)
 
-		got, err := repo.SetStaticMap(ctx, 999, newMedia("map.png"))
+		got, err := repo.SetBoundary(ctx, 999, mustBoundary(t, squareJSON))
 
 		assert.ErrorIs(t, err, subdistricts.ErrSubDistrictNotFound)
 		assert.Nil(t, got)
-		assert.Empty(t, storedMediaKeys(t))
-		assert.Empty(t, pgtest.QueuedKeys(t, testDB))
 	})
 }
 
@@ -651,16 +638,16 @@ func TestRepository_GetMany_Medias(t *testing.T) {
 	mustAddMedia(t, repo, first.ID, "1/a.webp")
 	mustAddMedia(t, repo, second.ID, "2/a.webp")
 	mustAddMedia(t, repo, first.ID, "1/b.webp")
-	mustSetStaticMap(t, repo, second.ID, "2/map.png")
+	mustSetBoundary(t, repo, second.ID)
 
 	got, err := repo.GetMany(ctx)
 
 	require.NoError(t, err)
 	require.Len(t, got, 3)
 	assert.Equal(t, []string{"1/a.webp", "1/b.webp"}, mediaKeys(got[0].Medias))
-	assert.Nil(t, got[0].StaticMapImageKey)
+	assert.Nil(t, got[0].Boundary)
 	assert.Equal(t, []string{"2/a.webp"}, mediaKeys(got[1].Medias))
-	assert.Equal(t, new("2/map.png"), got[1].StaticMapImageKey)
+	assert.Equal(t, mustBoundary(t, squareJSON), got[1].Boundary)
 	assert.NotNil(t, got[2].Medias, "a sub-district without medias has an empty list")
 	assert.Empty(t, got[2].Medias)
 }

@@ -12,6 +12,7 @@ package mock
 import (
 	context "context"
 	subdistricts "rantau-go/internal/module/subdistricts"
+	postgis "rantau-go/internal/pkg/postgis"
 	storage "rantau-go/internal/storage"
 	reflect "reflect"
 
@@ -145,19 +146,19 @@ func (mr *MockServiceMockRecorder) MediaUploadURL(ctx, id, slot, contentType any
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MediaUploadURL", reflect.TypeOf((*MockService)(nil).MediaUploadURL), ctx, id, slot, contentType)
 }
 
-// SetStaticMap mocks base method.
-func (m *MockService) SetStaticMap(ctx context.Context, id int64, uploadKey string) (*subdistricts.SubDistrict, error) {
+// SetBoundary mocks base method.
+func (m *MockService) SetBoundary(ctx context.Context, id int64, boundary *postgis.MultiPolygon) (*subdistricts.SubDistrict, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetStaticMap", ctx, id, uploadKey)
+	ret := m.ctrl.Call(m, "SetBoundary", ctx, id, boundary)
 	ret0, _ := ret[0].(*subdistricts.SubDistrict)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// SetStaticMap indicates an expected call of SetStaticMap.
-func (mr *MockServiceMockRecorder) SetStaticMap(ctx, id, uploadKey any) *gomock.Call {
+// SetBoundary indicates an expected call of SetBoundary.
+func (mr *MockServiceMockRecorder) SetBoundary(ctx, id, boundary any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStaticMap", reflect.TypeOf((*MockService)(nil).SetStaticMap), ctx, id, uploadKey)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBoundary", reflect.TypeOf((*MockService)(nil).SetBoundary), ctx, id, boundary)
 }
 
 // Update mocks base method.

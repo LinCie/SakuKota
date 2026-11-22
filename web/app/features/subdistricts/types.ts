@@ -1,6 +1,12 @@
 import type { Media } from "~/shared/image-upload";
 
-// Types (see internal/module/subdistrict/dto.go)
+// Types (see internal/module/subdistricts/dto.go)
+
+/** A GeoJSON MultiPolygon: polygons of rings of [longitude, latitude]. */
+export type Boundary = {
+  type: "MultiPolygon";
+  coordinates: number[][][][];
+};
 
 export type SubDistrict = {
   id: number;
@@ -11,6 +17,6 @@ export type SubDistrict = {
   estimated_daily_spending: number | null;
   /** The sub-district's images in position order; empty if it has none. */
   medias: Media[];
-  /** Public URL of the sub-district's static map; null if it has none. */
-  static_map_image_url: string | null;
+  /** The sub-district's area; null if it has none. */
+  boundary: Boundary | null;
 };

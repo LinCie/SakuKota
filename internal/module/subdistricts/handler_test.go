@@ -18,6 +18,7 @@ import (
 
 	"rantau-go/internal/module/subdistricts"
 	"rantau-go/internal/module/subdistricts/mock"
+	"rantau-go/internal/pkg/postgis"
 	"rantau-go/internal/storage"
 )
 
@@ -35,10 +36,20 @@ func newRouter(svc subdistricts.Service) http.Handler {
 		r.Post("/{id}/medias/upload-url", h.CreateMediaUpload)
 		r.Post("/{id}/medias", h.AddMedia)
 		r.Delete("/{id}/medias/{mediaId}", h.DeleteMedia)
-		r.Post("/{id}/static-map/upload-url", h.CreateStaticMapUpload)
-		r.Put("/{id}/static-map", h.SetStaticMap)
+		r.Put("/{id}/boundary", h.SetBoundary)
 	})
 	return r
+}
+
+// squareJSON is a small square in Jakarta as a GeoJSON MultiPolygon.
+const squareJSON = `{"type":"MultiPolygon","coordinates":[[[[106.8,-6.2],[106.9,-6.2],[106.9,-6.3],[106.8,-6.3],[106.8,-6.2]]]]}`
+
+// mustBoundary reads a GeoJSON Polygon or MultiPolygon.
+func mustBoundary(t *testing.T, geoJSON string) *postgis.MultiPolygon {
+	t.Helper()
+	var m postgis.MultiPolygon
+	require.NoError(t, json.Unmarshal([]byte(geoJSON), &m))
+	return &m
 }
 
 // testMediaURL stands in for the storage's public URLs.
@@ -117,7 +128,7 @@ func TestHandler_GetSubDistricts(t *testing.T) {
 						Medias: []storage.Media{
 							{ID: 4, Key: "subdistricts/1/medias/a.webp", ContentType: "image/webp", Size: 2048, Position: 1},
 						},
-						StaticMapImageKey: new("subdistricts/1/static-map/a.png")},
+						Boundary: mustBoundary(t, squareJSON)},
 					{ID: 2, Name: "Kemang", Slug: "kemang"},
 				},
 				want: `[
@@ -125,10 +136,10 @@ func TestHandler_GetSubDistricts(t *testing.T) {
 					 "safety_crime_information": null, "estimated_daily_spending": 1500000.5,
 					 "medias": [{"id": 4, "url": "https://img.test/subdistricts/1/medias/a.webp",
 					             "content_type": "image/webp", "size": 2048, "position": 1}],
-					 "static_map_image_url": "https://img.test/subdistricts/1/static-map/a.png"},
+					 "boundary": ` + squareJSON + `},
 					{"id": 2, "name": "Kemang", "slug": "kemang", "flood_history": null,
 					 "safety_crime_information": null, "estimated_daily_spending": null,
-					 "medias": [], "static_map_image_url": null}
+					 "medias": [], "boundary": null}
 				]`,
 			},
 		}
@@ -208,7 +219,7 @@ func TestHandler_GetSubDistrict(t *testing.T) {
 			"safety_crime_information": null,
 			"estimated_daily_spending": null,
 			"medias": [],
-			"static_map_image_url": null
+			"boundary": null
 		}`)
 	})
 }
@@ -282,7 +293,7 @@ func TestHandler_CreateSubDistrict(t *testing.T) {
 			})
 
 		body := `{"name":"Menteng","slug":"menteng","flood_history":"Banjir 2020","safety_crime_information":null,` +
-			`"estimated_daily_spending":1500000.5,"static_map_image_url":"https://example.com/menteng.png",` +
+			`"estimated_daily_spending":1500000.5,"boundary":` + squareJSON + `,` +
 			`"id":77,"created_at":"yesterday"}`
 		rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/subdistricts", body))
 
@@ -303,7 +314,7 @@ func TestHandler_CreateSubDistrict(t *testing.T) {
 			"safety_crime_information": null,
 			"estimated_daily_spending": 1500000.5,
 			"medias": [],
-			"static_map_image_url": null
+			"boundary": null
 		}`)
 	})
 
@@ -404,6 +415,15 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			},
 		},
 		{
+			name:   "set boundary",
+			method: http.MethodPut,
+			target: "/subdistricts/1/boundary",
+			body:   squareJSON,
+			fail: func(s *mock.MockService) {
+				s.EXPECT().SetBoundary(gomock.Any(), int64(1), gomock.Any()).Return(nil, dbErr)
+			},
+		},
+		{
 			name:   "delete sub-district",
 			method: http.MethodDelete,
 			target: "/subdistricts/1",
@@ -479,8 +499,8 @@ func TestHandler_PutSubDistrict(t *testing.T) {
 			{name: "null and left-out keys are passed as absent",
 				body: `{"name":"Menteng","slug":"menteng","flood_history":null}`,
 				want: &subdistricts.SubDistrict{Name: "Menteng", Slug: "menteng"}},
-			{name: "map image URL is ignored",
-				body: `{"name":"Menteng","slug":"menteng","static_map_image_url":"https://evil.test/x.png"}`,
+			{name: "boundary is ignored",
+				body: `{"name":"Menteng","slug":"menteng","boundary":` + squareJSON + `}`,
 				want: &subdistricts.SubDistrict{Name: "Menteng", Slug: "menteng"}},
 			{name: "client id and unknown keys are ignored",
 				body: `{"id":99,"created_at":"yesterday","name":"Menteng","slug":"menteng"}`,
@@ -529,10 +549,10 @@ func TestHandler_PutSubDistrict(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		svc := mock.NewMockService(gomock.NewController(t))
 		svc.EXPECT().Update(gomock.Any(), int64(3), &subdistricts.SubDistrict{Name: "Menteng Atas", Slug: "menteng"}).Return(&subdistricts.SubDistrict{
-			ID:                3,
-			Name:              "Menteng Atas",
-			Slug:              "menteng",
-			StaticMapImageKey: new("subdistricts/3/static-map/a.png"),
+			ID:       3,
+			Name:     "Menteng Atas",
+			Slug:     "menteng",
+			Boundary: mustBoundary(t, squareJSON),
 		}, nil)
 
 		rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/3", `{"name":"Menteng Atas","slug":"menteng"}`))
@@ -544,7 +564,7 @@ func TestHandler_PutSubDistrict(t *testing.T) {
 			"safety_crime_information": null,
 			"estimated_daily_spending": null,
 			"medias": [],
-			"static_map_image_url": "https://img.test/subdistricts/3/static-map/a.png"
+			"boundary": `+squareJSON+`
 		}`)
 	})
 }
@@ -615,7 +635,6 @@ var handlerSlots = []struct {
 	path string
 }{
 	{slot: subdistricts.SlotMedias, path: "medias"},
-	{slot: subdistricts.SlotStaticMap, path: "static-map"},
 }
 
 func TestHandler_CreateMediaUpload(t *testing.T) {
@@ -694,7 +713,7 @@ func TestHandler_CreateMediaUpload(t *testing.T) {
 	})
 }
 
-// storedImage is a sub-district with a media and a static map, and its JSON.
+// storedImage is a sub-district with a media, and its JSON.
 var storedImage = &subdistricts.SubDistrict{
 	ID:   3,
 	Name: "Menteng",
@@ -702,7 +721,6 @@ var storedImage = &subdistricts.SubDistrict{
 	Medias: []storage.Media{
 		{ID: 9, Key: "subdistricts/3/medias/a.png", ContentType: "image/png", Size: 1024, Position: 1},
 	},
-	StaticMapImageKey: new("subdistricts/3/static-map/a.png"),
 }
 
 const storedImageJSON = `{
@@ -713,7 +731,7 @@ const storedImageJSON = `{
 	"safety_crime_information": null,
 	"estimated_daily_spending": null,
 	"medias": [{"id": 9, "url": "https://img.test/subdistricts/3/medias/a.png", "content_type": "image/png", "size": 1024, "position": 1}],
-	"static_map_image_url": "https://img.test/subdistricts/3/static-map/a.png"
+	"boundary": null
 }`
 
 // uploadErrors are the service errors from storing an upload, with their responses.
@@ -847,36 +865,84 @@ func TestHandler_DeleteMedia(t *testing.T) {
 	})
 }
 
-func TestHandler_SetStaticMap(t *testing.T) {
+func TestHandler_SetBoundary(t *testing.T) {
 	t.Run("rejects invalid requests", func(t *testing.T) {
-		for _, tc := range invalidUploadRequests {
+		tests := []struct {
+			name     string
+			id       string
+			body     string
+			wantCode string
+		}{
+			{name: "sub-district id is not a number", id: "abc", body: squareJSON, wantCode: "INVALID_SUB_DISTRICT_ID"},
+			{name: "sub-district id is zero", id: "0", body: squareJSON, wantCode: "INVALID_SUB_DISTRICT_ID"},
+			{name: "empty body", id: "3", body: ``, wantCode: "INVALID_BODY"},
+			{name: "body is null", id: "3", body: `null`, wantCode: "INVALID_BODY"},
+			{name: "body is an array", id: "3", body: `[]`, wantCode: "INVALID_BODY"},
+			{name: "data after the object", id: "3", body: squareJSON + `{}`, wantCode: "INVALID_BODY"},
+			{name: "a Point", id: "3", body: `{"type":"Point","coordinates":[106.8,-6.2]}`, wantCode: "INVALID_BODY"},
+			{name: "no type", id: "3", body: `{"coordinates":[[[[106.8,-6.2],[106.9,-6.2],[106.9,-6.3],[106.8,-6.2]]]]}`, wantCode: "INVALID_BODY"},
+			{name: "no polygons", id: "3", body: `{"type":"MultiPolygon","coordinates":[]}`, wantCode: "INVALID_BODY"},
+			{name: "ring is not closed", id: "3",
+				body: `{"type":"Polygon","coordinates":[[[106.8,-6.2],[106.9,-6.2],[106.9,-6.3],[106.8,-6.3]]]}`, wantCode: "INVALID_BODY"},
+			{name: "ring has three positions", id: "3",
+				body: `{"type":"Polygon","coordinates":[[[106.8,-6.2],[106.9,-6.2],[106.8,-6.2]]]}`, wantCode: "INVALID_BODY"},
+			{name: "latitude out of range", id: "3",
+				body: `{"type":"Polygon","coordinates":[[[-6.2,106.8],[-6.2,106.9],[-6.3,106.9],[-6.2,106.8]]]}`, wantCode: "INVALID_BODY"},
+		}
+
+		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
+				// No expectations: an invalid request must never reach the service.
 				svc := mock.NewMockService(gomock.NewController(t))
-				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/"+tc.id+"/static-map", tc.body))
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/"+tc.id+"/boundary", tc.body))
 				assertError(t, rec, http.StatusBadRequest, tc.wantCode)
 			})
 		}
 	})
 
 	t.Run("maps service errors", func(t *testing.T) {
-		for _, tc := range uploadErrors {
+		tests := []struct {
+			name       string
+			err        error
+			wantStatus int
+			wantCode   string
+		}{
+			{name: "unknown sub-district", err: subdistricts.ErrSubDistrictNotFound, wantStatus: http.StatusNotFound, wantCode: "SUB_DISTRICT_NOT_FOUND"},
+			{name: "invalid boundary", err: subdistricts.ErrInvalidBoundary, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "wrapped invalid boundary", err: fmt.Errorf("set: %w", subdistricts.ErrInvalidBoundary), wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "storage failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
+		}
+
+		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				svc := mock.NewMockService(gomock.NewController(t))
-				svc.EXPECT().SetStaticMap(gomock.Any(), int64(3), "uploads/subdistricts/3/static-map/a.png").Return(nil, tc.err)
+				svc.EXPECT().SetBoundary(gomock.Any(), int64(3), gomock.Any()).Return(nil, tc.err)
 
-				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/3/static-map",
-					`{"upload_key":"uploads/subdistricts/3/static-map/a.png"}`))
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/3/boundary", squareJSON))
 				assertError(t, rec, tc.wantStatus, tc.wantCode)
 			})
 		}
 	})
 
 	t.Run("success", func(t *testing.T) {
-		svc := mock.NewMockService(gomock.NewController(t))
-		svc.EXPECT().SetStaticMap(gomock.Any(), int64(3), "uploads/subdistricts/3/static-map/a.png").Return(storedImage, nil)
+		polygon := `{"type":"Polygon","coordinates":[[[106.8,-6.2],[106.9,-6.2],[106.9,-6.3],[106.8,-6.3],[106.8,-6.2]]]}`
+		want := mustBoundary(t, squareJSON)
 
-		rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/3/static-map",
-			`{"upload_key":"uploads/subdistricts/3/static-map/a.png"}`))
-		assertData(t, rec, http.StatusOK, storedImageJSON)
+		svc := mock.NewMockService(gomock.NewController(t))
+		svc.EXPECT().SetBoundary(gomock.Any(), int64(3), want).Return(&subdistricts.SubDistrict{
+			ID: 3, Name: "Menteng", Slug: "menteng", Boundary: want,
+		}, nil)
+
+		rec := serve(t, newRouter(svc), jsonRequest(http.MethodPut, "/subdistricts/3/boundary", polygon))
+		assertData(t, rec, http.StatusOK, `{
+			"id": 3,
+			"name": "Menteng",
+			"slug": "menteng",
+			"flood_history": null,
+			"safety_crime_information": null,
+			"estimated_daily_spending": null,
+			"medias": [],
+			"boundary": `+squareJSON+`
+		}`)
 	})
 }

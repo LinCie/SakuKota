@@ -30,18 +30,18 @@ Curated micro-services (warung, tailors, local clinics, laundries, pharmacies, p
 
 - Frontend: TanStack Router (file routes) + Tailwind CSS v4 in `web/`; Tailwind utilities only, no raw CSS.
 - Map: Leaflet (confirmed) with real coordinates from the API.
-- Map: it cannot zoom out past zoom 16 and does not cluster pins. It loads the places nearest the centre of its view, 100 at zoom 16 down to 40 at zoom 19; the list beside it shows every match in the kecamatan, 20 at a time.
+- Map: it cannot zoom out past zoom 13 (a whole kecamatan on a phone) and does not cluster pins. It loads the places nearest the centre of its view, 100 at zoom 13 down to 40 from zoom 16; the list beside it shows every match in the kecamatan, 20 at a time. Each kecamatan's boundary is outlined; clicking another outline picks it.
 - Backend (Go, PostGIS) endpoints: `GET /places/` (optional `sub_district_id`, comma-separated `category_id`, `q` search, `bbox` as `west,south,east,north`, `limit` up to 100, and `offset`; returns `{places, total}`, where `total` counts every match before the limit), `GET /places/categories/`, `GET /subdistricts/`.
 - Categories: Affordable Food & Warung, Tailor, Local Clinic, Laundry, Pharmacy, Mosque & Musala, Other Worship, Police Post, Hospital, Community Health Center, Bank & ATM, Minimarket, Transit Stop, Public Service Office, Water & Gas Refill, Print & Copy.
 - Place fields: name, address, location (GeoJSON point), operating hours, estimated price range, short description, average rating and rating count, up to 10 photos or videos (`medias`), plus custom fields per category (`attributes`, described by each category's `fields` from `GET /places/categories/`; data types text, number, boolean, select, range, date). Nullable fields must show placeholders ("Hours not available", "Data not available").
-- Kecamatan fields: flood history, safety/crime information, estimated daily spending (Rupiah), up to 10 photos or videos (`medias`), static map image URL.
+- Kecamatan fields: flood history, safety/crime information, estimated daily spending (Rupiah), up to 10 photos or videos (`medias`), boundary (GeoJSON MultiPolygon, or null).
 - Reviews: `GET /places/{id}/reviews` (public) and `POST /places/{id}/reviews` (signed in): 1 to 5 stars with an optional comment, one review per user per place, no editing or deleting.
 - Suggestions: `POST /suggestions` and `GET /suggestions/mine` (signed in; at most 5 pending per user). Admins list, approve (with corrected place details), or reject (with an optional reason) them.
 - Auth endpoints: `POST /auth/register` (name, email, password of at least 8 characters; returns the user, no tokens), `POST /auth/login` (user plus access token; the refresh token is an HttpOnly cookie), `POST /auth/refresh` (single-use refresh tokens, kept in Redis, so sessions survive a backend restart), `POST /auth/logout`. Reviewing and suggesting require sign-in; place, kecamatan, and suggestion-review writes require the `admin` role. The frontend's `/admin` area covers places (with their photos) and suggestions. It has no kecamatan screens, and categories are read-only because the backend defines them.
 - Accounts: the map is public; an account lets a user review places and suggest new ones, and must not be advertised with benefits beyond those. Registering signs the user in automatically. The session (user plus access token) lives in memory only and is restored from the refresh cookie on page load; the return path travels in the `kembali` search param.
 - Images: admins upload JPEG, PNG, or WebP up to 5 MB and MP4 or WebM up to 50 MB, straight to storage through a presigned link.
 - Terminology: "kecamatan" in the UI (backend calls it sub-district).
-- Out of scope: up/down votes, GeoJSON overlays, kost listings, password reset, social login.
+- Out of scope: up/down votes, kost listings, password reset, social login.
 - UI language: Bahasa Indonesia (confirmed). Seed content is currently English; translating it is a separate data decision.
 
 ## Brand Commitments
@@ -51,7 +51,7 @@ Curated micro-services (warung, tailors, local clinics, laundries, pharmacies, p
 
 ## Evidence on Hand
 
-- Seed data in `../cmd/seed/seed.sql`: 3 kecamatan (Setiabudi, Mampang Prapatan, Tebet), about 1,070 real places from OpenStreetMap with made-up details filled in, 24 made-up water and gas refills, 12 demo users, and about 1,070 made-up reviews. `../cmd/seed-bulk` holds 50,000 generated places for load testing. Place and kecamatan photos are generated single-color placeholders; the static maps are stitched from OpenStreetMap tiles.
+- Seed data in `../cmd/seed/seed.sql`: 3 kecamatan (Setiabudi, Mampang Prapatan, Tebet), about 1,070 real places from OpenStreetMap with made-up details filled in, 24 made-up water and gas refills, 12 demo users, and about 1,070 made-up reviews. `../cmd/seed-bulk` holds 50,000 generated places for load testing. Place and kecamatan photos are generated single-color placeholders; the kecamatan boundaries are their OpenStreetMap administrative boundaries.
 - No testimonials, user counts, or partner claims exist; do not fabricate them.
 
 ## Product Principles

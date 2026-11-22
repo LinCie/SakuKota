@@ -1,14 +1,12 @@
 import {
   CloudRain,
   Image as ImageIcon,
-  Map as MapIcon,
   ShieldAlert,
   Wallet,
   X,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
 
-import { ImageFrame } from "~/shared/components/image-frame";
 import { MediaGallery } from "~/shared/components/media-gallery";
 import { MissingSlot } from "~/shared/components/missing-slot";
 import { InfoSection } from "~/shared/components/menu-board";
@@ -107,16 +105,6 @@ export function KecamatanBoard({
           ) : (
             <MissingSlot>Data tidak tersedia</MissingSlot>
           )}
-        </InfoSection>
-
-        <InfoSection icon={MapIcon} title="Peta area">
-          <ImageFrame
-            key={subDistrict.id}
-            src={subDistrict.static_map_image_url}
-            alt={`Peta area Kecamatan ${subDistrict.name}`}
-            missing="Peta area tidak tersedia"
-            aspect="aspect-8/5"
-          />
         </InfoSection>
       </div>
     </dialog>

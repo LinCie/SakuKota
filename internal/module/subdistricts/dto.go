@@ -1,6 +1,9 @@
 package subdistricts
 
-import "rantau-go/internal/storage"
+import (
+	"rantau-go/internal/pkg/postgis"
+	"rantau-go/internal/storage"
+)
 
 // SubDistrictRequest is the API payload for creating a SubDistrict or
 // replacing one. An update sends every field: keys left out are cleared.
@@ -23,9 +26,9 @@ type SubDistrictResponse struct {
 	// Medias are the sub-district's images in position order, or [] if it
 	// has none.
 	Medias []storage.MediaResponse `json:"medias"`
-	// StaticMapImageURL is where the static map is served, or null if the
-	// sub-district has none.
-	StaticMapImageURL *string `json:"static_map_image_url"`
+	// Boundary is the sub-district's area as a GeoJSON MultiPolygon, or null
+	// if it has none.
+	Boundary *postgis.MultiPolygon `json:"boundary"`
 }
 
 // -----------------------------------------------------------------------------
@@ -46,12 +49,6 @@ func toSubDistrict(req SubDistrictRequest) *SubDistrict {
 // toSubDistrictResponse turns sd into the JSON shape sent to clients.
 // Media keys become full links using mediaURL.
 func toSubDistrictResponse(sd SubDistrict, mediaURL func(key string) string) SubDistrictResponse {
-	var staticMap *string
-	if sd.StaticMapImageKey != nil {
-		url := mediaURL(*sd.StaticMapImageKey)
-		staticMap = &url
-	}
-
 	return SubDistrictResponse{
 		ID:                     sd.ID,
 		Name:                   sd.Name,
@@ -60,6 +57,6 @@ func toSubDistrictResponse(sd SubDistrict, mediaURL func(key string) string) Sub
 		SafetyCrimeInformation: sd.SafetyCrimeInformation,
 		EstimatedDailySpending: sd.EstimatedDailySpending,
 		Medias:                 storage.ToMediaResponses(sd.Medias, mediaURL),
-		StaticMapImageURL:      staticMap,
+		Boundary:               sd.Boundary,
 	}
 }

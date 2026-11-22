@@ -5,11 +5,11 @@
 > behavior or the API contract, once a VERIFICATION phase passes (see
 > [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-17. Brought in line with the tests and the web app (see the change log).
->   Verified by `go build`, `go vet` (with and without the `integration` tag), and the Go unit
->   tests. The integration tests were not run.
-> - Status: verified. All Go unit tests pass. The web app shows and uploads medias (images and
->   videos) for places; it is untested, like the rest of `web/`.
+> - Last updated: 2026-11-22. Sub-district boundaries replace the static map (see the change log).
+>   Verified by `go build`, `go vet` (with and without the `integration` tag), and the full Go
+>   unit and integration suites.
+> - Status: verified. All Go unit and integration tests pass. The web app draws the
+>   kecamatan boundaries; it is untested, like the rest of `web/`.
 
 ## Contents
 
@@ -84,12 +84,12 @@ MoSCoW scope agreed with the mentor in Week 3:
 | Tier | Feature | Backend status (per tests) |
 | ---- | ------- | -------------------------- |
 | Must | Interactive survival map and essential pins | Delivered: places API with filters, bbox, limit, total |
-| Must | Kecamatan dropdown and info modal (flood, safety/crime, daily spending, static map image) | Delivered: sub-districts API with up to 10 uploaded images and one static map |
+| Must | Kecamatan dropdown and info modal (flood, safety/crime, daily spending, static map image) | Delivered: sub-districts API with up to 10 uploaded images. The static map image was replaced by a GeoJSON boundary (see below) |
 | Must | Category filter and search | Delivered: `category_id` (any of several), `q` |
 | Should | Basic admin verification panel | Backend delivered: admin review of suggestions; create/update/delete for places and sub-districts, all admin-only (route access is tested, see §5) |
 | Could | Place suggestion form | Delivered: suggestions with a pending limit |
 | Could | Upvote/downvote and review system | Delivered as **1–5 star reviews** with comments (not up/down votes) |
-| Could | Kecamatan GeoJSON overlay | Not present |
+| Could | Kecamatan GeoJSON overlay | Backend delivered: each sub-district has an optional GeoJSON MultiPolygon `boundary`, set by an admin. The web map outlines every kecamatan with a boundary, frames the one on show by it, and switches kecamatan when another outline is clicked (untested, like the rest of `web/`) |
 | Won't | Kost listings | Not present (keep it that way) |
 
 Also delivered, beyond the docs: authentication with JWT access tokens and
@@ -119,7 +119,9 @@ These rules apply to every HTTP module unless §6 says otherwise.
 - **`INVALID_BODY` vs `VALIDATION_ERROR`.** A body that cannot be decoded
   returns `400 INVALID_BODY`. That covers an empty body, malformed JSON, a body
   that is not an object (array or `null`), data after the object, wrong JSON types, a non-Point
-  GeoJSON, or coordinates outside WGS84 (lat > 90, lon > 180). A body that
+  GeoJSON where a location is expected, a boundary that is not a well-formed
+  GeoJSON Polygon or MultiPolygon, or coordinates outside WGS84 (lat > 90,
+  lon > 180). A body that
   decodes but breaks a business rule returns `400 VALIDATION_ERROR`. Requests
   with invalid bodies never reach the service. The rule applies to every JSON
   endpoint, including register, login, create, approve, reject, and review, and
@@ -181,8 +183,7 @@ These rules apply to every HTTP module unless §6 says otherwise.
     `DELETE .../medias/{mediaId}`), `GET /v1/suggestions`, `GET
     /v1/suggestions/{id}`, `.../approve`, `.../reject`, `POST /v1/subdistricts`,
     `PUT` and `DELETE /v1/subdistricts/{id}`, the same three sub-district media
-    routes, and the sub-district `static-map` routes (`POST
-    .../static-map/upload-url`, `PUT .../static-map`).
+    routes, and `PUT /v1/subdistricts/{id}/boundary`.
 - **Privacy.** The only place a user's email appears is the caller's own user
   object in the register, login, and refresh responses. No other response
   exposes user emails. A nested author appears as `{"id", "name"}`. Password
@@ -285,8 +286,8 @@ its key; a place without images has `[]`. Lists and single reads return
     one above 100, is replaced by 100 (`maxLimit`), so no list is unbounded and a
     client cannot ask for more. `total` still counts every match, so a client can
     tell when the list was cut off. The web map sends a limit that follows its
-    zoom level: 100 at its widest zoom (16, which it cannot zoom out past), then
-    80 at 17, 60 at 18, and 40 at 19. The web side is untested.
+    zoom level: 100 at its widest zoom (13, which it cannot zoom out past), then
+    80 at 14, 60 at 15, and 40 from 16. The web side is untested.
   - `offset`: a non-negative integer, otherwise `INVALID_OFFSET`.
   - `bbox=west,south,east,north`: four finite numbers with lon in ±180, lat in
     ±90, `west ≤ east`, and `south ≤ north`, otherwise `INVALID_BBOX`. Edges
@@ -396,10 +397,10 @@ its key; a place without images has `[]`. Lists and single reads return
 ### 6.5 Sub-districts / kecamatan (`internal/module/subdistricts`)
 
 **Response:** `id, name, slug, flood_history, safety_crime_information,
-estimated_daily_spending, medias, static_map_image_url`. `medias` has the same
-shape and ordering as a place's (`[]` when there are none).
-`static_map_image_url` is the public URL of the static map's key, or `null`; it
-is **not** writable: the server ignores it in create and update bodies.
+estimated_daily_spending, medias, boundary`. `medias` has the same
+shape and ordering as a place's (`[]` when there are none). `boundary` is a
+GeoJSON `MultiPolygon` or `null`; it is **not** writable through create and
+update bodies, which ignore it (see **Boundary** below).
 
 - **Validation.** The name is trimmed and must have 1–100 code points;
   violations return `ErrInvalidName`, which covers both blank and too long. The
@@ -418,13 +419,13 @@ is **not** writable: the server ignores it in create and update bodies.
 - **Update (`PUT /subdistricts/{id}`).** The body has the same shape and
   validation as `POST /subdistricts`. `flood_history`,
   `safety_crime_information`, and `estimated_daily_spending` are nullable, and
-  are cleared when absent or `null`. The medias and static map are kept.
+  are cleared when absent or `null`. The medias and the boundary are kept.
 - **Delete.**
   - A sub-district that places still reference returns `409
     SUB_DISTRICT_IN_USE` and is not deleted.
   - Suggestions do **not** block deletion; they are deleted with the
     sub-district.
-  - The medias and the static map are deleted with it, and the repository
+  - The medias are deleted with it, and the repository
     **queues their keys in `STORAGE_DELETIONS`** in the same statement; the
     service deletes nothing directly. The cleanup worker removes the objects.
     A sub-district that is still in use keeps all its images and queues
@@ -433,16 +434,23 @@ is **not** writable: the server ignores it in create and update bodies.
   `/subdistricts/{id}/medias` (stored under `subdistricts/{id}/medias`, linked
   through `SUB_DISTRICT_MEDIAS`): presign, add after the last media up to 10
   (`409 MEDIA_LIMIT_REACHED`), and delete, which shifts later medias down one
-  position (`404 MEDIA_NOT_FOUND`, `400 INVALID_MEDIA_ID`). The static map is not a media: deleting its id
-  through the media route returns `404 MEDIA_NOT_FOUND`. Adding a media never
-  touches the static map.
-- **Static map.** One image, stored under `subdistricts/{id}/static-map`, with
-  `POST /subdistricts/{id}/static-map/upload-url` and
-  `PUT /subdistricts/{id}/static-map {upload_key}`. Setting it stores a new
-  `MEDIAS` row, points `SUB_DISTRICTS.static_map_media_id` at it, and removes
-  the previous static map row and queues its key, in one locked transaction.
-  The medias are never touched. If storing fails, the promoted object is
-  deleted.
+  position (`404 MEDIA_NOT_FOUND`, `400 INVALID_MEDIA_ID`). Adding a media
+  never touches the boundary.
+- **Boundary (`PUT /subdistricts/{id}/boundary`, admin).** The body is a
+  GeoJSON `Polygon` or `MultiPolygon`; a Polygon is stored and returned as a
+  MultiPolygon with the same coordinates. It replaces any previous boundary,
+  leaves every other field and the medias unchanged, and returns `200` with the
+  sub-district. There is no way to clear a boundary.
+  - `400 INVALID_BODY`: any other GeoJSON type, no type, no polygons, a polygon
+    without rings, a ring that is not closed or has fewer than four positions,
+    a position that is not `[lon, lat]`, or coordinates outside WGS84. Such a
+    body never reaches the service.
+  - `400 VALIDATION_ERROR` (`ErrInvalidBoundary`): a vertex outside the
+    Indonesia box (edges included), checked by the service before storage, or
+    an area that crosses itself (for example a bow tie), rejected by a `CHECK
+    (ST_IsValid(boundary))` on `SUB_DISTRICTS`. A rejected boundary leaves the
+    stored one unchanged. Holes and several polygons are allowed.
+  - `404 SUB_DISTRICT_NOT_FOUND` for an unknown sub-district.
 
 ### 6.6 Suggestions (`internal/module/suggestions`)
 
@@ -547,7 +555,7 @@ read, approve, and reject them. The admin role check happens in the API router.
 
 The `STORAGE_DELETIONS` table has columns `key`, `attempts`, `next_attempt_at`,
 and `last_error`. Images enter the queue when a place or sub-district media is
-deleted, when a sub-district's static map is replaced, and when a place or
+deleted, and when a place or
 sub-district is deleted. `cmd/cleanup`
 runs one batch and exits, so it must be scheduled.
 
@@ -572,7 +580,7 @@ runs one batch and exits, so it must be scheduled.
 | Code | Status | Raised by |
 | ---- | ------ | --------- |
 | `INVALID_BODY` | 400 | Every JSON endpoint (undecodable or wrongly-typed body) |
-| `VALIDATION_ERROR` | 400 | Business-rule violations: names, passwords, attributes, locations, ratings, lengths, unknown referenced sub-district or category on writes, and image type, key, size, or upload errors |
+| `VALIDATION_ERROR` | 400 | Business-rule violations: names, passwords, attributes, locations, sub-district boundaries outside Indonesia or crossing themselves, ratings, lengths, unknown referenced sub-district or category on writes, and image type, key, size, or upload errors |
 | `INVALID_PLACE_ID` / `INVALID_SUB_DISTRICT_ID` / `INVALID_CATEGORY_ID` / `INVALID_SUGGESTION_ID` / `INVALID_MEDIA_ID` | 400 | Bad path id, or a bad list filter for places |
 | `INVALID_LIMIT` / `INVALID_OFFSET` / `INVALID_BBOX` | 400 | `GET /places` |
 | `INVALID_STATUS` | 400 | `GET /suggestions` |
@@ -597,7 +605,7 @@ body.
 | US-01 Browse pins in the viewport | `GET /places?bbox=…`; the server returns at most 100 places, those nearest the centre of the viewport, and `total` lets the UI show "N results" when the list is truncated. Clustering and empty states are frontend work |
 | US-02 Pin details (6 fields) | Place response: name, category, address/location, operating hours, price range, description. Missing values are `null`, so the UI can show placeholders |
 | US-03 Kecamatan dropdown | `GET /subdistricts` (ordered by id) |
-| US-04 Kecamatan info modal | Flood, safety, and spending fields plus `static_map_image_url`, with `null` for missing data |
+| US-04 Kecamatan info modal | Flood, safety, and spending fields plus a GeoJSON `boundary` in place of the static map image, with `null` for missing data |
 | US-05 Category filter | `GET /categories`; `category_id=1,2` matches any of the listed ids |
 | US-06 Keyword search | `q` matches name, address, description, and category name, case-insensitively and literally |
 | US-07 Filters stay in sync with the map | All filters and `bbox` combine with AND; `total` reflects the combined filter |
@@ -610,8 +618,9 @@ When they disagree, the tests win. The docs record the history:
   replaced: a place has one `category_id`, and categories define typed custom
   fields stored as `attributes`.
 - **Kecamatan info is folded into `SUB_DISTRICTS`** (Week 8). The ERD's
-  `static_map_image_url` text column is now an uploaded image (a `MEDIAS` row).
-  Up to 10 general images (medias) were added.
+  `static_map_image_url` text column became an uploaded image and was then
+  replaced by a PostGIS `boundary GEOMETRY(MultiPolygon, 4326)` (the Could
+  Have GeoJSON overlay). Up to 10 general images (medias) were added.
 - **Coordinates.** The ERD's lat/lng columns became one PostGIS
   `GEOMETRY(Point, 4326)`. The API uses GeoJSON.
 - **Paths and error codes.** Week 9–10 reports list `/places/`,
@@ -679,15 +688,20 @@ them.
     deleted, that media row and its object can be left behind without being
     queued for deletion.
   - Media positions cannot be reordered.
-  - `MEDIAS` has no owner type: a row belongs to whichever link (or static
-    map) references it.
+  - `MEDIAS` has no owner type: a row belongs to whichever link references it.
 - **Unspecified values:** `UploadTTL`, `MaxImageSize`, `MaxVideoSize`, how and when the
   cleanup worker runs, and how long access tokens last in production.
 - **Unspecified behaviors:** review editing or deletion; a "current user" endpoint; listing users.
 - **Frontend (`web/`)** is outside the backend test workflow. US-01
   clustering, placeholders, and filter/viewport sync are untested there. Its
   admin area covers places and suggestions; it has no screens for creating or
-  editing sub-districts, their medias, or their static map.
+  editing sub-districts, their medias, or their boundary.
+- **Static map leftovers (2026-11-22).** The migration was edited in place,
+  so existing databases must be rebuilt; static map objects already in a
+  bucket are not queued for deletion.
+- **Kecamatan overlay, web.** At the widest zoom (13) a whole kecamatan is in
+  view, but the map still loads only the 100 places nearest the centre, so the
+  signs bunch up in the middle of the outline. There is no clustering.
 - **Load test script.** `scripts/k6/get-places.js` still reads the `X-Cache`
   header, which `GET /places` no longer sends (removed 2026-11-16), so its
   `cache_hit` metric always reports `none`. Not updated yet.
@@ -729,3 +743,6 @@ them.
 | 2026-11-17 | Web update | No API change. The web map's widest zoom moved from 13 to 14, and its zoom-based `limit` moved with it, so every zoom level asks for 20 more places than before: 100 at zoom 14, 80 at 15, 60 at 16, and 40 from 17. Verified by the web typecheck, lint, and tests (240 passed); the map was not checked in a browser |
 | 2026-11-17 | Seed data | No API change. `make seed` (`cmd/seed`) now uploads images, so it needs the `STORAGE_*` settings and a set-up bucket (`make dev-setup` seeds after `storage-init`). Every place in Setiabudi, Mampang Prapatan, and Tebet, and each of the three kecamatan, gets 2 or 3 generated 640x480 PNGs of one random color (136 bytes each), and each kecamatan gets a static map: an 800x600 PNG stitched from OpenStreetMap tiles, kept in `cmd/seed/images/static-maps`. Keys follow the API's (`places/{id}/`, `subdistricts/{id}/medias/`, `subdistricts/{id}/static-map/`). Reruns skip whatever already has its images; objects uploaded by a failed run stay in the bucket without a row. `storage.S3` gained `Put`, used only by the seed and outside `ObjectStore`. Verified by `go build`, `go vet`, `go test ./...` (1237 passed), and running the seed twice on the local database (2,716 medias the first time, none added the second), with a color image and a static map fetched from the bucket's public URL |
 | 2026-11-17 | Documentation update | No behavior change; this file was brought in line with the tests and the web app. Media positions: an add goes after the last media and a delete shifts later medias down, so positions stay `1..n` (§6.3, §6.5; the "gap" item is removed from §10). The Redis index behind `GET /places` with a `sub_district_id` is recorded in §6.3, with its untested 30-second lifetime and fallback in §10. The web map's widest zoom is 16, so its `limit` is 100 at 16, 80 at 17, 60 at 18, and 40 at 19. §10 names the two single-column `PLACES` indexes and notes that the web admin has no sub-district screens. The header no longer says the web app lacks medias. Verified by `go build`, `go vet` (with and without the `integration` tag), and the Go unit tests; the integration tests, which cover the media positions and the cache, were not run |
+| 2026-11-22 | Verification update | Sub-district boundary replaces the static map. `SUB_DISTRICTS.static_map_media_id` is replaced by `boundary GEOMETRY(MultiPolygon, 4326)` with a `CHECK (ST_IsValid(boundary))`, edited into the `create_sub_districts` migration (which now creates the PostGIS extension), so databases must be rebuilt. The response field `static_map_image_url` became `boundary` (GeoJSON MultiPolygon or `null`), and `POST .../static-map/upload-url` and `PUT .../static-map` became `PUT /v1/subdistricts/{id}/boundary` (admin), which takes a GeoJSON Polygon or MultiPolygon: malformed GeoJSON is `INVALID_BODY`, and an area outside Indonesia or crossing itself is `VALIDATION_ERROR` (`ErrInvalidBoundary`). Create and update ignore the boundary and keep it. New `postgis.MultiPolygon` type and `database.CheckViolation`. OpenAPI updated. Verified by `go build`, `go vet` (with and without the `integration` tag), `go test ./...` (1236 passed), and `go test -tags integration ./...` (1453 passed). The seed and web app are not updated yet (§10) |
+| 2026-11-22 | Seed data | No API change. `make seed` sets the boundaries of Setiabudi, Mampang Prapatan, and Tebet from their OpenStreetMap `admin_level=6` relations (5802434, 5802428, 5802418; ODbL), joined into one MultiPolygon each and not simplified, so neighbors share edges exactly (about 21 KB of GeoJSON in all). A rerun keeps a boundary already set. The static map PNGs (`cmd/seed/images/static-maps`) and their upload are removed. Verified by `go build`, `go vet ./cmd/...`, and running the seed twice on a fresh migrated database (2,718 medias, 1,092 places, and 3 boundaries the first time, nothing added the second); every seeded place lies inside its kecamatan's boundary, and the boundaries read back through `postgis.MultiPolygon` |
+| 2026-11-22 | Web update | No API change. The web app reads `boundary` instead of `static_map_image_url`. The survival map outlines every kecamatan that has a boundary: the one on show solid with a light fill, the others dashed, named in a tooltip on hover, and picked when clicked (the same as choosing it in the header). A kecamatan is framed by its boundary, or by its places when it has none. The widest zoom moved from 15 to 13 so a whole kecamatan fits on a phone, and the zoom-based `limit` moved with it: 100 at 13, 80 at 14, 60 at 15, and 40 from 16 (§6.3 was out of date, saying 16). The info modal's "Peta area" section is removed. Verified by the web typecheck, lint, format check, and tests (240 passed), and by headless Chrome screenshots against a freshly seeded API at 1366×800 and 390×844; clicking and hovering an outline were not checked |

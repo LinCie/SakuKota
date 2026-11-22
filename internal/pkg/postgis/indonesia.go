@@ -15,6 +15,30 @@ func InIndonesia(p *Point) bool {
 		return false
 	}
 
-	return p.X() >= indonesiaMinLongitude && p.X() <= indonesiaMaxLongitude &&
-		p.Y() >= indonesiaMinLatitude && p.Y() <= indonesiaMaxLatitude
+	return inIndonesia(p.X(), p.Y())
+}
+
+// MultiPolygonInIndonesia reports whether every vertex of m lies inside
+// Indonesia's bounding box. A nil area is not inside it.
+func MultiPolygonInIndonesia(m *MultiPolygon) bool {
+	if m == nil {
+		return false
+	}
+
+	for _, rings := range m.polygons {
+		for _, ring := range rings {
+			for _, c := range ring {
+				if !inIndonesia(c[0], c[1]) {
+					return false
+				}
+			}
+		}
+	}
+
+	return true
+}
+
+func inIndonesia(lng, lat float64) bool {
+	return lng >= indonesiaMinLongitude && lng <= indonesiaMaxLongitude &&
+		lat >= indonesiaMinLatitude && lat <= indonesiaMaxLatitude
 }

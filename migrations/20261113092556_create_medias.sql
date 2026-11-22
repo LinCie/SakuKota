@@ -2,7 +2,7 @@
 -- Every stored image is a MEDIAS row. Images live in object storage; a row
 -- keeps only the object key and the API builds the public URL. A place or
 -- sub-district links its medias by position (see PLACE_MEDIAS and
--- SUB_DISTRICT_MEDIAS), and a sub-district's static map references one.
+-- SUB_DISTRICT_MEDIAS).
 CREATE TABLE MEDIAS (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     key VARCHAR(255) NOT NULL UNIQUE,

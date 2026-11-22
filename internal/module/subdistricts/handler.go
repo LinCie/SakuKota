@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"rantau-go/internal/pkg/httpx"
+	"rantau-go/internal/pkg/postgis"
 	"rantau-go/internal/pkg/utils"
 	"rantau-go/internal/storage"
 )
@@ -47,11 +48,6 @@ func (h *Handler) CreateSubDistrict(w http.ResponseWriter, r *http.Request) {
 // CreateMediaUpload returns a temporary link the client uploads a photo to directly.
 func (h *Handler) CreateMediaUpload(w http.ResponseWriter, r *http.Request) {
 	h.createMediaUpload(w, r, SlotMedias)
-}
-
-// CreateStaticMapUpload returns a temporary link the client uploads the static map to directly.
-func (h *Handler) CreateStaticMapUpload(w http.ResponseWriter, r *http.Request) {
-	h.createMediaUpload(w, r, SlotStaticMap)
 }
 
 // AddMedia attaches an uploaded photo to the sub-district whose id is in the URL.
@@ -112,10 +108,26 @@ func (h *Handler) PutSubDistrict(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponse(*sd, h.mediaURL))
 }
 
-// SetStaticMap makes the uploaded image the static map of the sub-district whose id is in the URL.
-// It sends back the updated sub-district.
-func (h *Handler) SetStaticMap(w http.ResponseWriter, r *http.Request) {
-	h.storeMedia(w, r, h.service.SetStaticMap)
+// SetBoundary makes the GeoJSON Polygon or MultiPolygon in the body the boundary
+// of the sub-district whose id is in the URL. It sends back the updated sub-district.
+func (h *Handler) SetBoundary(w http.ResponseWriter, r *http.Request) {
+	id, ok := subDistrictID(w, r)
+	if !ok {
+		return
+	}
+
+	boundary, ok := httpx.DecodeJSON[postgis.MultiPolygon](w, r)
+	if !ok {
+		return
+	}
+
+	sd, err := h.service.SetBoundary(r.Context(), id, boundary)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusOK, toSubDistrictResponse(*sd, h.mediaURL))
 }
 
 // DeleteSubDistrict removes the sub-district whose id is in the URL.
@@ -227,6 +239,7 @@ func respondError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrInvalidName),
 		errors.Is(err, ErrInvalidSlug),
 		errors.Is(err, ErrInvalidEstimatedDailySpending),
+		errors.Is(err, ErrInvalidBoundary),
 		storage.IsInvalidMedia(err):
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 	default:

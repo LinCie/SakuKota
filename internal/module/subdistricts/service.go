@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"rantau-go/internal/pkg/postgis"
 	"rantau-go/internal/pkg/text"
 	"rantau-go/internal/storage"
 )
@@ -26,8 +27,8 @@ type Service interface {
 	GetSubDistrict(ctx context.Context, id int64) (*SubDistrict, error)
 	// Update overwrites the sub-district with the given id with the details in sd.
 	Update(ctx context.Context, id int64, sd *SubDistrict) (*SubDistrict, error)
-	// SetStaticMap sets the uploaded image as the static map, replacing any previous one.
-	SetStaticMap(ctx context.Context, id int64, uploadKey string) (*SubDistrict, error)
+	// SetBoundary checks the area and saves it as the sub-district's boundary, replacing any previous one.
+	SetBoundary(ctx context.Context, id int64, boundary *postgis.MultiPolygon) (*SubDistrict, error)
 	// Delete removes the sub-district with the given id.
 	Delete(ctx context.Context, id int64) error
 	// DeleteMedia removes a photo from the sub-district.
@@ -87,12 +88,17 @@ func (s *service) Update(ctx context.Context, id int64, sd *SubDistrict) (*SubDi
 	return s.repo.Update(ctx, sd)
 }
 
-// SetStaticMap also queues the previous static map for deletion, in the repository.
-func (s *service) SetStaticMap(ctx context.Context, id int64, uploadKey string) (*SubDistrict, error) {
-	return s.storeMedia(ctx, id, SlotStaticMap, uploadKey, s.repo.SetStaticMap)
+// SetBoundary only checks that the area lies in Indonesia; the database rejects
+// an area that crosses itself.
+func (s *service) SetBoundary(ctx context.Context, id int64, boundary *postgis.MultiPolygon) (*SubDistrict, error) {
+	if !postgis.MultiPolygonInIndonesia(boundary) {
+		return nil, ErrInvalidBoundary
+	}
+
+	return s.repo.SetBoundary(ctx, id, boundary)
 }
 
-// Delete also queues the sub-district's photos and static map for deletion, in the repository.
+// Delete also queues the sub-district's photos for deletion, in the repository.
 func (s *service) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
 }

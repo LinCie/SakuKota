@@ -7,6 +7,7 @@ import {
   type RefObject,
 } from "react";
 
+import type { SubDistrict } from "~/features/subdistricts/types";
 import type { Place } from "../types";
 import { useLeafletMap } from "../hooks";
 import { JAKARTA_CENTER, locatedPlaces, MAP_CANVAS_CLASS } from "./leaflet-map";
@@ -19,12 +20,29 @@ const FIT_OPTIONS = { padding: [56, 56] as [number, number], maxZoom: 16 };
 const PLACE_ZOOM = 18;
 // Keeps a selected sign this far from the map's edges.
 const SIGN_MARGIN = 72;
-// The map zooms out no further than this, a few kilometres across.
-const MIN_ZOOM = 15;
+// The map zooms out no further than this, enough to fit a whole kecamatan on a phone.
+const MIN_ZOOM = 13;
 // ZoomPlate replaces Leaflet's zoom control.
 const MAP_OPTIONS: Leaflet.MapOptions = {
   zoomControl: false,
   minZoom: MIN_ZOOM,
+};
+
+// Kecamatan outlines. The classes override Leaflet's stroke and fill colors;
+// literal so Tailwind generates them. A tooltip's focus listeners make Chrome
+// focus a path on mousedown (never by Tab), so its focus ring, a box around
+// the whole kecamatan, is hidden.
+const SHOWN_OUTLINE: Leaflet.PathOptions = {
+  className: "stroke-board fill-board/5",
+  weight: 3,
+  fillOpacity: 1,
+};
+const OTHER_OUTLINE: Leaflet.PathOptions = {
+  className:
+    "stroke-ink-soft fill-transparent outline-none hover:fill-board/10 transition-[fill]",
+  weight: 2,
+  dashArray: "6 6",
+  fillOpacity: 1,
 };
 
 // Signs plant west to east in a quick stagger. Literal class names so
@@ -121,8 +139,11 @@ export type FlyRequest = { place: Place };
 type SurvivalMapProps = {
   /** Places to plant as signs. The map frames them when the kecamatan changes. */
   places: Place[];
-  /** Changes when the kecamatan changes; triggers a fly-to. */
+  /** The slug of the kecamatan on show; a change triggers a fly-to. */
   focusKey: string;
+  /** Every kecamatan. Those with a boundary are outlined, and clicking another one picks it. */
+  subDistricts: SubDistrict[];
+  onSubDistrictSelect: (slug: string) => void;
   selectedId: number | null;
   onSelect: (placeId: number) => void;
   /** Flies to the place and keeps it clear of the sheet; null until asked. */
@@ -138,6 +159,8 @@ type SurvivalMapProps = {
 export function SurvivalMap({
   places,
   focusKey,
+  subDistricts,
+  onSubDistrictSelect,
   selectedId,
   onSelect,
   flyRequest,
@@ -153,6 +176,7 @@ export function SurvivalMap({
   const leaflet = useLeafletMap(containerRef, MAP_OPTIONS);
   const onSelectEvent = useEffectEvent(onSelect);
   const onViewChangeEvent = useEffectEvent(onViewChange);
+  const onSubDistrictSelectEvent = useEffectEvent(onSubDistrictSelect);
 
   // The list panel opens and closes beside the map, so it follows its container's size.
   useEffect(() => {
@@ -179,22 +203,24 @@ export function SurvivalMap({
     };
   }, [leaflet]);
 
-  // Frame the selected kecamatan: jump on first load, fly afterwards.
+  // Frame the selected kecamatan by its boundary, else by its places: jump on
+  // first load, fly afterwards.
   useEffect(() => {
     if (!leaflet || focusedKeyRef.current === focusKey) return;
     const { L, map } = leaflet;
 
+    const boundary = subDistricts.find((sd) => sd.slug === focusKey)?.boundary;
     const located = locatedPlaces(places);
-    if (located.length === 0) {
+    if (!boundary && located.length === 0) {
       if (focusedKeyRef.current === null) map.setView(JAKARTA_CENTER, 14);
       focusedKeyRef.current = focusKey;
       return;
     }
 
     map.invalidateSize();
-    const bounds = L.latLngBounds(
-      located.map(({ lat, lng }) => L.latLng(lat, lng)),
-    );
+    const bounds = boundary
+      ? L.geoJSON(boundary).getBounds()
+      : L.latLngBounds(located.map(({ lat, lng }) => L.latLng(lat, lng)));
 
     if (focusedKeyRef.current === null || prefersReducedMotion()) {
       map.fitBounds(bounds, FIT_OPTIONS);
@@ -202,7 +228,34 @@ export function SurvivalMap({
       map.flyToBounds(bounds, { ...FIT_OPTIONS, duration: 0.9 });
     }
     focusedKeyRef.current = focusKey;
-  }, [leaflet, focusKey, places]);
+  }, [leaflet, focusKey, places, subDistricts]);
+
+  // Outline every kecamatan: the one on show in bold, the others dashed,
+  // named on hover, and picked on click.
+  useEffect(() => {
+    if (!leaflet) return;
+    const { L, map } = leaflet;
+
+    const outlines = subDistricts.flatMap((sd) => {
+      if (!sd.boundary) return [];
+      const shown = sd.slug === focusKey;
+      const outline = L.geoJSON(sd.boundary, {
+        style: shown ? SHOWN_OUTLINE : OTHER_OUTLINE,
+        // The shown one lets clicks through to the map.
+        interactive: !shown,
+      });
+      if (!shown) {
+        outline
+          .bindTooltip(`Kec. ${sd.name}`, { sticky: true })
+          .on("click", () => onSubDistrictSelectEvent(sd.slug));
+      }
+      return [outline.addTo(map)];
+    });
+
+    return () => {
+      for (const outline of outlines) outline.remove();
+    };
+  }, [leaflet, subDistricts, focusKey]);
 
   // Plant new signs and pull the ones that no longer match.
   useEffect(() => {

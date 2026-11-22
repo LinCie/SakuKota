@@ -171,6 +171,16 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
     }
   }
 
+  function changeKecamatan(slug: string) {
+    // The new kecamatan loads without a view, so the map can frame it.
+    onSearchChange({
+      kecamatan: slug,
+      tempat: undefined,
+      bbox: undefined,
+      limit: undefined,
+    });
+  }
+
   function toggleCategory(slug: string) {
     let next: string[];
     if (activeSlugs.includes(slug)) {
@@ -254,15 +264,7 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
         subDistricts={subDistricts}
         subDistrict={subDistrict}
         search={searchField}
-        onKecamatanChange={(slug) =>
-          // The new kecamatan loads without a view, so the map can frame it.
-          onSearchChange({
-            kecamatan: slug,
-            tempat: undefined,
-            bbox: undefined,
-            limit: undefined,
-          })
-        }
+        onKecamatanChange={changeKecamatan}
         onOpenInfo={() => setInfoOpen(true)}
       />
 
@@ -286,6 +288,8 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
           <SurvivalMap
             places={mapPlaces}
             focusKey={subDistrict?.slug ?? ""}
+            subDistricts={subDistricts}
+            onSubDistrictSelect={changeKecamatan}
             selectedId={selectedPlace?.id ?? null}
             onSelect={selectPlace}
             flyRequest={flyRequest}

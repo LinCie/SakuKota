@@ -1,6 +1,4 @@
 -- +goose Up
-CREATE EXTENSION IF NOT EXISTS postgis;
-
 -- `attributes` holds the values of the category's custom fields. The rating
 -- columns summarize the place's reviews and are updated in the same statement
 -- that stores a review. The sum is kept instead of the average so it stays

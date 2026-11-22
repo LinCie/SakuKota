@@ -13,6 +13,7 @@ import (
 
 	"rantau-go/internal/module/subdistricts"
 	"rantau-go/internal/module/subdistricts/mock"
+	"rantau-go/internal/pkg/postgis"
 	"rantau-go/internal/storage"
 )
 
@@ -269,7 +270,7 @@ func TestService_Create_Storage(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 // savedMenteng is the stored sub-district that updates start from: a Menteng
-// with every optional field, a media, and a static map set.
+// with every optional field and a media set.
 func savedMenteng() *subdistricts.SubDistrict {
 	return &subdistricts.SubDistrict{
 		ID:                     7,
@@ -281,7 +282,6 @@ func savedMenteng() *subdistricts.SubDistrict {
 		Medias: []storage.Media{
 			{ID: 3, Key: "subdistricts/7/medias/9f8e7d6c-5b4a-4321-8fed-cba987654321.png", ContentType: "image/png", Size: 1024, Position: 1},
 		},
-		StaticMapImageKey: new(oldStaticMapKey),
 	}
 }
 
@@ -508,8 +508,6 @@ func TestService_Delete_QueuesImages(t *testing.T) {
 // Sub-district images
 // -----------------------------------------------------------------------------
 
-const oldStaticMapKey = "subdistricts/7/static-map/1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d.png"
-
 // slotCase is one of a sub-district's image slots, with its storage prefix
 // and keys for sub-district 7.
 type slotCase struct {
@@ -526,13 +524,7 @@ var (
 		uploadKey: "uploads/subdistricts/7/medias/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp",
 		newKey:    "subdistricts/7/medias/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp",
 	}
-	staticMapSlot = slotCase{
-		slot:      subdistricts.SlotStaticMap,
-		prefix:    "subdistricts/7/static-map",
-		uploadKey: "uploads/subdistricts/7/static-map/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.png",
-		newKey:    "subdistricts/7/static-map/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.png",
-	}
-	slotCases = []slotCase{mediasSlot, staticMapSlot}
+	slotCases = []slotCase{mediasSlot}
 )
 
 func TestService_MediaUploadURL(t *testing.T) {
@@ -603,8 +595,7 @@ func TestService_MediaUploadURL_PresignFailure(t *testing.T) {
 	}
 }
 
-// storeCase is an operation that promotes an upload and stores the image: adding
-// a media or setting the static map.
+// storeCase is an operation that promotes an upload and stores the image.
 type storeCase struct {
 	name string
 	sc   slotCase
@@ -622,16 +613,6 @@ var storeCases = []storeCase{
 		},
 		run: func(s subdistricts.Service, uploadKey string) (*subdistricts.SubDistrict, error) {
 			return s.AddMedia(context.Background(), 7, uploadKey)
-		},
-	},
-	{
-		name: "set static map",
-		sc:   staticMapSlot,
-		expectStore: func(repo *mock.MockRepository, m storage.Media) *gomock.Call {
-			return repo.EXPECT().SetStaticMap(gomock.Any(), int64(7), m)
-		},
-		run: func(s subdistricts.Service, uploadKey string) (*subdistricts.SubDistrict, error) {
-			return s.SetStaticMap(context.Background(), 7, uploadKey)
 		},
 	},
 }
@@ -775,4 +756,75 @@ func TestService_DeleteMedia(t *testing.T) {
 			require.ErrorIs(t, err, tc.repoErr)
 		})
 	}
+}
+
+// -----------------------------------------------------------------------------
+// Sub-district boundary
+// -----------------------------------------------------------------------------
+
+func TestService_SetBoundary(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name    string
+		repoErr error
+	}{
+		{name: "stores the boundary", repoErr: nil},
+		{name: "unknown sub-district", repoErr: subdistricts.ErrSubDistrictNotFound},
+		{name: "boundary crosses itself", repoErr: subdistricts.ErrInvalidBoundary},
+		{name: "storage failure is returned", repoErr: boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			boundary := mustBoundary(t, squareJSON)
+			var stored *subdistricts.SubDistrict
+			if tc.repoErr == nil {
+				stored = savedMenteng()
+			}
+
+			repo := mock.NewMockRepository(gomock.NewController(t))
+			repo.EXPECT().SetBoundary(gomock.Any(), int64(7), boundary).Return(stored, tc.repoErr)
+
+			got, err := subdistricts.NewService(repo, noMedia(t)).SetBoundary(context.Background(), 7, boundary)
+			require.ErrorIs(t, err, tc.repoErr)
+			assert.Same(t, stored, got)
+		})
+	}
+}
+
+func TestService_SetBoundary_Rejected(t *testing.T) {
+	tests := []struct {
+		name     string
+		boundary *postgis.MultiPolygon
+	}{
+		{name: "no boundary", boundary: nil},
+		{name: "a vertex east of Indonesia", boundary: mustBoundary(t,
+			`{"type":"Polygon","coordinates":[[[106.8,-6.2],[141.01,-6.2],[106.9,-6.3],[106.8,-6.2]]]}`)},
+		{name: "one polygon outside Indonesia", boundary: mustBoundary(t,
+			`{"type":"MultiPolygon","coordinates":[[[[106.8,-6.2],[106.9,-6.2],[106.9,-6.3],[106.8,-6.2]]],`+
+				`[[[0,0],[1,0],[1,1],[0,0]]]]}`)},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// No expectations: a rejected boundary must never reach storage.
+			repo := mock.NewMockRepository(gomock.NewController(t))
+
+			got, err := subdistricts.NewService(repo, noMedia(t)).SetBoundary(context.Background(), 7, tc.boundary)
+			require.ErrorIs(t, err, subdistricts.ErrInvalidBoundary)
+			assert.Nil(t, got)
+		})
+	}
+}
+
+func TestService_SetBoundary_EdgesOfIndonesia(t *testing.T) {
+	// The box's edges count as inside.
+	boundary := mustBoundary(t, `{"type":"Polygon","coordinates":[[[95,-11],[141,-11],[141,6],[95,6],[95,-11]]]}`)
+
+	repo := mock.NewMockRepository(gomock.NewController(t))
+	repo.EXPECT().SetBoundary(gomock.Any(), int64(7), boundary).Return(savedMenteng(), nil)
+
+	_, err := subdistricts.NewService(repo, noMedia(t)).SetBoundary(context.Background(), 7, boundary)
+	require.NoError(t, err)
 }

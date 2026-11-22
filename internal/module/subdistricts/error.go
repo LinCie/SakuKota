@@ -12,4 +12,5 @@ var (
 	ErrSubDistrictNotFound           = errors.New("sub-district not found")
 	ErrSubDistrictInUse              = errors.New("sub-district is referenced by places")
 	ErrInvalidEstimatedDailySpending = fmt.Errorf("estimated_daily_spending must be between 0 and %.2f", maxEstimatedDailySpending)
+	ErrInvalidBoundary               = errors.New("boundary must lie in Indonesia and must not cross itself")
 )

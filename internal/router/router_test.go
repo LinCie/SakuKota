@@ -69,16 +69,15 @@ var routeAccess = map[string]access{
 	"POST /v1/suggestions/{id}/approve": adminOnly,
 	"POST /v1/suggestions/{id}/reject":  adminOnly,
 
-	"GET /v1/subdistricts/":                            public,
-	"GET /v1/subdistricts/{id}":                        public,
-	"POST /v1/subdistricts/":                           adminOnly,
-	"PUT /v1/subdistricts/{id}":                        adminOnly,
-	"DELETE /v1/subdistricts/{id}":                     adminOnly,
-	"POST /v1/subdistricts/{id}/medias/upload-url":     adminOnly,
-	"POST /v1/subdistricts/{id}/medias":                adminOnly,
-	"DELETE /v1/subdistricts/{id}/medias/{mediaId}":    adminOnly,
-	"POST /v1/subdistricts/{id}/static-map/upload-url": adminOnly,
-	"PUT /v1/subdistricts/{id}/static-map":             adminOnly,
+	"GET /v1/subdistricts/":                         public,
+	"GET /v1/subdistricts/{id}":                     public,
+	"POST /v1/subdistricts/":                        adminOnly,
+	"PUT /v1/subdistricts/{id}":                     adminOnly,
+	"DELETE /v1/subdistricts/{id}":                  adminOnly,
+	"POST /v1/subdistricts/{id}/medias/upload-url":  adminOnly,
+	"POST /v1/subdistricts/{id}/medias":             adminOnly,
+	"DELETE /v1/subdistricts/{id}/medias/{mediaId}": adminOnly,
+	"PUT /v1/subdistricts/{id}/boundary":            adminOnly,
 }
 
 func testConfig() config.Config {

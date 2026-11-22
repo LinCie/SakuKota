@@ -1,6 +1,9 @@
 package subdistricts
 
-import "rantau-go/internal/storage"
+import (
+	"rantau-go/internal/pkg/postgis"
+	"rantau-go/internal/storage"
+)
 
 // SubDistrict represents a row in the SUB_DISTRICTS table.
 type SubDistrict struct {
@@ -10,9 +13,8 @@ type SubDistrict struct {
 	FloodHistory           *string  `db:"flood_history"`
 	SafetyCrimeInformation *string  `db:"safety_crime_information"`
 	EstimatedDailySpending *float64 `db:"estimated_daily_spending"`
-	// StaticMapImageKey is the storage key of the sub-district's static map,
-	// or nil if it has none.
-	StaticMapImageKey *string `db:"static_map_image_key"`
+	// Boundary is the sub-district's area, or nil if it has none.
+	Boundary *postgis.MultiPolygon `db:"boundary"`
 	// Medias are the sub-district's images in position order. The repository
 	// loads them separately, so they are never nil once read.
 	Medias []storage.Media `db:"-"`
@@ -23,6 +25,5 @@ type SubDistrict struct {
 type MediaSlot string
 
 const (
-	SlotMedias    MediaSlot = "medias"
-	SlotStaticMap MediaSlot = "static-map"
+	SlotMedias MediaSlot = "medias"
 )

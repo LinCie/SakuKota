@@ -164,11 +164,8 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 				// DELETE /v1/subdistricts/{id}/medias/{mediaId}
 				r.Delete("/{id}/medias/{mediaId}", subdistrictModule.Handler.DeleteMedia)
 
-				// POST /v1/subdistricts/{id}/static-map/upload-url
-				r.Post("/{id}/static-map/upload-url", subdistrictModule.Handler.CreateStaticMapUpload)
-
-				// PUT /v1/subdistricts/{id}/static-map
-				r.Put("/{id}/static-map", subdistrictModule.Handler.SetStaticMap)
+				// PUT /v1/subdistricts/{id}/boundary
+				r.Put("/{id}/boundary", subdistrictModule.Handler.SetBoundary)
 			})
 		})
 	})

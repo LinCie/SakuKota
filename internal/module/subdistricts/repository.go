@@ -8,6 +8,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"rantau-go/internal/database"
+	"rantau-go/internal/pkg/postgis"
 	"rantau-go/internal/storage"
 )
 
@@ -15,21 +16,21 @@ import (
 //
 //go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock
 type Repository interface {
-	// Create saves the sub-district and returns it with its photos and static map.
+	// Create saves the sub-district and returns it with its photos.
 	Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error)
 	// AddMedia stores the photo in the sub-district's first free slot and returns the sub-district.
 	// It returns ErrSubDistrictNotFound, or ErrMediaLimitReached if the sub-district is already full.
 	AddMedia(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error)
-	// GetMany returns every sub-district with its photos and static map.
+	// GetMany returns every sub-district with its photos.
 	GetMany(ctx context.Context) ([]SubDistrict, error)
-	// GetSubDistrict returns the sub-district with its photos and static map.
+	// GetSubDistrict returns the sub-district with its photos.
 	GetSubDistrict(ctx context.Context, id int64) (*SubDistrict, error)
-	// Update saves the sub-district's details and returns it with its photos and static map.
+	// Update saves the sub-district's details and returns it with its photos. The boundary is kept.
 	Update(ctx context.Context, sd *SubDistrict) (*SubDistrict, error)
-	// SetStaticMap saves the photo as the static map and returns the sub-district.
-	// The previous static map is removed and its file queued for deletion.
-	SetStaticMap(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error)
-	// Delete removes the sub-district with its photos and static map, and queues their files for deletion.
+	// SetBoundary saves the area as the sub-district's boundary and returns the sub-district.
+	// It returns ErrSubDistrictNotFound, or ErrInvalidBoundary if the area crosses itself.
+	SetBoundary(ctx context.Context, id int64, boundary *postgis.MultiPolygon) (*SubDistrict, error)
+	// Delete removes the sub-district with its photos, and queues their files for deletion.
 	// It returns ErrSubDistrictNotFound, or ErrSubDistrictInUse if places still use it.
 	Delete(ctx context.Context, id int64) error
 	// DeleteMedia removes the photo and queues its file for deletion.
@@ -51,7 +52,7 @@ func NewPostgresRepository(db *sqlx.DB) Repository {
 	}
 }
 
-// Create inserts the sub-district and returns it with its photos and static map.
+// Create inserts the sub-district and returns it with its photos.
 // It returns ErrSubDistrictExists if the name or slug is already taken.
 func (r *postgresRepository) Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error) {
 	var created SubDistrict
@@ -65,7 +66,7 @@ func (r *postgresRepository) Create(ctx context.Context, sd *SubDistrict) (*SubD
 			VALUES ($1, $2, $3, $4, $5)
 			RETURNING *
 		)
-		SELECT `+subDistrictColumns+` FROM sd`+staticMapJoin,
+		SELECT `+subDistrictColumns+` FROM sd`,
 		sd.Name,
 		sd.Slug,
 		sd.FloodHistory,
@@ -136,14 +137,14 @@ func (r *postgresRepository) AddMedia(ctx context.Context, id int64, m storage.M
 	return r.GetSubDistrict(ctx, id)
 }
 
-// GetMany returns every sub-district in id order, with its photos and static map.
+// GetMany returns every sub-district in id order, with its photos.
 func (r *postgresRepository) GetMany(ctx context.Context) ([]SubDistrict, error) {
 	subDistricts := make([]SubDistrict, 0)
 
 	err := r.db.SelectContext(
 		ctx,
 		&subDistricts,
-		`SELECT `+subDistrictColumns+` FROM SUB_DISTRICTS sd`+staticMapJoin+` ORDER BY sd.id`,
+		`SELECT `+subDistrictColumns+` FROM SUB_DISTRICTS sd ORDER BY sd.id`,
 	)
 	if err != nil {
 		return nil, err
@@ -163,7 +164,7 @@ func (r *postgresRepository) GetSubDistrict(ctx context.Context, id int64) (*Sub
 	err := r.db.GetContext(
 		ctx,
 		&sd,
-		`SELECT `+subDistrictColumns+` FROM SUB_DISTRICTS sd`+staticMapJoin+` WHERE sd.id = $1`,
+		`SELECT `+subDistrictColumns+` FROM SUB_DISTRICTS sd WHERE sd.id = $1`,
 		id,
 	)
 	if err != nil {
@@ -176,7 +177,7 @@ func (r *postgresRepository) GetSubDistrict(ctx context.Context, id int64) (*Sub
 	return r.withMedias(ctx, sd)
 }
 
-// Update saves the sub-district's details and returns it with its photos and static map.
+// Update saves the sub-district's details and returns it with its photos.
 // It returns ErrSubDistrictNotFound, or ErrSubDistrictExists if the name or slug is taken.
 func (r *postgresRepository) Update(ctx context.Context, sd *SubDistrict) (*SubDistrict, error) {
 	var updated SubDistrict
@@ -191,7 +192,7 @@ func (r *postgresRepository) Update(ctx context.Context, sd *SubDistrict) (*SubD
 			WHERE id = $1
 			RETURNING *
 		)
-		SELECT `+subDistrictColumns+` FROM sd`+staticMapJoin,
+		SELECT `+subDistrictColumns+` FROM sd`,
 		sd.ID,
 		sd.Name,
 		sd.Slug,
@@ -212,67 +213,35 @@ func (r *postgresRepository) Update(ctx context.Context, sd *SubDistrict) (*SubD
 	return r.withMedias(ctx, updated)
 }
 
-// SetStaticMap saves the photo as the static map, removes the old one, and returns the sub-district.
-// It locks the row so two replaces at once cannot leave an old file unqueued.
-func (r *postgresRepository) SetStaticMap(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error) {
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback() }()
+// SetBoundary saves the area as the sub-district's boundary and returns the sub-district.
+func (r *postgresRepository) SetBoundary(ctx context.Context, id int64, boundary *postgis.MultiPolygon) (*SubDistrict, error) {
+	var updated SubDistrict
 
-	var previous *int64
-	err = tx.GetContext(ctx, &previous, `SELECT static_map_media_id FROM SUB_DISTRICTS WHERE id = $1 FOR NO KEY UPDATE`, id)
+	err := r.db.GetContext(
+		ctx,
+		&updated,
+		`WITH sd AS (
+			UPDATE SUB_DISTRICTS SET boundary = $2 WHERE id = $1 RETURNING *
+		)
+		SELECT `+subDistrictColumns+` FROM sd`,
+		id,
+		boundary,
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrSubDistrictNotFound
 		}
-		return nil, err
-	}
-
-	_, err = tx.ExecContext(
-		ctx,
-		`WITH media AS (
-			INSERT INTO MEDIAS (key, content_type, size_bytes)
-			VALUES ($2, $3, $4)
-			RETURNING id
-		)
-		UPDATE SUB_DISTRICTS SET static_map_media_id = media.id
-		FROM media
-		WHERE SUB_DISTRICTS.id = $1`,
-		id,
-		m.Key,
-		m.ContentType,
-		m.Size,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	if previous != nil {
-		_, err = tx.ExecContext(
-			ctx,
-			`WITH deleted AS (
-				DELETE FROM MEDIAS WHERE id = $1 RETURNING key
-			)
-			INSERT INTO STORAGE_DELETIONS (key)
-			SELECT key FROM deleted
-			ON CONFLICT (key) DO NOTHING`,
-			*previous,
-		)
-		if err != nil {
-			return nil, err
+		if database.IsCode(err, database.CheckViolation) &&
+			database.ConstraintName(err) == "sub_districts_boundary_check" {
+			return nil, ErrInvalidBoundary
 		}
-	}
-
-	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 
-	return r.GetSubDistrict(ctx, id)
+	return r.withMedias(ctx, updated)
 }
 
-// Delete removes the sub-district with its photos and static map, and queues their files for deletion.
+// Delete removes the sub-district with its photos, and queues their files for deletion.
 // It returns ErrSubDistrictNotFound, or ErrSubDistrictInUse if places still use it, and removes nothing.
 func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
 	var deleted int
@@ -283,7 +252,6 @@ func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
 		`WITH medias AS (
 			DELETE FROM MEDIAS
 			WHERE id IN (SELECT media_id FROM SUB_DISTRICT_MEDIAS WHERE sub_district_id = $1)
-				OR id = (SELECT static_map_media_id FROM SUB_DISTRICTS WHERE id = $1)
 			RETURNING key
 		), deleted AS (
 			DELETE FROM SUB_DISTRICTS WHERE id = $1 RETURNING id
@@ -369,14 +337,9 @@ func (r *postgresRepository) DeleteMedia(ctx context.Context, id, mediaID int64)
 // Unexported
 // -----------------------------------------------------------------------------
 
-// subDistrictColumns selects a sub-district from `sd` and the key of its
-// static map from `sm`. Queries add staticMapJoin to provide `sm`.
+// subDistrictColumns selects a sub-district from `sd`.
 const subDistrictColumns = `sd.id, sd.name, sd.slug, sd.flood_history,
-	sd.safety_crime_information, sd.estimated_daily_spending,
-	sm.key AS static_map_image_key`
-
-// staticMapJoin joins the static map of `sd` as `sm`.
-const staticMapJoin = ` LEFT JOIN MEDIAS sm ON sm.id = sd.static_map_media_id`
+	sd.safety_crime_information, sd.estimated_daily_spending, sd.boundary`
 
 // withMedias returns sd with its photos attached.
 func (r *postgresRepository) withMedias(ctx context.Context, sd SubDistrict) (*SubDistrict, error) {
