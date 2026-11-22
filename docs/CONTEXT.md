@@ -285,9 +285,8 @@ its key; a place without images has `[]`. Lists and single reads return
   - `limit`: a positive integer, otherwise `INVALID_LIMIT`. An absent limit, or
     one above 100, is replaced by 100 (`maxLimit`), so no list is unbounded and a
     client cannot ask for more. `total` still counts every match, so a client can
-    tell when the list was cut off. The web map sends a limit that follows its
-    zoom level: 100 at its widest zoom (13, which it cannot zoom out past), then
-    80 at 14, 60 at 15, and 40 from 16. The web side is untested.
+    tell when the list was cut off. The web map sends a fixed limit of
+    20 at every zoom level. The web side is untested.
   - `offset`: a non-negative integer, otherwise `INVALID_OFFSET`.
   - `bbox=west,south,east,north`: four finite numbers with lon in ±180, lat in
     ±90, `west ≤ east`, and `south ≤ north`, otherwise `INVALID_BBOX`. Edges

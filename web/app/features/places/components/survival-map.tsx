@@ -117,19 +117,14 @@ function clamp(value: number, limit: number) {
   return Math.min(limit, Math.max(-limit, value));
 }
 
-/**
- * How many places to load at a zoom level: the server's maximum of 100 when
- * zoomed all the way out, where the view holds the most, down to 40 close in.
- */
-function placesLimit(zoom: number) {
-  return Math.max(40, 100 - (Math.round(zoom) - MIN_ZOOM) * 20);
-}
+/** How many places the map loads, whatever its zoom level. */
+const PLACES_LIMIT = 20;
 
 /** The part of the map on show, as the places request filters it. */
 export type MapView = {
   /** "west,south,east,north" in degrees. */
   bbox: string;
-  /** How many places to load for the view's zoom level. */
+  /** How many places to load. */
   limit: number;
 };
 
@@ -195,7 +190,7 @@ export function SurvivalMap({
     const reportView = () =>
       onViewChangeEvent({
         bbox: bboxParam(map.getBounds()),
-        limit: placesLimit(map.getZoom()),
+        limit: PLACES_LIMIT,
       });
     map.on("moveend", reportView);
     return () => {
