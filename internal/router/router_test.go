@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"rantau-go/internal/config"
-	"rantau-go/internal/module/users"
+	"rantau-go/internal/domain"
 	"rantau-go/internal/pkg/httpx"
 	"rantau-go/internal/pkg/jwt"
 	"rantau-go/internal/router"
@@ -152,21 +152,24 @@ func errorCode(rec *httptest.ResponseRecorder) string {
 	return body.Code
 }
 
-// assertTurnedAway checks the response is the middleware refusing the request.
-// A handler can also answer 401 (a bad refresh token, say), so the code is
-// checked too.
-func assertTurnedAway(t *testing.T, rec *httptest.ResponseRecorder, status int, code string) {
-	t.Helper()
-	assert.Equal(t, status, rec.Code, "status, body: %s", rec.Body)
-	assert.Equal(t, code, errorCode(rec), "error code")
+// refusal is the status and error code of a response.
+type refusal struct {
+	Status int
+	Code   string
 }
 
-func assertLetThrough(t *testing.T, rec *httptest.ResponseRecorder, who string) {
-	t.Helper()
+// refusalOf returns the response's status and error code. A middleware
+// refusal is told from a handler answering 401 (a bad refresh token, say) by
+// the code.
+func refusalOf(rec *httptest.ResponseRecorder) refusal {
+	return refusal{Status: rec.Code, Code: errorCode(rec)}
+}
 
-	turnedAway := rec.Code == http.StatusForbidden ||
+// isTurnedAway reports whether the response is an authentication or
+// authorization refusal.
+func isTurnedAway(rec *httptest.ResponseRecorder) bool {
+	return rec.Code == http.StatusForbidden ||
 		(rec.Code == http.StatusUnauthorized && errorCode(rec) == httpx.CodeUnauthorized)
-	assert.False(t, turnedAway, "%s was turned away: %d %s", who, rec.Code, rec.Body)
 }
 
 func TestRouter_EveryRouteHasADeclaredAccess(t *testing.T) {
@@ -184,31 +187,36 @@ func TestRouter_EveryRouteHasADeclaredAccess(t *testing.T) {
 	slices.Sort(registered)
 	slices.Sort(declared)
 
-	assert.Equal(t, declared, registered,
-		"routes registered in the router (actual) differ from routeAccess (expected)")
+	assert.Equal(t, declared, registered, "routes registered in the router differ from routeAccess")
 }
 
 func TestRouter_Access(t *testing.T) {
 	h := newRouter(t)
-	user, admin := token(t, "user"), token(t, users.RoleAdmin)
+	user, admin := token(t, "user"), token(t, domain.RoleAdmin)
 
 	for key, level := range routeAccess {
 		t.Run(key, func(t *testing.T) {
+			unauthorized := refusal{Status: http.StatusUnauthorized, Code: httpx.CodeUnauthorized}
+			forbidden := refusal{Status: http.StatusForbidden, Code: httpx.CodeForbidden}
+			letThrough := func(rec *httptest.ResponseRecorder, who string) {
+				assert.False(t, isTurnedAway(rec), "%s was turned away: %d %s", who, rec.Code, rec.Body)
+			}
+
 			switch level {
 			case public:
-				assertLetThrough(t, call(h, key, ""), "anonymous caller")
+				letThrough(call(h, key, ""), "anonymous caller")
 
 			case authenticated:
-				assertTurnedAway(t, call(h, key, ""), http.StatusUnauthorized, httpx.CodeUnauthorized)
-				assertTurnedAway(t, call(h, key, "garbage"), http.StatusUnauthorized, httpx.CodeUnauthorized)
-				assertLetThrough(t, call(h, key, user), "user")
-				assertLetThrough(t, call(h, key, admin), "admin")
+				assert.Equal(t, unauthorized, refusalOf(call(h, key, "")))
+				assert.Equal(t, unauthorized, refusalOf(call(h, key, "garbage")))
+				letThrough(call(h, key, user), "user")
+				letThrough(call(h, key, admin), "admin")
 
 			case adminOnly:
-				assertTurnedAway(t, call(h, key, ""), http.StatusUnauthorized, httpx.CodeUnauthorized)
-				assertTurnedAway(t, call(h, key, "garbage"), http.StatusUnauthorized, httpx.CodeUnauthorized)
-				assertTurnedAway(t, call(h, key, user), http.StatusForbidden, httpx.CodeForbidden)
-				assertLetThrough(t, call(h, key, admin), "admin")
+				assert.Equal(t, unauthorized, refusalOf(call(h, key, "")))
+				assert.Equal(t, unauthorized, refusalOf(call(h, key, "garbage")))
+				assert.Equal(t, forbidden, refusalOf(call(h, key, user)))
+				letThrough(call(h, key, admin), "admin")
 			}
 		})
 	}

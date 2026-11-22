@@ -8,54 +8,26 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"rantau-go/internal/database"
+	"rantau-go/internal/domain"
 	"rantau-go/internal/pkg/postgis"
-	"rantau-go/internal/storage"
 )
 
-// Repository defines the persistence operations required by the service.
-//
-//go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock
-type Repository interface {
-	// Create saves the sub-district and returns it with its photos.
-	Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error)
-	// AddMedia stores the photo in the sub-district's first free slot and returns the sub-district.
-	// It returns ErrSubDistrictNotFound, or ErrMediaLimitReached if the sub-district is already full.
-	AddMedia(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error)
-	// GetMany returns every sub-district with its photos.
-	GetMany(ctx context.Context) ([]SubDistrict, error)
-	// GetSubDistrict returns the sub-district with its photos.
-	GetSubDistrict(ctx context.Context, id int64) (*SubDistrict, error)
-	// Update saves the sub-district's details and returns it with its photos. The boundary is kept.
-	Update(ctx context.Context, sd *SubDistrict) (*SubDistrict, error)
-	// SetBoundary saves the area as the sub-district's boundary and returns the sub-district.
-	// It returns ErrSubDistrictNotFound, or ErrInvalidBoundary if the area crosses itself.
-	SetBoundary(ctx context.Context, id int64, boundary *postgis.MultiPolygon) (*SubDistrict, error)
-	// Delete removes the sub-district with its photos, and queues their files for deletion.
-	// It returns ErrSubDistrictNotFound, or ErrSubDistrictInUse if places still use it.
-	Delete(ctx context.Context, id int64) error
-	// DeleteMedia removes the photo and queues its file for deletion.
-	// Later photos move up one slot to close the gap; it returns ErrMediaNotFound if there is no such photo.
-	DeleteMedia(ctx context.Context, id, mediaID int64) error
-}
-
-type postgresRepository struct {
+// PostgresRepository stores sub-districts in PostgreSQL.
+type PostgresRepository struct {
 	db *sqlx.DB
 }
 
-// -----------------------------------------------------------------------------
-// Exported
-// -----------------------------------------------------------------------------
-
-func NewPostgresRepository(db *sqlx.DB) Repository {
-	return &postgresRepository{
+// NewPostgresRepository builds a PostgresRepository over db.
+func NewPostgresRepository(db *sqlx.DB) *PostgresRepository {
+	return &PostgresRepository{
 		db: db,
 	}
 }
 
 // Create inserts the sub-district and returns it with its photos.
-// It returns ErrSubDistrictExists if the name or slug is already taken.
-func (r *postgresRepository) Create(ctx context.Context, sd *SubDistrict) (*SubDistrict, error) {
-	var created SubDistrict
+// It returns domain.ErrSubDistrictExists if the name or slug is already taken.
+func (r *PostgresRepository) Create(ctx context.Context, sd *domain.SubDistrict) (*domain.SubDistrict, error) {
+	var created domain.SubDistrict
 
 	err := r.db.GetContext(
 		ctx,
@@ -75,7 +47,7 @@ func (r *postgresRepository) Create(ctx context.Context, sd *SubDistrict) (*SubD
 	)
 	if err != nil {
 		if database.IsCode(err, database.UniqueViolation) {
-			return nil, ErrSubDistrictExists
+			return nil, domain.ErrSubDistrictExists
 		}
 		return nil, err
 	}
@@ -85,7 +57,7 @@ func (r *postgresRepository) Create(ctx context.Context, sd *SubDistrict) (*SubD
 
 // AddMedia stores the photo after the sub-district's last one and returns the sub-district.
 // It locks the sub-district row so two uploads at once cannot take the same slot or go over the limit.
-func (r *postgresRepository) AddMedia(ctx context.Context, id int64, m storage.Media) (*SubDistrict, error) {
+func (r *PostgresRepository) AddMedia(ctx context.Context, id int64, m domain.Media) (*domain.SubDistrict, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -96,7 +68,7 @@ func (r *postgresRepository) AddMedia(ctx context.Context, id int64, m storage.M
 	err = tx.GetContext(ctx, &locked, `SELECT id FROM SUB_DISTRICTS WHERE id = $1 FOR NO KEY UPDATE`, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrSubDistrictNotFound
+			return nil, domain.ErrSubDistrictNotFound
 		}
 		return nil, err
 	}
@@ -107,8 +79,8 @@ func (r *postgresRepository) AddMedia(ctx context.Context, id int64, m storage.M
 	if err != nil {
 		return nil, err
 	}
-	if count >= storage.MaxMedias {
-		return nil, storage.ErrMediaLimitReached
+	if count >= domain.MaxMedias {
+		return nil, domain.ErrMediaLimitReached
 	}
 
 	_, err = tx.ExecContext(
@@ -134,12 +106,12 @@ func (r *postgresRepository) AddMedia(ctx context.Context, id int64, m storage.M
 		return nil, err
 	}
 
-	return r.GetSubDistrict(ctx, id)
+	return r.Fetch(ctx, id)
 }
 
-// GetMany returns every sub-district in id order, with its photos.
-func (r *postgresRepository) GetMany(ctx context.Context) ([]SubDistrict, error) {
-	subDistricts := make([]SubDistrict, 0)
+// List returns every sub-district in id order, with its photos.
+func (r *PostgresRepository) List(ctx context.Context) ([]domain.SubDistrict, error) {
+	subDistricts := make([]domain.SubDistrict, 0)
 
 	err := r.db.SelectContext(
 		ctx,
@@ -157,9 +129,9 @@ func (r *postgresRepository) GetMany(ctx context.Context) ([]SubDistrict, error)
 	return subDistricts, nil
 }
 
-// GetSubDistrict returns the sub-district with the id, or ErrSubDistrictNotFound.
-func (r *postgresRepository) GetSubDistrict(ctx context.Context, id int64) (*SubDistrict, error) {
-	var sd SubDistrict
+// Fetch returns the sub-district with the id, or domain.ErrSubDistrictNotFound.
+func (r *PostgresRepository) Fetch(ctx context.Context, id int64) (*domain.SubDistrict, error) {
+	var sd domain.SubDistrict
 
 	err := r.db.GetContext(
 		ctx,
@@ -169,7 +141,7 @@ func (r *postgresRepository) GetSubDistrict(ctx context.Context, id int64) (*Sub
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrSubDistrictNotFound
+			return nil, domain.ErrSubDistrictNotFound
 		}
 		return nil, err
 	}
@@ -178,9 +150,9 @@ func (r *postgresRepository) GetSubDistrict(ctx context.Context, id int64) (*Sub
 }
 
 // Update saves the sub-district's details and returns it with its photos.
-// It returns ErrSubDistrictNotFound, or ErrSubDistrictExists if the name or slug is taken.
-func (r *postgresRepository) Update(ctx context.Context, sd *SubDistrict) (*SubDistrict, error) {
-	var updated SubDistrict
+// It returns domain.ErrSubDistrictNotFound, or domain.ErrSubDistrictExists if the name or slug is taken.
+func (r *PostgresRepository) Update(ctx context.Context, sd *domain.SubDistrict) (*domain.SubDistrict, error) {
+	var updated domain.SubDistrict
 
 	err := r.db.GetContext(
 		ctx,
@@ -202,10 +174,10 @@ func (r *postgresRepository) Update(ctx context.Context, sd *SubDistrict) (*SubD
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrSubDistrictNotFound
+			return nil, domain.ErrSubDistrictNotFound
 		}
 		if database.IsCode(err, database.UniqueViolation) {
-			return nil, ErrSubDistrictExists
+			return nil, domain.ErrSubDistrictExists
 		}
 		return nil, err
 	}
@@ -214,8 +186,8 @@ func (r *postgresRepository) Update(ctx context.Context, sd *SubDistrict) (*SubD
 }
 
 // SetBoundary saves the area as the sub-district's boundary and returns the sub-district.
-func (r *postgresRepository) SetBoundary(ctx context.Context, id int64, boundary *postgis.MultiPolygon) (*SubDistrict, error) {
-	var updated SubDistrict
+func (r *PostgresRepository) SetBoundary(ctx context.Context, id int64, boundary *postgis.MultiPolygon) (*domain.SubDistrict, error) {
+	var updated domain.SubDistrict
 
 	err := r.db.GetContext(
 		ctx,
@@ -229,11 +201,10 @@ func (r *postgresRepository) SetBoundary(ctx context.Context, id int64, boundary
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrSubDistrictNotFound
+			return nil, domain.ErrSubDistrictNotFound
 		}
-		if database.IsCode(err, database.CheckViolation) &&
-			database.ConstraintName(err) == "sub_districts_boundary_check" {
-			return nil, ErrInvalidBoundary
+		if database.IsCode(err, database.CheckViolation) && database.ConstraintName(err) == "sub_districts_boundary_check" {
+			return nil, domain.ErrSubDistrictBoundaryInvalid
 		}
 		return nil, err
 	}
@@ -242,8 +213,8 @@ func (r *postgresRepository) SetBoundary(ctx context.Context, id int64, boundary
 }
 
 // Delete removes the sub-district with its photos, and queues their files for deletion.
-// It returns ErrSubDistrictNotFound, or ErrSubDistrictInUse if places still use it, and removes nothing.
-func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
+// It returns domain.ErrSubDistrictNotFound, or domain.ErrSubDistrictInUse if places still use it, and removes nothing.
+func (r *PostgresRepository) Delete(ctx context.Context, id int64) error {
 	var deleted int
 
 	err := r.db.GetContext(
@@ -264,14 +235,13 @@ func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
 		id,
 	)
 	if err != nil {
-		if database.IsCode(err, database.ForeignKeyViolation) &&
-			database.ConstraintName(err) == "places_sub_district_id_fkey" {
-			return ErrSubDistrictInUse
+		if database.IsCode(err, database.ForeignKeyViolation) && database.ConstraintName(err) == "places_sub_district_id_fkey" {
+			return domain.ErrSubDistrictInUse
 		}
 		return err
 	}
 	if deleted == 0 {
-		return ErrSubDistrictNotFound
+		return domain.ErrSubDistrictNotFound
 	}
 
 	return nil
@@ -279,7 +249,7 @@ func (r *postgresRepository) Delete(ctx context.Context, id int64) error {
 
 // DeleteMedia removes the photo, queues its file for deletion, and shifts later photos up one slot.
 // The shift closes the gap, so the next added photo goes to the end, not into the hole.
-func (r *postgresRepository) DeleteMedia(ctx context.Context, id, mediaID int64) error {
+func (r *PostgresRepository) DeleteMedia(ctx context.Context, id, mediaID int64) error {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return err
@@ -290,7 +260,7 @@ func (r *postgresRepository) DeleteMedia(ctx context.Context, id, mediaID int64)
 	err = tx.GetContext(ctx, &locked, `SELECT id FROM SUB_DISTRICTS WHERE id = $1 FOR NO KEY UPDATE`, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return storage.ErrMediaNotFound
+			return domain.ErrMediaNotFound
 		}
 		return err
 	}
@@ -315,7 +285,7 @@ func (r *postgresRepository) DeleteMedia(ctx context.Context, id, mediaID int64)
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return storage.ErrMediaNotFound
+			return domain.ErrMediaNotFound
 		}
 		return err
 	}
@@ -333,17 +303,13 @@ func (r *postgresRepository) DeleteMedia(ctx context.Context, id, mediaID int64)
 	return tx.Commit()
 }
 
-// -----------------------------------------------------------------------------
-// Unexported
-// -----------------------------------------------------------------------------
-
 // subDistrictColumns selects a sub-district from `sd`.
 const subDistrictColumns = `sd.id, sd.name, sd.slug, sd.flood_history,
 	sd.safety_crime_information, sd.estimated_daily_spending, sd.boundary`
 
 // withMedias returns sd with its photos attached.
-func (r *postgresRepository) withMedias(ctx context.Context, sd SubDistrict) (*SubDistrict, error) {
-	subDistricts := []SubDistrict{sd}
+func (r *PostgresRepository) withMedias(ctx context.Context, sd domain.SubDistrict) (*domain.SubDistrict, error) {
+	subDistricts := []domain.SubDistrict{sd}
 	if err := r.attachMedias(ctx, subDistricts); err != nil {
 		return nil, err
 	}
@@ -353,7 +319,7 @@ func (r *postgresRepository) withMedias(ctx context.Context, sd SubDistrict) (*S
 
 // attachMedias loads the photos of all the given sub-districts in one query.
 // Each sub-district gets its photos in position order.
-func (r *postgresRepository) attachMedias(ctx context.Context, subDistricts []SubDistrict) error {
+func (r *PostgresRepository) attachMedias(ctx context.Context, subDistricts []domain.SubDistrict) error {
 	if len(subDistricts) == 0 {
 		return nil
 	}
@@ -365,7 +331,7 @@ func (r *postgresRepository) attachMedias(ctx context.Context, subDistricts []Su
 
 	var rows []struct {
 		SubDistrictID int64 `db:"sub_district_id"`
-		storage.Media
+		domain.Media
 	}
 
 	err := r.db.SelectContext(
@@ -382,7 +348,7 @@ func (r *postgresRepository) attachMedias(ctx context.Context, subDistricts []Su
 		return err
 	}
 
-	mediasBySubDistrict := make(map[int64][]storage.Media, len(subDistricts))
+	mediasBySubDistrict := make(map[int64][]domain.Media, len(subDistricts))
 	for _, row := range rows {
 		mediasBySubDistrict[row.SubDistrictID] = append(mediasBySubDistrict[row.SubDistrictID], row.Media)
 	}
@@ -390,7 +356,7 @@ func (r *postgresRepository) attachMedias(ctx context.Context, subDistricts []Su
 	for i := range subDistricts {
 		subDistricts[i].Medias = mediasBySubDistrict[subDistricts[i].ID]
 		if subDistricts[i].Medias == nil {
-			subDistricts[i].Medias = make([]storage.Media, 0)
+			subDistricts[i].Medias = make([]domain.Media, 0)
 		}
 	}
 

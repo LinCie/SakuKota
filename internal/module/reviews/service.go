@@ -3,48 +3,51 @@ package reviews
 import (
 	"context"
 
+	"rantau-go/internal/domain"
 	"rantau-go/internal/pkg/text"
 )
 
-// Service defines the operations required by the handler.
-//
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
-type Service interface {
-	// Create checks the rating (1 to 5) and the comment (at most 1000 characters),
-	// then saves the review. A blank comment is saved as nothing.
-	Create(ctx context.Context, r *Review) (*Review, error)
-	// GetByPlace returns the place's reviews, newest first.
-	GetByPlace(ctx context.Context, placeID int64) ([]Review, error)
+
+// Repository is the persistence the Service needs.
+type Repository interface {
+	// Create saves the review and adds its rating to the place's totals.
+	// It returns the saved review with its author, or domain.ErrPlaceNotFound or
+	// domain.ErrPlaceAlreadyReviewed.
+	Create(ctx context.Context, r *domain.Review) (*domain.Review, error)
+	// ListByPlace returns the place's reviews with their authors, newest
+	// first, or domain.ErrPlaceNotFound.
+	ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error)
 }
 
-type service struct {
+// Service holds the business rules of reviews.
+type Service struct {
 	repo Repository
 }
 
-// -----------------------------------------------------------------------------
-// Exported
-// -----------------------------------------------------------------------------
-
-func NewService(repo Repository) Service {
-	return &service{
-		repo: repo,
-	}
+// NewService returns a Service that stores reviews in repo.
+func NewService(repo Repository) *Service {
+	return &Service{repo: repo}
 }
 
-func (s *service) Create(ctx context.Context, r *Review) (*Review, error) {
-	if r.Rating < minRating || r.Rating > maxRating {
-		return nil, ErrInvalidRating
+// Create checks the rating (domain.MinRating to domain.MaxRating) and the
+// comment (at most domain.MaxReviewCommentLength characters), then saves the
+// review. A blank comment is saved as nothing.
+func (s *Service) Create(ctx context.Context, r *domain.Review) (*domain.Review, error) {
+	if r.Rating < domain.MinRating || r.Rating > domain.MaxRating {
+		return nil, domain.ErrReviewRatingInvalid
 	}
 
-	comment, ok := text.TrimOptionalMax(r.Comment, maxCommentLength)
+	comment, ok := text.TrimOptionalMax(r.Comment, domain.MaxReviewCommentLength)
 	if !ok {
-		return nil, ErrCommentTooLong
+		return nil, domain.ErrReviewCommentTooLong
 	}
 	r.Comment = comment
 
 	return s.repo.Create(ctx, r)
 }
 
-func (s *service) GetByPlace(ctx context.Context, placeID int64) ([]Review, error) {
-	return s.repo.GetByPlace(ctx, placeID)
+// ListByPlace returns the place's reviews, newest first.
+func (s *Service) ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error) {
+	return s.repo.ListByPlace(ctx, placeID)
 }

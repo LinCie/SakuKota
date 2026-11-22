@@ -1,3 +1,5 @@
+// Package auth registers users and signs them in with an access token and a
+// rotating refresh token.
 package auth
 
 import (
@@ -6,18 +8,18 @@ import (
 	"rantau-go/internal/config"
 )
 
+// Module bundles the service and handler of the auth feature.
 type Module struct {
-	Service Service
+	Service *Service
 	Handler *Handler
 }
 
-func NewModule(cfg config.Config, userService UserService, rdb *redis.Client) *Module {
-	store := NewRedisRefreshStore(rdb)
-	service := NewService(cfg, userService, store)
-	handler := NewHandler(cfg, service)
+// New builds the auth module. Refresh tokens are kept in rdb.
+func New(cfg config.Config, userService UserService, rdb *redis.Client) *Module {
+	service := NewService(cfg, userService, NewRedisRefreshStore(rdb))
 
 	return &Module{
 		Service: service,
-		Handler: handler,
+		Handler: NewHandler(cfg, service),
 	}
 }

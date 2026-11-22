@@ -2,42 +2,44 @@ package users
 
 import (
 	"context"
+
+	"rantau-go/internal/domain"
 )
 
-// Service defines the user operations exposed to other modules.
-//
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
-type Service interface {
-	// Create saves a new user.
-	Create(ctx context.Context, u *User) (*User, error)
-	// GetByEmail returns the user with the email, or ErrNotFound.
-	GetByEmail(ctx context.Context, email string) (*User, error)
-	// GetUser returns the user with the id, or ErrNotFound.
-	GetUser(ctx context.Context, id int64) (*User, error)
+
+// Repository is the persistence the Service needs.
+type Repository interface {
+	// Create saves a new user and returns it with its generated fields, or
+	// domain.ErrEmailTaken.
+	Create(ctx context.Context, u *domain.User) (*domain.User, error)
+	// FetchByEmail returns the user with the email, or domain.ErrUserNotFound.
+	FetchByEmail(ctx context.Context, email string) (*domain.User, error)
+	// Fetch returns the user with the id, or domain.ErrUserNotFound.
+	Fetch(ctx context.Context, id int64) (*domain.User, error)
 }
 
-type service struct {
+// Service provides the user operations used by other modules.
+type Service struct {
 	repo Repository
 }
 
-// -----------------------------------------------------------------------------
-// Exported
-// -----------------------------------------------------------------------------
-
-func NewService(repo Repository) Service {
-	return &service{
-		repo: repo,
-	}
+// NewService builds a Service over repo.
+func NewService(repo Repository) *Service {
+	return &Service{repo: repo}
 }
 
-func (s *service) Create(ctx context.Context, u *User) (*User, error) {
+// Create saves a new user, or returns domain.ErrEmailTaken.
+func (s *Service) Create(ctx context.Context, u *domain.User) (*domain.User, error) {
 	return s.repo.Create(ctx, u)
 }
 
-func (s *service) GetByEmail(ctx context.Context, email string) (*User, error) {
-	return s.repo.GetByEmail(ctx, email)
+// FetchByEmail returns the user with the email, or domain.ErrUserNotFound.
+func (s *Service) FetchByEmail(ctx context.Context, email string) (*domain.User, error) {
+	return s.repo.FetchByEmail(ctx, email)
 }
 
-func (s *service) GetUser(ctx context.Context, id int64) (*User, error) {
-	return s.repo.GetUser(ctx, id)
+// Fetch returns the user with the id, or domain.ErrUserNotFound.
+func (s *Service) Fetch(ctx context.Context, id int64) (*domain.User, error) {
+	return s.repo.Fetch(ctx, id)
 }

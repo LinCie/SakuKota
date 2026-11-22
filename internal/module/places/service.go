@@ -3,92 +3,74 @@ package places
 import (
 	"context"
 	"strconv"
-	"strings"
-	"unicode/utf8"
 
+	"rantau-go/internal/domain"
 	"rantau-go/internal/pkg/postgis"
-	"rantau-go/internal/pkg/text"
 	"rantau-go/internal/storage"
 )
 
-// Service defines the operations required by the handler.
-//
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
-type Service interface {
-	// Create validates and saves a new place.
-	Create(ctx context.Context, p *Place) (*Place, error)
-	// MediaUploadURL returns a temporary link to upload a photo for the place.
-	MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error)
-	// AddMedia attaches an uploaded photo to the place.
-	AddMedia(ctx context.Context, id int64, uploadKey string) (*Place, error)
-	// GetMany returns one page of places matching the filter, plus the total match count.
-	GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error)
-	// GetPlace returns the place with the given id.
-	GetPlace(ctx context.Context, id int64) (*Place, error)
-	// GetCategories returns every category.
-	GetCategories(ctx context.Context) ([]Category, error)
-	// GetCategory returns the category with the given id.
-	GetCategory(ctx context.Context, id int64) (*Category, error)
-	// Update validates p and overwrites the place with the given id.
-	Update(ctx context.Context, id int64, p *Place) (*Place, error)
-	// Delete removes the place with the given id.
+
+// Repository is the persistence the service needs.
+type Repository interface {
+	// Create saves the place and returns it with its category and photos.
+	Create(ctx context.Context, p *domain.Place) (*domain.Place, error)
+	// AddMedia stores the photo in the place's first free position and returns the place.
+	// It returns domain.ErrPlaceNotFound, or domain.ErrMediaLimitReached if the place is full.
+	AddMedia(ctx context.Context, id int64, m domain.Media) (*domain.Place, error)
+	// List returns one page of places matching the filter, plus the total match count.
+	List(ctx context.Context, filter Filter) ([]domain.Place, int, error)
+	// ListLocations returns the id, category, and coordinates of every place matching the
+	// filter's sub-district, categories, and query. Bounds, limit, and offset are ignored.
+	ListLocations(ctx context.Context, filter Filter) ([]Location, error)
+	// ListByIDs returns the places with the given ids, in the order of ids.
+	// Ids that match no place are skipped.
+	ListByIDs(ctx context.Context, ids []int64) ([]domain.Place, error)
+	// ListCategories returns every category with its fields.
+	ListCategories(ctx context.Context) ([]domain.Category, error)
+	// FetchCategory returns the category with its fields.
+	FetchCategory(ctx context.Context, id int64) (*domain.Category, error)
+	// Fetch returns the place with its category and photos.
+	Fetch(ctx context.Context, id int64) (*domain.Place, error)
+	// Update overwrites the place and returns it with its category and photos.
+	Update(ctx context.Context, p *domain.Place) (*domain.Place, error)
+	// Delete removes the place and its photos and queues the photo files for deletion.
+	// It returns domain.ErrPlaceNotFound if there is no such place.
 	Delete(ctx context.Context, id int64) error
-	// DeleteMedia removes a photo from the place.
+	// DeleteMedia removes the photo and queues its file for deletion.
+	// It returns domain.ErrMediaNotFound if there is no such photo.
 	DeleteMedia(ctx context.Context, id, mediaID int64) error
 }
 
-type service struct {
+// MediaStorage is the file storage the service needs.
+type MediaStorage interface {
+	// PresignUpload returns a temporary link for uploading a file under prefix.
+	PresignUpload(ctx context.Context, prefix, contentType string) (storage.Upload, error)
+	// Promote moves the uploaded file under uploadKey into prefix and describes it as a photo.
+	Promote(ctx context.Context, prefix, uploadKey string) (domain.Media, error)
+	// Delete removes the file stored under key.
+	Delete(ctx context.Context, key string) error
+	// PublicURL returns the link a browser can use to open the file stored under key.
+	PublicURL(key string) string
+}
+
+// Service validates places and coordinates their storage. It is safe for
+// concurrent use if its repository and media storage are.
+type Service struct {
 	repo  Repository
 	media MediaStorage
 }
 
-// -----------------------------------------------------------------------------
-// Exported
-// -----------------------------------------------------------------------------
-
-func NewService(repo Repository, media MediaStorage) Service {
-	return &service{
+// NewService returns a Service that stores places in repo and photos in media.
+func NewService(repo Repository, media MediaStorage) *Service {
+	return &Service{
 		repo:  repo,
 		media: media,
 	}
 }
 
-// NormalizeName trims name and rejects it if it is empty or too long.
-func NormalizeName(name string) (string, error) {
-	name = strings.TrimSpace(name)
-	switch {
-	case name == "":
-		return "", ErrInvalidName
-	case utf8.RuneCountInString(name) > MaxNameLength:
-		return "", ErrNameTooLong
-	}
-
-	return name, nil
-}
-
-// NormalizeOptionalFields trims the optional text fields of p and turns blank ones into nil.
-// It rejects any that exceed their column length.
-func NormalizeOptionalFields(p *Place) error {
-	var ok bool
-
-	if p.Address, ok = text.TrimOptionalMax(p.Address, MaxAddressLength); !ok {
-		return ErrAddressTooLong
-	}
-
-	if p.OperatingHours, ok = text.TrimOptionalMax(p.OperatingHours, MaxOperatingHoursLength); !ok {
-		return ErrOperatingHoursTooLong
-	}
-
-	if p.EstimatedPriceRange, ok = text.TrimOptionalMax(p.EstimatedPriceRange, MaxEstimatedPriceRangeLength); !ok {
-		return ErrEstimatedPriceRangeTooLong
-	}
-
-	p.ShortDescription = text.TrimOptional(p.ShortDescription)
-
-	return nil
-}
-
-func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
+// Create validates and saves a new place.
+func (s *Service) Create(ctx context.Context, p *domain.Place) (*domain.Place, error) {
 	if err := s.validate(ctx, p); err != nil {
 		return nil, err
 	}
@@ -96,16 +78,18 @@ func (s *service) Create(ctx context.Context, p *Place) (*Place, error) {
 	return s.repo.Create(ctx, p)
 }
 
-func (s *service) MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error) {
-	if _, err := s.repo.GetPlace(ctx, id); err != nil {
+// MediaUploadURL returns a temporary link to upload a photo for the place.
+func (s *Service) MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error) {
+	if _, err := s.repo.Fetch(ctx, id); err != nil {
 		return storage.Upload{}, err
 	}
 
 	return s.media.PresignUpload(ctx, mediaPrefix(id), contentType)
 }
 
-func (s *service) AddMedia(ctx context.Context, id int64, uploadKey string) (*Place, error) {
-	if _, err := s.repo.GetPlace(ctx, id); err != nil {
+// AddMedia attaches an uploaded photo to the place and returns the place.
+func (s *Service) AddMedia(ctx context.Context, id int64, uploadKey string) (*domain.Place, error) {
+	if _, err := s.repo.Fetch(ctx, id); err != nil {
 		return nil, err
 	}
 
@@ -125,28 +109,33 @@ func (s *service) AddMedia(ctx context.Context, id int64, uploadKey string) (*Pl
 	return updated, nil
 }
 
-// GetMany caps the page size so no list is unbounded.
-func (s *service) GetMany(ctx context.Context, filter PlaceFilter) ([]Place, int, error) {
+// List returns one page of places matching the filter, plus the total match
+// count. It caps the page size so no list is unbounded.
+func (s *Service) List(ctx context.Context, filter Filter) ([]domain.Place, int, error) {
 	if filter.Limit <= 0 || filter.Limit > maxLimit {
 		filter.Limit = maxLimit
 	}
 
-	return s.repo.GetMany(ctx, filter)
+	return s.repo.List(ctx, filter)
 }
 
-func (s *service) GetPlace(ctx context.Context, id int64) (*Place, error) {
-	return s.repo.GetPlace(ctx, id)
+// Fetch returns the place with the given id.
+func (s *Service) Fetch(ctx context.Context, id int64) (*domain.Place, error) {
+	return s.repo.Fetch(ctx, id)
 }
 
-func (s *service) GetCategories(ctx context.Context) ([]Category, error) {
-	return s.repo.GetCategories(ctx)
+// ListCategories returns every category with its fields.
+func (s *Service) ListCategories(ctx context.Context) ([]domain.Category, error) {
+	return s.repo.ListCategories(ctx)
 }
 
-func (s *service) GetCategory(ctx context.Context, id int64) (*Category, error) {
-	return s.repo.GetCategory(ctx, id)
+// FetchCategory returns the category with the given id.
+func (s *Service) FetchCategory(ctx context.Context, id int64) (*domain.Category, error) {
+	return s.repo.FetchCategory(ctx, id)
 }
 
-func (s *service) Update(ctx context.Context, id int64, p *Place) (*Place, error) {
+// Update validates p and overwrites the place with the given id.
+func (s *Service) Update(ctx context.Context, id int64, p *domain.Place) (*domain.Place, error) {
 	if err := s.validate(ctx, p); err != nil {
 		return nil, err
 	}
@@ -155,39 +144,37 @@ func (s *service) Update(ctx context.Context, id int64, p *Place) (*Place, error
 	return s.repo.Update(ctx, p)
 }
 
-// Delete also queues the place's photo files for deletion, in the repository.
-func (s *service) Delete(ctx context.Context, id int64) error {
+// Delete removes the place with the given id. The repository also queues the
+// place's photo files for deletion.
+func (s *Service) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
 }
 
-// DeleteMedia also queues the photo file for deletion, in the repository.
-func (s *service) DeleteMedia(ctx context.Context, id, mediaID int64) error {
+// DeleteMedia removes a photo from the place. The repository also queues the
+// photo file for deletion.
+func (s *Service) DeleteMedia(ctx context.Context, id, mediaID int64) error {
 	return s.repo.DeleteMedia(ctx, id, mediaID)
 }
 
-// -----------------------------------------------------------------------------
-// Unexported
-// -----------------------------------------------------------------------------
-
 // validate cleans the place's text and checks its location and its attributes
 // against the fields of its category.
-func (s *service) validate(ctx context.Context, p *Place) error {
-	name, err := NormalizeName(p.Name)
+func (s *Service) validate(ctx context.Context, p *domain.Place) error {
+	name, err := domain.NormalizePlaceName(p.Name)
 	if err != nil {
 		return err
 	}
 	p.Name = name
 
-	if err := NormalizeOptionalFields(p); err != nil {
+	if err := domain.NormalizePlaceFields(p); err != nil {
 		return err
 	}
 
 	// The location is optional.
 	if p.Location != nil && !postgis.InIndonesia(p.Location) {
-		return ErrInvalidLocation
+		return domain.ErrPlaceLocationInvalid
 	}
 
-	category, err := s.repo.GetCategory(ctx, p.CategoryID)
+	category, err := s.repo.FetchCategory(ctx, p.CategoryID)
 	if err != nil {
 		return err
 	}

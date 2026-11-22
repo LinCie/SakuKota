@@ -1,7 +1,6 @@
 package suggestions_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,46 +12,27 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/module/places"
+	"rantau-go/internal/domain"
 	"rantau-go/internal/module/suggestions"
 	"rantau-go/internal/module/suggestions/mock"
 	"rantau-go/internal/pkg/postgis"
 )
 
-// noPlaces returns a place service that fails the test if it is used.
-func noPlaces(t *testing.T) *mock.MockPlaceService {
+// newService returns a Service over mock collaborators.
+func newService(t *testing.T) (*suggestions.Service, *mock.MockRepository, *mock.MockPlaceService) {
 	t.Helper()
-	return mock.NewMockPlaceService(gomock.NewController(t))
-}
 
-// newMocks returns a repository and place service that fail the test on any
-// call they do not expect.
-func newMocks(t *testing.T) (*mock.MockRepository, *mock.MockPlaceService) {
-	t.Helper()
 	ctrl := gomock.NewController(t)
-	return mock.NewMockRepository(ctrl), mock.NewMockPlaceService(ctrl)
-}
+	repo := mock.NewMockRepository(ctrl)
+	places := mock.NewMockPlaceService(ctrl)
 
-// assertJSON fails unless got is the JSON document want. Numbers are compared
-// by their literal text, so 1.50 and 1.5 are different.
-func assertJSON(t *testing.T, got json.RawMessage, want string) {
-	t.Helper()
-	assert.Equal(t, decodeExact(t, json.RawMessage(want)), decodeExact(t, got), "got JSON %s, want %s", got, want)
-}
-
-func decodeExact(t *testing.T, raw json.RawMessage) any {
-	t.Helper()
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.UseNumber()
-	var v any
-	require.NoError(t, dec.Decode(&v), "invalid JSON %s", raw)
-	return v
+	return suggestions.NewService(repo, places), repo, places
 }
 
 // submitted is what user 7 submits with only the required fields set: a warung
 // in sub-district 1, category 2, pinned in Jakarta.
-func submitted() *suggestions.Suggestion {
-	return &suggestions.Suggestion{
+func submitted() *domain.Suggestion {
+	return &domain.Suggestion{
 		UserID:        7,
 		SubDistrictID: 1,
 		CategoryID:    2,
@@ -61,35 +41,29 @@ func submitted() *suggestions.Suggestion {
 	}
 }
 
-// createSuggestion runs Service.Create for s. It returns the suggestion the
-// repository was asked to store, or nil if storage was never reached.
-func createSuggestion(t *testing.T, s *suggestions.Suggestion) (*suggestions.Suggestion, error) {
+// createSuggestion runs Service.Create for s. If reachesStorage, the
+// repository accepts the suggestion and it is returned as stored; otherwise
+// the repository must not be called and the returned suggestion is nil.
+func createSuggestion(t *testing.T, s *domain.Suggestion, reachesStorage bool) (*domain.Suggestion, error) {
 	t.Helper()
 
-	repo := mock.NewMockRepository(gomock.NewController(t))
+	svc, repo, _ := newService(t)
 
-	var stored *suggestions.Suggestion
-	repo.EXPECT().Create(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, got *suggestions.Suggestion) (*suggestions.Suggestion, error) {
+	var stored *domain.Suggestion
+	if reachesStorage {
+		repo.EXPECT().Create(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, got *domain.Suggestion) (*domain.Suggestion, error) {
 			stored = got
 			return got, nil
-		}).AnyTimes()
+		})
+	}
 
-	_, err := suggestions.NewService(repo, noPlaces(t)).Create(context.Background(), s)
+	_, err := svc.Create(t.Context(), s)
 	return stored, err
 }
-
-// -----------------------------------------------------------------------------
-// Pending limit
-// -----------------------------------------------------------------------------
 
 func TestService_Create_MaxPendingPerUser(t *testing.T) {
 	assert.Equal(t, 5, suggestions.MaxPendingPerUser)
 }
-
-// -----------------------------------------------------------------------------
-// Submitting suggestions
-// -----------------------------------------------------------------------------
 
 func TestService_Create_Name(t *testing.T) {
 	long := strings.Repeat("a", 150)
@@ -106,11 +80,11 @@ func TestService_Create_Name(t *testing.T) {
 		{name: "150 characters is allowed", input: long, wantName: long, wantErr: nil},
 		{name: "150 multibyte characters is allowed", input: strings.Repeat("é", 150), wantName: strings.Repeat("é", 150), wantErr: nil},
 		{name: "length is counted after trimming", input: "  " + long + "  ", wantName: long, wantErr: nil},
-		{name: "empty", input: "", wantName: "", wantErr: places.ErrInvalidName},
-		{name: "spaces only", input: "   ", wantName: "", wantErr: places.ErrInvalidName},
-		{name: "tabs and newlines only", input: "\t\n", wantName: "", wantErr: places.ErrInvalidName},
-		{name: "151 characters is too long", input: long + "a", wantName: "", wantErr: places.ErrNameTooLong},
-		{name: "151 multibyte characters is too long", input: strings.Repeat("é", 151), wantName: "", wantErr: places.ErrNameTooLong},
+		{name: "empty", input: "", wantName: "", wantErr: domain.ErrPlaceNameRequired},
+		{name: "spaces only", input: "   ", wantName: "", wantErr: domain.ErrPlaceNameRequired},
+		{name: "tabs and newlines only", input: "\t\n", wantName: "", wantErr: domain.ErrPlaceNameRequired},
+		{name: "151 characters is too long", input: long + "a", wantName: "", wantErr: domain.ErrPlaceNameTooLong},
+		{name: "151 multibyte characters is too long", input: strings.Repeat("é", 151), wantName: "", wantErr: domain.ErrPlaceNameTooLong},
 	}
 
 	for _, tc := range tests {
@@ -118,10 +92,9 @@ func TestService_Create_Name(t *testing.T) {
 			s := submitted()
 			s.Name = tc.input
 
-			stored, err := createSuggestion(t, s)
+			stored, err := createSuggestion(t, s, tc.wantErr == nil)
 			if tc.wantErr != nil {
-				require.ErrorIs(t, err, tc.wantErr)
-				require.Nil(t, stored, "invalid name reached storage")
+				assert.ErrorIs(t, err, tc.wantErr)
 				return
 			}
 			require.NoError(t, err)
@@ -159,18 +132,17 @@ func TestService_Create_Location(t *testing.T) {
 			s.Location = nil
 			if !tc.omit {
 				point, err := postgis.NewPoint(tc.lon, tc.lat)
-				require.NoError(t, err, "invalid test point")
+				require.NoError(t, err)
 				s.Location = point
 			}
 
-			stored, err := createSuggestion(t, s)
+			stored, err := createSuggestion(t, s, !tc.wantErr)
 			if tc.wantErr {
-				require.ErrorIs(t, err, suggestions.ErrInvalidLocation)
-				require.Nil(t, stored, "missing or outside location reached storage")
+				assert.ErrorIs(t, err, domain.ErrSuggestionLocationInvalid)
 				return
 			}
 			require.NoError(t, err)
-			require.NotNil(t, stored.Location, "stored location is missing")
+			require.NotNil(t, stored.Location)
 			assert.Equal(t, tc.lon, stored.Location.X())
 			assert.Equal(t, tc.lat, stored.Location.Y())
 		})
@@ -180,24 +152,24 @@ func TestService_Create_Location(t *testing.T) {
 func TestService_Create_OptionalText(t *testing.T) {
 	fields := []struct {
 		name string
-		set  func(*suggestions.Suggestion, *string)
-		get  func(*suggestions.Suggestion) *string
+		set  func(*domain.Suggestion, *string)
+		get  func(*domain.Suggestion) *string
 	}{
 		{name: "address",
-			set: func(s *suggestions.Suggestion, v *string) { s.Address = v },
-			get: func(s *suggestions.Suggestion) *string { return s.Address }},
-		{name: "operating hours",
-			set: func(s *suggestions.Suggestion, v *string) { s.OperatingHours = v },
-			get: func(s *suggestions.Suggestion) *string { return s.OperatingHours }},
-		{name: "estimated price range",
-			set: func(s *suggestions.Suggestion, v *string) { s.EstimatedPriceRange = v },
-			get: func(s *suggestions.Suggestion) *string { return s.EstimatedPriceRange }},
-		{name: "short description",
-			set: func(s *suggestions.Suggestion, v *string) { s.ShortDescription = v },
-			get: func(s *suggestions.Suggestion) *string { return s.ShortDescription }},
+			set: func(s *domain.Suggestion, v *string) { s.Address = v },
+			get: func(s *domain.Suggestion) *string { return s.Address }},
+		{name: "operating_hours",
+			set: func(s *domain.Suggestion, v *string) { s.OperatingHours = v },
+			get: func(s *domain.Suggestion) *string { return s.OperatingHours }},
+		{name: "estimated_price_range",
+			set: func(s *domain.Suggestion, v *string) { s.EstimatedPriceRange = v },
+			get: func(s *domain.Suggestion) *string { return s.EstimatedPriceRange }},
+		{name: "short_description",
+			set: func(s *domain.Suggestion, v *string) { s.ShortDescription = v },
+			get: func(s *domain.Suggestion) *string { return s.ShortDescription }},
 		{name: "note",
-			set: func(s *suggestions.Suggestion, v *string) { s.Note = v },
-			get: func(s *suggestions.Suggestion) *string { return s.Note }},
+			set: func(s *domain.Suggestion, v *string) { s.Note = v },
+			get: func(s *domain.Suggestion) *string { return s.Note }},
 	}
 
 	tests := []struct {
@@ -219,15 +191,9 @@ func TestService_Create_OptionalText(t *testing.T) {
 				s := submitted()
 				f.set(s, tc.input)
 
-				stored, err := createSuggestion(t, s)
+				stored, err := createSuggestion(t, s, true)
 				require.NoError(t, err)
-				got := f.get(stored)
-				if tc.want == nil {
-					assert.Nil(t, got, "stored %s, want none", f.name)
-					return
-				}
-				require.NotNil(t, got, "stored no %s, want %q", f.name, *tc.want)
-				assert.Equal(t, *tc.want, *got, "stored %s", f.name)
+				assert.Equal(t, tc.want, f.get(stored))
 			})
 		}
 	}
@@ -238,14 +204,14 @@ func TestService_Create_OptionalTextLimits(t *testing.T) {
 		name    string
 		limit   int
 		tooLong error
-		set     func(*suggestions.Suggestion, *string)
+		set     func(*domain.Suggestion, *string)
 	}{
-		{name: "address", limit: places.MaxAddressLength, tooLong: places.ErrAddressTooLong,
-			set: func(s *suggestions.Suggestion, v *string) { s.Address = v }},
-		{name: "operating hours", limit: places.MaxOperatingHoursLength, tooLong: places.ErrOperatingHoursTooLong,
-			set: func(s *suggestions.Suggestion, v *string) { s.OperatingHours = v }},
-		{name: "estimated price range", limit: places.MaxEstimatedPriceRangeLength, tooLong: places.ErrEstimatedPriceRangeTooLong,
-			set: func(s *suggestions.Suggestion, v *string) { s.EstimatedPriceRange = v }},
+		{name: "address", limit: domain.MaxPlaceAddressLength, tooLong: domain.ErrPlaceAddressTooLong,
+			set: func(s *domain.Suggestion, v *string) { s.Address = v }},
+		{name: "operating_hours", limit: domain.MaxPlaceOperatingHoursLength, tooLong: domain.ErrPlaceOperatingHoursTooLong,
+			set: func(s *domain.Suggestion, v *string) { s.OperatingHours = v }},
+		{name: "estimated_price_range", limit: domain.MaxPlaceEstimatedPriceRangeLength, tooLong: domain.ErrPlaceEstimatedPriceRangeTooLong,
+			set: func(s *domain.Suggestion, v *string) { s.EstimatedPriceRange = v }},
 	}
 
 	for _, f := range fields {
@@ -266,11 +232,12 @@ func TestService_Create_OptionalTextLimits(t *testing.T) {
 				input := tc.input
 				f.set(s, &input)
 
-				stored, err := createSuggestion(t, s)
-				require.ErrorIs(t, err, tc.wantErr)
+				_, err := createSuggestion(t, s, tc.wantErr == nil)
 				if tc.wantErr != nil {
-					require.Nil(t, stored, "refused suggestion reached storage")
+					assert.ErrorIs(t, err, tc.wantErr)
+					return
 				}
+				assert.NoError(t, err)
 			})
 		}
 	}
@@ -287,8 +254,8 @@ func TestService_Create_NoteLength(t *testing.T) {
 		{name: "exactly 1000 characters", note: thousand, wantErr: nil},
 		{name: "1000 multibyte characters", note: strings.Repeat("é", 1000), wantErr: nil},
 		{name: "surrounding spaces do not count toward the limit", note: " " + thousand + " ", wantErr: nil},
-		{name: "1001 characters", note: thousand + "a", wantErr: suggestions.ErrNoteTooLong},
-		{name: "1001 multibyte characters", note: strings.Repeat("é", 1001), wantErr: suggestions.ErrNoteTooLong},
+		{name: "1001 characters", note: thousand + "a", wantErr: domain.ErrSuggestionNoteTooLong},
+		{name: "1001 multibyte characters", note: strings.Repeat("é", 1001), wantErr: domain.ErrSuggestionNoteTooLong},
 	}
 
 	for _, tc := range tests {
@@ -296,11 +263,12 @@ func TestService_Create_NoteLength(t *testing.T) {
 			s := submitted()
 			s.Note = new(tc.note)
 
-			stored, err := createSuggestion(t, s)
-			require.ErrorIs(t, err, tc.wantErr)
+			_, err := createSuggestion(t, s, tc.wantErr == nil)
 			if tc.wantErr != nil {
-				require.Nil(t, stored, "too long note reached storage")
+				assert.ErrorIs(t, err, tc.wantErr)
+				return
 			}
+			assert.NoError(t, err)
 		})
 	}
 }
@@ -330,20 +298,20 @@ func TestService_Create_Attributes(t *testing.T) {
 			s := submitted()
 			s.Attributes = json.RawMessage(tc.attributes)
 
-			stored, err := createSuggestion(t, s)
+			stored, err := createSuggestion(t, s, !tc.wantErr)
 			if tc.wantErr {
-				require.ErrorIs(t, err, suggestions.ErrInvalidAttributes)
-				require.Nil(t, stored, "rejected attributes reached storage")
+				assert.ErrorIs(t, err, domain.ErrSuggestionAttributesInvalid)
 				return
 			}
 			require.NoError(t, err)
-			assertJSON(t, stored.Attributes, tc.wantStored)
+			// Compared as text, so 1.50 and 1.5 are different.
+			assert.Equal(t, tc.wantStored, string(stored.Attributes))
 		})
 	}
 }
 
 func TestService_Create_KeepsAuthorAndCatalog(t *testing.T) {
-	stored, err := createSuggestion(t, submitted())
+	stored, err := createSuggestion(t, submitted(), true)
 	require.NoError(t, err)
 	assert.Equal(t, int64(7), stored.UserID)
 	assert.Equal(t, int64(1), stored.SubDistrictID)
@@ -358,83 +326,84 @@ func TestService_Create_Storage(t *testing.T) {
 		storeErr error // returned when the suggestion is stored
 		wantErr  error // nil means the call succeeds
 	}{
-		{name: "storage reports too many pending suggestions", storeErr: suggestions.ErrTooManyPending, wantErr: suggestions.ErrTooManyPending},
-		{name: "storage reports an unknown sub-district", storeErr: places.ErrSubDistrictNotFound, wantErr: places.ErrSubDistrictNotFound},
-		{name: "storage reports an unknown category", storeErr: places.ErrCategoryNotFound, wantErr: places.ErrCategoryNotFound},
-		{name: "storage failure is returned", storeErr: boom, wantErr: boom},
-		{name: "stored suggestion is returned", storeErr: nil, wantErr: nil},
+		{name: "too_many_pending", storeErr: domain.ErrSuggestionLimitReached, wantErr: domain.ErrSuggestionLimitReached},
+		{name: "unknown_sub_district", storeErr: domain.ErrSubDistrictNotFound, wantErr: domain.ErrSubDistrictNotFound},
+		{name: "unknown_category", storeErr: domain.ErrCategoryNotFound, wantErr: domain.ErrCategoryNotFound},
+		{name: "storage_failure", storeErr: boom, wantErr: boom},
+		{name: "stored_returned", storeErr: nil, wantErr: nil},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			repo := mock.NewMockRepository(gomock.NewController(t))
-			repo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&suggestions.Suggestion{ID: 3}, tc.storeErr)
+			svc, repo, _ := newService(t)
+			repo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&domain.Suggestion{ID: 3}, tc.storeErr)
 
-			got, err := suggestions.NewService(repo, noPlaces(t)).Create(context.Background(), submitted())
-			require.ErrorIs(t, err, tc.wantErr)
-			if tc.wantErr == nil {
-				require.NotNil(t, got, "stored suggestion was not returned")
-				assert.Equal(t, int64(3), got.ID)
+			got, err := svc.Create(t.Context(), submitted())
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				return
 			}
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			assert.Equal(t, int64(3), got.ID)
 		})
 	}
 }
 
-// -----------------------------------------------------------------------------
-// Reading suggestions
-// -----------------------------------------------------------------------------
-
-func TestService_GetSuggestion(t *testing.T) {
+func TestService_Fetch(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
 		name    string
 		repoErr error
 	}{
-		{name: "returns the stored suggestion", repoErr: nil},
-		{name: "unknown suggestion", repoErr: suggestions.ErrSuggestionNotFound},
-		{name: "storage failure is returned", repoErr: boom},
+		{name: "returns_stored", repoErr: nil},
+		{name: "unknown", repoErr: domain.ErrSuggestionNotFound},
+		{name: "storage_failure", repoErr: boom},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			repo := mock.NewMockRepository(gomock.NewController(t))
-			repo.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(pending(), tc.repoErr)
+			svc, repo, _ := newService(t)
+			repo.EXPECT().Fetch(gomock.Any(), int64(3)).Return(pending(), tc.repoErr)
 
-			got, err := suggestions.NewService(repo, noPlaces(t)).GetSuggestion(context.Background(), 3)
-			require.ErrorIs(t, err, tc.repoErr)
-			if tc.repoErr == nil {
-				require.NotNil(t, got, "stored suggestion was not returned")
-				assert.Equal(t, int64(3), got.ID)
+			got, err := svc.Fetch(t.Context(), 3)
+			if tc.repoErr != nil {
+				assert.ErrorIs(t, err, tc.repoErr)
+				return
 			}
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			assert.Equal(t, int64(3), got.ID)
 		})
 	}
 }
 
-func TestService_GetByUser(t *testing.T) {
+func TestService_ListByUser(t *testing.T) {
 	boom := errors.New("connection reset")
 
 	tests := []struct {
 		name        string
-		suggestions []suggestions.Suggestion // returned by storage
-		repoErr     error                    // returned by storage
+		suggestions []domain.Suggestion // returned by storage
+		repoErr     error               // returned by storage
 		wantIDs     []int64
 	}{
-		{name: "suggestions keep the stored order", suggestions: []suggestions.Suggestion{{ID: 5}, {ID: 2}, {ID: 9}}, repoErr: nil, wantIDs: []int64{5, 2, 9}},
-		{name: "no suggestions", suggestions: []suggestions.Suggestion{}, repoErr: nil, wantIDs: []int64{}},
-		{name: "storage failure", suggestions: nil, repoErr: boom, wantIDs: nil},
+		{name: "keeps_stored_order", suggestions: []domain.Suggestion{{ID: 5}, {ID: 2}, {ID: 9}}, repoErr: nil, wantIDs: []int64{5, 2, 9}},
+		{name: "none", suggestions: []domain.Suggestion{}, repoErr: nil, wantIDs: []int64{}},
+		{name: "storage_failure", suggestions: nil, repoErr: boom, wantIDs: nil},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			repo := mock.NewMockRepository(gomock.NewController(t))
-			repo.EXPECT().GetByUser(gomock.Any(), int64(7)).Return(tc.suggestions, tc.repoErr)
+			svc, repo, _ := newService(t)
+			repo.EXPECT().ListByUser(gomock.Any(), int64(7)).Return(tc.suggestions, tc.repoErr)
 
-			got, err := suggestions.NewService(repo, noPlaces(t)).GetByUser(context.Background(), 7)
-			require.ErrorIs(t, err, tc.repoErr)
+			got, err := svc.ListByUser(t.Context(), 7)
 			if tc.repoErr != nil {
+				assert.ErrorIs(t, err, tc.repoErr)
 				return
 			}
+			require.NoError(t, err)
 
 			ids := make([]int64, 0, len(got))
 			for _, s := range got {
@@ -445,66 +414,65 @@ func TestService_GetByUser(t *testing.T) {
 	}
 }
 
-func TestService_GetMany_Status(t *testing.T) {
+func TestService_List_Status(t *testing.T) {
 	tests := []struct {
 		name    string
-		status  suggestions.Status
+		status  domain.Status
 		wantErr error
 	}{
-		{name: "no status lists every suggestion", status: "", wantErr: nil},
-		{name: "pending", status: suggestions.StatusPending, wantErr: nil},
-		{name: "approved", status: suggestions.StatusApproved, wantErr: nil},
-		{name: "rejected", status: suggestions.StatusRejected, wantErr: nil},
-		{name: "unknown status", status: "deleted", wantErr: suggestions.ErrInvalidStatus},
-		{name: "status is case sensitive", status: "PENDING", wantErr: suggestions.ErrInvalidStatus},
+		{name: "no_status", status: "", wantErr: nil},
+		{name: "pending", status: domain.StatusPending, wantErr: nil},
+		{name: "approved", status: domain.StatusApproved, wantErr: nil},
+		{name: "rejected", status: domain.StatusRejected, wantErr: nil},
+		{name: "unknown", status: "deleted", wantErr: domain.ErrSuggestionStatusInvalid},
+		{name: "case_sensitive", status: "PENDING", wantErr: domain.ErrSuggestionStatusInvalid},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			filter := suggestions.SuggestionFilter{Status: tc.status}
-
-			repo := mock.NewMockRepository(gomock.NewController(t))
+			svc, repo, _ := newService(t)
+			filter := suggestions.Filter{Status: tc.status}
 			if tc.wantErr == nil {
-				repo.EXPECT().GetMany(gomock.Any(), filter).Return([]suggestions.Suggestion{}, nil)
+				repo.EXPECT().List(gomock.Any(), filter).Return([]domain.Suggestion{}, nil)
 			}
 
-			_, err := suggestions.NewService(repo, noPlaces(t)).GetMany(context.Background(), filter)
-			require.ErrorIs(t, err, tc.wantErr)
+			_, err := svc.List(t.Context(), filter)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			assert.NoError(t, err)
 		})
 	}
 }
 
-func TestService_GetMany_Storage(t *testing.T) {
+func TestService_List_Storage(t *testing.T) {
 	boom := errors.New("connection reset")
 
-	repo := mock.NewMockRepository(gomock.NewController(t))
-	repo.EXPECT().GetMany(gomock.Any(), gomock.Any()).Return(nil, boom)
+	svc, repo, _ := newService(t)
+	filter := suggestions.Filter{Status: domain.StatusPending}
+	repo.EXPECT().List(gomock.Any(), filter).Return(nil, boom)
 
-	_, err := suggestions.NewService(repo, noPlaces(t)).GetMany(context.Background(),
-		suggestions.SuggestionFilter{Status: suggestions.StatusPending})
-	require.ErrorIs(t, err, boom)
+	_, err := svc.List(t.Context(), filter)
+	assert.ErrorIs(t, err, boom)
 }
-
-// -----------------------------------------------------------------------------
-// Approving suggestions
-// -----------------------------------------------------------------------------
 
 const adminID int64 = 99
 
 // pending is suggestion 3, stored and waiting for review.
-func pending() *suggestions.Suggestion {
+func pending() *domain.Suggestion {
 	s := submitted()
 	s.ID = 3
-	s.Status = suggestions.StatusPending
+	s.Status = domain.StatusPending
 	s.Attributes = json.RawMessage(`{}`)
 	s.CreatedAt = time.Date(2026, 10, 4, 12, 30, 0, 0, time.UTC)
 	return s
 }
 
 // approved is suggestion 3 after admin 99 approved it as place 42.
-func approved() *suggestions.Suggestion {
+func approved() *domain.Suggestion {
 	s := pending()
-	s.Status = suggestions.StatusApproved
+	s.Status = domain.StatusApproved
 	s.PlaceID = new(int64(42))
 	s.ReviewedBy = new(adminID)
 	s.ReviewedAt = new(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))
@@ -512,9 +480,9 @@ func approved() *suggestions.Suggestion {
 }
 
 // rejected is suggestion 3 after admin 99 rejected it.
-func rejected() *suggestions.Suggestion {
+func rejected() *domain.Suggestion {
 	s := pending()
-	s.Status = suggestions.StatusRejected
+	s.Status = domain.StatusRejected
 	s.RejectionReason = new("Sudah tutup")
 	s.ReviewedBy = new(adminID)
 	s.ReviewedAt = new(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))
@@ -523,8 +491,8 @@ func rejected() *suggestions.Suggestion {
 
 // finalPlace is the place the admin approves suggestion 3 as, after
 // correcting it.
-func finalPlace() *places.Place {
-	return &places.Place{
+func finalPlace() *domain.Place {
+	return &domain.Place{
 		SubDistrictID: 1,
 		CategoryID:    2,
 		Name:          "Warung Bu Ani",
@@ -535,29 +503,29 @@ func finalPlace() *places.Place {
 }
 
 func TestService_Approve(t *testing.T) {
-	repo, placeSvc := newMocks(t)
 	want := approved()
 
+	svc, repo, places := newService(t)
 	gomock.InOrder(
-		repo.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(pending(), nil),
-		placeSvc.EXPECT().Create(gomock.Any(), finalPlace()).Return(&places.Place{ID: 42}, nil),
+		repo.EXPECT().Fetch(gomock.Any(), int64(3)).Return(pending(), nil),
+		places.EXPECT().Create(gomock.Any(), finalPlace()).Return(&domain.Place{ID: 42}, nil),
 		repo.EXPECT().MarkApproved(gomock.Any(), int64(3), int64(42), adminID).Return(want, nil),
 	)
 
-	got, err := suggestions.NewService(repo, placeSvc).Approve(context.Background(), 3, adminID, finalPlace())
+	got, err := svc.Approve(t.Context(), 3, adminID, finalPlace())
 	require.NoError(t, err)
-	assert.Same(t, want, got, "want the approved suggestion")
+	assert.Same(t, want, got)
 }
 
 func TestService_Approve_PlaceWithoutLocation(t *testing.T) {
 	// Location is required for suggestions, so the approved place must have
 	// one too. Nothing may be read, created, or marked.
-	repo, placeSvc := newMocks(t)
+	svc, _, _ := newService(t)
 	p := finalPlace()
 	p.Location = nil
 
-	_, err := suggestions.NewService(repo, placeSvc).Approve(context.Background(), 3, adminID, p)
-	require.ErrorIs(t, err, suggestions.ErrInvalidLocation)
+	_, err := svc.Approve(t.Context(), 3, adminID, p)
+	assert.ErrorIs(t, err, domain.ErrSuggestionLocationInvalid)
 }
 
 func TestService_Approve_LookupFailure(t *testing.T) {
@@ -567,18 +535,18 @@ func TestService_Approve_LookupFailure(t *testing.T) {
 		name   string
 		getErr error
 	}{
-		{name: "unknown suggestion", getErr: suggestions.ErrSuggestionNotFound},
-		{name: "lookup failure is returned", getErr: boom},
+		{name: "unknown", getErr: domain.ErrSuggestionNotFound},
+		{name: "lookup_failure", getErr: boom},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// No place may be created for a suggestion that cannot be read.
-			repo, placeSvc := newMocks(t)
-			repo.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(nil, tc.getErr)
+			svc, repo, _ := newService(t)
+			repo.EXPECT().Fetch(gomock.Any(), int64(3)).Return(nil, tc.getErr)
 
-			_, err := suggestions.NewService(repo, placeSvc).Approve(context.Background(), 3, adminID, finalPlace())
-			require.ErrorIs(t, err, tc.getErr)
+			_, err := svc.Approve(t.Context(), 3, adminID, finalPlace())
+			assert.ErrorIs(t, err, tc.getErr)
 		})
 	}
 }
@@ -586,20 +554,20 @@ func TestService_Approve_LookupFailure(t *testing.T) {
 func TestService_Approve_AlreadyReviewed(t *testing.T) {
 	tests := []struct {
 		name     string
-		existing *suggestions.Suggestion
+		existing *domain.Suggestion
 	}{
-		{name: "already approved", existing: approved()},
-		{name: "already rejected", existing: rejected()},
+		{name: "approved", existing: approved()},
+		{name: "rejected", existing: rejected()},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// No place may be created for a reviewed suggestion.
-			repo, placeSvc := newMocks(t)
-			repo.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(tc.existing, nil)
+			svc, repo, _ := newService(t)
+			repo.EXPECT().Fetch(gomock.Any(), int64(3)).Return(tc.existing, nil)
 
-			_, err := suggestions.NewService(repo, placeSvc).Approve(context.Background(), 3, adminID, finalPlace())
-			require.ErrorIs(t, err, suggestions.ErrAlreadyReviewed)
+			_, err := svc.Approve(t.Context(), 3, adminID, finalPlace())
+			assert.ErrorIs(t, err, domain.ErrSuggestionAlreadyReviewed)
 		})
 	}
 }
@@ -611,24 +579,24 @@ func TestService_Approve_PlaceRejected(t *testing.T) {
 		name      string
 		createErr error
 	}{
-		{name: "invalid name", createErr: places.ErrInvalidName},
-		{name: "invalid attributes", createErr: places.ErrInvalidAttributes},
-		{name: "unknown category", createErr: places.ErrCategoryNotFound},
-		{name: "unknown sub-district", createErr: places.ErrSubDistrictNotFound},
-		{name: "place storage failure", createErr: boom},
+		{name: "invalid_name", createErr: domain.ErrPlaceNameRequired},
+		{name: "invalid_attributes", createErr: domain.ErrPlaceAttributesInvalid},
+		{name: "unknown_category", createErr: domain.ErrCategoryNotFound},
+		{name: "unknown_sub_district", createErr: domain.ErrSubDistrictNotFound},
+		{name: "place_storage_failure", createErr: boom},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// The suggestion stays pending: it may not be marked approved.
-			repo, placeSvc := newMocks(t)
+			svc, repo, places := newService(t)
 			gomock.InOrder(
-				repo.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(pending(), nil),
-				placeSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, tc.createErr),
+				repo.EXPECT().Fetch(gomock.Any(), int64(3)).Return(pending(), nil),
+				places.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil, tc.createErr),
 			)
 
-			_, err := suggestions.NewService(repo, placeSvc).Approve(context.Background(), 3, adminID, finalPlace())
-			require.ErrorIs(t, err, tc.createErr)
+			_, err := svc.Approve(t.Context(), 3, adminID, finalPlace())
+			assert.ErrorIs(t, err, tc.createErr)
 		})
 	}
 }
@@ -641,33 +609,29 @@ func TestService_Approve_MarkFailure(t *testing.T) {
 		markErr   error
 		deleteErr error
 	}{
-		{name: "another admin reviewed it meanwhile", markErr: suggestions.ErrAlreadyReviewed, deleteErr: nil},
-		{name: "suggestion deleted meanwhile", markErr: suggestions.ErrSuggestionNotFound, deleteErr: nil},
-		{name: "storage failure is returned", markErr: boom, deleteErr: nil},
-		{name: "created place delete failure is ignored", markErr: suggestions.ErrAlreadyReviewed, deleteErr: errors.New("timeout")},
+		{name: "reviewed_meanwhile", markErr: domain.ErrSuggestionAlreadyReviewed, deleteErr: nil},
+		{name: "deleted_meanwhile", markErr: domain.ErrSuggestionNotFound, deleteErr: nil},
+		{name: "storage_failure", markErr: boom, deleteErr: nil},
+		{name: "place_delete_failure_ignored", markErr: domain.ErrSuggestionAlreadyReviewed, deleteErr: errors.New("timeout")},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// The created place is removed, so no place exists without an
 			// approved suggestion.
-			repo, placeSvc := newMocks(t)
+			svc, repo, places := newService(t)
 			gomock.InOrder(
-				repo.EXPECT().GetSuggestion(gomock.Any(), int64(3)).Return(pending(), nil),
-				placeSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&places.Place{ID: 42}, nil),
+				repo.EXPECT().Fetch(gomock.Any(), int64(3)).Return(pending(), nil),
+				places.EXPECT().Create(gomock.Any(), gomock.Any()).Return(&domain.Place{ID: 42}, nil),
 				repo.EXPECT().MarkApproved(gomock.Any(), int64(3), int64(42), adminID).Return(nil, tc.markErr),
-				placeSvc.EXPECT().Delete(gomock.Any(), int64(42)).Return(tc.deleteErr),
+				places.EXPECT().Delete(gomock.Any(), int64(42)).Return(tc.deleteErr),
 			)
 
-			_, err := suggestions.NewService(repo, placeSvc).Approve(context.Background(), 3, adminID, finalPlace())
-			require.ErrorIs(t, err, tc.markErr)
+			_, err := svc.Approve(t.Context(), 3, adminID, finalPlace())
+			assert.ErrorIs(t, err, tc.markErr)
 		})
 	}
 }
-
-// -----------------------------------------------------------------------------
-// Rejecting suggestions
-// -----------------------------------------------------------------------------
 
 func TestService_Reject_Reason(t *testing.T) {
 	thousand := strings.Repeat("a", 1000)
@@ -677,37 +641,23 @@ func TestService_Reject_Reason(t *testing.T) {
 		reason *string
 		want   *string
 	}{
-		{name: "absent reason stays absent", reason: nil, want: nil},
-		{name: "surrounding spaces are removed", reason: new("  Sudah tutup  "), want: new("Sudah tutup")},
-		{name: "inner line breaks are kept", reason: new("Sudah tutup.\nPindah."), want: new("Sudah tutup.\nPindah.")},
-		{name: "empty reason is stored as absent", reason: new(""), want: nil},
-		{name: "blank reason is stored as absent", reason: new(" \t\n "), want: nil},
-		{name: "exactly 1000 characters", reason: new(thousand), want: new(thousand)},
-		{name: "1000 multibyte characters", reason: new(strings.Repeat("é", 1000)), want: new(strings.Repeat("é", 1000))},
-		{name: "surrounding spaces do not count toward the limit", reason: new(" " + thousand + " "), want: new(thousand)},
+		{name: "absent_stays_absent", reason: nil, want: nil},
+		{name: "surrounding_spaces_removed", reason: new("  Sudah tutup  "), want: new("Sudah tutup")},
+		{name: "inner_line_breaks_kept", reason: new("Sudah tutup.\nPindah."), want: new("Sudah tutup.\nPindah.")},
+		{name: "empty_stored_as_absent", reason: new(""), want: nil},
+		{name: "blank_stored_as_absent", reason: new(" \t\n "), want: nil},
+		{name: "exactly_1000_characters", reason: new(thousand), want: new(thousand)},
+		{name: "1000_multibyte_characters", reason: new(strings.Repeat("é", 1000)), want: new(strings.Repeat("é", 1000))},
+		{name: "surrounding_spaces_not_counted", reason: new(" " + thousand + " "), want: new(thousand)},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			repo := mock.NewMockRepository(gomock.NewController(t))
+			svc, repo, _ := newService(t)
+			repo.EXPECT().Reject(gomock.Any(), int64(3), adminID, tc.want).Return(rejected(), nil)
 
-			var stored *string
-			called := false
-			repo.EXPECT().Reject(gomock.Any(), int64(3), adminID, gomock.Any()).DoAndReturn(
-				func(_ context.Context, _, _ int64, reason *string) (*suggestions.Suggestion, error) {
-					called, stored = true, reason
-					return rejected(), nil
-				})
-
-			_, err := suggestions.NewService(repo, noPlaces(t)).Reject(context.Background(), 3, adminID, tc.reason)
-			require.NoError(t, err)
-			require.True(t, called, "rejection was not stored")
-			if tc.want == nil {
-				assert.Nil(t, stored, "stored reason, want none")
-				return
-			}
-			require.NotNil(t, stored, "stored no reason, want %q", *tc.want)
-			assert.Equal(t, *tc.want, *stored)
+			_, err := svc.Reject(t.Context(), 3, adminID, tc.reason)
+			assert.NoError(t, err)
 		})
 	}
 }
@@ -717,17 +667,17 @@ func TestService_Reject_ReasonTooLong(t *testing.T) {
 		name   string
 		reason string
 	}{
-		{name: "1001 characters", reason: strings.Repeat("a", 1001)},
-		{name: "1001 multibyte characters", reason: strings.Repeat("é", 1001)},
+		{name: "1001_characters", reason: strings.Repeat("a", 1001)},
+		{name: "1001_multibyte_characters", reason: strings.Repeat("é", 1001)},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// No expectations: a too long reason must never reach storage.
-			repo := mock.NewMockRepository(gomock.NewController(t))
+			// A too long reason must never reach storage.
+			svc, _, _ := newService(t)
 
-			_, err := suggestions.NewService(repo, noPlaces(t)).Reject(context.Background(), 3, adminID, new(tc.reason))
-			require.ErrorIs(t, err, suggestions.ErrReasonTooLong)
+			_, err := svc.Reject(t.Context(), 3, adminID, new(tc.reason))
+			assert.ErrorIs(t, err, domain.ErrSuggestionReasonTooLong)
 		})
 	}
 }
@@ -739,24 +689,26 @@ func TestService_Reject_Storage(t *testing.T) {
 		name      string
 		rejectErr error
 	}{
-		{name: "unknown suggestion", rejectErr: suggestions.ErrSuggestionNotFound},
-		{name: "already reviewed", rejectErr: suggestions.ErrAlreadyReviewed},
-		{name: "storage failure is returned", rejectErr: boom},
-		{name: "rejected suggestion is returned", rejectErr: nil},
+		{name: "unknown", rejectErr: domain.ErrSuggestionNotFound},
+		{name: "already_reviewed", rejectErr: domain.ErrSuggestionAlreadyReviewed},
+		{name: "storage_failure", rejectErr: boom},
+		{name: "returns_rejected", rejectErr: nil},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			want := rejected()
 
-			repo := mock.NewMockRepository(gomock.NewController(t))
-			repo.EXPECT().Reject(gomock.Any(), int64(3), adminID, gomock.Any()).Return(want, tc.rejectErr)
+			svc, repo, _ := newService(t)
+			repo.EXPECT().Reject(gomock.Any(), int64(3), adminID, new("Sudah tutup")).Return(want, tc.rejectErr)
 
-			got, err := suggestions.NewService(repo, noPlaces(t)).Reject(context.Background(), 3, adminID, new("Sudah tutup"))
-			require.ErrorIs(t, err, tc.rejectErr)
-			if tc.rejectErr == nil {
-				assert.Same(t, want, got, "want the rejected suggestion")
+			got, err := svc.Reject(t.Context(), 3, adminID, new("Sudah tutup"))
+			if tc.rejectErr != nil {
+				assert.ErrorIs(t, err, tc.rejectErr)
+				return
 			}
+			require.NoError(t, err)
+			assert.Same(t, want, got)
 		})
 	}
 }

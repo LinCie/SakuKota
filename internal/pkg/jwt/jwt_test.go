@@ -20,10 +20,10 @@ func testConfig() config.Config {
 
 func TestValidateToken_AcceptsIssuedToken(t *testing.T) {
 	token, err := jwt.GenerateToken(testConfig(), 7, "admin")
-	require.NoError(t, err, "generate")
+	require.NoError(t, err)
 
 	claims, err := jwt.ValidateToken(testConfig(), token)
-	require.NoError(t, err, "validate")
+	require.NoError(t, err)
 	assert.Equal(t, "7", claims.Subject)
 	assert.Equal(t, "admin", claims.Role)
 }
@@ -38,7 +38,7 @@ func TestValidateToken_RejectsTokensNotIssuedByThisService(t *testing.T) {
 	}
 	sign := func(method gojwt.SigningMethod, key any, c gojwt.RegisteredClaims) string {
 		s, err := gojwt.NewWithClaims(method, jwt.Claims{Role: "admin", RegisteredClaims: c}).SignedString(key)
-		require.NoError(t, err, "sign")
+		require.NoError(t, err, "sign token")
 		return s
 	}
 
@@ -55,14 +55,14 @@ func TestValidateToken_RejectsTokensNotIssuedByThisService(t *testing.T) {
 		name  string
 		token string
 	}{
-		{name: "HS512 instead of HS256", token: sign(gojwt.SigningMethodHS512, []byte(secret), valid())},
-		{name: "unsigned (alg none)", token: sign(gojwt.SigningMethodNone, gojwt.UnsafeAllowNoneSignatureType, valid())},
-		{name: "signed with another secret", token: sign(gojwt.SigningMethodHS256, []byte("another-secret-another-secret-00"), valid())},
-		{name: "no issuer", token: sign(gojwt.SigningMethodHS256, []byte(secret), noIssuer)},
-		{name: "another issuer", token: sign(gojwt.SigningMethodHS256, []byte(secret), otherIssuer)},
-		{name: "no expiry", token: sign(gojwt.SigningMethodHS256, []byte(secret), noExpiry)},
-		{name: "expired", token: sign(gojwt.SigningMethodHS256, []byte(secret), expired)},
-		{name: "not a token", token: "garbage"},
+		{name: "HS512", token: sign(gojwt.SigningMethodHS512, []byte(secret), valid())},
+		{name: "AlgNone", token: sign(gojwt.SigningMethodNone, gojwt.UnsafeAllowNoneSignatureType, valid())},
+		{name: "OtherSecret", token: sign(gojwt.SigningMethodHS256, []byte("another-secret-another-secret-00"), valid())},
+		{name: "NoIssuer", token: sign(gojwt.SigningMethodHS256, []byte(secret), noIssuer)},
+		{name: "OtherIssuer", token: sign(gojwt.SigningMethodHS256, []byte(secret), otherIssuer)},
+		{name: "NoExpiry", token: sign(gojwt.SigningMethodHS256, []byte(secret), noExpiry)},
+		{name: "Expired", token: sign(gojwt.SigningMethodHS256, []byte(secret), expired)},
+		{name: "Garbage", token: "garbage"},
 	}
 
 	// The control: the same helper with valid claims is accepted.

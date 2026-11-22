@@ -6,38 +6,23 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"rantau-go/internal/database"
+	"rantau-go/internal/domain"
 )
 
-// Repository defines the persistence operations required by the service.
-//
-//go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock
-type Repository interface {
-	// Create saves the review and adds its rating to the place's totals.
-	// It returns the saved review with its author, or ErrPlaceNotFound or ErrAlreadyReviewed.
-	Create(ctx context.Context, r *Review) (*Review, error)
-	// GetByPlace returns the place's reviews with their authors, newest
-	// first, or ErrPlaceNotFound.
-	GetByPlace(ctx context.Context, placeID int64) ([]Review, error)
-}
-
-type postgresRepository struct {
+// PostgresRepository stores reviews in PostgreSQL. It is safe for concurrent use.
+type PostgresRepository struct {
 	db *sqlx.DB
 }
 
-// -----------------------------------------------------------------------------
-// Exported
-// -----------------------------------------------------------------------------
-
-func NewPostgresRepository(db *sqlx.DB) Repository {
-	return &postgresRepository{
-		db: db,
-	}
+// NewPostgresRepository returns a PostgresRepository that uses db.
+func NewPostgresRepository(db *sqlx.DB) *PostgresRepository {
+	return &PostgresRepository{db: db}
 }
 
 // Create saves the review and adds its rating to the place's totals in one statement.
 // Adding to the totals, not recounting them, means two reviews at once both count.
-func (r *postgresRepository) Create(ctx context.Context, review *Review) (*Review, error) {
-	var created Review
+func (r *PostgresRepository) Create(ctx context.Context, review *domain.Review) (*domain.Review, error) {
+	var created domain.Review
 
 	err := r.db.GetContext(
 		ctx,
@@ -67,9 +52,9 @@ func (r *postgresRepository) Create(ctx context.Context, review *Review) (*Revie
 	return &created, nil
 }
 
-// GetByPlace returns the place's reviews, newest first, or ErrPlaceNotFound.
+// ListByPlace returns the place's reviews, newest first, or domain.ErrPlaceNotFound.
 // Reviews created at the same moment list the later one first.
-func (r *postgresRepository) GetByPlace(ctx context.Context, placeID int64) ([]Review, error) {
+func (r *PostgresRepository) ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error) {
 	var exists bool
 	err := r.db.GetContext(
 		ctx,
@@ -81,10 +66,10 @@ func (r *postgresRepository) GetByPlace(ctx context.Context, placeID int64) ([]R
 		return nil, err
 	}
 	if !exists {
-		return nil, ErrPlaceNotFound
+		return nil, domain.ErrPlaceNotFound
 	}
 
-	reviews := make([]Review, 0)
+	reviews := make([]domain.Review, 0)
 
 	err = r.db.SelectContext(
 		ctx,
@@ -103,26 +88,20 @@ func (r *postgresRepository) GetByPlace(ctx context.Context, placeID int64) ([]R
 	return reviews, nil
 }
 
-// -----------------------------------------------------------------------------
-// Unexported
-// -----------------------------------------------------------------------------
-
 // reviewColumns selects a review from `r` and its author from `u`, aliased to
-// match the nested Review.User fields.
+// match the nested domain.Review.User fields.
 const reviewColumns = `r.id, r.place_id, r.user_id, r.rating, r.comment, r.created_at,
 	u.id AS "user.id", u.name AS "user.name"`
 
-// mapCreateError maps a repeat review to ErrAlreadyReviewed and a missing place to ErrPlaceNotFound.
+// mapCreateError maps a repeat review to domain.ErrPlaceAlreadyReviewed and a missing place to domain.ErrPlaceNotFound.
 // Any other error is returned unchanged.
 func mapCreateError(err error) error {
-	if database.IsCode(err, database.UniqueViolation) &&
-		database.ConstraintName(err) == "place_reviews_place_id_user_id_key" {
-		return ErrAlreadyReviewed
+	if database.IsCode(err, database.UniqueViolation) && database.ConstraintName(err) == "place_reviews_place_id_user_id_key" {
+		return domain.ErrPlaceAlreadyReviewed
 	}
 
-	if database.IsCode(err, database.ForeignKeyViolation) &&
-		database.ConstraintName(err) == "place_reviews_place_id_fkey" {
-		return ErrPlaceNotFound
+	if database.IsCode(err, database.ForeignKeyViolation) && database.ConstraintName(err) == "place_reviews_place_id_fkey" {
+		return domain.ErrPlaceNotFound
 	}
 
 	return err

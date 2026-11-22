@@ -3,6 +3,8 @@ package storage
 import (
 	"errors"
 	"time"
+
+	"rantau-go/internal/domain"
 )
 
 // MediaUploadRequest is the API payload for requesting an image or video upload.
@@ -36,7 +38,7 @@ type MediaResponse struct {
 
 // ToMediaResponses turns each media into its response shape, with its key made into a URL.
 // It never returns nil, so an empty list is sent as [] instead of null.
-func ToMediaResponses(medias []Media, mediaURL func(key string) string) []MediaResponse {
+func ToMediaResponses(medias []domain.Media, mediaURL func(key string) string) []MediaResponse {
 	responses := make([]MediaResponse, 0, len(medias))
 
 	for _, m := range medias {

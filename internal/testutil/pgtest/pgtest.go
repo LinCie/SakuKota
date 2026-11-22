@@ -107,11 +107,11 @@ func Reset(t testing.TB, db *sqlx.DB) {
 
 	var tables []string
 	err := db.Select(&tables, `SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> ALL($1)`, keptTables)
-	require.NoError(t, err)
+	require.NoError(t, err, "list tables")
 	if len(tables) == 0 {
 		return
 	}
 
 	_, err = db.Exec(`TRUNCATE ` + strings.Join(tables, ", ") + ` RESTART IDENTITY CASCADE`)
-	require.NoError(t, err)
+	require.NoError(t, err, "truncate tables")
 }

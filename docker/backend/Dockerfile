@@ -1,6 +1,6 @@
 # Build from the repository root:
 #   docker build -f docker/backend/Dockerfile .
-FROM docker.io/library/golang:1.26-alpine AS build
+FROM docker.io/library/golang:1.27-alpine AS build
 
 WORKDIR /src
 
@@ -12,7 +12,7 @@ COPY internal ./internal
 
 ENV CGO_ENABLED=0
 RUN for cmd in api migrate seed cleanup; do \
-        go build -trimpath -ldflags="-s -w" -o "/out/$cmd" "./cmd/$cmd" || exit 1; \
+    go build -trimpath -ldflags="-s -w" -o "/out/$cmd" "./cmd/$cmd" || exit 1; \
     done
 
 # One-shot setup for compose: migrations and Garage (see docker/init).

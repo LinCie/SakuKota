@@ -1,22 +1,22 @@
+// Package subdistricts serves the sub-districts (kecamatan) API: their details,
+// photos, and GeoJSON boundaries.
 package subdistricts
 
-import (
-	"github.com/jmoiron/sqlx"
-)
+import "github.com/jmoiron/sqlx"
 
+// Module wires the service and handler of sub-districts.
 type Module struct {
-	Service Service
+	Service *Service
 	Handler *Handler
 }
 
-// The handler uses media.PublicURL to build image links.
-func NewModule(db *sqlx.DB, media MediaStorage) *Module {
-	repo := NewPostgresRepository(db)
-	service := NewService(repo, media)
-	handler := NewHandler(service, media.PublicURL)
+// New builds a Module over db and media. The handler uses media.PublicURL to
+// build image links.
+func New(db *sqlx.DB, media MediaStorage) *Module {
+	service := NewService(NewPostgresRepository(db), media)
 
 	return &Module{
 		Service: service,
-		Handler: handler,
+		Handler: NewHandler(service, media.PublicURL),
 	}
 }

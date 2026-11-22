@@ -10,22 +10,13 @@ const (
 	refreshCookiePath = "/v1/auth"
 )
 
-// Lengths in characters, counted after trimming spaces. They match the
-// VARCHAR columns of USERS.
-const (
-	maxNameLength  = 100
-	maxEmailLength = 255
-)
-
 // emailPattern accepts one @ with text on both sides and no spaces.
 var emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+$`)
-
-// minPasswordLength is the fewest characters a password may have.
-const minPasswordLength = 8
 
 // refreshKeyPrefix namespaces refresh token keys in Redis.
 const refreshKeyPrefix = "auth:refresh:"
 
+// refreshTokenBytes is the number of random bytes in a refresh token.
 const refreshTokenBytes = 32
 
 // Argon2id parameters, following the OWASP recommendation.

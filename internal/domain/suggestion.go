@@ -1,4 +1,4 @@
-package suggestions
+package domain
 
 import (
 	"encoding/json"
@@ -9,6 +9,22 @@ import (
 
 // Status is where a suggestion stands in its review.
 type Status string
+
+// Statuses a suggestion can have. A suggestion is reviewed once, so it leaves
+// pending for approved or rejected and never changes again.
+const (
+	StatusPending  Status = "pending"
+	StatusApproved Status = "approved"
+	StatusRejected Status = "rejected"
+)
+
+// Lengths in characters, counted after trimming spaces. The name and optional
+// place fields share the limits of a place, so an approved suggestion always
+// fits the place it becomes.
+const (
+	MaxSuggestionNoteLength   = 1000
+	MaxSuggestionReasonLength = 1000
+)
 
 // Suggestion represents a row in the PLACE_SUGGESTIONS table, joined with its author.
 type Suggestion struct {
@@ -37,16 +53,4 @@ type Suggestion struct {
 	ReviewedAt *time.Time `db:"reviewed_at"`
 	CreatedAt  time.Time  `db:"created_at"`
 	User       Author     `db:"user"`
-}
-
-// Author is the user who submitted a Suggestion, as shown next to it.
-type Author struct {
-	ID   int64  `db:"id"`
-	Name string `db:"name"`
-}
-
-// SuggestionFilter narrows the suggestions returned by GetMany. The zero value applies no filter.
-type SuggestionFilter struct {
-	// Status keeps only the suggestions in this status. Empty keeps all of them.
-	Status Status
 }

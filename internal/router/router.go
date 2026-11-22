@@ -10,6 +10,7 @@ import (
 
 	"rantau-go/internal/config"
 	"rantau-go/internal/docs"
+	"rantau-go/internal/domain"
 	"rantau-go/internal/middleware"
 	"rantau-go/internal/module/auth"
 	"rantau-go/internal/module/places"
@@ -40,12 +41,12 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 
 	media := storage.NewMediaStore(storage.NewS3(cfg.Storage), cfg.Storage.PublicURL)
 
-	userModule := users.NewModule(db)
-	authModule := auth.NewModule(cfg, userModule.Service, rdb)
-	placeModule := places.NewModule(db, rdb, media)
-	reviewModule := reviews.NewModule(db)
-	subdistrictModule := subdistricts.NewModule(db, media)
-	suggestionModule := suggestions.NewModule(db, placeModule.Service)
+	userModule := users.New(db)
+	authModule := auth.New(cfg, userModule.Service, rdb)
+	placeModule := places.New(db, rdb, media)
+	reviewModule := reviews.New(db)
+	subdistrictModule := subdistricts.New(db, media)
+	suggestionModule := suggestions.New(db, placeModule.Service)
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
@@ -57,23 +58,23 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 
 		r.Route("/places", func(r chi.Router) {
 			// GET /v1/places
-			r.Get("/", placeModule.Handler.GetPlaces)
+			r.Get("/", placeModule.Handler.List)
 
 			// GET /v1/places/{id}
-			r.Get("/{id}", placeModule.Handler.GetPlace)
+			r.Get("/{id}", placeModule.Handler.Show)
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.WithAuth(cfg))
-				r.Use(middleware.Guard([]string{users.RoleAdmin}))
+				r.Use(middleware.Guard([]string{domain.RoleAdmin}))
 
 				// POST /v1/places
-				r.Post("/", placeModule.Handler.CreatePlace)
+				r.Post("/", placeModule.Handler.Create)
 
 				// PUT /v1/places/{id}
-				r.Put("/{id}", placeModule.Handler.PutPlace)
+				r.Put("/{id}", placeModule.Handler.Replace)
 
 				// DELETE /v1/places/{id}
-				r.Delete("/{id}", placeModule.Handler.DeletePlace)
+				r.Delete("/{id}", placeModule.Handler.Delete)
 
 				// POST /v1/places/{id}/medias/upload-url
 				r.Post("/{id}/medias/upload-url", placeModule.Handler.CreateMediaUpload)
@@ -87,22 +88,22 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 
 			r.Route("/{id}/reviews", func(r chi.Router) {
 				// GET /v1/places/{id}/reviews
-				r.Get("/", reviewModule.Handler.GetReviews)
+				r.Get("/", reviewModule.Handler.List)
 
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.WithAuth(cfg))
 
 					// POST /v1/places/{id}/reviews
-					r.Post("/", reviewModule.Handler.CreateReview)
+					r.Post("/", reviewModule.Handler.Create)
 				})
 			})
 
 			r.Route("/categories", func(r chi.Router) {
 				// GET /v1/places/categories
-				r.Get("/", placeModule.Handler.GetCategories)
+				r.Get("/", placeModule.Handler.ListCategories)
 
 				// GET /v1/places/categories/{id}
-				r.Get("/{id}", placeModule.Handler.GetCategory)
+				r.Get("/{id}", placeModule.Handler.ShowCategory)
 			})
 		})
 
@@ -111,49 +112,49 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 				r.Use(middleware.WithAuth(cfg))
 
 				// POST /v1/suggestions
-				r.Post("/", suggestionModule.Handler.CreateSuggestion)
+				r.Post("/", suggestionModule.Handler.Create)
 
 				// GET /v1/suggestions/mine
-				r.Get("/mine", suggestionModule.Handler.GetMySuggestions)
+				r.Get("/mine", suggestionModule.Handler.ListMine)
 			})
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.WithAuth(cfg))
-				r.Use(middleware.Guard([]string{users.RoleAdmin}))
+				r.Use(middleware.Guard([]string{domain.RoleAdmin}))
 
 				// GET /v1/suggestions
-				r.Get("/", suggestionModule.Handler.GetSuggestions)
+				r.Get("/", suggestionModule.Handler.List)
 
 				// GET /v1/suggestions/{id}
-				r.Get("/{id}", suggestionModule.Handler.GetSuggestion)
+				r.Get("/{id}", suggestionModule.Handler.Show)
 
 				// POST /v1/suggestions/{id}/approve
-				r.Post("/{id}/approve", suggestionModule.Handler.ApproveSuggestion)
+				r.Post("/{id}/approve", suggestionModule.Handler.Approve)
 
 				// POST /v1/suggestions/{id}/reject
-				r.Post("/{id}/reject", suggestionModule.Handler.RejectSuggestion)
+				r.Post("/{id}/reject", suggestionModule.Handler.Reject)
 			})
 		})
 
 		r.Route("/subdistricts", func(r chi.Router) {
 			// GET /v1/subdistricts
-			r.Get("/", subdistrictModule.Handler.GetSubDistricts)
+			r.Get("/", subdistrictModule.Handler.List)
 
 			// GET /v1/subdistricts/{id}
-			r.Get("/{id}", subdistrictModule.Handler.GetSubDistrict)
+			r.Get("/{id}", subdistrictModule.Handler.Show)
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.WithAuth(cfg))
-				r.Use(middleware.Guard([]string{users.RoleAdmin}))
+				r.Use(middleware.Guard([]string{domain.RoleAdmin}))
 
 				// POST /v1/subdistricts
-				r.Post("/", subdistrictModule.Handler.CreateSubDistrict)
+				r.Post("/", subdistrictModule.Handler.Create)
 
 				// PUT /v1/subdistricts/{id}
-				r.Put("/{id}", subdistrictModule.Handler.PutSubDistrict)
+				r.Put("/{id}", subdistrictModule.Handler.Replace)
 
 				// DELETE /v1/subdistricts/{id}
-				r.Delete("/{id}", subdistrictModule.Handler.DeleteSubDistrict)
+				r.Delete("/{id}", subdistrictModule.Handler.Delete)
 
 				// POST /v1/subdistricts/{id}/medias/upload-url
 				r.Post("/{id}/medias/upload-url", subdistrictModule.Handler.CreateMediaUpload)

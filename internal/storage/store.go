@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-// ObjectStore defines the object operations MediaStore is built on.
-//
 //go:generate mockgen -source=store.go -destination=mock/store.go -package=mock
+
+// ObjectStore defines the object operations MediaStore is built on.
 type ObjectStore interface {
 	// PresignPut returns a temporary link that uploads key with contentType until UploadTTL passes.
 	PresignPut(ctx context.Context, key, contentType string) (Upload, error)
@@ -37,4 +37,5 @@ type ObjectInfo struct {
 	ContentType string
 }
 
+// ErrObjectNotFound is returned by ObjectStore.Stat when no object has the key.
 var ErrObjectNotFound = errors.New("object not found")

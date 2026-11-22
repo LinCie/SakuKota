@@ -3,35 +3,43 @@ package storagecleanup
 import (
 	"context"
 	"log/slog"
+	"time"
 )
 
-// Service defines the cleanup operations.
-type Service interface {
-	// Run deletes one batch of due objects from storage.
-	Run(ctx context.Context) error
+//go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
+
+// Repository is the deletion queue the Service needs.
+type Repository interface {
+	// Remove takes key off the queue.
+	Remove(ctx context.Context, key string) error
+	// ListDue returns up to limit keys that are due, longest due first.
+	ListDue(ctx context.Context, limit int) ([]string, error)
+	// Reschedule records a failed attempt to delete key and makes it due again
+	// after retryIn.
+	Reschedule(ctx context.Context, key string, retryIn time.Duration, lastErr string) error
 }
 
-type service struct {
+// MediaStorage is the object storage the Service deletes from.
+type MediaStorage interface {
+	// Delete removes the object. Deleting a missing object is not an error.
+	Delete(ctx context.Context, key string) error
+}
+
+// Service deletes queued storage objects.
+type Service struct {
 	repo  Repository
 	media MediaStorage
 }
 
 // NewService builds the cleanup service from the queue and the media storage.
-func NewService(repo Repository, media MediaStorage) Service {
-	return &service{
-		repo:  repo,
-		media: media,
-	}
+func NewService(repo Repository, media MediaStorage) *Service {
+	return &Service{repo: repo, media: media}
 }
 
-// -----------------------------------------------------------------------------
-// service
-// -----------------------------------------------------------------------------
-
-// Run gets the due keys and deletes their objects. A failed delete is
+// Run deletes one batch of due objects from storage. A failed delete is
 // rescheduled and does not fail the run; a failure to update the queue does.
-func (s *service) Run(ctx context.Context) error {
-	keys, err := s.repo.GetDue(ctx, batchSize)
+func (s *Service) Run(ctx context.Context) error {
+	keys, err := s.repo.ListDue(ctx, batchSize)
 	if err != nil {
 		return err
 	}
@@ -47,7 +55,7 @@ func (s *service) Run(ctx context.Context) error {
 
 // delete removes the object for key, then takes key off the queue.
 // If the object cannot be removed, key is rescheduled and only queue errors are returned.
-func (s *service) delete(ctx context.Context, key string) error {
+func (s *Service) delete(ctx context.Context, key string) error {
 	if err := s.media.Delete(ctx, key); err != nil {
 		slog.ErrorContext(ctx, "delete storage object", "key", key, "err", err)
 		return s.repo.Reschedule(ctx, key, retryDelay, err.Error())

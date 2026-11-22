@@ -1,23 +1,40 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
 	"rantau-go/internal/config"
+	"rantau-go/internal/domain"
 	"rantau-go/internal/pkg/httpx"
 )
 
-type Handler struct {
-	cfg     config.Config
-	service Service
+// Error codes sent to clients, in addition to the shared ones in httpx.
+const (
+	codeInvalidCredentials  = "INVALID_CREDENTIALS"
+	codeInvalidRefreshToken = "INVALID_REFRESH_TOKEN"
+	codeEmailTaken          = "EMAIL_TAKEN"
+)
+
+//go:generate mockgen -source=handler.go -destination=mock/handler.go -package=mock
+
+// authService is the part of Service the Handler uses.
+type authService interface {
+	Register(ctx context.Context, u *domain.User, password string) (*domain.User, error)
+	Login(ctx context.Context, email, password string) (*domain.User, *Tokens, error)
+	Refresh(ctx context.Context, refreshToken string) (*domain.User, *Tokens, error)
+	Logout(ctx context.Context, refreshToken string) error
 }
 
-// -----------------------------------------------------------------------------
-// Exported
-// -----------------------------------------------------------------------------
+// Handler serves the auth endpoints.
+type Handler struct {
+	cfg     config.Config
+	service authService
+}
 
-func NewHandler(cfg config.Config, service Service) *Handler {
+// NewHandler returns a Handler that uses service and sets cookies as cfg says.
+func NewHandler(cfg config.Config, service authService) *Handler {
 	return &Handler{
 		cfg:     cfg,
 		service: service,
@@ -35,14 +52,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	u, err := h.service.Register(r.Context(), toUser(*req), req.Password)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrInvalidName),
-			errors.Is(err, ErrNameTooLong),
-			errors.Is(err, ErrInvalidEmail),
-			errors.Is(err, ErrEmailTooLong),
-			errors.Is(err, ErrWeakPassword):
+		case isValidationError(err):
 			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
-		case errors.Is(err, ErrEmailTaken):
-			httpx.RespondError(w, http.StatusConflict, httpx.CodeEmailTaken, err.Error())
+		case errors.Is(err, domain.ErrEmailTaken):
+			httpx.RespondError(w, http.StatusConflict, codeEmailTaken, err.Error())
 		default:
 			httpx.RespondInternalError(w)
 		}
@@ -62,8 +75,8 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	u, tokens, err := h.service.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
-		if errors.Is(err, ErrInvalidCredentials) {
-			httpx.RespondError(w, http.StatusUnauthorized, httpx.CodeInvalidCredentials, err.Error())
+		if errors.Is(err, domain.ErrInvalidCredentials) {
+			httpx.RespondError(w, http.StatusUnauthorized, codeInvalidCredentials, err.Error())
 			return
 		}
 		httpx.RespondInternalError(w)
@@ -80,15 +93,15 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(refreshCookieName)
 	if err != nil {
 		h.clearRefreshCookie(w)
-		httpx.RespondError(w, http.StatusUnauthorized, httpx.CodeInvalidRefreshToken, ErrInvalidRefreshToken.Error())
+		httpx.RespondError(w, http.StatusUnauthorized, codeInvalidRefreshToken, domain.ErrInvalidRefreshToken.Error())
 		return
 	}
 
 	u, tokens, err := h.service.Refresh(r.Context(), cookie.Value)
 	if err != nil {
-		if errors.Is(err, ErrInvalidRefreshToken) {
+		if errors.Is(err, domain.ErrInvalidRefreshToken) {
 			h.clearRefreshCookie(w)
-			httpx.RespondError(w, http.StatusUnauthorized, httpx.CodeInvalidRefreshToken, err.Error())
+			httpx.RespondError(w, http.StatusUnauthorized, codeInvalidRefreshToken, err.Error())
 			return
 		}
 		httpx.RespondInternalError(w)
@@ -114,9 +127,10 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// -----------------------------------------------------------------------------
-// Unexported
-// -----------------------------------------------------------------------------
+// isValidationError reports whether err means the sign-up details were refused.
+func isValidationError(err error) bool {
+	return errors.Is(err, domain.ErrUserNameRequired) || errors.Is(err, domain.ErrUserNameTooLong) || errors.Is(err, domain.ErrEmailInvalid) || errors.Is(err, domain.ErrEmailTooLong) || errors.Is(err, domain.ErrPasswordTooShort)
+}
 
 // setRefreshCookie puts token in the refresh cookie, lasting as long as refresh tokens do.
 func (h *Handler) setRefreshCookie(w http.ResponseWriter, token string) {

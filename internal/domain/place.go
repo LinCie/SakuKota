@@ -1,13 +1,35 @@
-package places
+package domain
 
 import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"math"
+	"strings"
+	"unicode/utf8"
 
 	"rantau-go/internal/pkg/postgis"
-	"rantau-go/internal/storage"
+	"rantau-go/internal/pkg/text"
+)
+
+// Data types of a CategoryField. A CHECK on CATEGORY_FIELDS.data_type allows
+// exactly these, so a new one needs a migration too.
+const (
+	FieldTypeText    = "text"
+	FieldTypeNumber  = "number"
+	FieldTypeBoolean = "boolean"
+	FieldTypeSelect  = "select"
+	// FieldTypeRange values are objects of the form {"min": 1, "max": 2}.
+	FieldTypeRange = "range"
+	// FieldTypeDate values are strings in YYYY-MM-DD format.
+	FieldTypeDate = "date"
+)
+
+// Maximum lengths in characters, counted after trimming. They match the VARCHAR columns of PLACES.
+const (
+	MaxPlaceNameLength                = 150
+	MaxPlaceAddressLength             = 255
+	MaxPlaceOperatingHoursLength      = 255
+	MaxPlaceEstimatedPriceRangeLength = 100
 )
 
 // Place is a row of PLACES, joined with its category.
@@ -30,57 +52,7 @@ type Place struct {
 	Category    Category `db:"category"`
 	// Medias are the place's images in position order, loaded separately by
 	// the repository. They are never nil once read.
-	Medias []storage.Media `db:"-"`
-}
-
-// PlaceFilter narrows the places GetMany returns. A zero field applies no filter.
-type PlaceFilter struct {
-	SubDistrictID int64
-	// CategoryIDs matches places in any of the given categories.
-	CategoryIDs []int64
-	// Query matches the name, address, short description, or category name, ignoring case.
-	Query string
-	// Bounds keeps places located inside the box, edges included.
-	Bounds *BoundingBox
-	// Limit is the page size. The service replaces zero or an oversized value
-	// with its maximum, so below the service it is always positive.
-	Limit int
-	// Offset skips this many places before the page starts. Without Bounds,
-	// places are ordered by id; with Bounds, they are spread over the box (see
-	// spreadPlaces).
-	Offset int
-}
-
-// PlaceLocation is a place's id, category, and coordinates in degrees.
-// The coordinates are nil for a place without a location.
-type PlaceLocation struct {
-	ID         int64    `db:"id"`
-	CategoryID int64    `db:"category_id"`
-	Longitude  *float64 `db:"longitude"`
-	Latitude   *float64 `db:"latitude"`
-}
-
-// BoundingBox is an area in degrees.
-type BoundingBox struct {
-	MinLng float64
-	MinLat float64
-	MaxLng float64
-	MaxLat float64
-}
-
-// Center returns the longitude and latitude of the middle of the box.
-func (b BoundingBox) Center() (float64, float64) {
-	return (b.MinLng + b.MaxLng) / 2, (b.MinLat + b.MaxLat) / 2
-}
-
-// gridCell returns the side in degrees of the square cells a page of limit places
-// is spread over: the smallest power of two that splits the box into at most about
-// limit cells. A power of two keeps the grid the same while the box pans at one
-// zoom level. It is never below minGridCell, so an empty box still has a grid.
-func (b BoundingBox) gridCell(limit int) float64 {
-	side := math.Sqrt((b.MaxLng - b.MinLng) * (b.MaxLat - b.MinLat) / float64(limit))
-
-	return math.Exp2(math.Ceil(math.Log2(max(side, minGridCell))))
+	Medias []Media `db:"-"`
 }
 
 // Category is a row of CATEGORIES. Migrations define categories; the API cannot create them.
@@ -135,4 +107,39 @@ func (o FieldOptions) Value() (driver.Value, error) {
 	}
 
 	return json.Marshal(o)
+}
+
+// NormalizePlaceName trims name and rejects it if it is empty or too long.
+func NormalizePlaceName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	switch {
+	case name == "":
+		return "", ErrPlaceNameRequired
+	case utf8.RuneCountInString(name) > MaxPlaceNameLength:
+		return "", ErrPlaceNameTooLong
+	}
+
+	return name, nil
+}
+
+// NormalizePlaceFields trims the optional text fields of p and turns blank ones into nil.
+// It rejects any that exceed their column length.
+func NormalizePlaceFields(p *Place) error {
+	var ok bool
+
+	if p.Address, ok = text.TrimOptionalMax(p.Address, MaxPlaceAddressLength); !ok {
+		return ErrPlaceAddressTooLong
+	}
+
+	if p.OperatingHours, ok = text.TrimOptionalMax(p.OperatingHours, MaxPlaceOperatingHoursLength); !ok {
+		return ErrPlaceOperatingHoursTooLong
+	}
+
+	if p.EstimatedPriceRange, ok = text.TrimOptionalMax(p.EstimatedPriceRange, MaxPlaceEstimatedPriceRangeLength); !ok {
+		return ErrPlaceEstimatedPriceRangeTooLong
+	}
+
+	p.ShortDescription = text.TrimOptional(p.ShortDescription)
+
+	return nil
 }

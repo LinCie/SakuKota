@@ -1,13 +1,14 @@
 package subdistricts
 
 import (
+	"rantau-go/internal/domain"
 	"rantau-go/internal/pkg/postgis"
 	"rantau-go/internal/storage"
 )
 
-// SubDistrictRequest is the API payload for creating a SubDistrict or
-// replacing one. An update sends every field: keys left out are cleared.
-type SubDistrictRequest struct {
+// Request is the API payload for creating a sub-district or replacing one. An
+// update sends every field: keys left out are cleared.
+type Request struct {
 	Name                   string   `json:"name"`
 	Slug                   string   `json:"slug"`
 	FloodHistory           *string  `json:"flood_history"`
@@ -15,8 +16,8 @@ type SubDistrictRequest struct {
 	EstimatedDailySpending *float64 `json:"estimated_daily_spending"`
 }
 
-// SubDistrictResponse is the API representation of a SubDistrict.
-type SubDistrictResponse struct {
+// Response is the API representation of a sub-district.
+type Response struct {
 	ID                     int64    `json:"id"`
 	Name                   string   `json:"name"`
 	Slug                   string   `json:"slug"`
@@ -31,13 +32,9 @@ type SubDistrictResponse struct {
 	Boundary *postgis.MultiPolygon `json:"boundary"`
 }
 
-// -----------------------------------------------------------------------------
-// Conversions
-// -----------------------------------------------------------------------------
-
-// toSubDistrict turns the request body into a SubDistrict.
-func toSubDistrict(req SubDistrictRequest) *SubDistrict {
-	return &SubDistrict{
+// toSubDistrict turns the request body into a sub-district.
+func toSubDistrict(req Request) *domain.SubDistrict {
+	return &domain.SubDistrict{
 		Name:                   req.Name,
 		Slug:                   req.Slug,
 		FloodHistory:           req.FloodHistory,
@@ -46,10 +43,10 @@ func toSubDistrict(req SubDistrictRequest) *SubDistrict {
 	}
 }
 
-// toSubDistrictResponse turns sd into the JSON shape sent to clients.
+// toResponse turns sd into the JSON shape sent to clients.
 // Media keys become full links using mediaURL.
-func toSubDistrictResponse(sd SubDistrict, mediaURL func(key string) string) SubDistrictResponse {
-	return SubDistrictResponse{
+func toResponse(sd domain.SubDistrict, mediaURL func(key string) string) Response {
+	return Response{
 		ID:                     sd.ID,
 		Name:                   sd.Name,
 		Slug:                   sd.Slug,

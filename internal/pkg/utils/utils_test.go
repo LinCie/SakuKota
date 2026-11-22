@@ -10,6 +10,9 @@ import (
 )
 
 func TestMap(t *testing.T) {
-	assert.Equal(t, []string{"1", "2"}, utils.Map([]int{1, 2}, strconv.Itoa))
-	assert.NotNil(t, utils.Map([]int(nil), strconv.Itoa), "nil input must give an empty slice, not nil")
+	got := utils.Map([]int{1, 2}, strconv.Itoa)
+	assert.Equal(t, []string{"1", "2"}, got)
+
+	// A nil input must give an empty slice, not nil.
+	assert.NotNil(t, utils.Map([]int(nil), strconv.Itoa))
 }

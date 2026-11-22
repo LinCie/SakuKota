@@ -1,49 +1,81 @@
 package places
 
 import (
+	"context"
 	"errors"
 	"math"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"rantau-go/internal/domain"
 	"rantau-go/internal/pkg/httpx"
 	"rantau-go/internal/pkg/utils"
 	"rantau-go/internal/storage"
 )
 
+// Codes of the error responses only places sends.
+const (
+	codeInvalidPlaceID       = "INVALID_PLACE_ID"
+	codePlaceNotFound        = "PLACE_NOT_FOUND"
+	codeInvalidSubDistrictID = "INVALID_SUB_DISTRICT_ID"
+	codeSubDistrictNotFound  = "SUB_DISTRICT_NOT_FOUND"
+	codeInvalidCategoryID    = "INVALID_CATEGORY_ID"
+	codeCategoryNotFound     = "CATEGORY_NOT_FOUND"
+	codeInvalidLimit         = "INVALID_LIMIT"
+	codeInvalidOffset        = "INVALID_OFFSET"
+	codeInvalidBBox          = "INVALID_BBOX"
+	codeInvalidMediaID       = "INVALID_MEDIA_ID"
+	codeMediaNotFound        = "MEDIA_NOT_FOUND"
+	codeMediaLimitReached    = "MEDIA_LIMIT_REACHED"
+)
+
+//go:generate mockgen -source=handler.go -destination=mock/handler.go -package=mock
+
+// placeService is the service the handler calls.
+type placeService interface {
+	Create(ctx context.Context, p *domain.Place) (*domain.Place, error)
+	MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error)
+	AddMedia(ctx context.Context, id int64, uploadKey string) (*domain.Place, error)
+	List(ctx context.Context, filter Filter) ([]domain.Place, int, error)
+	Fetch(ctx context.Context, id int64) (*domain.Place, error)
+	ListCategories(ctx context.Context) ([]domain.Category, error)
+	FetchCategory(ctx context.Context, id int64) (*domain.Category, error)
+	Update(ctx context.Context, id int64, p *domain.Place) (*domain.Place, error)
+	Delete(ctx context.Context, id int64) error
+	DeleteMedia(ctx context.Context, id, mediaID int64) error
+}
+
+// Handler serves the place and category endpoints.
 type Handler struct {
-	service Service
+	service placeService
 
 	// mediaURL turns a stored media key into its public URL.
 	mediaURL func(key string) string
 }
 
-// -----------------------------------------------------------------------------
-// Exported
-// -----------------------------------------------------------------------------
-
-func NewHandler(service Service, mediaURL func(key string) string) *Handler {
+// NewHandler returns a Handler that calls service and builds media links with mediaURL.
+func NewHandler(service placeService, mediaURL func(key string) string) *Handler {
 	return &Handler{
 		service:  service,
 		mediaURL: mediaURL,
 	}
 }
 
-// CreatePlace creates a place from the request body.
-func (h *Handler) CreatePlace(w http.ResponseWriter, r *http.Request) {
-	req, ok := httpx.DecodeJSON[PlaceRequest](w, r)
+// Create creates a place from the request body.
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+	req, ok := httpx.DecodeJSON[Request](w, r)
 	if !ok {
 		return
 	}
 
-	p, err := h.service.Create(r.Context(), ToPlace(*req))
+	p, err := h.service.Create(r.Context(), toPlace(*req))
 	if err != nil {
 		respondWriteError(w, err)
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusCreated, toPlaceResponse(*p, h.mediaURL))
+	httpx.RespondJSON(w, http.StatusCreated, toResponse(*p, h.mediaURL))
 }
 
 // CreateMediaUpload returns a temporary link the client uploads a photo to directly.
@@ -85,47 +117,47 @@ func (h *Handler) AddMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.mediaURL))
+	httpx.RespondJSON(w, http.StatusOK, toResponse(*p, h.mediaURL))
 }
 
-// GetPlaces returns one page of places matching the URL filters, plus the total match count.
-func (h *Handler) GetPlaces(w http.ResponseWriter, r *http.Request) {
+// List returns one page of places matching the URL filters, plus the total match count.
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	filter, ok := parseFilter(w, r)
 	if !ok {
 		return
 	}
 
-	places, total, err := h.service.GetMany(r.Context(), filter)
+	places, total, err := h.service.List(r.Context(), filter)
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, PlacePageResponse{
-		Places: utils.Map(places, func(p Place) PlaceResponse { return toPlaceResponse(p, h.mediaURL) }),
+	httpx.RespondJSON(w, http.StatusOK, PageResponse{
+		Places: utils.Map(places, func(p domain.Place) Response { return toResponse(p, h.mediaURL) }),
 		Total:  total,
 	})
 }
 
-// GetPlace returns the place with the id in the URL.
-func (h *Handler) GetPlace(w http.ResponseWriter, r *http.Request) {
+// Show returns the place with the id in the URL.
+func (h *Handler) Show(w http.ResponseWriter, r *http.Request) {
 	id, ok := placeID(w, r)
 	if !ok {
 		return
 	}
 
-	p, err := h.service.GetPlace(r.Context(), id)
+	p, err := h.service.Fetch(r.Context(), id)
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.mediaURL))
+	httpx.RespondJSON(w, http.StatusOK, toResponse(*p, h.mediaURL))
 }
 
-// GetCategories returns every category with its custom fields.
-func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
-	categories, err := h.service.GetCategories(r.Context())
+// ListCategories returns every category with its custom fields.
+func (h *Handler) ListCategories(w http.ResponseWriter, r *http.Request) {
+	categories, err := h.service.ListCategories(r.Context())
 	if err != nil {
 		respondError(w, err)
 		return
@@ -134,14 +166,14 @@ func (h *Handler) GetCategories(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, utils.Map(categories, toCategoryDetailResponse))
 }
 
-// GetCategory returns the category with the id in the URL.
-func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
-	id, ok := httpx.PathID(w, r, "id", httpx.CodeInvalidCategoryID, "invalid category_id")
+// ShowCategory returns the category with the id in the URL.
+func (h *Handler) ShowCategory(w http.ResponseWriter, r *http.Request) {
+	id, ok := httpx.PathID(w, r, "id", codeInvalidCategoryID, "invalid category_id")
 	if !ok {
 		return
 	}
 
-	c, err := h.service.GetCategory(r.Context(), id)
+	c, err := h.service.FetchCategory(r.Context(), id)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -150,29 +182,29 @@ func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondJSON(w, http.StatusOK, toCategoryDetailResponse(*c))
 }
 
-// PutPlace replaces the place with the request body. Fields left out are cleared.
-func (h *Handler) PutPlace(w http.ResponseWriter, r *http.Request) {
+// Replace replaces the place with the request body. Fields left out are cleared.
+func (h *Handler) Replace(w http.ResponseWriter, r *http.Request) {
 	id, ok := placeID(w, r)
 	if !ok {
 		return
 	}
 
-	req, ok := httpx.DecodeJSON[PlaceRequest](w, r)
+	req, ok := httpx.DecodeJSON[Request](w, r)
 	if !ok {
 		return
 	}
 
-	p, err := h.service.Update(r.Context(), id, ToPlace(*req))
+	p, err := h.service.Update(r.Context(), id, toPlace(*req))
 	if err != nil {
 		respondWriteError(w, err)
 		return
 	}
 
-	httpx.RespondJSON(w, http.StatusOK, toPlaceResponse(*p, h.mediaURL))
+	httpx.RespondJSON(w, http.StatusOK, toResponse(*p, h.mediaURL))
 }
 
-// DeletePlace deletes the place with the id in the URL.
-func (h *Handler) DeletePlace(w http.ResponseWriter, r *http.Request) {
+// Delete deletes the place with the id in the URL.
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := placeID(w, r)
 	if !ok {
 		return
@@ -193,7 +225,7 @@ func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mediaID, ok := httpx.PathID(w, r, "mediaId", httpx.CodeInvalidMediaID, "invalid media_id")
+	mediaID, ok := httpx.PathID(w, r, "mediaId", codeInvalidMediaID, "invalid media_id")
 	if !ok {
 		return
 	}
@@ -206,24 +238,20 @@ func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// -----------------------------------------------------------------------------
-// Unexported
-// -----------------------------------------------------------------------------
-
 // placeID reads the place id from the URL, or answers 400.
 func placeID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	return httpx.PathID(w, r, "id", httpx.CodeInvalidPlaceID, "invalid place_id")
+	return httpx.PathID(w, r, "id", codeInvalidPlaceID, "invalid place_id")
 }
 
 // parseFilter reads the list filters from the query string, or answers 400.
-func parseFilter(w http.ResponseWriter, r *http.Request) (PlaceFilter, bool) {
+func parseFilter(w http.ResponseWriter, r *http.Request) (Filter, bool) {
 	query := r.URL.Query()
-	filter := PlaceFilter{Query: strings.TrimSpace(query.Get("q"))}
+	filter := Filter{Query: strings.TrimSpace(query.Get("q"))}
 
 	if param := query.Get("sub_district_id"); param != "" {
 		id, ok := httpx.ParseID(param)
 		if !ok {
-			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidSubDistrictID, "invalid sub_district_id")
+			httpx.RespondError(w, http.StatusBadRequest, codeInvalidSubDistrictID, "invalid sub_district_id")
 			return filter, false
 		}
 		filter.SubDistrictID = id
@@ -234,7 +262,7 @@ func parseFilter(w http.ResponseWriter, r *http.Request) (PlaceFilter, bool) {
 		for _, part := range strings.Split(param, ",") {
 			id, ok := httpx.ParseID(part)
 			if !ok {
-				httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidCategoryID, "invalid category_id")
+				httpx.RespondError(w, http.StatusBadRequest, codeInvalidCategoryID, "invalid category_id")
 				return filter, false
 			}
 			filter.CategoryIDs = append(filter.CategoryIDs, id)
@@ -244,7 +272,7 @@ func parseFilter(w http.ResponseWriter, r *http.Request) (PlaceFilter, bool) {
 	if param := query.Get("limit"); param != "" {
 		limit, err := strconv.Atoi(param)
 		if err != nil || limit <= 0 {
-			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidLimit, "invalid limit")
+			httpx.RespondError(w, http.StatusBadRequest, codeInvalidLimit, "invalid limit")
 			return filter, false
 		}
 		filter.Limit = limit
@@ -253,7 +281,7 @@ func parseFilter(w http.ResponseWriter, r *http.Request) (PlaceFilter, bool) {
 	if param := query.Get("offset"); param != "" {
 		offset, err := strconv.Atoi(param)
 		if err != nil || offset < 0 {
-			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidOffset, "invalid offset")
+			httpx.RespondError(w, http.StatusBadRequest, codeInvalidOffset, "invalid offset")
 			return filter, false
 		}
 		filter.Offset = offset
@@ -262,7 +290,7 @@ func parseFilter(w http.ResponseWriter, r *http.Request) (PlaceFilter, bool) {
 	if param := query.Get("bbox"); param != "" {
 		bounds, ok := parseBoundingBox(param)
 		if !ok {
-			httpx.RespondError(w, http.StatusBadRequest, httpx.CodeInvalidBBox, "invalid bbox")
+			httpx.RespondError(w, http.StatusBadRequest, codeInvalidBBox, "invalid bbox")
 			return filter, false
 		}
 		filter.Bounds = bounds
@@ -290,8 +318,7 @@ func parseBoundingBox(param string) (*BoundingBox, bool) {
 	}
 
 	b := BoundingBox{MinLng: coords[0], MinLat: coords[1], MaxLng: coords[2], MaxLat: coords[3]}
-	if b.MinLng < -180 || b.MaxLng > 180 || b.MinLat < -90 || b.MaxLat > 90 ||
-		b.MinLng > b.MaxLng || b.MinLat > b.MaxLat {
+	if b.MinLng < -180 || b.MaxLng > 180 || b.MinLat < -90 || b.MaxLat > 90 || b.MinLng > b.MaxLng || b.MinLat > b.MaxLat {
 		return nil, false
 	}
 
@@ -301,7 +328,7 @@ func parseBoundingBox(param string) (*BoundingBox, bool) {
 // respondWriteError answers a failed create or update.
 // Here an unknown sub-district or category is bad input (400), not a missing resource.
 func respondWriteError(w http.ResponseWriter, err error) {
-	if errors.Is(err, ErrSubDistrictNotFound) || errors.Is(err, ErrCategoryNotFound) {
+	if errors.Is(err, domain.ErrSubDistrictNotFound) || errors.Is(err, domain.ErrCategoryNotFound) {
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 		return
 	}
@@ -313,17 +340,17 @@ func respondWriteError(w http.ResponseWriter, err error) {
 // so internals never reach the client.
 func respondError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, ErrPlaceNotFound):
-		httpx.RespondError(w, http.StatusNotFound, httpx.CodePlaceNotFound, err.Error())
-	case errors.Is(err, ErrSubDistrictNotFound):
-		httpx.RespondError(w, http.StatusNotFound, httpx.CodeSubDistrictNotFound, err.Error())
-	case errors.Is(err, ErrCategoryNotFound):
-		httpx.RespondError(w, http.StatusNotFound, httpx.CodeCategoryNotFound, err.Error())
-	case errors.Is(err, storage.ErrMediaNotFound):
-		httpx.RespondError(w, http.StatusNotFound, httpx.CodeMediaNotFound, err.Error())
-	case errors.Is(err, storage.ErrMediaLimitReached):
-		httpx.RespondError(w, http.StatusConflict, httpx.CodeMediaLimitReached, err.Error())
-	case IsValidationError(err), storage.IsInvalidMedia(err):
+	case errors.Is(err, domain.ErrPlaceNotFound):
+		httpx.RespondError(w, http.StatusNotFound, codePlaceNotFound, err.Error())
+	case errors.Is(err, domain.ErrSubDistrictNotFound):
+		httpx.RespondError(w, http.StatusNotFound, codeSubDistrictNotFound, err.Error())
+	case errors.Is(err, domain.ErrCategoryNotFound):
+		httpx.RespondError(w, http.StatusNotFound, codeCategoryNotFound, err.Error())
+	case errors.Is(err, domain.ErrMediaNotFound):
+		httpx.RespondError(w, http.StatusNotFound, codeMediaNotFound, err.Error())
+	case errors.Is(err, domain.ErrMediaLimitReached):
+		httpx.RespondError(w, http.StatusConflict, codeMediaLimitReached, err.Error())
+	case domain.IsPlaceValidationError(err), storage.IsInvalidMedia(err):
 		httpx.RespondError(w, http.StatusBadRequest, httpx.CodeValidationError, err.Error())
 	default:
 		httpx.RespondInternalError(w)

@@ -4,64 +4,69 @@ import (
 	"context"
 	"encoding/json"
 
-	"rantau-go/internal/module/places"
+	"rantau-go/internal/domain"
 	"rantau-go/internal/pkg/postgis"
 	"rantau-go/internal/pkg/text"
 )
 
-// Service defines the operations required by the handler.
-//
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
-type Service interface {
-	// Create checks the name, location, and attributes, then saves the suggestion as pending.
-	// Blank optional text is saved as nothing.
-	Create(ctx context.Context, s *Suggestion) (*Suggestion, error)
-	// GetSuggestion returns the suggestion with the given ID.
-	GetSuggestion(ctx context.Context, id int64) (*Suggestion, error)
-	// GetByUser returns the user's suggestions, newest first.
-	GetByUser(ctx context.Context, userID int64) ([]Suggestion, error)
-	// GetMany returns the suggestions matching the filter, oldest first.
-	GetMany(ctx context.Context, filter SuggestionFilter) ([]Suggestion, error)
-	// Approve creates the place p from a pending suggestion and marks the
-	// suggestion approved as that place. p must have a location.
-	Approve(ctx context.Context, id, adminID int64, p *places.Place) (*Suggestion, error)
-	// Reject marks a pending suggestion rejected. The reason is trimmed and
-	// stored as nil when blank, and must be at most 1000 characters.
-	Reject(ctx context.Context, id, adminID int64, reason *string) (*Suggestion, error)
+
+// Repository is the persistence the service consumes.
+type Repository interface {
+	// Create saves the suggestion as pending and returns it with its author.
+	// It returns domain.ErrSuggestionLimitReached at the limit, or
+	// domain.ErrSubDistrictNotFound or domain.ErrCategoryNotFound.
+	Create(ctx context.Context, s *domain.Suggestion) (*domain.Suggestion, error)
+	// Fetch returns the suggestion with its author, or domain.ErrSuggestionNotFound.
+	Fetch(ctx context.Context, id int64) (*domain.Suggestion, error)
+	// ListByUser returns the user's suggestions with their author, newest first.
+	ListByUser(ctx context.Context, userID int64) ([]domain.Suggestion, error)
+	// List returns the suggestions matching the filter with their authors,
+	// oldest first.
+	List(ctx context.Context, filter Filter) ([]domain.Suggestion, error)
+	// MarkApproved marks the suggestion approved and links it to the place placeID.
+	// It returns domain.ErrSuggestionNotFound, or domain.ErrSuggestionAlreadyReviewed
+	// if it is not pending.
+	MarkApproved(ctx context.Context, id, placeID, adminID int64) (*domain.Suggestion, error)
+	// Reject marks the suggestion rejected with the reason. It returns
+	// domain.ErrSuggestionNotFound, or domain.ErrSuggestionAlreadyReviewed if the
+	// suggestion is not pending.
+	Reject(ctx context.Context, id, adminID int64, reason *string) (*domain.Suggestion, error)
 }
 
-// PlaceService defines the place operations that approving a suggestion requires.
+// PlaceService is the place operations that approving a suggestion requires.
 type PlaceService interface {
 	// Create saves a new place, which approval uses to make a place from a suggestion.
-	Create(ctx context.Context, p *places.Place) (*places.Place, error)
+	Create(ctx context.Context, p *domain.Place) (*domain.Place, error)
 	// Delete removes the place again, which is used to undo a failed approval.
 	Delete(ctx context.Context, id int64) error
 }
 
-type service struct {
+// Service implements the suggestion use cases.
+type Service struct {
 	repo   Repository
 	places PlaceService
 }
 
-// -----------------------------------------------------------------------------
-// Exported
-// -----------------------------------------------------------------------------
-
-func NewService(repo Repository, places PlaceService) Service {
-	return &service{
+// NewService returns a Service that stores suggestions in repo and creates
+// approved places through places.
+func NewService(repo Repository, places PlaceService) *Service {
+	return &Service{
 		repo:   repo,
 		places: places,
 	}
 }
 
-func (s *service) Create(ctx context.Context, sg *Suggestion) (*Suggestion, error) {
-	name, err := places.NormalizeName(sg.Name)
+// Create checks the name, location, and attributes, then saves the suggestion as pending.
+// Blank optional text is saved as nothing.
+func (s *Service) Create(ctx context.Context, sg *domain.Suggestion) (*domain.Suggestion, error) {
+	name, err := domain.NormalizePlaceName(sg.Name)
 	if err != nil {
 		return nil, err
 	}
 
 	if !postgis.InIndonesia(sg.Location) {
-		return nil, ErrInvalidLocation
+		return nil, domain.ErrSuggestionLocationInvalid
 	}
 
 	attributes, err := normalizeAttributes(sg.Attributes)
@@ -70,19 +75,19 @@ func (s *service) Create(ctx context.Context, sg *Suggestion) (*Suggestion, erro
 	}
 
 	// The optional place text follows the place rules, so they check and trim it.
-	place := &places.Place{
+	place := &domain.Place{
 		Address:             sg.Address,
 		OperatingHours:      sg.OperatingHours,
 		EstimatedPriceRange: sg.EstimatedPriceRange,
 		ShortDescription:    sg.ShortDescription,
 	}
-	if err := places.NormalizeOptionalFields(place); err != nil {
+	if err := domain.NormalizePlaceFields(place); err != nil {
 		return nil, err
 	}
 
-	note, ok := text.TrimOptionalMax(sg.Note, maxNoteLength)
+	note, ok := text.TrimOptionalMax(sg.Note, domain.MaxSuggestionNoteLength)
 	if !ok {
-		return nil, ErrNoteTooLong
+		return nil, domain.ErrSuggestionNoteTooLong
 	}
 
 	sg.Name = name
@@ -96,39 +101,44 @@ func (s *service) Create(ctx context.Context, sg *Suggestion) (*Suggestion, erro
 	return s.repo.Create(ctx, sg)
 }
 
-func (s *service) GetSuggestion(ctx context.Context, id int64) (*Suggestion, error) {
-	return s.repo.GetSuggestion(ctx, id)
+// Fetch returns the suggestion with the given ID.
+func (s *Service) Fetch(ctx context.Context, id int64) (*domain.Suggestion, error) {
+	return s.repo.Fetch(ctx, id)
 }
 
-func (s *service) GetByUser(ctx context.Context, userID int64) ([]Suggestion, error) {
-	return s.repo.GetByUser(ctx, userID)
+// ListByUser returns the user's suggestions, newest first.
+func (s *Service) ListByUser(ctx context.Context, userID int64) ([]domain.Suggestion, error) {
+	return s.repo.ListByUser(ctx, userID)
 }
 
-func (s *service) GetMany(ctx context.Context, filter SuggestionFilter) ([]Suggestion, error) {
+// List returns the suggestions matching the filter, oldest first.
+// It returns domain.ErrSuggestionStatusInvalid for an unknown status.
+func (s *Service) List(ctx context.Context, filter Filter) ([]domain.Suggestion, error) {
 	switch filter.Status {
-	case "", StatusPending, StatusApproved, StatusRejected:
+	case "", domain.StatusPending, domain.StatusApproved, domain.StatusRejected:
 	default:
-		return nil, ErrInvalidStatus
+		return nil, domain.ErrSuggestionStatusInvalid
 	}
 
-	return s.repo.GetMany(ctx, filter)
+	return s.repo.List(ctx, filter)
 }
 
-// Approve creates the place, then marks the suggestion approved as that place.
+// Approve creates the place p from a pending suggestion, then marks the
+// suggestion approved as that place. p must have a location.
 // If marking fails, the new place is deleted again, so it is not left unlinked.
-func (s *service) Approve(ctx context.Context, id, adminID int64, p *places.Place) (*Suggestion, error) {
+func (s *Service) Approve(ctx context.Context, id, adminID int64, p *domain.Place) (*domain.Suggestion, error) {
 	// Checked before the suggestion is read: a place without a location is
 	// refused without touching storage.
 	if p.Location == nil {
-		return nil, ErrInvalidLocation
+		return nil, domain.ErrSuggestionLocationInvalid
 	}
 
-	current, err := s.repo.GetSuggestion(ctx, id)
+	current, err := s.repo.Fetch(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	if current.Status != StatusPending {
-		return nil, ErrAlreadyReviewed
+	if current.Status != domain.StatusPending {
+		return nil, domain.ErrSuggestionAlreadyReviewed
 	}
 
 	created, err := s.places.Create(ctx, p)
@@ -148,18 +158,16 @@ func (s *service) Approve(ctx context.Context, id, adminID int64, p *places.Plac
 	return approved, nil
 }
 
-func (s *service) Reject(ctx context.Context, id, adminID int64, reason *string) (*Suggestion, error) {
-	trimmed, ok := text.TrimOptionalMax(reason, maxReasonLength)
+// Reject marks a pending suggestion rejected. The reason is trimmed and
+// stored as nil when blank, and must be at most 1000 characters.
+func (s *Service) Reject(ctx context.Context, id, adminID int64, reason *string) (*domain.Suggestion, error) {
+	trimmed, ok := text.TrimOptionalMax(reason, domain.MaxSuggestionReasonLength)
 	if !ok {
-		return nil, ErrReasonTooLong
+		return nil, domain.ErrSuggestionReasonTooLong
 	}
 
 	return s.repo.Reject(ctx, id, adminID, trimmed)
 }
-
-// -----------------------------------------------------------------------------
-// Unexported
-// -----------------------------------------------------------------------------
 
 // normalizeAttributes checks that raw is a JSON object and returns it as sent.
 // A missing or null value becomes an empty object.
@@ -167,7 +175,7 @@ func normalizeAttributes(raw json.RawMessage) (json.RawMessage, error) {
 	var object map[string]json.RawMessage
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &object); err != nil {
-			return nil, ErrInvalidAttributes
+			return nil, domain.ErrSuggestionAttributesInvalid
 		}
 	}
 

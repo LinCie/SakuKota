@@ -67,7 +67,7 @@ Before finishing a change, the code must pass:
 - Make the zero value useful where practical. Use `var x T` for values ready to use without initialization.
 - Prefer concrete types. Accept interfaces where a function needs only behavior, and return concrete types.
 - Define interfaces in the package that consumes them, not in the package that implements them. Keep them small, with the methods the consumer actually uses.
-- Do not create an interface before it has a real need: two or more implementations, or a genuine dependency-break. Do not export test doubles or mocks from the production package. Test through the real public API.
+- Do not create an interface before it has a real need: two or more implementations, or a genuine dependency-break. Do not export test doubles or mocks from the production package; generated mocks live in a `mock` subpackage (see Testing). Test through the real public API.
 - Use an option struct when a function takes many arguments, or when most callers set only a few fields. Use functional options for large, evolving APIs. Do not pass a `context.Context` inside an option struct.
 - Avoid global mutable state, including package-level registries, singletons, and `init`-time side effects. Pass dependencies explicitly through constructors, function parameters, or struct fields.
 - Parse flags only in `package main`. Libraries take configuration through Go APIs, not by registering flags.
@@ -151,16 +151,16 @@ Before finishing a change, the code must pass:
 
 ## Testing
 
-- Use the standard `testing` package only. Do not use assertion libraries or third-party test frameworks.
-- Use `cmp.Diff` and `cmp.Equal` from `github.com/google/go-cmp/cmp` for complex comparisons, and print the diff with a `(-want +got)` legend.
+- Use the standard `testing` package with `github.com/stretchr/testify` (`assert` to keep checking after a mismatch, `require` when continuing would be meaningless, such as setup failure or a nil result that would panic) and `go.uber.org/mock/gomock` for mocks. Do not add other assertion libraries or test frameworks.
+- Mocks must be generated with `mockgen` in source mode, never written by hand. Put a `//go:generate mockgen -source=service.go -destination=mock/service.go -package=mock` line above the interface, in the file that defines it, so the mock lands in the `mock` subpackage of the package that consumes the interface. Commit the generated files, never edit them, and regenerate with `go generate ./...` when an interface changes. Tests of the consumer live in `package foo_test`, since `mock` imports `foo`.
+- Create the controller with `gomock.NewController(t)` (it verifies expectations on cleanup). Match arguments precisely; use `gomock.Any()` only for values the test does not care about, such as `ctx`.
 - Put tests in `foo_test.go`. Use `package foo` for white-box tests and `package foo_test` for black-box tests of the exported API.
 - Name test functions `TestXxx`, benchmarks `BenchmarkXxx`, and fuzz tests `FuzzXxx`.
-- Use table-driven tests for many cases with the same logic. Name each case with `t.Run` using short names without spaces or slashes. Put the input in the failure message, not the row index.
-- Make failure messages diagnostic. Use the form `Func(input) = got, want want`. Print got before want. Include inputs and the function name.
-- Use `t.Error` to keep checking after a mismatch. Use `t.Fatal` only when continuing would be meaningless, such as setup failure or a nil result that would panic.
-- Mark test helpers with `t.Helper()`. Helpers that only set up or clean up resources should use `t.Fatal`. Do not write helpers that assert correctness; return values or errors instead, and compare in the test function.
-- Do not call `t.Fatal` or `t.FailNow` from goroutines other than the test goroutine. Use `t.Error` there.
-- Do not compare error message strings. Use `errors.Is`, `errors.As`, or a boolean check for whether an error occurred.
+- Use table-driven tests for many cases with the same logic. Name each case with `t.Run` using short names without spaces or slashes.
+- Compare with `assert.Equal`, `assert.ErrorIs`, `assert.JSONEq` and similar, passing `want` (expected) before `got`. Add a message with the input only where the failure would otherwise be ambiguous, such as inside a table loop.
+- Mark test helpers with `t.Helper()`. Helpers that only set up or clean up resources should use `require`. Do not write helpers that assert correctness; return values or errors instead, and assert in the test function.
+- Do not call `require` or `t.FailNow` from goroutines other than the test goroutine. Use `assert` there.
+- Do not compare error message strings. Use `ErrorIs`, `ErrorAs`, or a boolean check for whether an error occurred.
 - Keep setup scoped to the tests that need it. Use `TestMain` only for expensive setup shared by all tests in a package, and tear it down explicitly.
 - Keep tests hermetic and independent. Do not depend on test order, and do not share mutable package state between tests.
 - Put fixtures in `testdata/`.

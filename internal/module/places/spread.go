@@ -16,7 +16,7 @@ type spreadPlace struct {
 
 // spreadPlaces orders places inside bounds so that any first n of them are spread
 // over the box and over the categories, instead of bunching up where most places
-// are. postgresRepository.GetMany orders them the same way in SQL.
+// are. PostgresRepository.List orders them the same way in SQL.
 //
 //  1. The box is split into square cells of bounds.gridCell(limit), counted from
 //     longitude and latitude 0 so the grid does not move with the box.

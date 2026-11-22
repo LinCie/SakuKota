@@ -8,38 +8,23 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"rantau-go/internal/database"
+	"rantau-go/internal/domain"
 )
 
-// Repository defines the persistence operations for users.
-//
-//go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock
-type Repository interface {
-	// Create saves a new user and returns it with its generated fields.
-	Create(ctx context.Context, u *User) (*User, error)
-	// GetByEmail returns the user with the email, or ErrNotFound.
-	GetByEmail(ctx context.Context, email string) (*User, error)
-	// GetUser returns the user with the id, or ErrNotFound.
-	GetUser(ctx context.Context, id int64) (*User, error)
-}
-
-type postgresRepository struct {
+// PostgresRepository keeps users in PostgreSQL.
+type PostgresRepository struct {
 	db *sqlx.DB
 }
 
-// -----------------------------------------------------------------------------
-// Exported
-// -----------------------------------------------------------------------------
-
-func NewPostgresRepository(db *sqlx.DB) Repository {
-	return &postgresRepository{
-		db: db,
-	}
+// NewPostgresRepository builds a PostgresRepository over db.
+func NewPostgresRepository(db *sqlx.DB) *PostgresRepository {
+	return &PostgresRepository{db: db}
 }
 
 // Create inserts the user and returns it with its generated fields, or
-// ErrEmailTaken if the email is already registered.
-func (r *postgresRepository) Create(ctx context.Context, u *User) (*User, error) {
-	var created User
+// domain.ErrEmailTaken if the email is already registered.
+func (r *PostgresRepository) Create(ctx context.Context, u *domain.User) (*domain.User, error) {
+	var created domain.User
 
 	err := r.db.GetContext(
 		ctx,
@@ -51,19 +36,19 @@ func (r *postgresRepository) Create(ctx context.Context, u *User) (*User, error)
 		u.Email,
 		u.PasswordHash,
 	)
+	if database.IsCode(err, database.UniqueViolation) {
+		return nil, domain.ErrEmailTaken
+	}
 	if err != nil {
-		if database.IsCode(err, database.UniqueViolation) {
-			return nil, ErrEmailTaken
-		}
 		return nil, err
 	}
 
 	return &created, nil
 }
 
-// GetByEmail returns the user with the email, or ErrNotFound.
-func (r *postgresRepository) GetByEmail(ctx context.Context, email string) (*User, error) {
-	var u User
+// FetchByEmail returns the user with the email, or domain.ErrUserNotFound.
+func (r *PostgresRepository) FetchByEmail(ctx context.Context, email string) (*domain.User, error) {
+	var u domain.User
 
 	err := r.db.GetContext(
 		ctx,
@@ -73,19 +58,19 @@ func (r *postgresRepository) GetByEmail(ctx context.Context, email string) (*Use
 		WHERE email = $1`,
 		email,
 	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, domain.ErrUserNotFound
+	}
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
-		}
 		return nil, err
 	}
 
 	return &u, nil
 }
 
-// GetUser returns the user with the id, or ErrNotFound.
-func (r *postgresRepository) GetUser(ctx context.Context, id int64) (*User, error) {
-	var u User
+// Fetch returns the user with the id, or domain.ErrUserNotFound.
+func (r *PostgresRepository) Fetch(ctx context.Context, id int64) (*domain.User, error) {
+	var u domain.User
 
 	err := r.db.GetContext(
 		ctx,
@@ -95,10 +80,10 @@ func (r *postgresRepository) GetUser(ctx context.Context, id int64) (*User, erro
 		WHERE id = $1`,
 		id,
 	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, domain.ErrUserNotFound
+	}
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
-		}
 		return nil, err
 	}
 

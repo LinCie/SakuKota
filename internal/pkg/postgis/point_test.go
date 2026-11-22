@@ -37,8 +37,8 @@ func TestPoint_RejectsBadInput(t *testing.T) {
 		`{"type":"Point","coordinates":[-6.2,106.8]}`,
 		`{"coordinates":[106.8,-6.2]}`,
 	} {
-		assert.Error(t, json.Unmarshal([]byte(body), &postgis.Point{}), body)
+		assert.Error(t, json.Unmarshal([]byte(body), &postgis.Point{}), "Unmarshal(%s)", body)
 	}
 
-	assert.Error(t, (&postgis.Point{}).Scan(nil), "NULL")
+	assert.Error(t, (&postgis.Point{}).Scan(nil)) // NULL
 }

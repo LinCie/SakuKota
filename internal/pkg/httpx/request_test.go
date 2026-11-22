@@ -27,8 +27,8 @@ func decodeBody(body string) (*payload, bool, *httptest.ResponseRecorder) {
 func TestDecodeJSON_Valid(t *testing.T) {
 	for _, body := range []string{`{"name":"Ana"}`, " {\"name\":\"Ana\"} \n", `{"name":"Ana","unknown":1}`} {
 		got, ok, rec := decodeBody(body)
-		require.True(t, ok, "body %q was rejected: %s", body, rec.Body.String())
-		assert.Equal(t, "Ana", got.Name)
+		require.True(t, ok, "DecodeJSON(%q) response: %s", body, rec.Body.String())
+		assert.Equal(t, "Ana", got.Name, "DecodeJSON(%q)", body)
 	}
 }
 
@@ -38,9 +38,9 @@ func TestDecodeJSON_Invalid(t *testing.T) {
 		{name: "malformed", body: `{"name":`},
 		{name: "null", body: `null`},
 		{name: "array", body: `[]`},
-		{name: "wrong type", body: `{"name":5}`},
-		{name: "data after the object", body: `{"name":"Ana"} trailing`},
-		{name: "two objects", body: `{"name":"Ana"}{"name":"Budi"}`},
+		{name: "wrongType", body: `{"name":5}`},
+		{name: "dataAfterObject", body: `{"name":"Ana"} trailing`},
+		{name: "twoObjects", body: `{"name":"Ana"}{"name":"Budi"}`},
 	}
 
 	for _, tc := range tests {
@@ -51,7 +51,7 @@ func TestDecodeJSON_Invalid(t *testing.T) {
 			assert.Equal(t, http.StatusBadRequest, rec.Code)
 
 			var resp struct{ Code string }
-			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp), "response %q", rec.Body.String())
 			assert.Equal(t, httpx.CodeInvalidBody, resp.Code)
 		})
 	}

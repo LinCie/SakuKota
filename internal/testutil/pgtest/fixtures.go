@@ -17,7 +17,7 @@ func InsertUser(t testing.TB, db *sqlx.DB, name string) int64 {
 	err := db.Get(&id,
 		`INSERT INTO USERS (name, email, password_hash) VALUES ($1, $2, 'hash') RETURNING id`,
 		name, strings.ToLower(name)+"@example.com")
-	require.NoError(t, err)
+	require.NoError(t, err, "insert user %q", name)
 
 	return id
 }
@@ -29,7 +29,7 @@ func InsertSubDistrict(t testing.TB, db *sqlx.DB, name string) int64 {
 
 	var id int64
 	err := db.Get(&id, `INSERT INTO SUB_DISTRICTS (name, slug) VALUES ($1, $1) RETURNING id`, name)
-	require.NoError(t, err)
+	require.NoError(t, err, "insert sub-district %q", name)
 
 	return id
 }
@@ -42,7 +42,7 @@ func InsertPlace(t testing.TB, db *sqlx.DB, subDistrictID, categoryID int64, nam
 	err := db.Get(&id,
 		`INSERT INTO PLACES (sub_district_id, category_id, name) VALUES ($1, $2, $3) RETURNING id`,
 		subDistrictID, categoryID, name)
-	require.NoError(t, err)
+	require.NoError(t, err, "insert place %q", name)
 
 	return id
 }
@@ -52,7 +52,8 @@ func CategoryID(t testing.TB, db *sqlx.DB, slug string) int64 {
 	t.Helper()
 
 	var id int64
-	require.NoError(t, db.Get(&id, `SELECT id FROM CATEGORIES WHERE slug = $1`, slug))
+	err := db.Get(&id, `SELECT id FROM CATEGORIES WHERE slug = $1`, slug)
+	require.NoError(t, err, "select category %q", slug)
 
 	return id
 }
@@ -62,7 +63,8 @@ func QueuedKeys(t testing.TB, db *sqlx.DB) []string {
 	t.Helper()
 
 	keys := []string{}
-	require.NoError(t, db.Select(&keys, `SELECT key FROM STORAGE_DELETIONS ORDER BY key`))
+	err := db.Select(&keys, `SELECT key FROM STORAGE_DELETIONS ORDER BY key`)
+	require.NoError(t, err, "select storage deletions")
 
 	return keys
 }

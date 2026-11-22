@@ -11,7 +11,7 @@ package mock
 
 import (
 	context "context"
-	subdistricts "rantau-go/internal/module/subdistricts"
+	domain "rantau-go/internal/domain"
 	postgis "rantau-go/internal/pkg/postgis"
 	storage "rantau-go/internal/storage"
 	reflect "reflect"
@@ -19,62 +19,62 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockService is a mock of Service interface.
-type MockService struct {
+// MockRepository is a mock of Repository interface.
+type MockRepository struct {
 	ctrl     *gomock.Controller
-	recorder *MockServiceMockRecorder
+	recorder *MockRepositoryMockRecorder
 	isgomock struct{}
 }
 
-// MockServiceMockRecorder is the mock recorder for MockService.
-type MockServiceMockRecorder struct {
-	mock *MockService
+// MockRepositoryMockRecorder is the mock recorder for MockRepository.
+type MockRepositoryMockRecorder struct {
+	mock *MockRepository
 }
 
-// NewMockService creates a new mock instance.
-func NewMockService(ctrl *gomock.Controller) *MockService {
-	mock := &MockService{ctrl: ctrl}
-	mock.recorder = &MockServiceMockRecorder{mock}
+// NewMockRepository creates a new mock instance.
+func NewMockRepository(ctrl *gomock.Controller) *MockRepository {
+	mock := &MockRepository{ctrl: ctrl}
+	mock.recorder = &MockRepositoryMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockService) EXPECT() *MockServiceMockRecorder {
+func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 	return m.recorder
 }
 
 // AddMedia mocks base method.
-func (m *MockService) AddMedia(ctx context.Context, id int64, uploadKey string) (*subdistricts.SubDistrict, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddMedia", ctx, id, uploadKey)
-	ret0, _ := ret[0].(*subdistricts.SubDistrict)
+func (m_2 *MockRepository) AddMedia(ctx context.Context, id int64, m domain.Media) (*domain.SubDistrict, error) {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "AddMedia", ctx, id, m)
+	ret0, _ := ret[0].(*domain.SubDistrict)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AddMedia indicates an expected call of AddMedia.
-func (mr *MockServiceMockRecorder) AddMedia(ctx, id, uploadKey any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) AddMedia(ctx, id, m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMedia", reflect.TypeOf((*MockService)(nil).AddMedia), ctx, id, uploadKey)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMedia", reflect.TypeOf((*MockRepository)(nil).AddMedia), ctx, id, m)
 }
 
 // Create mocks base method.
-func (m *MockService) Create(ctx context.Context, sd *subdistricts.SubDistrict) (*subdistricts.SubDistrict, error) {
+func (m *MockRepository) Create(ctx context.Context, sd *domain.SubDistrict) (*domain.SubDistrict, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Create", ctx, sd)
-	ret0, _ := ret[0].(*subdistricts.SubDistrict)
+	ret0, _ := ret[0].(*domain.SubDistrict)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockServiceMockRecorder) Create(ctx, sd any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) Create(ctx, sd any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockService)(nil).Create), ctx, sd)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockRepository)(nil).Create), ctx, sd)
 }
 
 // Delete mocks base method.
-func (m *MockService) Delete(ctx context.Context, id int64) error {
+func (m *MockRepository) Delete(ctx context.Context, id int64) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Delete", ctx, id)
 	ret0, _ := ret[0].(error)
@@ -82,13 +82,13 @@ func (m *MockService) Delete(ctx context.Context, id int64) error {
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockServiceMockRecorder) Delete(ctx, id any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) Delete(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockService)(nil).Delete), ctx, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockRepository)(nil).Delete), ctx, id)
 }
 
 // DeleteMedia mocks base method.
-func (m *MockService) DeleteMedia(ctx context.Context, id, mediaID int64) error {
+func (m *MockRepository) DeleteMedia(ctx context.Context, id, mediaID int64) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteMedia", ctx, id, mediaID)
 	ret0, _ := ret[0].(error)
@@ -96,82 +96,149 @@ func (m *MockService) DeleteMedia(ctx context.Context, id, mediaID int64) error 
 }
 
 // DeleteMedia indicates an expected call of DeleteMedia.
-func (mr *MockServiceMockRecorder) DeleteMedia(ctx, id, mediaID any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) DeleteMedia(ctx, id, mediaID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMedia", reflect.TypeOf((*MockService)(nil).DeleteMedia), ctx, id, mediaID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMedia", reflect.TypeOf((*MockRepository)(nil).DeleteMedia), ctx, id, mediaID)
 }
 
-// GetMany mocks base method.
-func (m *MockService) GetMany(ctx context.Context) ([]subdistricts.SubDistrict, error) {
+// Fetch mocks base method.
+func (m *MockRepository) Fetch(ctx context.Context, id int64) (*domain.SubDistrict, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMany", ctx)
-	ret0, _ := ret[0].([]subdistricts.SubDistrict)
+	ret := m.ctrl.Call(m, "Fetch", ctx, id)
+	ret0, _ := ret[0].(*domain.SubDistrict)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetMany indicates an expected call of GetMany.
-func (mr *MockServiceMockRecorder) GetMany(ctx any) *gomock.Call {
+// Fetch indicates an expected call of Fetch.
+func (mr *MockRepositoryMockRecorder) Fetch(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMany", reflect.TypeOf((*MockService)(nil).GetMany), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fetch", reflect.TypeOf((*MockRepository)(nil).Fetch), ctx, id)
 }
 
-// GetSubDistrict mocks base method.
-func (m *MockService) GetSubDistrict(ctx context.Context, id int64) (*subdistricts.SubDistrict, error) {
+// List mocks base method.
+func (m *MockRepository) List(ctx context.Context) ([]domain.SubDistrict, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSubDistrict", ctx, id)
-	ret0, _ := ret[0].(*subdistricts.SubDistrict)
+	ret := m.ctrl.Call(m, "List", ctx)
+	ret0, _ := ret[0].([]domain.SubDistrict)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetSubDistrict indicates an expected call of GetSubDistrict.
-func (mr *MockServiceMockRecorder) GetSubDistrict(ctx, id any) *gomock.Call {
+// List indicates an expected call of List.
+func (mr *MockRepositoryMockRecorder) List(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubDistrict", reflect.TypeOf((*MockService)(nil).GetSubDistrict), ctx, id)
-}
-
-// MediaUploadURL mocks base method.
-func (m *MockService) MediaUploadURL(ctx context.Context, id int64, slot subdistricts.MediaSlot, contentType string) (storage.Upload, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MediaUploadURL", ctx, id, slot, contentType)
-	ret0, _ := ret[0].(storage.Upload)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// MediaUploadURL indicates an expected call of MediaUploadURL.
-func (mr *MockServiceMockRecorder) MediaUploadURL(ctx, id, slot, contentType any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MediaUploadURL", reflect.TypeOf((*MockService)(nil).MediaUploadURL), ctx, id, slot, contentType)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockRepository)(nil).List), ctx)
 }
 
 // SetBoundary mocks base method.
-func (m *MockService) SetBoundary(ctx context.Context, id int64, boundary *postgis.MultiPolygon) (*subdistricts.SubDistrict, error) {
+func (m *MockRepository) SetBoundary(ctx context.Context, id int64, boundary *postgis.MultiPolygon) (*domain.SubDistrict, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SetBoundary", ctx, id, boundary)
-	ret0, _ := ret[0].(*subdistricts.SubDistrict)
+	ret0, _ := ret[0].(*domain.SubDistrict)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SetBoundary indicates an expected call of SetBoundary.
-func (mr *MockServiceMockRecorder) SetBoundary(ctx, id, boundary any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) SetBoundary(ctx, id, boundary any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBoundary", reflect.TypeOf((*MockService)(nil).SetBoundary), ctx, id, boundary)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBoundary", reflect.TypeOf((*MockRepository)(nil).SetBoundary), ctx, id, boundary)
 }
 
 // Update mocks base method.
-func (m *MockService) Update(ctx context.Context, id int64, sd *subdistricts.SubDistrict) (*subdistricts.SubDistrict, error) {
+func (m *MockRepository) Update(ctx context.Context, sd *domain.SubDistrict) (*domain.SubDistrict, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Update", ctx, id, sd)
-	ret0, _ := ret[0].(*subdistricts.SubDistrict)
+	ret := m.ctrl.Call(m, "Update", ctx, sd)
+	ret0, _ := ret[0].(*domain.SubDistrict)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Update indicates an expected call of Update.
-func (mr *MockServiceMockRecorder) Update(ctx, id, sd any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) Update(ctx, sd any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockService)(nil).Update), ctx, id, sd)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockRepository)(nil).Update), ctx, sd)
+}
+
+// MockMediaStorage is a mock of MediaStorage interface.
+type MockMediaStorage struct {
+	ctrl     *gomock.Controller
+	recorder *MockMediaStorageMockRecorder
+	isgomock struct{}
+}
+
+// MockMediaStorageMockRecorder is the mock recorder for MockMediaStorage.
+type MockMediaStorageMockRecorder struct {
+	mock *MockMediaStorage
+}
+
+// NewMockMediaStorage creates a new mock instance.
+func NewMockMediaStorage(ctrl *gomock.Controller) *MockMediaStorage {
+	mock := &MockMediaStorage{ctrl: ctrl}
+	mock.recorder = &MockMediaStorageMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockMediaStorage) EXPECT() *MockMediaStorageMockRecorder {
+	return m.recorder
+}
+
+// Delete mocks base method.
+func (m *MockMediaStorage) Delete(ctx context.Context, key string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, key)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockMediaStorageMockRecorder) Delete(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockMediaStorage)(nil).Delete), ctx, key)
+}
+
+// PresignUpload mocks base method.
+func (m *MockMediaStorage) PresignUpload(ctx context.Context, prefix, contentType string) (storage.Upload, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PresignUpload", ctx, prefix, contentType)
+	ret0, _ := ret[0].(storage.Upload)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PresignUpload indicates an expected call of PresignUpload.
+func (mr *MockMediaStorageMockRecorder) PresignUpload(ctx, prefix, contentType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PresignUpload", reflect.TypeOf((*MockMediaStorage)(nil).PresignUpload), ctx, prefix, contentType)
+}
+
+// Promote mocks base method.
+func (m *MockMediaStorage) Promote(ctx context.Context, prefix, uploadKey string) (domain.Media, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Promote", ctx, prefix, uploadKey)
+	ret0, _ := ret[0].(domain.Media)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Promote indicates an expected call of Promote.
+func (mr *MockMediaStorageMockRecorder) Promote(ctx, prefix, uploadKey any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Promote", reflect.TypeOf((*MockMediaStorage)(nil).Promote), ctx, prefix, uploadKey)
+}
+
+// PublicURL mocks base method.
+func (m *MockMediaStorage) PublicURL(key string) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublicURL", key)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// PublicURL indicates an expected call of PublicURL.
+func (mr *MockMediaStorageMockRecorder) PublicURL(key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublicURL", reflect.TypeOf((*MockMediaStorage)(nil).PublicURL), key)
 }

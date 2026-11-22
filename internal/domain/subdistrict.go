@@ -1,8 +1,14 @@
-package subdistricts
+package domain
 
-import (
-	"rantau-go/internal/pkg/postgis"
-	"rantau-go/internal/storage"
+import "rantau-go/internal/pkg/postgis"
+
+const (
+	// MaxSubDistrictNameLength is the size of the VARCHAR(100) name and slug
+	// columns. VARCHAR counts characters, not bytes.
+	MaxSubDistrictNameLength = 100
+
+	// MaxEstimatedDailySpending is the largest value a DECIMAL(10,2) column holds.
+	MaxEstimatedDailySpending = 99999999.99
 )
 
 // SubDistrict represents a row in the SUB_DISTRICTS table.
@@ -17,13 +23,5 @@ type SubDistrict struct {
 	Boundary *postgis.MultiPolygon `db:"boundary"`
 	// Medias are the sub-district's images in position order. The repository
 	// loads them separately, so they are never nil once read.
-	Medias []storage.Media `db:"-"`
+	Medias []Media `db:"-"`
 }
-
-// MediaSlot names where a sub-district file is uploaded. It is also the
-// file's path segment in the API and in storage.
-type MediaSlot string
-
-const (
-	SlotMedias MediaSlot = "medias"
-)

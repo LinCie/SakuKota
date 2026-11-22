@@ -7,18 +7,20 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"rantau-go/internal/domain"
 )
 
 // validateAttributes checks the attributes against the category's fields and returns clean JSON.
 // Missing required fields and unknown keys are rejected, and blank optional text is dropped.
-func validateAttributes(fields []CategoryField, raw json.RawMessage) (json.RawMessage, error) {
+func validateAttributes(fields []domain.CategoryField, raw json.RawMessage) (json.RawMessage, error) {
 	var values map[string]any
 	if len(raw) > 0 {
 		decoder := json.NewDecoder(bytes.NewReader(raw))
 		// Keep numbers as json.Number so they are stored exactly as sent.
 		decoder.UseNumber()
 		if err := decoder.Decode(&values); err != nil {
-			return nil, fmt.Errorf("%w: must be a JSON object", ErrInvalidAttributes)
+			return nil, fmt.Errorf("%w: must be a JSON object", domain.ErrPlaceAttributesInvalid)
 		}
 	}
 
@@ -28,12 +30,12 @@ func validateAttributes(fields []CategoryField, raw json.RawMessage) (json.RawMe
 		// Whatever is left in values after this loop is not a field of the category.
 		delete(values, f.Key)
 
-		if text, ok := value.(string); ok && f.DataType == FieldTypeText && strings.TrimSpace(text) == "" {
+		if text, ok := value.(string); ok && f.DataType == domain.FieldTypeText && strings.TrimSpace(text) == "" {
 			value = nil
 		}
 		if value == nil {
 			if f.Required {
-				return nil, fmt.Errorf("%w: %q is required", ErrInvalidAttributes, f.Key)
+				return nil, fmt.Errorf("%w: %q is required", domain.ErrPlaceAttributesInvalid, f.Key)
 			}
 			continue
 		}
@@ -45,7 +47,7 @@ func validateAttributes(fields []CategoryField, raw json.RawMessage) (json.RawMe
 	}
 
 	for key := range values {
-		return nil, fmt.Errorf("%w: unknown field %q", ErrInvalidAttributes, key)
+		return nil, fmt.Errorf("%w: unknown field %q", domain.ErrPlaceAttributesInvalid, key)
 	}
 
 	return json.Marshal(clean)
@@ -53,35 +55,35 @@ func validateAttributes(fields []CategoryField, raw json.RawMessage) (json.RawMe
 
 // validateAttribute checks that one value has the right type and format for its field.
 // The database allows only these data types, so there is no case for others.
-func validateAttribute(f CategoryField, value any) error {
+func validateAttribute(f domain.CategoryField, value any) error {
 	switch f.DataType {
-	case FieldTypeText:
+	case domain.FieldTypeText:
 		if _, ok := value.(string); !ok {
-			return fmt.Errorf("%w: %q must be text", ErrInvalidAttributes, f.Key)
+			return fmt.Errorf("%w: %q must be text", domain.ErrPlaceAttributesInvalid, f.Key)
 		}
-	case FieldTypeNumber:
+	case domain.FieldTypeNumber:
 		if _, ok := value.(json.Number); !ok {
-			return fmt.Errorf("%w: %q must be a number", ErrInvalidAttributes, f.Key)
+			return fmt.Errorf("%w: %q must be a number", domain.ErrPlaceAttributesInvalid, f.Key)
 		}
-	case FieldTypeBoolean:
+	case domain.FieldTypeBoolean:
 		if _, ok := value.(bool); !ok {
-			return fmt.Errorf("%w: %q must be a boolean", ErrInvalidAttributes, f.Key)
+			return fmt.Errorf("%w: %q must be a boolean", domain.ErrPlaceAttributesInvalid, f.Key)
 		}
-	case FieldTypeSelect:
+	case domain.FieldTypeSelect:
 		option, ok := value.(string)
 		if !ok || !slices.Contains(f.Options, option) {
 			return fmt.Errorf("%w: %q must be one of: %s",
-				ErrInvalidAttributes, f.Key, strings.Join(f.Options, ", "))
+				domain.ErrPlaceAttributesInvalid, f.Key, strings.Join(f.Options, ", "))
 		}
-	case FieldTypeRange:
+	case domain.FieldTypeRange:
 		if !validRange(value) {
 			return fmt.Errorf(`%w: %q must be {"min": number, "max": number} with min <= max`,
-				ErrInvalidAttributes, f.Key)
+				domain.ErrPlaceAttributesInvalid, f.Key)
 		}
-	case FieldTypeDate:
+	case domain.FieldTypeDate:
 		date, ok := value.(string)
 		if _, err := time.Parse(time.DateOnly, date); !ok || err != nil {
-			return fmt.Errorf("%w: %q must be a date in YYYY-MM-DD format", ErrInvalidAttributes, f.Key)
+			return fmt.Errorf("%w: %q must be a date in YYYY-MM-DD format", domain.ErrPlaceAttributesInvalid, f.Key)
 		}
 	}
 

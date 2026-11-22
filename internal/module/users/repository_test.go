@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"rantau-go/internal/domain"
 	"rantau-go/internal/module/users"
 	"rantau-go/internal/testutil/pgtest"
 )
@@ -35,116 +36,107 @@ func TestMain(m *testing.M) {
 }
 
 // newRepository returns a repository over an emptied database.
-func newRepository(t *testing.T) users.Repository {
+func newRepository(t *testing.T) *users.PostgresRepository {
 	t.Helper()
 	pgtest.Reset(t, testDB)
 	return users.NewPostgresRepository(testDB)
 }
 
-func TestRepository_Create(t *testing.T) {
-	ctx := context.Background()
+// createUser stores a user and returns it.
+func createUser(t *testing.T, repo *users.PostgresRepository, name, email, hash string) *domain.User {
+	t.Helper()
+	u, err := repo.Create(t.Context(), &domain.User{Name: name, Email: email, PasswordHash: hash})
+	require.NoError(t, err, "Create(%q)", email)
+	return u
+}
 
-	t.Run("stores the user and returns its generated fields", func(t *testing.T) {
+func TestRepository_Create(t *testing.T) {
+	t.Run("StoresUserAndReturnsGeneratedFields", func(t *testing.T) {
 		repo := newRepository(t)
 
-		got, err := repo.Create(ctx, &users.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "$2a$hash"})
-
+		got, err := repo.Create(t.Context(), &domain.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "$2a$hash"})
 		require.NoError(t, err)
 		assert.NotZero(t, got.ID)
 		assert.Equal(t, "Ana", got.Name)
 		assert.Equal(t, "ana@example.com", got.Email)
 		assert.Equal(t, "$2a$hash", got.PasswordHash)
-		assert.Equal(t, "user", got.Role, "new users are not admins")
+		assert.Equal(t, "user", got.Role) // new users are not admins
 		assert.WithinDuration(t, time.Now(), got.CreatedAt, time.Minute)
 		assert.WithinDuration(t, time.Now(), got.UpdatedAt, time.Minute)
 
-		stored, err := repo.GetUser(ctx, got.ID)
+		stored, err := repo.Fetch(t.Context(), got.ID)
 		require.NoError(t, err)
 		assert.Equal(t, got, stored)
 	})
 
-	t.Run("gives each user its own id", func(t *testing.T) {
+	t.Run("GivesEachUserItsOwnID", func(t *testing.T) {
 		repo := newRepository(t)
 
-		first, err := repo.Create(ctx, &users.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "h"})
-		require.NoError(t, err)
-		second, err := repo.Create(ctx, &users.User{Name: "Budi", Email: "budi@example.com", PasswordHash: "h"})
-		require.NoError(t, err)
+		first := createUser(t, repo, "Ana", "ana@example.com", "h")
+		second := createUser(t, repo, "Budi", "budi@example.com", "h")
 
 		assert.Less(t, first.ID, second.ID)
 	})
 
-	t.Run("returns ErrEmailTaken for a registered email", func(t *testing.T) {
+	t.Run("EmailTaken", func(t *testing.T) {
 		repo := newRepository(t)
-		_, err := repo.Create(ctx, &users.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "h"})
-		require.NoError(t, err)
+		createUser(t, repo, "Ana", "ana@example.com", "h")
 
-		got, err := repo.Create(ctx, &users.User{Name: "Other Ana", Email: "ana@example.com", PasswordHash: "h2"})
+		got, err := repo.Create(t.Context(), &domain.User{Name: "Other Ana", Email: "ana@example.com", PasswordHash: "h2"})
 
-		assert.ErrorIs(t, err, users.ErrEmailTaken)
+		assert.ErrorIs(t, err, domain.ErrEmailTaken)
 		assert.Nil(t, got)
 	})
 }
 
-func TestRepository_GetByEmail(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("returns the user with the email", func(t *testing.T) {
+func TestRepository_FetchByEmail(t *testing.T) {
+	t.Run("ReturnsUserWithEmail", func(t *testing.T) {
 		repo := newRepository(t)
-		_, err := repo.Create(ctx, &users.User{Name: "Budi", Email: "budi@example.com", PasswordHash: "h"})
-		require.NoError(t, err)
-		ana, err := repo.Create(ctx, &users.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "h"})
-		require.NoError(t, err)
+		createUser(t, repo, "Budi", "budi@example.com", "h")
+		ana := createUser(t, repo, "Ana", "ana@example.com", "h")
 
-		got, err := repo.GetByEmail(ctx, "ana@example.com")
-
+		got, err := repo.FetchByEmail(t.Context(), "ana@example.com")
 		require.NoError(t, err)
 		assert.Equal(t, ana, got)
 	})
 
-	t.Run("returns ErrNotFound for an unknown email", func(t *testing.T) {
+	t.Run("NotFound", func(t *testing.T) {
 		repo := newRepository(t)
 
-		got, err := repo.GetByEmail(ctx, "nobody@example.com")
+		got, err := repo.FetchByEmail(t.Context(), "nobody@example.com")
 
-		assert.ErrorIs(t, err, users.ErrNotFound)
+		assert.ErrorIs(t, err, domain.ErrUserNotFound)
 		assert.Nil(t, got)
 	})
 }
 
-func TestRepository_GetUser(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("returns the user with the id", func(t *testing.T) {
+func TestRepository_Fetch(t *testing.T) {
+	t.Run("ReturnsUserWithID", func(t *testing.T) {
 		repo := newRepository(t)
-		ana, err := repo.Create(ctx, &users.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "h"})
-		require.NoError(t, err)
+		ana := createUser(t, repo, "Ana", "ana@example.com", "h")
 
-		got, err := repo.GetUser(ctx, ana.ID)
-
+		got, err := repo.Fetch(t.Context(), ana.ID)
 		require.NoError(t, err)
 		assert.Equal(t, ana, got)
 	})
 
-	t.Run("reads the role of an admin", func(t *testing.T) {
+	t.Run("ReadsAdminRole", func(t *testing.T) {
 		repo := newRepository(t)
-		ana, err := repo.Create(ctx, &users.User{Name: "Ana", Email: "ana@example.com", PasswordHash: "h"})
-		require.NoError(t, err)
-		_, err = testDB.Exec(`UPDATE USERS SET role = $2 WHERE id = $1`, ana.ID, users.RoleAdmin)
-		require.NoError(t, err)
+		ana := createUser(t, repo, "Ana", "ana@example.com", "h")
+		_, err := testDB.Exec(`UPDATE USERS SET role = $2 WHERE id = $1`, ana.ID, domain.RoleAdmin)
+		require.NoError(t, err, "promote user %d", ana.ID)
 
-		got, err := repo.GetUser(ctx, ana.ID)
-
+		got, err := repo.Fetch(t.Context(), ana.ID)
 		require.NoError(t, err)
-		assert.Equal(t, users.RoleAdmin, got.Role)
+		assert.Equal(t, domain.RoleAdmin, got.Role)
 	})
 
-	t.Run("returns ErrNotFound for an unknown id", func(t *testing.T) {
+	t.Run("NotFound", func(t *testing.T) {
 		repo := newRepository(t)
 
-		got, err := repo.GetUser(ctx, 999)
+		got, err := repo.Fetch(t.Context(), 999)
 
-		assert.ErrorIs(t, err, users.ErrNotFound)
+		assert.ErrorIs(t, err, domain.ErrUserNotFound)
 		assert.Nil(t, got)
 	})
 }

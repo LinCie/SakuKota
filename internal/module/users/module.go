@@ -1,18 +1,14 @@
+// Package users stores user accounts and exposes them to other modules.
 package users
 
-import (
-	"github.com/jmoiron/sqlx"
-)
+import "github.com/jmoiron/sqlx"
 
+// Module wires up the users module's repository and service.
 type Module struct {
-	Service Service
+	Service *Service
 }
 
-func NewModule(db *sqlx.DB) *Module {
-	repo := NewPostgresRepository(db)
-	service := NewService(repo)
-
-	return &Module{
-		Service: service,
-	}
+// New builds the users module's repository and service, linked together.
+func New(db *sqlx.DB) *Module {
+	return &Module{Service: NewService(NewPostgresRepository(db))}
 }

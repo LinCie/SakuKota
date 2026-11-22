@@ -3,36 +3,36 @@
 package places_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"rantau-go/internal/domain"
 	"rantau-go/internal/module/places"
 	"rantau-go/internal/module/places/mock"
 	"rantau-go/internal/pkg/postgis"
 	"rantau-go/internal/testutil/redistest"
 )
 
-// newCached returns a cached repository over repo and Redis, where repo expects exactly
-// locationCalls GetLocations calls (the cache misses).
-func newCached(t *testing.T, repo places.Repository, locationCalls int) places.Repository {
+// newCached returns a cached repository over repo and Redis, where repo expects
+// exactly locationCalls ListLocations calls (the cache misses).
+func newCached(t *testing.T, repo places.Repository, locationCalls int) *places.CachedRepository {
 	t.Helper()
 
 	spy := mock.NewMockRepository(gomock.NewController(t))
-	spy.EXPECT().GetLocations(gomock.Any(), gomock.Any()).DoAndReturn(repo.GetLocations).Times(locationCalls)
-	spy.EXPECT().GetByIDs(gomock.Any(), gomock.Any()).DoAndReturn(repo.GetByIDs).AnyTimes()
-	spy.EXPECT().GetMany(gomock.Any(), gomock.Any()).DoAndReturn(repo.GetMany).AnyTimes()
+	spy.EXPECT().ListLocations(gomock.Any(), gomock.Any()).DoAndReturn(repo.ListLocations).Times(locationCalls)
+	spy.EXPECT().ListByIDs(gomock.Any(), gomock.Any()).DoAndReturn(repo.ListByIDs).AnyTimes()
+	spy.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(repo.List).AnyTimes()
 
 	return places.NewCachedRepository(spy, testRedis)
 }
 
-// TestCachedRepository_GetMany checks that, cold and warm, the cached repository answers
+// TestCachedRepository_List checks that, cold and warm, the cached repository answers
 // like the database, and only the cold call reads the index.
-func TestCachedRepository_GetMany(t *testing.T) {
-	ctx := context.Background()
+func TestCachedRepository_List(t *testing.T) {
+	ctx := t.Context()
 	repo := newRepository(t)
 
 	setiabudi := insertSubDistrict(t, "Setiabudi")
@@ -59,22 +59,22 @@ func TestCachedRepository_GetMany(t *testing.T) {
 	// The centre of nearBox is on Penjahit B, so it comes before Laundry A despite its higher id.
 	nearBox := &places.BoundingBox{MinLng: 106.81, MinLat: -6.23, MaxLng: 106.87, MaxLat: -6.19}
 	wideBox := &places.BoundingBox{MinLng: 106.80, MinLat: -6.32, MaxLng: 106.92, MaxLat: -6.18}
-	filters := map[string]places.PlaceFilter{
-		"sub-district":         {SubDistrictID: setiabudi},
+	filters := map[string]places.Filter{
+		"sub_district":         {SubDistrictID: setiabudi},
 		"categories":           {SubDistrictID: setiabudi, CategoryIDs: []int64{tailor, laundry}},
 		"query":                {SubDistrictID: setiabudi, Query: "laundry"},
 		"bounds":               {SubDistrictID: setiabudi, Bounds: box},
-		"bounds and category":  {SubDistrictID: setiabudi, Bounds: box, CategoryIDs: []int64{laundry}},
-		"bounds by distance":   {SubDistrictID: setiabudi, Bounds: nearBox},
-		"bounds and limit":     {SubDistrictID: setiabudi, Bounds: nearBox, Limit: 1},
-		"bounds and offset":    {SubDistrictID: setiabudi, Bounds: nearBox, Limit: 1, Offset: 1},
+		"bounds_category":      {SubDistrictID: setiabudi, Bounds: box, CategoryIDs: []int64{laundry}},
+		"bounds_distance":      {SubDistrictID: setiabudi, Bounds: nearBox},
+		"bounds_limit":         {SubDistrictID: setiabudi, Bounds: nearBox, Limit: 1},
+		"bounds_offset":        {SubDistrictID: setiabudi, Bounds: nearBox, Limit: 1, Offset: 1},
 		"spread":               {SubDistrictID: setiabudi, Bounds: wideBox, Limit: 3},
-		"spread and offset":    {SubDistrictID: setiabudi, Bounds: wideBox, Limit: 3, Offset: 3},
+		"spread_offset":        {SubDistrictID: setiabudi, Bounds: wideBox, Limit: 3, Offset: 3},
 		"limit":                {SubDistrictID: setiabudi, Limit: 2},
 		"offset":               {SubDistrictID: setiabudi, Limit: 2, Offset: 2},
-		"offset past the end":  {SubDistrictID: setiabudi, Limit: 2, Offset: 20},
-		"no match":             {SubDistrictID: setiabudi, Query: "nothing like this"},
-		"without sub-district": {Limit: 3},
+		"offset_past_end":      {SubDistrictID: setiabudi, Limit: 2, Offset: 20},
+		"no_match":             {SubDistrictID: setiabudi, Query: "nothing like this"},
+		"without_sub_district": {Limit: 3},
 	}
 
 	for name, filter := range filters {
@@ -84,8 +84,8 @@ func TestCachedRepository_GetMany(t *testing.T) {
 				filter.Limit = 100
 			}
 
-			want, wantTotal, err := repo.GetMany(ctx, filter)
-			require.NoError(t, err)
+			want, wantTotal, err := repo.List(ctx, filter)
+			require.NoError(t, err, "List(%+v)", filter)
 
 			// The cold call misses and reads the index once, the warm call hits.
 			// Without a sub-district nothing is cached, so the index is never read.
@@ -97,22 +97,22 @@ func TestCachedRepository_GetMany(t *testing.T) {
 			cached := newCached(t, repo, locationCalls)
 
 			for _, pass := range []string{"cold", "warm"} {
-				got, total, err := cached.GetMany(ctx, filter)
-				require.NoError(t, err, pass)
+				got, total, err := cached.List(ctx, filter)
+				require.NoError(t, err, "%s List(%+v)", pass, filter)
 
-				assert.Equal(t, want, got, pass)
-				assert.Equal(t, wantTotal, total, pass)
+				assert.Equal(t, want, got, "%s List(%+v)", pass, filter)
+				assert.Equal(t, wantTotal, total, "%s List(%+v) total", pass, filter)
 			}
 		})
 	}
 
-	t.Run("unknown sub-district is an error that is not cached", func(t *testing.T) {
+	t.Run("unknown_sub_district_not_cached", func(t *testing.T) {
 		redistest.Reset(t, testRedis)
 		cached := newCached(t, repo, 2)
 
 		for range 2 {
-			_, _, err := cached.GetMany(ctx, places.PlaceFilter{SubDistrictID: 999999})
-			assert.ErrorIs(t, err, places.ErrSubDistrictNotFound)
+			_, _, err := cached.List(ctx, places.Filter{SubDistrictID: 999999})
+			assert.ErrorIs(t, err, domain.ErrSubDistrictNotFound, "List(sub-district 999999)")
 		}
 	})
 }

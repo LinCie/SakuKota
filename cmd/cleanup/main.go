@@ -35,7 +35,7 @@ func main() {
 	}
 	defer func() { _ = db.Close() }()
 
-	module := storagecleanup.NewModule(db, storage.NewS3(storageCfg))
+	module := storagecleanup.New(db, storage.NewS3(storageCfg))
 	if err := module.Service.Run(ctx); err != nil {
 		log.Fatalf("clean up storage: %v", err)
 	}

@@ -7,44 +7,26 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// Repository defines the persistence operations required by the service.
-//
-//go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock
-type Repository interface {
-	// Remove takes key off the queue.
-	Remove(ctx context.Context, key string) error
-	// GetDue returns up to limit keys that are due, longest due first.
-	GetDue(ctx context.Context, limit int) ([]string, error)
-	// Reschedule records a failed attempt to delete key and makes it due again
-	// after retryIn.
-	Reschedule(ctx context.Context, key string, retryIn time.Duration, lastErr string) error
-}
-
-type postgresRepository struct {
+// PostgresRepository keeps the deletion queue in PostgreSQL.
+type PostgresRepository struct {
 	db *sqlx.DB
 }
 
-// NewPostgresRepository builds a Repository that keeps the deletion queue in PostgreSQL.
-func NewPostgresRepository(db *sqlx.DB) Repository {
-	return &postgresRepository{
-		db: db,
-	}
+// NewPostgresRepository builds a PostgresRepository over db.
+func NewPostgresRepository(db *sqlx.DB) *PostgresRepository {
+	return &PostgresRepository{db: db}
 }
-
-// -----------------------------------------------------------------------------
-// postgresRepository
-// -----------------------------------------------------------------------------
 
 // Remove takes key off the queue. Removing a key that is not queued is not an
 // error.
-func (r *postgresRepository) Remove(ctx context.Context, key string) error {
+func (r *PostgresRepository) Remove(ctx context.Context, key string) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM STORAGE_DELETIONS WHERE key = $1`, key)
 	return err
 }
 
-// GetDue returns up to limit due keys, longest due first. It does not change
+// ListDue returns up to limit due keys, longest due first. It does not change
 // the queue, so runs that overlap get the same keys.
-func (r *postgresRepository) GetDue(ctx context.Context, limit int) ([]string, error) {
+func (r *PostgresRepository) ListDue(ctx context.Context, limit int) ([]string, error) {
 	var keys []string
 
 	err := r.db.SelectContext(
@@ -66,7 +48,7 @@ func (r *postgresRepository) GetDue(ctx context.Context, limit int) ([]string, e
 
 // Reschedule records a failed attempt to delete key and makes it due again
 // after retryIn. The error message is stored in last_error.
-func (r *postgresRepository) Reschedule(ctx context.Context, key string, retryIn time.Duration, lastErr string) error {
+func (r *PostgresRepository) Reschedule(ctx context.Context, key string, retryIn time.Duration, lastErr string) error {
 	_, err := r.db.ExecContext(
 		ctx,
 		`UPDATE STORAGE_DELETIONS

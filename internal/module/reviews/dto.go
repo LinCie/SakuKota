@@ -1,16 +1,20 @@
 package reviews
 
-import "time"
+import (
+	"time"
 
-// CreateReviewRequest is the API payload for reviewing a place. The place
-// comes from the path and the author from the access token.
-type CreateReviewRequest struct {
+	"rantau-go/internal/domain"
+)
+
+// CreateRequest is the API payload for reviewing a place. The place comes from
+// the path and the author from the access token.
+type CreateRequest struct {
 	Rating  int     `json:"rating"`
 	Comment *string `json:"comment"`
 }
 
-// ReviewResponse is the API representation of a Review.
-type ReviewResponse struct {
+// Response is the API representation of a domain.Review.
+type Response struct {
 	ID        int64          `json:"id"`
 	PlaceID   int64          `json:"place_id"`
 	Rating    int            `json:"rating"`
@@ -19,19 +23,15 @@ type ReviewResponse struct {
 	User      AuthorResponse `json:"user"`
 }
 
-// AuthorResponse is the API representation of a review's Author.
+// AuthorResponse is the API representation of a review's domain.Author.
 type AuthorResponse struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
 }
 
-// -----------------------------------------------------------------------------
-// Conversions
-// -----------------------------------------------------------------------------
-
 // toReview builds the review to save from the place, the author, and the request body.
-func toReview(placeID, userID int64, req CreateReviewRequest) *Review {
-	return &Review{
+func toReview(placeID, userID int64, req CreateRequest) *domain.Review {
+	return &domain.Review{
 		PlaceID: placeID,
 		UserID:  userID,
 		Rating:  req.Rating,
@@ -39,9 +39,9 @@ func toReview(placeID, userID int64, req CreateReviewRequest) *Review {
 	}
 }
 
-// toReviewResponse turns r into the JSON shape sent to clients.
-func toReviewResponse(r Review) ReviewResponse {
-	return ReviewResponse{
+// toResponse turns r into the JSON shape sent to clients.
+func toResponse(r domain.Review) Response {
+	return Response{
 		ID:        r.ID,
 		PlaceID:   r.PlaceID,
 		Rating:    r.Rating,

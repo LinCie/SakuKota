@@ -61,5 +61,5 @@ func Start(ctx context.Context) (client *redis.Client, stop func(), err error) {
 // Reset empties every Redis database, so each test starts from a cold cache.
 func Reset(t testing.TB, client *redis.Client) {
 	t.Helper()
-	require.NoError(t, client.FlushAll(context.Background()).Err())
+	require.NoError(t, client.FlushAll(t.Context()).Err(), "flush")
 }

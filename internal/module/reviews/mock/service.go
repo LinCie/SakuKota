@@ -11,62 +11,62 @@ package mock
 
 import (
 	context "context"
-	"rantau-go/internal/module/reviews"
+	domain "rantau-go/internal/domain"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockService is a mock of Service interface.
-type MockService struct {
+// MockRepository is a mock of Repository interface.
+type MockRepository struct {
 	ctrl     *gomock.Controller
-	recorder *MockServiceMockRecorder
+	recorder *MockRepositoryMockRecorder
 	isgomock struct{}
 }
 
-// MockServiceMockRecorder is the mock recorder for MockService.
-type MockServiceMockRecorder struct {
-	mock *MockService
+// MockRepositoryMockRecorder is the mock recorder for MockRepository.
+type MockRepositoryMockRecorder struct {
+	mock *MockRepository
 }
 
-// NewMockService creates a new mock instance.
-func NewMockService(ctrl *gomock.Controller) *MockService {
-	mock := &MockService{ctrl: ctrl}
-	mock.recorder = &MockServiceMockRecorder{mock}
+// NewMockRepository creates a new mock instance.
+func NewMockRepository(ctrl *gomock.Controller) *MockRepository {
+	mock := &MockRepository{ctrl: ctrl}
+	mock.recorder = &MockRepositoryMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockService) EXPECT() *MockServiceMockRecorder {
+func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 	return m.recorder
 }
 
 // Create mocks base method.
-func (m *MockService) Create(ctx context.Context, r *reviews.Review) (*reviews.Review, error) {
+func (m *MockRepository) Create(ctx context.Context, r *domain.Review) (*domain.Review, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Create", ctx, r)
-	ret0, _ := ret[0].(*reviews.Review)
+	ret0, _ := ret[0].(*domain.Review)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockServiceMockRecorder) Create(ctx, r any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) Create(ctx, r any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockService)(nil).Create), ctx, r)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockRepository)(nil).Create), ctx, r)
 }
 
-// GetByPlace mocks base method.
-func (m *MockService) GetByPlace(ctx context.Context, placeID int64) ([]reviews.Review, error) {
+// ListByPlace mocks base method.
+func (m *MockRepository) ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetByPlace", ctx, placeID)
-	ret0, _ := ret[0].([]reviews.Review)
+	ret := m.ctrl.Call(m, "ListByPlace", ctx, placeID)
+	ret0, _ := ret[0].([]domain.Review)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetByPlace indicates an expected call of GetByPlace.
-func (mr *MockServiceMockRecorder) GetByPlace(ctx, placeID any) *gomock.Call {
+// ListByPlace indicates an expected call of ListByPlace.
+func (mr *MockRepositoryMockRecorder) ListByPlace(ctx, placeID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByPlace", reflect.TypeOf((*MockService)(nil).GetByPlace), ctx, placeID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByPlace", reflect.TypeOf((*MockRepository)(nil).ListByPlace), ctx, placeID)
 }

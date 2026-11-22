@@ -17,18 +17,19 @@ func TestMultiPolygon_RoundTrips(t *testing.T) {
 
 	for _, body := range []string{want, `{"type":"Polygon","coordinates":[` + square + `]}`} {
 		var m postgis.MultiPolygon
-		require.NoError(t, json.Unmarshal([]byte(body), &m), body)
+		require.NoError(t, json.Unmarshal([]byte(body), &m), "Unmarshal(%s)", body)
 
 		out, err := json.Marshal(m)
-		require.NoError(t, err)
-		assert.JSONEq(t, want, string(out), "a Polygon is written as a MultiPolygon")
+		require.NoError(t, err, "Marshal(%s)", body)
+		// A Polygon is written as a MultiPolygon.
+		assert.JSONEq(t, want, string(out), "Marshal(%s)", body)
 
 		value, err := m.Value()
-		require.NoError(t, err)
+		require.NoError(t, err, "Value() of %s", body)
 
 		var fromDB postgis.MultiPolygon
-		require.NoError(t, fromDB.Scan(value))
-		assert.Equal(t, m, fromDB)
+		require.NoError(t, fromDB.Scan(value), "Scan(%v)", value)
+		assert.Equal(t, m, fromDB, "MultiPolygon from Scan of %s", body)
 	}
 }
 
@@ -45,19 +46,19 @@ func TestMultiPolygon_RejectsBadInput(t *testing.T) {
 		`{"type":"Polygon","coordinates":[[[-6.2,106.8],[-6.2,106.9],[-6.3,106.9],[-6.2,106.8]]]}`,
 		`{"type":"Polygon","coordinates":"square"}`,
 	} {
-		assert.Error(t, json.Unmarshal([]byte(body), &postgis.MultiPolygon{}), body)
+		assert.Error(t, json.Unmarshal([]byte(body), &postgis.MultiPolygon{}), "Unmarshal(%s)", body)
 	}
 
-	assert.Error(t, (&postgis.MultiPolygon{}).Scan(nil), "NULL")
+	assert.Error(t, (&postgis.MultiPolygon{}).Scan(nil)) // NULL
 }
 
 func TestMultiPolygonInIndonesia(t *testing.T) {
 	var jakarta, outside postgis.MultiPolygon
-	require.NoError(t, json.Unmarshal([]byte(`{"type":"Polygon","coordinates":[`+square+`]}`), &jakarta))
-	require.NoError(t, json.Unmarshal([]byte(
-		`{"type":"Polygon","coordinates":[[[106.8,-6.2],[150,-6.2],[106.9,-6.3],[106.8,-6.2]]]}`), &outside))
+	require.NoError(t, json.Unmarshal([]byte(`{"type":"Polygon","coordinates":[`+square+`]}`), &jakarta), "unmarshal jakarta")
+	require.NoError(t, json.Unmarshal([]byte(`{"type":"Polygon","coordinates":[[[106.8,-6.2],[150,-6.2],[106.9,-6.3],[106.8,-6.2]]]}`), &outside), "unmarshal outside")
 
 	assert.True(t, postgis.MultiPolygonInIndonesia(&jakarta))
-	assert.False(t, postgis.MultiPolygonInIndonesia(&outside), "one vertex outside")
+	// One vertex is outside.
+	assert.False(t, postgis.MultiPolygonInIndonesia(&outside))
 	assert.False(t, postgis.MultiPolygonInIndonesia(nil))
 }

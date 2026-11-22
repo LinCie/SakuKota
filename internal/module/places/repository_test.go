@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
+	"slices"
 	"sync"
 	"testing"
 
@@ -16,9 +18,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"rantau-go/internal/domain"
 	"rantau-go/internal/module/places"
 	"rantau-go/internal/pkg/postgis"
-	"rantau-go/internal/storage"
 	"rantau-go/internal/testutil/pgtest"
 	"rantau-go/internal/testutil/redistest"
 )
@@ -53,7 +55,7 @@ func TestMain(m *testing.M) {
 }
 
 // newRepository returns a repository over an emptied database.
-func newRepository(t *testing.T) places.Repository {
+func newRepository(t *testing.T) *places.PostgresRepository {
 	t.Helper()
 	pgtest.Reset(t, testDB)
 	return places.NewPostgresRepository(testDB)
@@ -71,8 +73,8 @@ func categoryID(t *testing.T, slug string) int64 {
 }
 
 // newPlace returns a place that is valid to create.
-func newPlace(subDistrictID, categoryID int64, name string) *places.Place {
-	return &places.Place{
+func newPlace(subDistrictID, categoryID int64, name string) *domain.Place {
+	return &domain.Place{
 		SubDistrictID: subDistrictID,
 		CategoryID:    categoryID,
 		Name:          name,
@@ -80,16 +82,16 @@ func newPlace(subDistrictID, categoryID int64, name string) *places.Place {
 	}
 }
 
-func mustCreate(t *testing.T, repo places.Repository, p *places.Place) *places.Place {
+func mustCreate(t *testing.T, repo places.Repository, p *domain.Place) *domain.Place {
 	t.Helper()
 
-	created, err := repo.Create(context.Background(), p)
-	require.NoError(t, err)
+	created, err := repo.Create(t.Context(), p)
+	require.NoError(t, err, "Create(%q)", p.Name)
 
 	return created
 }
 
-func names(places []places.Place) []string {
+func names(places []domain.Place) []string {
 	out := make([]string, 0, len(places))
 	for _, p := range places {
 		out = append(out, p.Name)
@@ -104,15 +106,20 @@ func queuedKeys(t *testing.T) []string {
 	return pgtest.QueuedKeys(t, testDB)
 }
 
-func TestRepository_Create(t *testing.T) {
-	ctx := context.Background()
+// near reports whether p is within 1e-9 degrees of the coordinates.
+func near(p *postgis.Point, longitude, latitude float64) bool {
+	return p != nil && math.Abs(p.X()-longitude) <= 1e-9 && math.Abs(p.Y()-latitude) <= 1e-9
+}
 
-	t.Run("stores the place and returns it with its category", func(t *testing.T) {
+func TestRepository_Create(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("stores_place", func(t *testing.T) {
 		repo := newRepository(t)
 		subDistrictID := insertSubDistrict(t, "Setiabudi")
 		laundryID := categoryID(t, "laundry")
 
-		got, err := repo.Create(ctx, &places.Place{
+		got, err := repo.Create(ctx, &domain.Place{
 			SubDistrictID:       subDistrictID,
 			CategoryID:          laundryID,
 			Name:                "Laundry Bersih",
@@ -123,49 +130,42 @@ func TestRepository_Create(t *testing.T) {
 			ShortDescription:    new("Cuci kilat"),
 			Attributes:          json.RawMessage(`{"service_type": "Swalayan"}`),
 		})
-		require.NoError(t, err)
+		require.NoError(t, err, "Create()")
 
-		assert.NotZero(t, got.ID)
-		assert.Equal(t, subDistrictID, got.SubDistrictID)
-		assert.Equal(t, laundryID, got.CategoryID)
-		assert.Equal(t, "Laundry Bersih", got.Name)
-		assert.Equal(t, new("Jl. Sudirman 1"), got.Address)
-		assert.Equal(t, new("08:00-20:00"), got.OperatingHours)
-		assert.Equal(t, new("Rp5.000-Rp10.000"), got.EstimatedPriceRange)
-		assert.Equal(t, new("Cuci kilat"), got.ShortDescription)
-		assert.JSONEq(t, `{"service_type": "Swalayan"}`, string(got.Attributes))
-		require.NotNil(t, got.Location)
-		assert.InDelta(t, 106.82, got.Location.X(), 1e-9)
-		assert.InDelta(t, -6.2, got.Location.Y(), 1e-9)
-		assert.Equal(t, 0, got.RatingCount)
-		assert.Equal(t, 0, got.RatingSum)
-		assert.NotNil(t, got.Medias, "a new place has an empty media list")
-		assert.Empty(t, got.Medias)
+		assert.NotZero(t, got.ID, "Create().ID")
+		wantFields := domain.Place{
+			SubDistrictID:       subDistrictID,
+			CategoryID:          laundryID,
+			Name:                "Laundry Bersih",
+			Address:             new("Jl. Sudirman 1"),
+			Location:            got.Location,
+			OperatingHours:      new("08:00-20:00"),
+			EstimatedPriceRange: new("Rp5.000-Rp10.000"),
+			ShortDescription:    new("Cuci kilat"),
+			Attributes:          got.Attributes,
+			Medias:              []domain.Media{},
+			Category:            domain.Category{ID: laundryID, Name: got.Category.Name, Slug: "laundry", Code: "L", Label: "Laundry", Color: "sign"},
+		}
+		wantFields.ID = got.ID
+		assert.Equal(t, wantFields, *got, "Create()")
+		assert.JSONEq(t, `{"service_type": "Swalayan"}`, string(got.Attributes), "Create().Attributes")
+		assert.True(t, near(got.Location, 106.82, -6.2), "Create().Location = %v, want (106.82, -6.2)", got.Location)
 
-		assert.Equal(t, laundryID, got.Category.ID)
-		assert.Equal(t, "laundry", got.Category.Slug)
-		assert.Equal(t, "L", got.Category.Code)
-		assert.Equal(t, "Laundry", got.Category.Label)
-		assert.Equal(t, "sign", got.Category.Color)
-
-		stored, err := repo.GetPlace(ctx, got.ID)
-		require.NoError(t, err)
-		assert.Equal(t, got, stored)
+		stored, err := repo.Fetch(ctx, got.ID)
+		require.NoError(t, err, "Fetch(%d)", got.ID)
+		assert.Equal(t, got, stored, "Fetch(%d) differs from the created place", got.ID)
 	})
 
-	t.Run("leaves optional fields empty", func(t *testing.T) {
+	t.Run("optional_fields_empty", func(t *testing.T) {
 		repo := newRepository(t)
 
 		got := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
 
-		assert.Nil(t, got.Address)
-		assert.Nil(t, got.Location)
-		assert.Nil(t, got.OperatingHours)
-		assert.Nil(t, got.EstimatedPriceRange)
-		assert.Nil(t, got.ShortDescription)
+		assert.True(t, got.Address == nil && got.Location == nil && got.OperatingHours == nil && got.EstimatedPriceRange == nil && got.ShortDescription == nil,
+			"Create() = %+v, want every optional field nil", got)
 	})
 
-	t.Run("gives each place its own id", func(t *testing.T) {
+	t.Run("own_ids", func(t *testing.T) {
 		repo := newRepository(t)
 		subDistrictID := insertSubDistrict(t, "Setiabudi")
 		laundryID := categoryID(t, "laundry")
@@ -173,54 +173,54 @@ func TestRepository_Create(t *testing.T) {
 		first := mustCreate(t, repo, newPlace(subDistrictID, laundryID, "First"))
 		second := mustCreate(t, repo, newPlace(subDistrictID, laundryID, "Second"))
 
-		assert.Less(t, first.ID, second.ID)
+		assert.Less(t, first.ID, second.ID, "Create() ids, want increasing")
 	})
 
-	t.Run("rejects an unknown sub-district", func(t *testing.T) {
+	t.Run("unknown_sub_district", func(t *testing.T) {
 		repo := newRepository(t)
 
 		got, err := repo.Create(ctx, newPlace(999, categoryID(t, "laundry"), "Laundry"))
 
-		assert.ErrorIs(t, err, places.ErrSubDistrictNotFound)
-		assert.Nil(t, got)
+		assert.ErrorIs(t, err, domain.ErrSubDistrictNotFound, "Create(sub-district 999)")
+		assert.Nil(t, got, "Create(sub-district 999)")
 	})
 
-	t.Run("rejects an unknown category", func(t *testing.T) {
+	t.Run("unknown_category", func(t *testing.T) {
 		repo := newRepository(t)
 
 		got, err := repo.Create(ctx, newPlace(insertSubDistrict(t, "Setiabudi"), 999, "Laundry"))
 
-		assert.ErrorIs(t, err, places.ErrCategoryNotFound)
-		assert.Nil(t, got)
+		assert.ErrorIs(t, err, domain.ErrCategoryNotFound, "Create(category 999)")
+		assert.Nil(t, got, "Create(category 999)")
 	})
 }
 
-func TestRepository_GetPlace(t *testing.T) {
-	ctx := context.Background()
+func TestRepository_Fetch(t *testing.T) {
+	ctx := t.Context()
 
-	t.Run("returns the place with its category", func(t *testing.T) {
+	t.Run("with_category", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "tailor"), "Penjahit"))
 
-		got, err := repo.GetPlace(ctx, created.ID)
+		got, err := repo.Fetch(ctx, created.ID)
+		require.NoError(t, err, "Fetch(%d)", created.ID)
 
-		require.NoError(t, err)
-		assert.Equal(t, created, got)
-		assert.Equal(t, "tailor", got.Category.Slug)
+		assert.Equal(t, created, got, "Fetch(%d)", created.ID)
+		assert.Equal(t, "tailor", got.Category.Slug, "Fetch(%d).Category.Slug", created.ID)
 	})
 
-	t.Run("returns ErrPlaceNotFound for an unknown id", func(t *testing.T) {
+	t.Run("unknown_id", func(t *testing.T) {
 		repo := newRepository(t)
 
-		got, err := repo.GetPlace(ctx, 999)
+		got, err := repo.Fetch(ctx, 999)
 
-		assert.ErrorIs(t, err, places.ErrPlaceNotFound)
-		assert.Nil(t, got)
+		assert.ErrorIs(t, err, domain.ErrPlaceNotFound, "Fetch(999)")
+		assert.Nil(t, got, "Fetch(999)")
 	})
 }
 
-func TestRepository_GetMany(t *testing.T) {
-	ctx := context.Background()
+func TestRepository_List(t *testing.T) {
+	ctx := t.Context()
 
 	// Four places, created in this order so ids follow it:
 	//   Laundry Bersih   laundry   setiabudi  inside the Setiabudi box
@@ -252,103 +252,103 @@ func TestRepository_GetMany(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		filter    places.PlaceFilter
+		filter    places.Filter
 		want      []string
 		wantTotal int
 	}{
 		{
-			name:      "no filter returns every place by id",
-			filter:    places.PlaceFilter{},
+			name:      "no_filter",
+			filter:    places.Filter{},
 			want:      []string{"Laundry Bersih", "Penjahit Maju", "Apotek Sehat", "Kios_Jahit"},
 			wantTotal: 4,
 		},
 		{
-			name:      "sub-district",
-			filter:    places.PlaceFilter{SubDistrictID: menteng},
+			name:      "sub_district",
+			filter:    places.Filter{SubDistrictID: menteng},
 			want:      []string{"Apotek Sehat", "Kios_Jahit"},
 			wantTotal: 2,
 		},
 		{
-			name:      "one category",
-			filter:    places.PlaceFilter{CategoryIDs: []int64{tailor}},
+			name:      "one_category",
+			filter:    places.Filter{CategoryIDs: []int64{tailor}},
 			want:      []string{"Penjahit Maju", "Kios_Jahit"},
 			wantTotal: 2,
 		},
 		{
-			name:      "any of several categories",
-			filter:    places.PlaceFilter{CategoryIDs: []int64{laundry, pharmacy}},
+			name:      "any_category",
+			filter:    places.Filter{CategoryIDs: []int64{laundry, pharmacy}},
 			want:      []string{"Laundry Bersih", "Apotek Sehat"},
 			wantTotal: 2,
 		},
 		{
-			name:      "query matches the name ignoring case",
-			filter:    places.PlaceFilter{Query: "LAUNDRY"},
+			name:      "query_name",
+			filter:    places.Filter{Query: "LAUNDRY"},
 			want:      []string{"Laundry Bersih"},
 			wantTotal: 1,
 		},
 		{
-			name:      "query matches the address",
-			filter:    places.PlaceFilter{Query: "thamrin"},
+			name:      "query_address",
+			filter:    places.Filter{Query: "thamrin"},
 			want:      []string{"Penjahit Maju"},
 			wantTotal: 1,
 		},
 		{
-			name:      "query matches the short description",
-			filter:    places.PlaceFilter{Query: "kilat"},
+			name:      "query_description",
+			filter:    places.Filter{Query: "kilat"},
 			want:      []string{"Laundry Bersih"},
 			wantTotal: 1,
 		},
 		{
-			name:      "query matches the category name",
-			filter:    places.PlaceFilter{Query: "pharm"},
+			name:      "query_category_name",
+			filter:    places.Filter{Query: "pharm"},
 			want:      []string{"Apotek Sehat"},
 			wantTotal: 1,
 		},
 		{
-			name:      "query treats % literally",
-			filter:    places.PlaceFilter{Query: "%"},
+			name:      "query_percent_literal",
+			filter:    places.Filter{Query: "%"},
 			want:      []string{"Apotek Sehat"},
 			wantTotal: 1,
 		},
 		{
-			name:      "query treats _ literally",
-			filter:    places.PlaceFilter{Query: "_"},
+			name:      "query_underscore_literal",
+			filter:    places.Filter{Query: "_"},
 			want:      []string{"Kios_Jahit"},
 			wantTotal: 1,
 		},
 		{
-			name:      "query with no match",
-			filter:    places.PlaceFilter{Query: "nothing like this"},
+			name:      "query_no_match",
+			filter:    places.Filter{Query: "nothing like this"},
 			want:      []string{},
 			wantTotal: 0,
 		},
 		{
-			name:      "bounds keep places inside the box and drop those without a location",
-			filter:    places.PlaceFilter{Bounds: &places.BoundingBox{MinLng: 106.81, MinLat: -6.22, MaxLng: 106.85, MaxLat: -6.19}},
+			name:      "bounds_inside",
+			filter:    places.Filter{Bounds: &places.BoundingBox{MinLng: 106.81, MinLat: -6.22, MaxLng: 106.85, MaxLat: -6.19}},
 			want:      []string{"Laundry Bersih", "Penjahit Maju"},
 			wantTotal: 2,
 		},
 		{
-			name:      "bounds include places on the edge",
-			filter:    places.PlaceFilter{Bounds: &places.BoundingBox{MinLng: 106.82, MinLat: -6.21, MaxLng: 106.84, MaxLat: -6.20}},
+			name:      "bounds_edge",
+			filter:    places.Filter{Bounds: &places.BoundingBox{MinLng: 106.82, MinLat: -6.21, MaxLng: 106.84, MaxLat: -6.20}},
 			want:      []string{"Laundry Bersih", "Penjahit Maju"},
 			wantTotal: 2,
 		},
 		{
-			name:      "bounds exclude places just past the edge",
-			filter:    places.PlaceFilter{Bounds: &places.BoundingBox{MinLng: 106.82, MinLat: -6.21, MaxLng: 106.839999, MaxLat: -6.20}},
+			name:      "bounds_just_past_edge",
+			filter:    places.Filter{Bounds: &places.BoundingBox{MinLng: 106.82, MinLat: -6.21, MaxLng: 106.839999, MaxLat: -6.20}},
 			want:      []string{"Laundry Bersih"},
 			wantTotal: 1,
 		},
 		{
-			name:      "bounds exclude places outside the box",
-			filter:    places.PlaceFilter{Bounds: &places.BoundingBox{MinLng: 106.85, MinLat: -6.40, MaxLng: 107, MaxLat: -6.25}},
+			name:      "bounds_outside",
+			filter:    places.Filter{Bounds: &places.BoundingBox{MinLng: 106.85, MinLat: -6.40, MaxLng: 107, MaxLat: -6.25}},
 			want:      []string{"Apotek Sehat"},
 			wantTotal: 1,
 		},
 		{
-			name:      "bounds order places by distance from the centre of the box, not by id",
-			filter:    places.PlaceFilter{Bounds: &places.BoundingBox{MinLng: 106.81, MinLat: -6.23, MaxLng: 106.87, MaxLat: -6.19}},
+			name:      "bounds_by_distance",
+			filter:    places.Filter{Bounds: &places.BoundingBox{MinLng: 106.81, MinLat: -6.23, MaxLng: 106.87, MaxLat: -6.19}},
 			want:      []string{"Penjahit Maju", "Laundry Bersih"},
 			wantTotal: 2,
 		},
@@ -356,20 +356,20 @@ func TestRepository_GetMany(t *testing.T) {
 		// Its categories take turns from (index - 1709 - -100) mod 2, where tailor is
 		// index 0 and laundry index 1 (by id), so laundry goes first.
 		{
-			name:      "limit sizes the grid, and a cell takes its categories in turns",
-			filter:    places.PlaceFilter{Bounds: &places.BoundingBox{MinLng: 106.81, MinLat: -6.23, MaxLng: 106.87, MaxLat: -6.19}, Limit: 1},
+			name:      "limit_sizes_grid",
+			filter:    places.Filter{Bounds: &places.BoundingBox{MinLng: 106.81, MinLat: -6.23, MaxLng: 106.87, MaxLat: -6.19}, Limit: 1},
 			want:      []string{"Laundry Bersih"},
 			wantTotal: 2,
 		},
 		{
-			name:      "offset skips into the same order",
-			filter:    places.PlaceFilter{Bounds: &places.BoundingBox{MinLng: 106.81, MinLat: -6.23, MaxLng: 106.87, MaxLat: -6.19}, Limit: 1, Offset: 1},
+			name:      "bounds_offset",
+			filter:    places.Filter{Bounds: &places.BoundingBox{MinLng: 106.81, MinLat: -6.23, MaxLng: 106.87, MaxLat: -6.19}, Limit: 1, Offset: 1},
 			want:      []string{"Penjahit Maju"},
 			wantTotal: 2,
 		},
 		{
-			name: "filters combine",
-			filter: places.PlaceFilter{
+			name: "filters_combine",
+			filter: places.Filter{
 				SubDistrictID: setiabudi,
 				CategoryIDs:   []int64{tailor, pharmacy},
 				Query:         "penjahit",
@@ -379,50 +379,50 @@ func TestRepository_GetMany(t *testing.T) {
 			wantTotal: 1,
 		},
 		{
-			name:      "limit cuts the page and total counts every match",
-			filter:    places.PlaceFilter{Limit: 2},
+			name:      "limit_cuts_page",
+			filter:    places.Filter{Limit: 2},
 			want:      []string{"Laundry Bersih", "Penjahit Maju"},
 			wantTotal: 4,
 		},
 		{
-			name:      "limit equal to the matches reports them all",
-			filter:    places.PlaceFilter{Limit: 4},
+			name:      "limit_equals_matches",
+			filter:    places.Filter{Limit: 4},
 			want:      []string{"Laundry Bersih", "Penjahit Maju", "Apotek Sehat", "Kios_Jahit"},
 			wantTotal: 4,
 		},
 		{
-			name:      "limit above the matches reports them all",
-			filter:    places.PlaceFilter{Limit: 10},
+			name:      "limit_above_matches",
+			filter:    places.Filter{Limit: 10},
 			want:      []string{"Laundry Bersih", "Penjahit Maju", "Apotek Sehat", "Kios_Jahit"},
 			wantTotal: 4,
 		},
 		{
-			name:      "offset skips the lowest ids and total counts every match",
-			filter:    places.PlaceFilter{Limit: 2, Offset: 1},
+			name:      "offset_skips",
+			filter:    places.Filter{Limit: 2, Offset: 1},
 			want:      []string{"Penjahit Maju", "Apotek Sehat"},
 			wantTotal: 4,
 		},
 		{
-			name:      "last page reports every match",
-			filter:    places.PlaceFilter{Limit: 2, Offset: 3},
+			name:      "last_page",
+			filter:    places.Filter{Limit: 2, Offset: 3},
 			want:      []string{"Kios_Jahit"},
 			wantTotal: 4,
 		},
 		{
-			name:      "offset past the matches returns no places but still the total",
-			filter:    places.PlaceFilter{Limit: 2, Offset: 10},
+			name:      "offset_past_matches",
+			filter:    places.Filter{Limit: 2, Offset: 10},
 			want:      []string{},
 			wantTotal: 4,
 		},
 		{
-			name:      "offset applies after the other filters",
-			filter:    places.PlaceFilter{SubDistrictID: menteng, Limit: 1, Offset: 1},
+			name:      "offset_after_filters",
+			filter:    places.Filter{SubDistrictID: menteng, Limit: 1, Offset: 1},
 			want:      []string{"Kios_Jahit"},
 			wantTotal: 2,
 		},
 		{
-			name:      "limit applies after the other filters",
-			filter:    places.PlaceFilter{SubDistrictID: menteng, Limit: 1},
+			name:      "limit_after_filters",
+			filter:    places.Filter{SubDistrictID: menteng, Limit: 1},
 			want:      []string{"Apotek Sehat"},
 			wantTotal: 2,
 		},
@@ -435,53 +435,50 @@ func TestRepository_GetMany(t *testing.T) {
 				tt.filter.Limit = 100
 			}
 
-			got, total, err := repo.GetMany(ctx, tt.filter)
+			got, total, err := repo.List(ctx, tt.filter)
+			require.NoError(t, err, "List(%+v)", tt.filter)
 
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, names(got))
-			assert.Equal(t, tt.wantTotal, total)
+			assert.Equal(t, tt.want, names(got), "List(%+v) names", tt.filter)
+			assert.Equal(t, tt.wantTotal, total, "List(%+v) total", tt.filter)
 		})
 	}
 
-	t.Run("returns the category of each place", func(t *testing.T) {
-		got, _, err := repo.GetMany(ctx, places.PlaceFilter{Limit: 1})
-
-		require.NoError(t, err)
-		require.Len(t, got, 1)
-		assert.Equal(t, "laundry", got[0].Category.Slug)
-		assert.Equal(t, "Laundry", got[0].Category.Label)
+	t.Run("category_of_each", func(t *testing.T) {
+		got, _, err := repo.List(ctx, places.Filter{Limit: 1})
+		require.NoError(t, err, "List(limit 1)")
+		require.Len(t, got, 1, "List(limit 1)")
+		assert.Equal(t, "laundry", got[0].Category.Slug, "List(limit 1)[0].Category.Slug")
+		assert.Equal(t, "Laundry", got[0].Category.Label, "List(limit 1)[0].Category.Label")
 	})
 
-	t.Run("rejects an unknown sub-district", func(t *testing.T) {
-		got, total, err := repo.GetMany(ctx, places.PlaceFilter{SubDistrictID: 999})
+	t.Run("unknown_sub_district", func(t *testing.T) {
+		got, total, err := repo.List(ctx, places.Filter{SubDistrictID: 999})
 
-		assert.ErrorIs(t, err, places.ErrSubDistrictNotFound)
-		assert.Nil(t, got)
-		assert.Zero(t, total)
+		assert.ErrorIs(t, err, domain.ErrSubDistrictNotFound, "List(sub-district 999)")
+		assert.Nil(t, got, "List(sub-district 999)")
+		assert.Zero(t, total, "List(sub-district 999) total")
 	})
 
-	t.Run("rejects an unknown category among known ones", func(t *testing.T) {
-		got, total, err := repo.GetMany(ctx, places.PlaceFilter{CategoryIDs: []int64{laundry, 999}})
+	t.Run("unknown_category", func(t *testing.T) {
+		got, total, err := repo.List(ctx, places.Filter{CategoryIDs: []int64{laundry, 999}})
 
-		assert.ErrorIs(t, err, places.ErrCategoryNotFound)
-		assert.Nil(t, got)
-		assert.Zero(t, total)
+		assert.ErrorIs(t, err, domain.ErrCategoryNotFound, "List(categories %d, 999)", laundry)
+		assert.Nil(t, got, "List(categories %d, 999)", laundry)
+		assert.Zero(t, total, "List(categories %d, 999) total", laundry)
 	})
 
-	t.Run("returns an empty, non-nil slice when there are no places", func(t *testing.T) {
+	t.Run("empty_non_nil", func(t *testing.T) {
 		empty := newRepository(t)
 
-		got, total, err := empty.GetMany(ctx, places.PlaceFilter{Limit: 10})
+		got, total, err := empty.List(ctx, places.Filter{Limit: 10})
+		require.NoError(t, err, "List(limit 10)")
 
-		require.NoError(t, err)
-		assert.NotNil(t, got)
-		assert.Empty(t, got)
-		assert.Zero(t, total)
+		assert.Equal(t, []domain.Place{}, got, "List(limit 10) must be an empty, non-nil slice")
+		assert.Zero(t, total, "List(limit 10) total")
 	})
 }
 
-func TestRepository_GetMany_Spread(t *testing.T) {
-	ctx := context.Background()
+func TestRepository_List_Spread(t *testing.T) {
 	repo := newRepository(t)
 	setiabudi := insertSubDistrict(t, "Setiabudi")
 	laundry := categoryID(t, "laundry")
@@ -501,118 +498,119 @@ func TestRepository_GetMany_Spread(t *testing.T) {
 	create("Timur Laut", 106.87, -6.13)
 	box := &places.BoundingBox{MinLng: 106.75, MinLat: -6.25, MaxLng: 106.875, MaxLat: -6.125}
 
-	got, total, err := repo.GetMany(ctx, places.PlaceFilter{Bounds: box, Limit: 4})
+	got, total, err := repo.List(t.Context(), places.Filter{Bounds: box, Limit: 4})
+	require.NoError(t, err, "List(bounds, limit 4)")
 
 	// One place from each cell (the one nearest the cell's centre), nearest the
 	// box's centre first, then the crowded cell's next, instead of the four
 	// places nearest the box's centre.
-	require.NoError(t, err)
-	assert.Equal(t, []string{"Tengah 4", "Barat Laut", "Timur Laut", "Tengah 2"}, names(got))
-	assert.Equal(t, 6, total)
+	want := []string{"Tengah 4", "Barat Laut", "Timur Laut", "Tengah 2"}
+	assert.Equal(t, want, names(got), "List(bounds, limit 4) names")
+	assert.Equal(t, 6, total, "List(bounds, limit 4) total")
 }
 
-func TestRepository_GetCategories(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("returns the categories the migrations define, with their fields in order", func(t *testing.T) {
+func TestRepository_ListCategories(t *testing.T) {
+	t.Run("migrated_categories", func(t *testing.T) {
 		repo := newRepository(t)
 
-		got, err := repo.GetCategories(ctx)
-
-		require.NoError(t, err)
-		require.NotEmpty(t, got)
+		got, err := repo.ListCategories(t.Context())
+		require.NoError(t, err, "ListCategories()")
+		require.NotEmpty(t, got, "ListCategories() must return the categories the migrations define")
 		for i := 1; i < len(got); i++ {
-			assert.Less(t, got[i-1].ID, got[i].ID, "categories are ordered by id")
+			assert.Less(t, got[i-1].ID, got[i].ID, "ListCategories() ids, want ordered by id")
 		}
 
-		var laundry *places.Category
+		var laundry *domain.Category
 		for i := range got {
-			require.NotNil(t, got[i].Fields, "%s has non-nil fields", got[i].Slug)
+			assert.NotNil(t, got[i].Fields, "ListCategories() category %q fields", got[i].Slug)
 			if got[i].Slug == "laundry" {
 				laundry = &got[i]
 			}
 		}
-		require.NotNil(t, laundry)
+		require.NotNil(t, laundry, "ListCategories() must have a laundry category")
 
 		keys := make([]string, 0, len(laundry.Fields))
 		for i, f := range laundry.Fields {
-			assert.Equal(t, laundry.ID, f.CategoryID)
-			assert.Equal(t, int32(i+1), f.SortOrder)
+			assert.Equal(t, laundry.ID, f.CategoryID, "laundry field %q CategoryID", f.Key)
+			assert.Equal(t, int32(i+1), f.SortOrder, "laundry field %q SortOrder", f.Key)
 			keys = append(keys, f.Key)
 		}
-		assert.Equal(t, []string{"service_type", "turnaround_hours", "express_available", "minimum_weight_kg"}, keys)
+		wantKeys := []string{"service_type", "turnaround_hours", "express_available", "minimum_weight_kg"}
+		assert.Equal(t, wantKeys, keys, "laundry field keys")
 	})
 }
 
-func TestRepository_GetCategory(t *testing.T) {
-	ctx := context.Background()
+func TestRepository_FetchCategory(t *testing.T) {
+	ctx := t.Context()
 
-	t.Run("returns the category with its fields", func(t *testing.T) {
+	t.Run("with_fields", func(t *testing.T) {
 		repo := newRepository(t)
 		id := categoryID(t, "tailor")
 
-		got, err := repo.GetCategory(ctx, id)
+		got, err := repo.FetchCategory(ctx, id)
+		require.NoError(t, err, "FetchCategory(%d)", id)
 
-		require.NoError(t, err)
-		assert.Equal(t, id, got.ID)
-		assert.Equal(t, "Tailor", got.Name)
-		assert.Equal(t, "J", got.Code)
-		assert.Equal(t, "Penjahit", got.Label)
-		assert.Equal(t, "plum", got.Color)
+		assert.Equal(t, id, got.ID, "FetchCategory(%d).ID", id)
+		assert.Equal(t, "Tailor", got.Name, "FetchCategory(%d).Name", id)
+		assert.Equal(t, "J", got.Code, "FetchCategory(%d).Code", id)
+		assert.Equal(t, "Penjahit", got.Label, "FetchCategory(%d).Label", id)
+		assert.Equal(t, "plum", got.Color, "FetchCategory(%d).Color", id)
 		keys := make([]string, 0, len(got.Fields))
 		for _, f := range got.Fields {
 			keys = append(keys, f.Key)
 		}
-		assert.Equal(t, []string{"specialty", "turnaround_days", "same_day_service"}, keys)
+		wantKeys := []string{"specialty", "turnaround_days", "same_day_service"}
+		assert.Equal(t, wantKeys, keys, "FetchCategory(%d) field keys", id)
 	})
 
-	t.Run("decodes the options of a select field", func(t *testing.T) {
+	t.Run("select_options", func(t *testing.T) {
 		repo := newRepository(t)
 
-		got, err := repo.GetCategory(ctx, categoryID(t, "laundry"))
+		got, err := repo.FetchCategory(ctx, categoryID(t, "laundry"))
+		require.NoError(t, err, "FetchCategory(laundry)")
 
-		require.NoError(t, err)
 		serviceType := got.Fields[0]
-		assert.Equal(t, "select", serviceType.DataType)
-		assert.True(t, serviceType.Required)
-		assert.Equal(t, places.FieldOptions{"Swalayan", "Titip cuci", "Swalayan & titip cuci"}, serviceType.Options)
-		assert.Nil(t, got.Fields[1].Options, "other types have no options")
+		assert.Equal(t, domain.FieldTypeSelect, serviceType.DataType, "FetchCategory(laundry).Fields[0].DataType")
+		assert.True(t, serviceType.Required, "FetchCategory(laundry).Fields[0].Required")
+		wantOptions := domain.FieldOptions{"Swalayan", "Titip cuci", "Swalayan & titip cuci"}
+		assert.Equal(t, wantOptions, serviceType.Options, "FetchCategory(laundry).Fields[0].Options")
+		assert.Nil(t, got.Fields[1].Options, "FetchCategory(laundry).Fields[1].Options (other types have no options)")
 	})
 
-	t.Run("returns empty, non-nil fields for a category without any", func(t *testing.T) {
+	t.Run("no_fields", func(t *testing.T) {
 		repo := newRepository(t)
 		var id int64
-		require.NoError(t, testDB.Get(&id, `INSERT INTO CATEGORIES (name, slug, code, label, color) VALUES ('Bare', 'bare', 'Z', 'Bare', 'cat') RETURNING id`))
-		t.Cleanup(func() { _, _ = testDB.Exec(`DELETE FROM CATEGORIES WHERE id = $1`, id) })
+		err := testDB.Get(&id, `INSERT INTO CATEGORIES (name, slug, code, label, color) VALUES ('Bare', 'bare', 'Z', 'Bare', 'cat') RETURNING id`)
+		require.NoError(t, err, "insert category")
+		t.Cleanup(func() { _, _ = testDB.Exec(`DELETE FROM CATEGORIES WHERE id = $1`, id) }) // best-effort cleanup
 
-		got, err := repo.GetCategory(ctx, id)
+		got, err := repo.FetchCategory(ctx, id)
+		require.NoError(t, err, "FetchCategory(%d)", id)
 
-		require.NoError(t, err)
-		assert.NotNil(t, got.Fields)
-		assert.Empty(t, got.Fields)
+		assert.Equal(t, []domain.CategoryField{}, got.Fields, "FetchCategory(%d).Fields must be an empty, non-nil slice", id)
 	})
 
-	t.Run("returns ErrCategoryNotFound for an unknown id", func(t *testing.T) {
+	t.Run("unknown_id", func(t *testing.T) {
 		repo := newRepository(t)
 
-		got, err := repo.GetCategory(ctx, 999)
+		got, err := repo.FetchCategory(ctx, 999)
 
-		assert.ErrorIs(t, err, places.ErrCategoryNotFound)
-		assert.Nil(t, got)
+		assert.ErrorIs(t, err, domain.ErrCategoryNotFound, "FetchCategory(999)")
+		assert.Nil(t, got, "FetchCategory(999)")
 	})
 }
 
 func TestRepository_Update(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
-	t.Run("stores every field and returns the place with its new category", func(t *testing.T) {
+	t.Run("stores_every_field", func(t *testing.T) {
 		repo := newRepository(t)
 		setiabudi := insertSubDistrict(t, "Setiabudi")
 		menteng := insertSubDistrict(t, "Menteng")
 		created := mustCreate(t, repo, newPlace(setiabudi, categoryID(t, "laundry"), "Old"))
 		tailorID := categoryID(t, "tailor")
 
-		got, err := repo.Update(ctx, &places.Place{
+		got, err := repo.Update(ctx, &domain.Place{
 			ID:                  created.ID,
 			SubDistrictID:       menteng,
 			CategoryID:          tailorID,
@@ -624,27 +622,26 @@ func TestRepository_Update(t *testing.T) {
 			ShortDescription:    new("Baru"),
 			Attributes:          json.RawMessage(`{"specialty": "Permak"}`),
 		})
-		require.NoError(t, err)
+		require.NoError(t, err, "Update()")
 
-		assert.Equal(t, created.ID, got.ID)
-		assert.Equal(t, menteng, got.SubDistrictID)
-		assert.Equal(t, tailorID, got.CategoryID)
-		assert.Equal(t, "New", got.Name)
-		assert.Equal(t, new("Jl. Baru"), got.Address)
-		assert.Equal(t, new("24 jam"), got.OperatingHours)
-		assert.Equal(t, new("Rp1"), got.EstimatedPriceRange)
-		assert.Equal(t, new("Baru"), got.ShortDescription)
-		assert.JSONEq(t, `{"specialty": "Permak"}`, string(got.Attributes))
-		require.NotNil(t, got.Location)
-		assert.InDelta(t, 106.9, got.Location.X(), 1e-9)
-		assert.Equal(t, "tailor", got.Category.Slug)
+		assert.Equal(t, created.ID, got.ID, "Update().ID")
+		assert.Equal(t, menteng, got.SubDistrictID, "Update().SubDistrictID")
+		assert.Equal(t, tailorID, got.CategoryID, "Update().CategoryID")
+		assert.Equal(t, "New", got.Name, "Update().Name")
+		wantTexts := []*string{new("Jl. Baru"), new("24 jam"), new("Rp1"), new("Baru")}
+		gotTexts := []*string{got.Address, got.OperatingHours, got.EstimatedPriceRange, got.ShortDescription}
+		assert.Equal(t, wantTexts, gotTexts, "Update() text fields")
+		assert.JSONEq(t, `{"specialty": "Permak"}`, string(got.Attributes), "Update().Attributes")
+		require.NotNil(t, got.Location, "Update().Location")
+		assert.InDelta(t, 106.9, got.Location.X(), 1e-9, "Update().Location longitude")
+		assert.Equal(t, "tailor", got.Category.Slug, "Update().Category.Slug")
 
-		stored, err := repo.GetPlace(ctx, created.ID)
-		require.NoError(t, err)
-		assert.Equal(t, got, stored)
+		stored, err := repo.Fetch(ctx, created.ID)
+		require.NoError(t, err, "Fetch(%d)", created.ID)
+		assert.Equal(t, got, stored, "Fetch(%d) differs from the updated place", created.ID)
 	})
 
-	t.Run("clears optional fields that are nil", func(t *testing.T) {
+	t.Run("clears_nil_fields", func(t *testing.T) {
 		repo := newRepository(t)
 		p := newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry")
 		p.Address = new("Jl. Lama")
@@ -652,40 +649,40 @@ func TestRepository_Update(t *testing.T) {
 		created := mustCreate(t, repo, p)
 
 		got, err := repo.Update(ctx, newPlaceWithID(created, "Laundry"))
+		require.NoError(t, err, "Update()")
 
-		require.NoError(t, err)
-		assert.Nil(t, got.Address)
-		assert.Nil(t, got.Location)
+		assert.Nil(t, got.Address, "Update().Address")
+		assert.Nil(t, got.Location, "Update().Location")
 	})
 
-	t.Run("keeps the ratings and the medias", func(t *testing.T) {
+	t.Run("keeps_ratings_medias", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
 		m := mustAddMedia(t, repo, created.ID, "places/1.jpg")
 		_, err := testDB.Exec(`UPDATE PLACES SET rating_count = 2, rating_sum = 9 WHERE id = $1`, created.ID)
-		require.NoError(t, err)
+		require.NoError(t, err, "set ratings")
 
 		got, err := repo.Update(ctx, newPlaceWithID(created, "Renamed"))
+		require.NoError(t, err, "Update()")
 
-		require.NoError(t, err)
-		assert.Equal(t, "Renamed", got.Name)
-		assert.Equal(t, 2, got.RatingCount)
-		assert.Equal(t, 9, got.RatingSum)
-		assert.Equal(t, []storage.Media{m}, got.Medias)
+		assert.Equal(t, "Renamed", got.Name, "Update().Name")
+		assert.Equal(t, 2, got.RatingCount, "Update().RatingCount")
+		assert.Equal(t, 9, got.RatingSum, "Update().RatingSum")
+		assert.Equal(t, []domain.Media{m}, got.Medias, "Update().Medias")
 	})
 
-	t.Run("returns ErrPlaceNotFound for an unknown id", func(t *testing.T) {
+	t.Run("unknown_id", func(t *testing.T) {
 		repo := newRepository(t)
 		p := newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry")
 		p.ID = 999
 
 		got, err := repo.Update(ctx, p)
 
-		assert.ErrorIs(t, err, places.ErrPlaceNotFound)
-		assert.Nil(t, got)
+		assert.ErrorIs(t, err, domain.ErrPlaceNotFound, "Update(ID 999)")
+		assert.Nil(t, got, "Update(ID 999)")
 	})
 
-	t.Run("rejects an unknown sub-district and keeps the place", func(t *testing.T) {
+	t.Run("unknown_sub_district", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
 		update := newPlaceWithID(created, "Renamed")
@@ -693,14 +690,14 @@ func TestRepository_Update(t *testing.T) {
 
 		got, err := repo.Update(ctx, update)
 
-		assert.ErrorIs(t, err, places.ErrSubDistrictNotFound)
-		assert.Nil(t, got)
-		stored, err := repo.GetPlace(ctx, created.ID)
-		require.NoError(t, err)
-		assert.Equal(t, "Laundry", stored.Name)
+		assert.ErrorIs(t, err, domain.ErrSubDistrictNotFound, "Update(sub-district 999)")
+		assert.Nil(t, got, "Update(sub-district 999)")
+		stored, err := repo.Fetch(ctx, created.ID)
+		require.NoError(t, err, "Fetch(%d)", created.ID)
+		assert.Equal(t, "Laundry", stored.Name, "Fetch(%d).Name after a refused update", created.ID)
 	})
 
-	t.Run("rejects an unknown category and keeps the place", func(t *testing.T) {
+	t.Run("unknown_category", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
 		update := newPlaceWithID(created, "Renamed")
@@ -708,17 +705,17 @@ func TestRepository_Update(t *testing.T) {
 
 		got, err := repo.Update(ctx, update)
 
-		assert.ErrorIs(t, err, places.ErrCategoryNotFound)
-		assert.Nil(t, got)
-		stored, err := repo.GetPlace(ctx, created.ID)
-		require.NoError(t, err)
-		assert.Equal(t, "Laundry", stored.Name)
+		assert.ErrorIs(t, err, domain.ErrCategoryNotFound, "Update(category 999)")
+		assert.Nil(t, got, "Update(category 999)")
+		stored, err := repo.Fetch(ctx, created.ID)
+		require.NoError(t, err, "Fetch(%d)", created.ID)
+		assert.Equal(t, "Laundry", stored.Name, "Fetch(%d).Name after a refused update", created.ID)
 	})
 }
 
 // newPlaceWithID returns a copy of p's identity and ownership with the given
 // name and no optional fields, to use as an update.
-func newPlaceWithID(p *places.Place, name string) *places.Place {
+func newPlaceWithID(p *domain.Place, name string) *domain.Place {
 	update := newPlace(p.SubDistrictID, p.CategoryID, name)
 	update.ID = p.ID
 
@@ -726,20 +723,20 @@ func newPlaceWithID(p *places.Place, name string) *places.Place {
 }
 
 func TestRepository_Delete(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
-	t.Run("removes the place", func(t *testing.T) {
+	t.Run("removes_place", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
 
-		require.NoError(t, repo.Delete(ctx, created.ID))
+		require.NoError(t, repo.Delete(ctx, created.ID), "Delete(%d)", created.ID)
 
-		_, err := repo.GetPlace(ctx, created.ID)
-		assert.ErrorIs(t, err, places.ErrPlaceNotFound)
-		assert.Empty(t, queuedKeys(t), "a place without medias queues nothing")
+		_, err := repo.Fetch(ctx, created.ID)
+		assert.ErrorIs(t, err, domain.ErrPlaceNotFound, "Fetch(%d) after Delete", created.ID)
+		assert.Empty(t, queuedKeys(t), "queued keys (a place without medias queues nothing)")
 	})
 
-	t.Run("removes the medias and queues their images for deletion", func(t *testing.T) {
+	t.Run("queues_images", func(t *testing.T) {
 		repo := newRepository(t)
 		subDistrictID := insertSubDistrict(t, "Setiabudi")
 		laundryID := categoryID(t, "laundry")
@@ -749,80 +746,83 @@ func TestRepository_Delete(t *testing.T) {
 		mustAddMedia(t, repo, created.ID, "places/1/b.jpg")
 		keptMedia := mustAddMedia(t, repo, kept.ID, "places/2/a.jpg")
 
-		require.NoError(t, repo.Delete(ctx, created.ID))
+		require.NoError(t, repo.Delete(ctx, created.ID), "Delete(%d)", created.ID)
 
-		assert.ElementsMatch(t, []string{"places/1/a.jpg", "places/1/b.jpg"}, queuedKeys(t))
-		assert.Equal(t, 1, storedMediaCount(t), "only the other place's media is left")
-		stored, err := repo.GetPlace(ctx, kept.ID)
-		require.NoError(t, err)
-		assert.Equal(t, []storage.Media{keptMedia}, stored.Medias)
+		keys := queuedKeys(t)
+		slices.Sort(keys)
+		assert.Equal(t, []string{"places/1/a.jpg", "places/1/b.jpg"}, keys, "queued keys")
+		assert.Equal(t, 1, storedMediaCount(t), "stored medias (only the other place's media)")
+		stored, err := repo.Fetch(ctx, kept.ID)
+		require.NoError(t, err, "Fetch(%d)", kept.ID)
+		assert.Equal(t, []domain.Media{keptMedia}, stored.Medias, "Fetch(%d).Medias", kept.ID)
 	})
 
-	t.Run("tolerates an image that is already queued", func(t *testing.T) {
+	t.Run("already_queued", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
 		mustAddMedia(t, repo, created.ID, "places/1.jpg")
 		_, err := testDB.Exec(`INSERT INTO STORAGE_DELETIONS (key) VALUES ('places/1.jpg')`)
-		require.NoError(t, err)
+		require.NoError(t, err, "queue key")
 
-		require.NoError(t, repo.Delete(ctx, created.ID))
+		require.NoError(t, repo.Delete(ctx, created.ID), "Delete(%d)", created.ID)
 
-		assert.Equal(t, []string{"places/1.jpg"}, queuedKeys(t))
+		assert.Equal(t, []string{"places/1.jpg"}, queuedKeys(t), "queued keys")
 	})
 
-	t.Run("leaves other places alone", func(t *testing.T) {
+	t.Run("leaves_others", func(t *testing.T) {
 		repo := newRepository(t)
 		subDistrictID := insertSubDistrict(t, "Setiabudi")
 		laundryID := categoryID(t, "laundry")
 		doomed := mustCreate(t, repo, newPlace(subDistrictID, laundryID, "Doomed"))
 		kept := mustCreate(t, repo, newPlace(subDistrictID, laundryID, "Kept"))
 
-		require.NoError(t, repo.Delete(ctx, doomed.ID))
+		require.NoError(t, repo.Delete(ctx, doomed.ID), "Delete(%d)", doomed.ID)
 
-		got, total, err := repo.GetMany(ctx, places.PlaceFilter{Limit: 10})
-		require.NoError(t, err)
-		assert.Equal(t, []string{kept.Name}, names(got))
-		assert.Equal(t, 1, total)
+		got, total, err := repo.List(ctx, places.Filter{Limit: 10})
+		require.NoError(t, err, "List()")
+		assert.Equal(t, []string{kept.Name}, names(got), "List() names")
+		assert.Equal(t, 1, total, "List() total")
 	})
 
-	t.Run("returns ErrPlaceNotFound for an unknown id", func(t *testing.T) {
+	t.Run("unknown_id", func(t *testing.T) {
 		repo := newRepository(t)
 
-		assert.ErrorIs(t, repo.Delete(ctx, 999), places.ErrPlaceNotFound)
+		assert.ErrorIs(t, repo.Delete(ctx, 999), domain.ErrPlaceNotFound, "Delete(999)")
 	})
 
-	t.Run("returns ErrPlaceNotFound the second time", func(t *testing.T) {
+	t.Run("second_time", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
-		require.NoError(t, repo.Delete(ctx, created.ID))
+		require.NoError(t, repo.Delete(ctx, created.ID), "Delete(%d)", created.ID)
 
-		assert.ErrorIs(t, repo.Delete(ctx, created.ID), places.ErrPlaceNotFound)
+		assert.ErrorIs(t, repo.Delete(ctx, created.ID), domain.ErrPlaceNotFound, "second Delete(%d)", created.ID)
 	})
 }
 
 // newMedia returns a promoted image to store under key.
-func newMedia(key string) storage.Media {
-	return storage.Media{Key: key, ContentType: "image/webp", Size: 2048}
+func newMedia(key string) domain.Media {
+	return domain.Media{Key: key, ContentType: "image/webp", Size: 2048}
 }
 
 // mustAddMedia stores an image under key for the place and returns it.
-func mustAddMedia(t *testing.T, repo places.Repository, placeID int64, key string) storage.Media {
+func mustAddMedia(t *testing.T, repo places.Repository, placeID int64, key string) domain.Media {
 	t.Helper()
 
-	got, err := repo.AddMedia(context.Background(), placeID, newMedia(key))
-	require.NoError(t, err)
+	got, err := repo.AddMedia(t.Context(), placeID, newMedia(key))
+	require.NoError(t, err, "AddMedia(%d, %q)", placeID, key)
 
 	for _, m := range got.Medias {
 		if m.Key == key {
 			return m
 		}
 	}
-	require.FailNow(t, "the added media is missing", "key %q", key)
-	return storage.Media{}
+	require.Failf(t, "media missing", "AddMedia(%d, %q) returned a place without the added media", placeID, key)
+
+	return domain.Media{}
 }
 
 // mediaKeys returns the keys of medias, in order.
-func mediaKeys(medias []storage.Media) []string {
+func mediaKeys(medias []domain.Media) []string {
 	out := make([]string, 0, len(medias))
 	for _, m := range medias {
 		out = append(out, m.Key)
@@ -832,7 +832,7 @@ func mediaKeys(medias []storage.Media) []string {
 }
 
 // mediaPositions returns the positions of medias, in order.
-func mediaPositions(medias []storage.Media) []int {
+func mediaPositions(medias []domain.Media) []int {
 	out := make([]int, 0, len(medias))
 	for _, m := range medias {
 		out = append(out, m.Position)
@@ -846,81 +846,81 @@ func storedMediaCount(t *testing.T) int {
 	t.Helper()
 
 	var count int
-	require.NoError(t, testDB.Get(&count, `SELECT COUNT(*) FROM MEDIAS`))
+	require.NoError(t, testDB.Get(&count, `SELECT COUNT(*) FROM MEDIAS`), "count medias")
+
 	return count
 }
 
 func TestRepository_AddMedia(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
-	t.Run("stores the media at the first position and returns the place", func(t *testing.T) {
+	t.Run("first_position", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
 
 		got, err := repo.AddMedia(ctx, created.ID, newMedia("places/1/a.webp"))
+		require.NoError(t, err, "AddMedia()")
 
-		require.NoError(t, err)
-		assert.Equal(t, created.ID, got.ID)
-		assert.Equal(t, "laundry", got.Category.Slug)
-		require.Len(t, got.Medias, 1)
-		assert.NotZero(t, got.Medias[0].ID)
-		assert.Equal(t, "places/1/a.webp", got.Medias[0].Key)
-		assert.Equal(t, "image/webp", got.Medias[0].ContentType)
-		assert.Equal(t, int64(2048), got.Medias[0].Size)
-		assert.Equal(t, 1, got.Medias[0].Position)
-		assert.Empty(t, queuedKeys(t), "adding a media replaces nothing")
+		assert.Equal(t, created.ID, got.ID, "AddMedia() place ID")
+		assert.Equal(t, "laundry", got.Category.Slug, "AddMedia() place category")
+		require.Len(t, got.Medias, 1, "AddMedia().Medias")
+		m := got.Medias[0]
+		assert.NotZero(t, m.ID, "AddMedia().Medias[0].ID")
+		want := domain.Media{ID: m.ID, Key: "places/1/a.webp", ContentType: "image/webp", Size: 2048, Position: 1}
+		assert.Equal(t, want, m, "AddMedia().Medias[0]")
+		assert.Empty(t, queuedKeys(t), "queued keys (adding a media replaces nothing)")
 
-		stored, err := repo.GetPlace(ctx, created.ID)
-		require.NoError(t, err)
-		assert.Equal(t, got, stored)
+		stored, err := repo.Fetch(ctx, created.ID)
+		require.NoError(t, err, "Fetch(%d)", created.ID)
+		assert.Equal(t, got, stored, "Fetch(%d) differs from the returned place", created.ID)
 	})
 
-	t.Run("adds each media after the last, in position order", func(t *testing.T) {
+	t.Run("after_last", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
 		mustAddMedia(t, repo, created.ID, "places/1/a.webp")
 		mustAddMedia(t, repo, created.ID, "places/1/b.webp")
 
 		got, err := repo.AddMedia(ctx, created.ID, newMedia("places/1/c.webp"))
+		require.NoError(t, err, "AddMedia()")
 
-		require.NoError(t, err)
-		assert.Equal(t, []string{"places/1/a.webp", "places/1/b.webp", "places/1/c.webp"}, mediaKeys(got.Medias))
-		assert.Equal(t, []int{1, 2, 3}, mediaPositions(got.Medias))
+		assert.Equal(t, []string{"places/1/a.webp", "places/1/b.webp", "places/1/c.webp"}, mediaKeys(got.Medias), "AddMedia() keys")
+		assert.Equal(t, []int{1, 2, 3}, mediaPositions(got.Medias), "AddMedia() positions")
 	})
 
-	t.Run("appends after the remaining medias once one is deleted", func(t *testing.T) {
+	t.Run("after_delete", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
 		mustAddMedia(t, repo, created.ID, "places/1/a.webp")
 		removed := mustAddMedia(t, repo, created.ID, "places/1/b.webp")
 		mustAddMedia(t, repo, created.ID, "places/1/c.webp")
-		require.NoError(t, repo.DeleteMedia(ctx, created.ID, removed.ID))
+		require.NoError(t, repo.DeleteMedia(ctx, created.ID, removed.ID), "DeleteMedia(%d, %d)", created.ID, removed.ID)
 
 		got, err := repo.AddMedia(ctx, created.ID, newMedia("places/1/d.webp"))
+		require.NoError(t, err, "AddMedia()")
 
-		require.NoError(t, err)
-		assert.Equal(t, []string{"places/1/a.webp", "places/1/c.webp", "places/1/d.webp"}, mediaKeys(got.Medias))
-		assert.Equal(t, []int{1, 2, 3}, mediaPositions(got.Medias))
+		assert.Equal(t, []string{"places/1/a.webp", "places/1/c.webp", "places/1/d.webp"}, mediaKeys(got.Medias), "AddMedia() keys")
+		assert.Equal(t, []int{1, 2, 3}, mediaPositions(got.Medias), "AddMedia() positions")
 	})
 
-	t.Run("returns ErrMediaLimitReached once the place has the most medias", func(t *testing.T) {
+	t.Run("limit_reached", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
-		for i := range storage.MaxMedias {
+		for i := range domain.MaxMedias {
 			mustAddMedia(t, repo, created.ID, fmt.Sprintf("places/1/%d.webp", i))
 		}
 
 		got, err := repo.AddMedia(ctx, created.ID, newMedia("places/1/extra.webp"))
 
-		assert.ErrorIs(t, err, storage.ErrMediaLimitReached)
-		assert.Nil(t, got)
-		assert.Equal(t, storage.MaxMedias, storedMediaCount(t), "the extra media must not be stored")
+		assert.ErrorIs(t, err, domain.ErrMediaLimitReached, "AddMedia(11th media)")
+		assert.Nil(t, got, "AddMedia(11th media)")
+		assert.Equal(t, domain.MaxMedias, storedMediaCount(t), "stored medias (the extra media must not be stored)")
 	})
 
-	t.Run("keeps the limit under concurrent adds", func(t *testing.T) {
+	t.Run("concurrent_limit", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
-		const attempts = storage.MaxMedias + 4
+		const attempts = domain.MaxMedias + 4
 
 		errs := make([]error, attempts)
 		var wg sync.WaitGroup
@@ -934,66 +934,67 @@ func TestRepository_AddMedia(t *testing.T) {
 		added, limited := 0, 0
 		for _, err := range errs {
 			switch {
-			case err == nil:
+			case err == nil: // if NO error
 				added++
-			case errors.Is(err, storage.ErrMediaLimitReached):
+			case errors.Is(err, domain.ErrMediaLimitReached):
 				limited++
 			default:
-				t.Errorf("unexpected error: %v", err)
+				assert.Fail(t, "unexpected error", "AddMedia() unexpected error: %v", err)
 			}
 		}
-		assert.Equal(t, storage.MaxMedias, added)
-		assert.Equal(t, attempts-storage.MaxMedias, limited)
+		assert.Equal(t, domain.MaxMedias, added, "concurrent AddMedia() added")
+		assert.Equal(t, attempts-domain.MaxMedias, limited, "concurrent AddMedia() limited")
 
-		stored, err := repo.GetPlace(ctx, created.ID)
-		require.NoError(t, err)
-		assert.Equal(t, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, mediaPositions(stored.Medias))
+		stored, err := repo.Fetch(ctx, created.ID)
+		require.NoError(t, err, "Fetch(%d)", created.ID)
+		assert.Equal(t, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, mediaPositions(stored.Medias), "Fetch(%d) positions", created.ID)
 	})
 
-	t.Run("returns ErrPlaceNotFound for an unknown id", func(t *testing.T) {
+	t.Run("unknown_id", func(t *testing.T) {
 		repo := newRepository(t)
 
 		got, err := repo.AddMedia(ctx, 999, newMedia("places/1/a.webp"))
 
-		assert.ErrorIs(t, err, places.ErrPlaceNotFound)
-		assert.Nil(t, got)
-		assert.Zero(t, storedMediaCount(t))
+		assert.ErrorIs(t, err, domain.ErrPlaceNotFound, "AddMedia(place 999)")
+		assert.Nil(t, got, "AddMedia(place 999)")
+		assert.Zero(t, storedMediaCount(t), "stored medias")
 	})
 }
 
 func TestRepository_DeleteMedia(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
-	t.Run("removes the media and queues its image for deletion", func(t *testing.T) {
+	t.Run("queues_image", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
 		mustAddMedia(t, repo, created.ID, "places/1/a.webp")
 		removed := mustAddMedia(t, repo, created.ID, "places/1/b.webp")
 		mustAddMedia(t, repo, created.ID, "places/1/c.webp")
 
-		require.NoError(t, repo.DeleteMedia(ctx, created.ID, removed.ID))
+		require.NoError(t, repo.DeleteMedia(ctx, created.ID, removed.ID), "DeleteMedia(%d, %d)", created.ID, removed.ID)
 
-		stored, err := repo.GetPlace(ctx, created.ID)
-		require.NoError(t, err)
-		assert.Equal(t, []string{"places/1/a.webp", "places/1/c.webp"}, mediaKeys(stored.Medias))
-		assert.Equal(t, []int{1, 2}, mediaPositions(stored.Medias), "the later medias shift down")
-		assert.Equal(t, 2, storedMediaCount(t))
-		assert.Equal(t, []string{"places/1/b.webp"}, queuedKeys(t))
+		stored, err := repo.Fetch(ctx, created.ID)
+		require.NoError(t, err, "Fetch(%d)", created.ID)
+		assert.Equal(t, []string{"places/1/a.webp", "places/1/c.webp"}, mediaKeys(stored.Medias), "Fetch(%d) keys", created.ID)
+		// The later medias shift down.
+		assert.Equal(t, []int{1, 2}, mediaPositions(stored.Medias), "Fetch(%d) positions", created.ID)
+		assert.Equal(t, 2, storedMediaCount(t), "stored medias")
+		assert.Equal(t, []string{"places/1/b.webp"}, queuedKeys(t), "queued keys")
 	})
 
-	t.Run("tolerates an image that is already queued", func(t *testing.T) {
+	t.Run("already_queued", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
 		removed := mustAddMedia(t, repo, created.ID, "places/1/a.webp")
 		_, err := testDB.Exec(`INSERT INTO STORAGE_DELETIONS (key) VALUES ('places/1/a.webp')`)
-		require.NoError(t, err)
+		require.NoError(t, err, "queue key")
 
-		require.NoError(t, repo.DeleteMedia(ctx, created.ID, removed.ID))
+		require.NoError(t, repo.DeleteMedia(ctx, created.ID, removed.ID), "DeleteMedia(%d, %d)", created.ID, removed.ID)
 
-		assert.Equal(t, []string{"places/1/a.webp"}, queuedKeys(t))
+		assert.Equal(t, []string{"places/1/a.webp"}, queuedKeys(t), "queued keys")
 	})
 
-	t.Run("returns ErrMediaNotFound for a media of another place", func(t *testing.T) {
+	t.Run("other_place", func(t *testing.T) {
 		repo := newRepository(t)
 		subDistrictID := insertSubDistrict(t, "Setiabudi")
 		laundryID := categoryID(t, "laundry")
@@ -1003,33 +1004,32 @@ func TestRepository_DeleteMedia(t *testing.T) {
 
 		err := repo.DeleteMedia(ctx, other.ID, m.ID)
 
-		assert.ErrorIs(t, err, storage.ErrMediaNotFound)
-		assert.Equal(t, 1, storedMediaCount(t), "the media must be kept")
-		assert.Empty(t, queuedKeys(t))
+		assert.ErrorIs(t, err, domain.ErrMediaNotFound, "DeleteMedia(%d, %d)", other.ID, m.ID)
+		assert.Equal(t, 1, storedMediaCount(t), "stored medias (the media must be kept)")
+		assert.Empty(t, queuedKeys(t), "queued keys")
 	})
 
-	t.Run("returns ErrMediaNotFound for an unknown media or place", func(t *testing.T) {
+	t.Run("unknown_media_or_place", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
 		m := mustAddMedia(t, repo, created.ID, "places/1/a.webp")
 
-		assert.ErrorIs(t, repo.DeleteMedia(ctx, created.ID, 999), storage.ErrMediaNotFound)
-		assert.ErrorIs(t, repo.DeleteMedia(ctx, 999, m.ID), storage.ErrMediaNotFound)
-		assert.Equal(t, 1, storedMediaCount(t))
+		assert.ErrorIs(t, repo.DeleteMedia(ctx, created.ID, 999), domain.ErrMediaNotFound, "DeleteMedia(%d, 999)", created.ID)
+		assert.ErrorIs(t, repo.DeleteMedia(ctx, 999, m.ID), domain.ErrMediaNotFound, "DeleteMedia(999, %d)", m.ID)
+		assert.Equal(t, 1, storedMediaCount(t), "stored medias")
 	})
 
-	t.Run("returns ErrMediaNotFound the second time", func(t *testing.T) {
+	t.Run("second_time", func(t *testing.T) {
 		repo := newRepository(t)
 		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
 		m := mustAddMedia(t, repo, created.ID, "places/1/a.webp")
-		require.NoError(t, repo.DeleteMedia(ctx, created.ID, m.ID))
+		require.NoError(t, repo.DeleteMedia(ctx, created.ID, m.ID), "DeleteMedia(%d, %d)", created.ID, m.ID)
 
-		assert.ErrorIs(t, repo.DeleteMedia(ctx, created.ID, m.ID), storage.ErrMediaNotFound)
+		assert.ErrorIs(t, repo.DeleteMedia(ctx, created.ID, m.ID), domain.ErrMediaNotFound, "second DeleteMedia(%d, %d)", created.ID, m.ID)
 	})
 }
 
-func TestRepository_GetMany_Medias(t *testing.T) {
-	ctx := context.Background()
+func TestRepository_List_Medias(t *testing.T) {
 	repo := newRepository(t)
 	subDistrictID := insertSubDistrict(t, "Setiabudi")
 	laundryID := categoryID(t, "laundry")
@@ -1040,12 +1040,11 @@ func TestRepository_GetMany_Medias(t *testing.T) {
 	mustAddMedia(t, repo, second.ID, "places/2/a.webp")
 	mustAddMedia(t, repo, first.ID, "places/1/b.webp")
 
-	got, _, err := repo.GetMany(ctx, places.PlaceFilter{Limit: 10})
+	got, _, err := repo.List(t.Context(), places.Filter{Limit: 10})
+	require.NoError(t, err, "List(limit 10)")
 
-	require.NoError(t, err)
-	require.Len(t, got, 3)
-	assert.Equal(t, []string{"places/1/a.webp", "places/1/b.webp"}, mediaKeys(got[0].Medias))
-	assert.Equal(t, []string{"places/2/a.webp"}, mediaKeys(got[1].Medias))
-	assert.NotNil(t, got[2].Medias, "a place without medias has an empty list")
-	assert.Empty(t, got[2].Medias)
+	require.Len(t, got, 3, "List(limit 10)")
+	assert.Equal(t, []string{"places/1/a.webp", "places/1/b.webp"}, mediaKeys(got[0].Medias), "List()[0] media keys")
+	assert.Equal(t, []string{"places/2/a.webp"}, mediaKeys(got[1].Medias), "List()[1] media keys")
+	assert.Equal(t, []domain.Media{}, got[2].Medias, "List()[2].Medias must be an empty, non-nil list")
 }

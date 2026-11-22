@@ -8,48 +8,24 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"rantau-go/internal/database"
-	"rantau-go/internal/module/places"
+	"rantau-go/internal/domain"
 )
 
-// Repository defines the persistence operations required by the service.
-//
-//go:generate mockgen -source=repository.go -destination=mock/repository.go -package=mock
-type Repository interface {
-	// Create saves the suggestion as pending and returns it with its author.
-	// It returns ErrTooManyPending at the limit, or places.ErrSubDistrictNotFound or places.ErrCategoryNotFound.
-	Create(ctx context.Context, s *Suggestion) (*Suggestion, error)
-	// GetSuggestion returns the suggestion with its author, or ErrSuggestionNotFound.
-	GetSuggestion(ctx context.Context, id int64) (*Suggestion, error)
-	// GetByUser returns the user's suggestions with their author, newest first.
-	GetByUser(ctx context.Context, userID int64) ([]Suggestion, error)
-	// GetMany returns the suggestions matching the filter with their authors,
-	// oldest first.
-	GetMany(ctx context.Context, filter SuggestionFilter) ([]Suggestion, error)
-	// MarkApproved marks the suggestion approved and links it to the place placeID.
-	// It returns ErrSuggestionNotFound, or ErrAlreadyReviewed if it is not pending.
-	MarkApproved(ctx context.Context, id, placeID, adminID int64) (*Suggestion, error)
-	// Reject marks the suggestion rejected with the reason. It returns
-	// ErrSuggestionNotFound, or ErrAlreadyReviewed if the suggestion is not pending.
-	Reject(ctx context.Context, id, adminID int64, reason *string) (*Suggestion, error)
-}
-
-type postgresRepository struct {
+// PostgresRepository stores suggestions in PostgreSQL. It is safe for concurrent use.
+type PostgresRepository struct {
 	db *sqlx.DB
 }
 
-// -----------------------------------------------------------------------------
-// Exported
-// -----------------------------------------------------------------------------
-
-func NewPostgresRepository(db *sqlx.DB) Repository {
-	return &postgresRepository{
+// NewPostgresRepository returns a PostgresRepository that uses db.
+func NewPostgresRepository(db *sqlx.DB) *PostgresRepository {
+	return &PostgresRepository{
 		db: db,
 	}
 }
 
 // Create saves the suggestion as pending and returns it with its author.
 // It locks the user's row while counting, so two submissions at once cannot both pass the limit.
-func (r *postgresRepository) Create(ctx context.Context, s *Suggestion) (*Suggestion, error) {
+func (r *PostgresRepository) Create(ctx context.Context, s *domain.Suggestion) (*domain.Suggestion, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -71,10 +47,10 @@ func (r *postgresRepository) Create(ctx context.Context, s *Suggestion) (*Sugges
 		return nil, err
 	}
 	if pending >= MaxPendingPerUser {
-		return nil, ErrTooManyPending
+		return nil, domain.ErrSuggestionLimitReached
 	}
 
-	var created Suggestion
+	var created domain.Suggestion
 	err = tx.GetContext(
 		ctx,
 		&created,
@@ -111,9 +87,9 @@ func (r *postgresRepository) Create(ctx context.Context, s *Suggestion) (*Sugges
 	return &created, nil
 }
 
-// GetSuggestion returns the suggestion with its author, or ErrSuggestionNotFound.
-func (r *postgresRepository) GetSuggestion(ctx context.Context, id int64) (*Suggestion, error) {
-	var s Suggestion
+// Fetch returns the suggestion with its author, or domain.ErrSuggestionNotFound.
+func (r *PostgresRepository) Fetch(ctx context.Context, id int64) (*domain.Suggestion, error) {
+	var s domain.Suggestion
 
 	err := r.db.GetContext(
 		ctx,
@@ -125,7 +101,7 @@ func (r *postgresRepository) GetSuggestion(ctx context.Context, id int64) (*Sugg
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrSuggestionNotFound
+			return nil, domain.ErrSuggestionNotFound
 		}
 		return nil, err
 	}
@@ -133,10 +109,10 @@ func (r *postgresRepository) GetSuggestion(ctx context.Context, id int64) (*Sugg
 	return &s, nil
 }
 
-// GetByUser returns the user's suggestions with their author, newest first.
+// ListByUser returns the user's suggestions with their author, newest first.
 // Suggestions created at the same moment list the later one first.
-func (r *postgresRepository) GetByUser(ctx context.Context, userID int64) ([]Suggestion, error) {
-	suggestions := make([]Suggestion, 0)
+func (r *PostgresRepository) ListByUser(ctx context.Context, userID int64) ([]domain.Suggestion, error) {
+	suggestions := make([]domain.Suggestion, 0)
 
 	err := r.db.SelectContext(
 		ctx,
@@ -154,9 +130,9 @@ func (r *postgresRepository) GetByUser(ctx context.Context, userID int64) ([]Sug
 	return suggestions, nil
 }
 
-// GetMany returns the suggestions matching the filter with their authors,
+// List returns the suggestions matching the filter with their authors,
 // oldest first. Suggestions created at the same moment list the earlier one first.
-func (r *postgresRepository) GetMany(ctx context.Context, filter SuggestionFilter) ([]Suggestion, error) {
+func (r *PostgresRepository) List(ctx context.Context, filter Filter) ([]domain.Suggestion, error) {
 	query := `SELECT ` + suggestionColumns + `
 		` + suggestionFrom
 
@@ -167,7 +143,7 @@ func (r *postgresRepository) GetMany(ctx context.Context, filter SuggestionFilte
 	}
 	query += ` ORDER BY s.created_at, s.id`
 
-	suggestions := make([]Suggestion, 0)
+	suggestions := make([]domain.Suggestion, 0)
 
 	if err := r.db.SelectContext(ctx, &suggestions, query, args...); err != nil {
 		return nil, err
@@ -177,18 +153,14 @@ func (r *postgresRepository) GetMany(ctx context.Context, filter SuggestionFilte
 }
 
 // MarkApproved marks the suggestion approved as placeID.
-func (r *postgresRepository) MarkApproved(ctx context.Context, id, placeID, adminID int64) (*Suggestion, error) {
-	return r.review(ctx, id, StatusApproved, &placeID, nil, adminID)
+func (r *PostgresRepository) MarkApproved(ctx context.Context, id, placeID, adminID int64) (*domain.Suggestion, error) {
+	return r.review(ctx, id, domain.StatusApproved, &placeID, nil, adminID)
 }
 
 // Reject marks the suggestion rejected with the reason.
-func (r *postgresRepository) Reject(ctx context.Context, id, adminID int64, reason *string) (*Suggestion, error) {
-	return r.review(ctx, id, StatusRejected, nil, reason, adminID)
+func (r *PostgresRepository) Reject(ctx context.Context, id, adminID int64, reason *string) (*domain.Suggestion, error) {
+	return r.review(ctx, id, domain.StatusRejected, nil, reason, adminID)
 }
-
-// -----------------------------------------------------------------------------
-// Unexported
-// -----------------------------------------------------------------------------
 
 // suggestionColumns selects a suggestion from `s` and its author from `u`,
 // aliased to match the nested Suggestion.User fields.
@@ -202,15 +174,8 @@ const suggestionFrom = `FROM PLACE_SUGGESTIONS s JOIN USERS u ON u.id = s.user_i
 
 // review records the outcome of suggestion id and returns it with its author.
 // Only a pending suggestion is updated, so two admins cannot both review it.
-func (r *postgresRepository) review(
-	ctx context.Context,
-	id int64,
-	status Status,
-	placeID *int64,
-	reason *string,
-	adminID int64,
-) (*Suggestion, error) {
-	var reviewed Suggestion
+func (r *PostgresRepository) review(ctx context.Context, id int64, status domain.Status, placeID *int64, reason *string, adminID int64) (*domain.Suggestion, error) {
+	var reviewed domain.Suggestion
 
 	err := r.db.GetContext(
 		ctx,
@@ -243,7 +208,7 @@ func (r *postgresRepository) review(
 
 // unreviewableError explains why suggestion id was not reviewed: it does not
 // exist, or it is no longer pending.
-func (r *postgresRepository) unreviewableError(ctx context.Context, id int64) error {
+func (r *PostgresRepository) unreviewableError(ctx context.Context, id int64) error {
 	var exists bool
 	err := r.db.GetContext(
 		ctx,
@@ -255,10 +220,10 @@ func (r *postgresRepository) unreviewableError(ctx context.Context, id int64) er
 		return err
 	}
 	if !exists {
-		return ErrSuggestionNotFound
+		return domain.ErrSuggestionNotFound
 	}
 
-	return ErrAlreadyReviewed
+	return domain.ErrSuggestionAlreadyReviewed
 }
 
 // mapForeignKeyError maps a bad sub-district or category reference to its not-found error.
@@ -267,9 +232,9 @@ func mapForeignKeyError(err error) error {
 	if database.IsCode(err, database.ForeignKeyViolation) {
 		switch database.ConstraintName(err) {
 		case "place_suggestions_sub_district_id_fkey":
-			return places.ErrSubDistrictNotFound
+			return domain.ErrSubDistrictNotFound
 		case "place_suggestions_category_id_fkey":
-			return places.ErrCategoryNotFound
+			return domain.ErrCategoryNotFound
 		}
 	}
 

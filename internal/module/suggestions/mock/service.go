@@ -11,125 +11,125 @@ package mock
 
 import (
 	context "context"
-	places "rantau-go/internal/module/places"
+	domain "rantau-go/internal/domain"
 	suggestions "rantau-go/internal/module/suggestions"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockService is a mock of Service interface.
-type MockService struct {
+// MockRepository is a mock of Repository interface.
+type MockRepository struct {
 	ctrl     *gomock.Controller
-	recorder *MockServiceMockRecorder
+	recorder *MockRepositoryMockRecorder
 	isgomock struct{}
 }
 
-// MockServiceMockRecorder is the mock recorder for MockService.
-type MockServiceMockRecorder struct {
-	mock *MockService
+// MockRepositoryMockRecorder is the mock recorder for MockRepository.
+type MockRepositoryMockRecorder struct {
+	mock *MockRepository
 }
 
-// NewMockService creates a new mock instance.
-func NewMockService(ctrl *gomock.Controller) *MockService {
-	mock := &MockService{ctrl: ctrl}
-	mock.recorder = &MockServiceMockRecorder{mock}
+// NewMockRepository creates a new mock instance.
+func NewMockRepository(ctrl *gomock.Controller) *MockRepository {
+	mock := &MockRepository{ctrl: ctrl}
+	mock.recorder = &MockRepositoryMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockService) EXPECT() *MockServiceMockRecorder {
+func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 	return m.recorder
 }
 
-// Approve mocks base method.
-func (m *MockService) Approve(ctx context.Context, id, adminID int64, p *places.Place) (*suggestions.Suggestion, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Approve", ctx, id, adminID, p)
-	ret0, _ := ret[0].(*suggestions.Suggestion)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Approve indicates an expected call of Approve.
-func (mr *MockServiceMockRecorder) Approve(ctx, id, adminID, p any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Approve", reflect.TypeOf((*MockService)(nil).Approve), ctx, id, adminID, p)
-}
-
 // Create mocks base method.
-func (m *MockService) Create(ctx context.Context, s *suggestions.Suggestion) (*suggestions.Suggestion, error) {
+func (m *MockRepository) Create(ctx context.Context, s *domain.Suggestion) (*domain.Suggestion, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Create", ctx, s)
-	ret0, _ := ret[0].(*suggestions.Suggestion)
+	ret0, _ := ret[0].(*domain.Suggestion)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockServiceMockRecorder) Create(ctx, s any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) Create(ctx, s any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockService)(nil).Create), ctx, s)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockRepository)(nil).Create), ctx, s)
 }
 
-// GetByUser mocks base method.
-func (m *MockService) GetByUser(ctx context.Context, userID int64) ([]suggestions.Suggestion, error) {
+// Fetch mocks base method.
+func (m *MockRepository) Fetch(ctx context.Context, id int64) (*domain.Suggestion, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetByUser", ctx, userID)
-	ret0, _ := ret[0].([]suggestions.Suggestion)
+	ret := m.ctrl.Call(m, "Fetch", ctx, id)
+	ret0, _ := ret[0].(*domain.Suggestion)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetByUser indicates an expected call of GetByUser.
-func (mr *MockServiceMockRecorder) GetByUser(ctx, userID any) *gomock.Call {
+// Fetch indicates an expected call of Fetch.
+func (mr *MockRepositoryMockRecorder) Fetch(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByUser", reflect.TypeOf((*MockService)(nil).GetByUser), ctx, userID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fetch", reflect.TypeOf((*MockRepository)(nil).Fetch), ctx, id)
 }
 
-// GetMany mocks base method.
-func (m *MockService) GetMany(ctx context.Context, filter suggestions.SuggestionFilter) ([]suggestions.Suggestion, error) {
+// List mocks base method.
+func (m *MockRepository) List(ctx context.Context, filter suggestions.Filter) ([]domain.Suggestion, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMany", ctx, filter)
-	ret0, _ := ret[0].([]suggestions.Suggestion)
+	ret := m.ctrl.Call(m, "List", ctx, filter)
+	ret0, _ := ret[0].([]domain.Suggestion)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetMany indicates an expected call of GetMany.
-func (mr *MockServiceMockRecorder) GetMany(ctx, filter any) *gomock.Call {
+// List indicates an expected call of List.
+func (mr *MockRepositoryMockRecorder) List(ctx, filter any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMany", reflect.TypeOf((*MockService)(nil).GetMany), ctx, filter)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockRepository)(nil).List), ctx, filter)
 }
 
-// GetSuggestion mocks base method.
-func (m *MockService) GetSuggestion(ctx context.Context, id int64) (*suggestions.Suggestion, error) {
+// ListByUser mocks base method.
+func (m *MockRepository) ListByUser(ctx context.Context, userID int64) ([]domain.Suggestion, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSuggestion", ctx, id)
-	ret0, _ := ret[0].(*suggestions.Suggestion)
+	ret := m.ctrl.Call(m, "ListByUser", ctx, userID)
+	ret0, _ := ret[0].([]domain.Suggestion)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetSuggestion indicates an expected call of GetSuggestion.
-func (mr *MockServiceMockRecorder) GetSuggestion(ctx, id any) *gomock.Call {
+// ListByUser indicates an expected call of ListByUser.
+func (mr *MockRepositoryMockRecorder) ListByUser(ctx, userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSuggestion", reflect.TypeOf((*MockService)(nil).GetSuggestion), ctx, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByUser", reflect.TypeOf((*MockRepository)(nil).ListByUser), ctx, userID)
+}
+
+// MarkApproved mocks base method.
+func (m *MockRepository) MarkApproved(ctx context.Context, id, placeID, adminID int64) (*domain.Suggestion, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkApproved", ctx, id, placeID, adminID)
+	ret0, _ := ret[0].(*domain.Suggestion)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MarkApproved indicates an expected call of MarkApproved.
+func (mr *MockRepositoryMockRecorder) MarkApproved(ctx, id, placeID, adminID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkApproved", reflect.TypeOf((*MockRepository)(nil).MarkApproved), ctx, id, placeID, adminID)
 }
 
 // Reject mocks base method.
-func (m *MockService) Reject(ctx context.Context, id, adminID int64, reason *string) (*suggestions.Suggestion, error) {
+func (m *MockRepository) Reject(ctx context.Context, id, adminID int64, reason *string) (*domain.Suggestion, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Reject", ctx, id, adminID, reason)
-	ret0, _ := ret[0].(*suggestions.Suggestion)
+	ret0, _ := ret[0].(*domain.Suggestion)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Reject indicates an expected call of Reject.
-func (mr *MockServiceMockRecorder) Reject(ctx, id, adminID, reason any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) Reject(ctx, id, adminID, reason any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reject", reflect.TypeOf((*MockService)(nil).Reject), ctx, id, adminID, reason)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reject", reflect.TypeOf((*MockRepository)(nil).Reject), ctx, id, adminID, reason)
 }
 
 // MockPlaceService is a mock of PlaceService interface.
@@ -157,10 +157,10 @@ func (m *MockPlaceService) EXPECT() *MockPlaceServiceMockRecorder {
 }
 
 // Create mocks base method.
-func (m *MockPlaceService) Create(ctx context.Context, p *places.Place) (*places.Place, error) {
+func (m *MockPlaceService) Create(ctx context.Context, p *domain.Place) (*domain.Place, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Create", ctx, p)
-	ret0, _ := ret[0].(*places.Place)
+	ret0, _ := ret[0].(*domain.Place)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

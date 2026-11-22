@@ -4,11 +4,15 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
 )
+
+// errInvalidHash means a stored password hash is not a valid argon2id hash.
+var errInvalidHash = errors.New("invalid argon2id hash")
 
 // hashPassword turns password into an argon2id hash.
 // The result is in PHC format: $argon2id$v=19$m=...,t=...,p=...$salt$hash
@@ -34,17 +38,17 @@ func hashPassword(password string) (string, error) {
 func verifyPassword(password, encodedHash string) (bool, error) {
 	parts := strings.Split(encodedHash, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" {
-		return false, ErrInvalidHash
+		return false, errInvalidHash
 	}
 
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
-		return false, ErrInvalidHash
+		return false, errInvalidHash
 	}
 
 	key, err := base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil {
-		return false, ErrInvalidHash
+		return false, errInvalidHash
 	}
 
 	otherKey := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)

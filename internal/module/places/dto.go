@@ -3,14 +3,15 @@ package places
 import (
 	"encoding/json"
 
+	"rantau-go/internal/domain"
 	"rantau-go/internal/pkg/postgis"
 	"rantau-go/internal/pkg/utils"
 	"rantau-go/internal/storage"
 )
 
-// PlaceRequest is the body for creating or replacing a place.
+// Request is the body for creating or replacing a place.
 // A replace clears every field left out.
-type PlaceRequest struct {
+type Request struct {
 	SubDistrictID       int64          `json:"sub_district_id"`
 	CategoryID          int64          `json:"category_id"`
 	Name                string         `json:"name"`
@@ -23,8 +24,8 @@ type PlaceRequest struct {
 	Attributes json.RawMessage `json:"attributes"`
 }
 
-// PlaceResponse is the API representation of a place.
-type PlaceResponse struct {
+// Response is the API representation of a place.
+type Response struct {
 	ID                  int64           `json:"id"`
 	SubDistrictID       int64           `json:"sub_district_id"`
 	Name                string          `json:"name"`
@@ -42,11 +43,11 @@ type PlaceResponse struct {
 	Category CategoryResponse        `json:"category"`
 }
 
-// PlacePageResponse is one page of places. Total counts every match, including
+// PageResponse is one page of places. Total counts every match, including
 // those beyond the page.
-type PlacePageResponse struct {
-	Places []PlaceResponse `json:"places"`
-	Total  int             `json:"total"`
+type PageResponse struct {
+	Places []Response `json:"places"`
+	Total  int        `json:"total"`
 }
 
 // CategoryResponse is the API representation of a place's category.
@@ -77,13 +78,9 @@ type CategoryFieldResponse struct {
 	SortOrder  int32    `json:"sort_order"`
 }
 
-// -----------------------------------------------------------------------------
-// Exported
-// -----------------------------------------------------------------------------
-
-// ToPlace turns the request body into a Place.
-func ToPlace(req PlaceRequest) *Place {
-	return &Place{
+// toPlace turns the request body into a place.
+func toPlace(req Request) *domain.Place {
+	return &domain.Place{
 		SubDistrictID:       req.SubDistrictID,
 		CategoryID:          req.CategoryID,
 		Name:                req.Name,
@@ -96,13 +93,9 @@ func ToPlace(req PlaceRequest) *Place {
 	}
 }
 
-// -----------------------------------------------------------------------------
-// Unexported
-// -----------------------------------------------------------------------------
-
-// toPlaceResponse turns p into its response, with media keys turned into URLs by mediaURL.
-func toPlaceResponse(p Place, mediaURL func(key string) string) PlaceResponse {
-	return PlaceResponse{
+// toResponse turns p into its response, with media keys turned into URLs by mediaURL.
+func toResponse(p domain.Place, mediaURL func(key string) string) Response {
+	return Response{
 		ID:                  p.ID,
 		SubDistrictID:       p.SubDistrictID,
 		Name:                p.Name,
@@ -130,7 +123,7 @@ func ratingAverage(count, sum int) *float64 {
 }
 
 // toCategoryResponse turns c into its response.
-func toCategoryResponse(c Category) CategoryResponse {
+func toCategoryResponse(c domain.Category) CategoryResponse {
 	return CategoryResponse{
 		ID:    c.ID,
 		Name:  c.Name,
@@ -142,7 +135,7 @@ func toCategoryResponse(c Category) CategoryResponse {
 }
 
 // toCategoryDetailResponse turns c and its fields into its response.
-func toCategoryDetailResponse(c Category) CategoryDetailResponse {
+func toCategoryDetailResponse(c domain.Category) CategoryDetailResponse {
 	return CategoryDetailResponse{
 		CategoryResponse: toCategoryResponse(c),
 		Fields:           utils.Map(c.Fields, toCategoryFieldResponse),
@@ -150,7 +143,7 @@ func toCategoryDetailResponse(c Category) CategoryDetailResponse {
 }
 
 // toCategoryFieldResponse turns f into its response.
-func toCategoryFieldResponse(f CategoryField) CategoryFieldResponse {
+func toCategoryFieldResponse(f domain.CategoryField) CategoryFieldResponse {
 	return CategoryFieldResponse{
 		ID:         f.ID,
 		CategoryID: f.CategoryID,

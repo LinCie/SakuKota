@@ -1,21 +1,21 @@
+// Package reviews lets users rate and comment on places and lists a place's
+// reviews.
 package reviews
 
-import (
-	"github.com/jmoiron/sqlx"
-)
+import "github.com/jmoiron/sqlx"
 
+// Module bundles the service and handler of the reviews feature.
 type Module struct {
-	Service Service
+	Service *Service
 	Handler *Handler
 }
 
-func NewModule(db *sqlx.DB) *Module {
-	repo := NewPostgresRepository(db)
-	service := NewService(repo)
-	handler := NewHandler(service)
+// New builds the reviews module on db.
+func New(db *sqlx.DB) *Module {
+	service := NewService(NewPostgresRepository(db))
 
 	return &Module{
 		Service: service,
-		Handler: handler,
+		Handler: NewHandler(service),
 	}
 }

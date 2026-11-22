@@ -1,10 +1,8 @@
 package subdistricts
 
-const (
-	// maxNameLength is the size of the VARCHAR(100) name and slug columns.
-	// VARCHAR counts characters, not bytes.
-	maxNameLength = 100
+// MediaSlot names where a sub-district file is uploaded. It is also the
+// file's path segment in the API and in storage.
+type MediaSlot string
 
-	// maxEstimatedDailySpending is the largest value a DECIMAL(10,2) column holds.
-	maxEstimatedDailySpending = 99999999.99
-)
+// SlotMedias is the slot of a sub-district's photos.
+const SlotMedias MediaSlot = "medias"
