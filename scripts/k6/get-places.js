@@ -4,6 +4,10 @@ import http from "k6/http";
 import { check, sleep } from "k6";
 import { Rate, Trend } from "k6/metrics";
 
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
 const BASE_URL = __ENV.BASE_URL || "http://localhost:8080";
 const PROFILE = __ENV.PROFILE || "load";
 const RATE = Number(__ENV.RATE || 2);
@@ -21,6 +25,7 @@ const SERVER_LIMIT = 100;
 const FIT_PADDING = 56;
 const FIT_MAX_ZOOM = 16;
 const JAKARTA_CENTER = { lon: 106.8456, lat: -6.2088 };
+const DEFAULT_ZOOM = 14;
 
 const MIN_ZOOM = 10;
 const MAX_ZOOM = 17;
@@ -52,8 +57,12 @@ const SEARCH_TERMS = [
   "indomaret",
 ];
 
-// Traffic shapes. All but smoke start sessions at a rate that follows the
-// stages, in new sessions per second.
+// ---------------------------------------------------------------------------
+// Traffic profiles
+// ---------------------------------------------------------------------------
+
+// All but smoke start sessions at a rate that follows the stages, in new
+// sessions per second.
 const PROFILES = {
   // One visitor, a few sessions: checks the script, seed, and API work.
   smoke: { executor: "per-vu-iterations", vus: 1, iterations: 3 },
@@ -108,10 +117,24 @@ function arrivalRate(stages) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Options and metrics
+// ---------------------------------------------------------------------------
+
 // Response times split by the API's X-Cache header (hit, miss, or bypass), and
 // the share of requests served from the cache.
 const cacheDuration = new Trend("places_duration", true);
 const cacheHitRate = new Rate("cache_hit");
+
+// Each of these must keep its p95 under 500ms.
+const LATENCY_METRICS = [
+  "http_req_duration{kind:map}",
+  "http_req_duration{kind:list}",
+  "http_req_duration{search:yes}",
+  "http_req_duration{category:yes}",
+  "places_duration{cache:hit}",
+  "places_duration{cache:miss}",
+];
 
 export const options = {
   scenarios: {
@@ -120,14 +143,13 @@ export const options = {
   thresholds: {
     http_req_failed: ["rate<0.01"],
     checks: ["rate>0.99"],
-    "http_req_duration{kind:map}": ["p(95)<500"],
-    "http_req_duration{kind:list}": ["p(95)<500"],
-    "http_req_duration{search:yes}": ["p(95)<500"],
-    "http_req_duration{category:yes}": ["p(95)<500"],
-    "places_duration{cache:hit}": ["p(95)<500"],
-    "places_duration{cache:miss}": ["p(95)<500"],
+    ...Object.fromEntries(LATENCY_METRICS.map((m) => [m, ["p(95)<500"]])),
   },
 };
+
+// ---------------------------------------------------------------------------
+// Session
+// ---------------------------------------------------------------------------
 
 // Fetches the real sub-district and category ids so filters never 404.
 export function setup() {
@@ -150,15 +172,27 @@ export function setup() {
   return data;
 }
 
+// What a visitor does between pauses, and the share of steps each takes.
+// To add a behavior, write a `(state, data)` function and list it here.
+const ACTIONS = [
+  { weight: 0.45, run: panOrZoom },
+  { weight: 0.2, run: scrollList },
+  { weight: 0.15, run: search },
+  { weight: 0.15, run: toggleCategory },
+  { weight: 0.05, run: switchSubDistrict },
+];
+
 export default function (data) {
   const state = {
+    // Filters, sent with every request.
     subDistrictId: pick(data.subDistrictIds),
     categoryIds: [],
     q: "",
-    // The map's view; null until the sub-district is framed.
+    // The map's view; center is null until the sub-district is framed.
     center: null,
     zoom: null,
     viewport: pick(VIEWPORTS),
+    // The list's infinite scroll.
     loaded: 0,
     total: 0,
   };
@@ -167,14 +201,13 @@ export default function (data) {
   const steps = randInt(3, 10);
   for (let i = 0; i < steps; i++) {
     sleep(rand(1, 4));
-    const roll = Math.random();
-    if (roll < 0.45) panOrZoom(state);
-    else if (roll < 0.65) scrollList(state);
-    else if (roll < 0.8) search(state);
-    else if (roll < 0.95) toggleCategory(state, data.categoryIds);
-    else switchSubDistrict(state, data.subDistrictIds);
+    pickWeighted(ACTIONS).run(state, data);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Visitor actions
+// ---------------------------------------------------------------------------
 
 function panOrZoom(state) {
   if (Math.random() < 0.6) {
@@ -206,7 +239,7 @@ function scrollList(state) {
 }
 
 // Types a term letter by letter. A pause longer than the debounce sends the
-// prefix typed so far; the full term is always sent.
+// prefix typed so far; the full term is always sent. Sometimes clears instead.
 function search(state) {
   if (state.q && Math.random() < 0.3) {
     state.q = "";
@@ -225,7 +258,7 @@ function search(state) {
   refresh(state);
 }
 
-function toggleCategory(state, categoryIds) {
+function toggleCategory(state, { categoryIds }) {
   if (state.categoryIds.length > 0 && Math.random() < 0.2) {
     state.categoryIds = [];
   } else {
@@ -237,14 +270,18 @@ function toggleCategory(state, categoryIds) {
   refresh(state);
 }
 
-function switchSubDistrict(state, subDistrictIds) {
+function switchSubDistrict(state, { subDistrictIds }) {
   const others = subDistrictIds.filter((id) => id !== state.subDistrictId);
   state.subDistrictId = pick(others.length > 0 ? others : subDistrictIds);
   openSubDistrict(state);
 }
 
-// Like picking a kecamatan in the app: loads the sub-district without a bbox, frames the
-// places it gets, and then requests that view. The filters stay.
+// ---------------------------------------------------------------------------
+// App flows shared by the actions
+// ---------------------------------------------------------------------------
+
+// Like picking a kecamatan in the app: loads the sub-district without a bbox,
+// frames the places it gets, and then requests that view. The filters stay.
 function openSubDistrict(state) {
   state.center = null;
   const body = refresh(state);
@@ -261,43 +298,12 @@ function refresh(state) {
   return body;
 }
 
-// Sets the view that fits the located places, like Leaflet's fitBounds with
-// the app's padding and zoom cap.
-function frame(state, places) {
-  const located = places
-    .filter((place) => place.location)
-    .map((place) => place.location.coordinates);
-  if (located.length === 0) {
-    state.center = { ...JAKARTA_CENTER };
-    state.zoom = 14;
-    return;
-  }
-  const lons = located.map(([lon]) => lon);
-  const lats = located.map(([, lat]) => lat);
-  const [west, east] = [Math.min(...lons), Math.max(...lons)];
-  const [south, north] = [Math.min(...lats), Math.max(...lats)];
-  state.center = { lon: (west + east) / 2, lat: (south + north) / 2 };
-
-  // The zoom at which a span of degrees fills the padded pixels.
-  const fit = (pixels, degrees) =>
-    degrees > 0
-      ? Math.log2(((pixels - 2 * FIT_PADDING) * 360) / (256 * degrees))
-      : Infinity;
-  const cos = Math.cos((state.center.lat * Math.PI) / 180);
-  const zoom = Math.min(
-    fit(state.viewport.width, east - west),
-    fit(state.viewport.height, (north - south) / cos),
-  );
-  state.zoom = clamp(Math.floor(zoom), MIN_ZOOM, FIT_MAX_ZOOM);
-}
-
 // Without a view the map sends no bbox. It never sends a limit.
 function requestMap(state) {
-  if (!state.center) return getPlaces(state, "map", {});
-  return getPlaces(state, "map", { bbox: viewBBox(state) });
+  return getPlaces(state, "map", state.center ? { bbox: viewBBox(state) } : {});
 }
 
-// Returns whether the page had places.
+// Loads the list's next page. Returns whether the page had places.
 function requestListPage(state) {
   const body = getPlaces(state, "list", {
     limit: LIST_PAGE_SIZE,
@@ -309,23 +315,24 @@ function requestListPage(state) {
   return body.places.length > 0;
 }
 
+// ---------------------------------------------------------------------------
+// GET /v1/places
+// ---------------------------------------------------------------------------
+
 // Sends the request with the session's filters and checks the page against
 // them. Returns the page, or null when the request failed.
-function getPlaces(state, kind, { limit, offset, bbox }) {
+function getPlaces(state, kind, page) {
   const q = state.q.trim();
-  const params = [
-    ["sub_district_id", state.subDistrictId],
-    ["category_id", state.categoryIds.join(",")],
-    ["q", q],
-    ["limit", limit],
-    ["offset", offset],
-    ["bbox", bbox],
-  ]
-    .filter(([, value]) => value !== undefined && value !== "")
-    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
-    .join("&");
+  const query = queryString({
+    sub_district_id: state.subDistrictId,
+    category_id: state.categoryIds.join(","),
+    q,
+    limit: page.limit,
+    offset: page.offset,
+    bbox: page.bbox,
+  });
 
-  const res = http.get(`${BASE_URL}/v1/places?${params}`, {
+  const res = http.get(`${BASE_URL}/v1/places?${query}`, {
     headers: { "Accept-Encoding": "gzip" },
     tags: {
       name: "GET /v1/places",
@@ -341,6 +348,12 @@ function getPlaces(state, kind, { limit, offset, bbox }) {
   cacheHitRate.add(cache === "hit");
 
   const body = res.json("data");
+  checkPage(state, page, body);
+  return body;
+}
+
+// Checks that the page honors the filters, the paging, and the bbox it asked for.
+function checkPage(state, { limit, offset, bbox }, body) {
   const places = body.places;
   const box = bbox && bbox.split(",").map(Number);
   check(body, {
@@ -359,19 +372,56 @@ function getPlaces(state, kind, { limit, offset, bbox }) {
         return lon >= box[0] && lat >= box[1] && lon <= box[2] && lat <= box[3];
       }),
   });
-  return body;
 }
 
-// Half the map's width and height in degrees, for Web Mercator tiles of 256
-// pixels. Near the equator a degree of latitude is about one of longitude.
+// Skips undefined and empty values.
+function queryString(params) {
+  return Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== "")
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join("&");
+}
+
+// ---------------------------------------------------------------------------
+// Map geometry (Web Mercator, 256-pixel tiles)
+// ---------------------------------------------------------------------------
+
+// Sets the view that fits the located places, like Leaflet's fitBounds with
+// the app's padding and zoom cap.
+function frame(state, places) {
+  const located = places
+    .filter((place) => place.location)
+    .map((place) => place.location.coordinates);
+  if (located.length === 0) {
+    state.center = { ...JAKARTA_CENTER };
+    state.zoom = DEFAULT_ZOOM;
+    return;
+  }
+  const lons = located.map(([lon]) => lon);
+  const lats = located.map(([, lat]) => lat);
+  const [west, east] = [Math.min(...lons), Math.max(...lons)];
+  const [south, north] = [Math.min(...lats), Math.max(...lats)];
+  state.center = { lon: (west + east) / 2, lat: (south + north) / 2 };
+
+  // The zoom at which a span of degrees fills the padded pixels.
+  const fit = (pixels, degrees) =>
+    degrees > 0
+      ? Math.log2(((pixels - 2 * FIT_PADDING) * 360) / (256 * degrees))
+      : Infinity;
+  const zoom = Math.min(
+    fit(state.viewport.width, east - west),
+    fit(state.viewport.height, (north - south) / cosLat(state.center)),
+  );
+  state.zoom = clamp(Math.floor(zoom), MIN_ZOOM, FIT_MAX_ZOOM);
+}
+
+// Half the map's width and height in degrees. Near the equator a degree of
+// latitude is about one of longitude.
 function halfSpans({ center, zoom, viewport }) {
   const degreesPerPixel = 360 / (256 * 2 ** zoom);
   return {
     halfLon: (viewport.width / 2) * degreesPerPixel,
-    halfLat:
-      (viewport.height / 2) *
-      degreesPerPixel *
-      Math.cos((center.lat * Math.PI) / 180),
+    halfLat: (viewport.height / 2) * degreesPerPixel * cosLat(center),
   };
 }
 
@@ -390,6 +440,14 @@ function viewBBox(state) {
   ].join(",");
 }
 
+function cosLat({ lat }) {
+  return Math.cos((lat * Math.PI) / 180);
+}
+
+// ---------------------------------------------------------------------------
+// Random and math helpers
+// ---------------------------------------------------------------------------
+
 function rand(min, max) {
   return min + Math.random() * (max - min);
 }
@@ -400,6 +458,16 @@ function randInt(min, max) {
 
 function pick(items) {
   return items[Math.floor(Math.random() * items.length)];
+}
+
+// Picks an item with probability equal to its weight; weights sum to 1.
+function pickWeighted(items) {
+  let roll = Math.random();
+  for (const item of items) {
+    roll -= item.weight;
+    if (roll < 0) return item;
+  }
+  return items[items.length - 1];
 }
 
 function clamp(value, min, max) {
