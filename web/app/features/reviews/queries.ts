@@ -1,10 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { placeKeys } from "~/features/places/queries";
+import { uploadImage } from "~/shared/image-upload";
 
 import {
+  addReviewMedia,
   createPlaceReview,
+  deleteReviewMedia,
   getPlaceReviews,
+  requestReviewMediaUpload,
   type CreateReviewRequest,
 } from "./api";
 
@@ -34,5 +38,34 @@ export function useCreateReview(placeId: number) {
         queryClient.invalidateQueries({ queryKey: reviewKeys.place(placeId) }),
         queryClient.invalidateQueries({ queryKey: placeKeys.all }),
       ]),
+  });
+}
+
+/**
+ * Uploads `files` one by one and adds each to the user's review of the place.
+ * Refetches the reviews even after a failure, so the files added so far show.
+ */
+export function useAddReviewMedias(placeId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (files: File[]) => {
+      for (const file of files) {
+        const uploadKey = await uploadImage(file, (contentType) =>
+          requestReviewMediaUpload(placeId, contentType),
+        );
+        await addReviewMedia(placeId, uploadKey);
+      }
+    },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: reviewKeys.place(placeId) }),
+  });
+}
+
+export function useDeleteReviewMedia(placeId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (mediaId: number) => deleteReviewMedia(placeId, mediaId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: reviewKeys.place(placeId) }),
   });
 }

@@ -2,9 +2,11 @@ package reviews
 
 import (
 	"context"
+	"strconv"
 
 	"rantau-go/internal/domain"
 	"rantau-go/internal/pkg/text"
+	"rantau-go/internal/storage"
 )
 
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
@@ -14,9 +16,20 @@ type Repository interface {
 	// Create saves the review. It returns the saved review with its author,
 	// or domain.ErrPlaceNotFound or domain.ErrPlaceAlreadyReviewed.
 	Create(ctx context.Context, r *domain.Review) (*domain.Review, error)
-	// ListByPlace returns the place's reviews with their authors, newest
-	// first, or domain.ErrPlaceNotFound.
+	// Fetch returns the user's review of the place with its author and medias,
+	// or domain.ErrReviewNotFound.
+	Fetch(ctx context.Context, placeID, userID int64) (*domain.Review, error)
+	// AddMedia stores the photo in the first free position of the user's review
+	// of the place and returns the review. It returns domain.ErrReviewNotFound,
+	// or domain.ErrMediaLimitReached if the review is full.
+	AddMedia(ctx context.Context, placeID, userID int64, m domain.Media) (*domain.Review, error)
+	// ListByPlace returns the place's reviews with their authors and medias,
+	// newest first, or domain.ErrPlaceNotFound.
 	ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error)
+	// DeleteMedia removes the photo from the user's review of the place and
+	// queues its file for deletion. It returns domain.ErrMediaNotFound if
+	// there is no such photo.
+	DeleteMedia(ctx context.Context, placeID, userID, mediaID int64) error
 }
 
 // Transactor runs functions in one database transaction.
@@ -33,20 +46,35 @@ type PlaceService interface {
 	AddRating(ctx context.Context, placeID int64, rating int) error
 }
 
+// MediaStorage is the file storage the service needs.
+type MediaStorage interface {
+	// PresignUpload returns a temporary link for uploading a file under prefix.
+	PresignUpload(ctx context.Context, prefix, contentType string) (storage.Upload, error)
+	// Promote moves the uploaded file under uploadKey into prefix and describes it as a photo.
+	Promote(ctx context.Context, prefix, uploadKey string) (domain.Media, error)
+	// Delete removes the file stored under key.
+	Delete(ctx context.Context, key string) error
+	// PublicURL returns the link a browser can use to open the file stored under key.
+	PublicURL(key string) string
+}
+
 // service holds the business rules of reviews.
 type service struct {
 	repo   Repository
 	tx     Transactor
 	places PlaceService
+	media  MediaStorage
 }
 
 // NewService returns a service that stores reviews in repo and adds their
-// ratings through places, both in one transaction run by tx.
-func NewService(repo Repository, tx Transactor, places PlaceService) Service {
+// ratings through places, both in one transaction run by tx. Review photos
+// are kept in media.
+func NewService(repo Repository, tx Transactor, places PlaceService, media MediaStorage) Service {
 	return &service{
 		repo:   repo,
 		tx:     tx,
 		places: places,
+		media:  media,
 	}
 }
 
@@ -81,7 +109,52 @@ func (s *service) Create(ctx context.Context, r *domain.Review) (*domain.Review,
 	return created, nil
 }
 
+// MediaUploadURL returns a temporary link to upload a photo for the user's
+// review of the place.
+func (s *service) MediaUploadURL(ctx context.Context, placeID, userID int64, contentType string) (storage.Upload, error) {
+	if _, err := s.repo.Fetch(ctx, placeID, userID); err != nil {
+		return storage.Upload{}, err
+	}
+
+	return s.media.PresignUpload(ctx, mediaPrefix(placeID, userID), contentType)
+}
+
+// AddMedia attaches an uploaded photo to the user's review of the place and
+// returns the review.
+func (s *service) AddMedia(ctx context.Context, placeID, userID int64, uploadKey string) (*domain.Review, error) {
+	if _, err := s.repo.Fetch(ctx, placeID, userID); err != nil {
+		return nil, err
+	}
+
+	promoted, err := s.media.Promote(ctx, mediaPrefix(placeID, userID), uploadKey)
+	if err != nil {
+		return nil, err
+	}
+
+	updated, err := s.repo.AddMedia(ctx, placeID, userID, promoted)
+	if err != nil {
+		// Attaching failed (e.g. the review is full), so remove the file just moved.
+		// WithoutCancel: the cleanup must run even if the request was cancelled.
+		_ = s.media.Delete(context.WithoutCancel(ctx), promoted.Key)
+		return nil, err
+	}
+
+	return updated, nil
+}
+
 // ListByPlace returns the place's reviews, newest first.
 func (s *service) ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error) {
 	return s.repo.ListByPlace(ctx, placeID)
+}
+
+// DeleteMedia removes a photo from the user's review of the place. The
+// repository also queues the photo file for deletion.
+func (s *service) DeleteMedia(ctx context.Context, placeID, userID, mediaID int64) error {
+	return s.repo.DeleteMedia(ctx, placeID, userID, mediaID)
+}
+
+// mediaPrefix returns the storage folder of the photos of the user's review of
+// the place. A user reviews a place once, so the pair names one review.
+func mediaPrefix(placeID, userID int64) string {
+	return "reviews/" + strconv.FormatInt(placeID, 10) + "/" + strconv.FormatInt(userID, 10)
 }

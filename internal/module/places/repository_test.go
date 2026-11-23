@@ -101,6 +101,23 @@ func names(places []domain.Place) []string {
 	return out
 }
 
+// insertReviewMedia inserts the user's review of the place with one media stored under key.
+func insertReviewMedia(t *testing.T, placeID, userID int64, key string) {
+	t.Helper()
+
+	_, err := testDB.Exec(
+		`WITH review AS (
+			INSERT INTO PLACE_REVIEWS (place_id, user_id, rating) VALUES ($1, $2, 5) RETURNING id
+		), media AS (
+			INSERT INTO MEDIAS (key, content_type, size_bytes) VALUES ($3, 'image/jpeg', 1) RETURNING id
+		)
+		INSERT INTO PLACE_REVIEW_MEDIAS (review_id, media_id, position)
+		SELECT review.id, media.id, 1 FROM review, media`,
+		placeID, userID, key,
+	)
+	require.NoError(t, err, "insert review media %q", key)
+}
+
 // queuedKeys returns the storage keys waiting for deletion.
 func queuedKeys(t *testing.T) []string {
 	t.Helper()
@@ -824,6 +841,22 @@ func TestRepository_Delete(t *testing.T) {
 		stored, err := repo.Fetch(ctx, kept.ID)
 		require.NoError(t, err, "Fetch(%d)", kept.ID)
 		assert.Equal(t, []domain.Media{keptMedia}, stored.Medias, "Fetch(%d).Medias", kept.ID)
+	})
+
+	t.Run("queues_review_images", func(t *testing.T) {
+		repo := newRepository(t)
+		subDistrictID := insertSubDistrict(t, "Setiabudi")
+		laundryID := categoryID(t, "laundry")
+		created := mustCreate(t, repo, newPlace(subDistrictID, laundryID, "Laundry"))
+		kept := mustCreate(t, repo, newPlace(subDistrictID, laundryID, "Kept"))
+		userID := pgtest.InsertUser(t, testDB, "Ana")
+		insertReviewMedia(t, created.ID, userID, "reviews/1/1/a.jpg")
+		insertReviewMedia(t, kept.ID, userID, "reviews/2/1/a.jpg")
+
+		require.NoError(t, repo.Delete(ctx, created.ID), "Delete(%d)", created.ID)
+
+		assert.Equal(t, []string{"reviews/1/1/a.jpg"}, queuedKeys(t), "queued keys")
+		assert.Equal(t, 1, storedMediaCount(t), "stored medias (only the other place's review media)")
 	})
 
 	t.Run("already_queued", func(t *testing.T) {

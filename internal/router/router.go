@@ -48,7 +48,7 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 	userModule := users.New(db)
 	authModule := auth.New(cfg, userModule.Service, rdb)
 	placeModule := places.New(db, rdb, media)
-	reviewModule := reviews.New(db, placeModule.Service)
+	reviewModule := reviews.New(db, placeModule.Service, media)
 	subdistrictModule := subdistricts.New(db, media)
 	suggestionModule := suggestions.New(db, placeModule.Service)
 
@@ -99,6 +99,15 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 
 					// POST /v1/places/{id}/reviews
 					r.Post("/", reviewModule.Handler.Create)
+
+					// POST /v1/places/{id}/reviews/mine/medias/upload-url
+					r.Post("/mine/medias/upload-url", reviewModule.Handler.CreateMediaUpload)
+
+					// POST /v1/places/{id}/reviews/mine/medias
+					r.Post("/mine/medias", reviewModule.Handler.AddMedia)
+
+					// DELETE /v1/places/{id}/reviews/mine/medias/{mediaId}
+					r.Delete("/mine/medias/{mediaId}", reviewModule.Handler.DeleteMedia)
 				})
 			})
 

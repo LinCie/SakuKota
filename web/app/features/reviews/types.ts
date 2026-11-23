@@ -1,4 +1,6 @@
-// Types (see internal/module/review/dto.go)
+import type { Media } from "~/shared/image-upload";
+
+// Types (see internal/module/reviews/dto.go)
 
 export type Review = {
   id: number;
@@ -10,4 +12,6 @@ export type Review = {
   created_at: string;
   /** The user who wrote the review. */
   user: { id: number; name: string };
+  /** In display order; empty when the review has none. */
+  medias: Media[];
 };

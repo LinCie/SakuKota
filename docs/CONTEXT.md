@@ -4,8 +4,8 @@
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-23 (cleanup logs go to Loki; request logs carry the
->   route, not the raw path; no contract change).
+> - Last updated: 2026-11-23 (review authors add and delete up to 10 medias
+>   on their review through the same promote flow as places).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
@@ -34,7 +34,7 @@ is **Rantau** / `rantau-go`.
 | Category | Place type (e.g. Warung), defined in migrations with `code`, `label`, `color` (palette key) and custom **fields** |
 | Attributes | A place's values for its category's fields (JSON object) |
 | Suggestion | A user-proposed place awaiting admin review |
-| Review | A user's 1–5 star rating of a place, with optional comment |
+| Review | A user's 1–5 star rating of a place, with optional comment and medias |
 
 ## 3. Sources of truth
 
@@ -59,7 +59,7 @@ is **Rantau** / `rantau-go`.
 | Won't | Kost listings | Absent |
 
 Beyond the docs: JWT auth with rotating refresh cookies, up to 10 medias per
-place and per sub-district in S3-compatible storage (Garage), and a cleanup queue
+place, sub-district, and review in S3-compatible storage (Garage), and a cleanup queue
 for deleted objects. Only the Must features have user stories; the rest are
 specified only by tests.
 
@@ -101,7 +101,8 @@ Applies to every module unless §6 says otherwise. All routes live under `/v1`.
   - *Public:* `/docs`, `/openapi.json`, `/v1/auth/*`, `GET /places`,
     `GET /places/{id}`, `GET /places/{id}/reviews`, `GET /places/categories[/{id}]`,
     `GET /subdistricts[/{id}]`.
-  - *Signed in:* `POST /places/{id}/reviews`, `POST /suggestions`,
+  - *Signed in:* `POST /places/{id}/reviews`, the caller's review media
+    routes under `/places/{id}/reviews/mine/medias`, `POST /suggestions`,
     `GET /suggestions/mine`.
   - *Admin:* place and sub-district create/update/delete and media routes,
     `PUT /subdistricts/{id}/boundary`, `GET /suggestions[/{id}]`, approve, reject.
@@ -151,8 +152,9 @@ ratings, `medias` is `[]` without images.
   sub-district, is `400 VALIDATION_ERROR`. Update validates before looking up the
   place (unknown → `404 PLACE_NOT_FOUND`) and keeps the rating and medias.
 - **Get.** Unknown → `404 PLACE_NOT_FOUND`.
-- **Delete.** `204`, then `404`. Medias are deleted and their keys queued in
-  `STORAGE_DELETIONS` in the same statement; reviews are deleted; approved
+- **Delete.** `204`, then `404`. Medias, including its reviews' medias, are
+  deleted and their keys queued in `STORAGE_DELETIONS` in the same statement;
+  reviews are deleted; approved
   suggestions keep their status with `place_id = null`.
 - **List (`GET /places`)** returns `{places, total}`; `total` counts all matches
   before paging. Filters combine with AND; empty parameters count as absent.
@@ -204,8 +206,23 @@ ratings, `medias` is `[]` without images.
   `rating_count`/`rating_sum` through the place service in one transaction: a
   rejected review adds no rating, a failed rating discards the review, and
   concurrent reviews lose no rating.
-- Response: `{id, place_id, rating, comment, created_at, user{id,name}}`. No
-  edit or delete.
+- **Medias** of the caller's own review of the place (signed in; same rules
+  as place medias: max 10, positions `1..n`):
+  - `POST /places/{id}/reviews/mine/medias/upload-url {content_type}` presigns
+    an upload under `reviews/{placeId}/{userId}`.
+  - `POST /places/{id}/reviews/mine/medias {upload_key}` promotes and appends
+    it, returning the review. Concurrent adds never exceed 10; an 11th → `409
+    MEDIA_LIMIT_REACHED`. If storing fails, the promoted object is deleted,
+    even if the request was cancelled.
+  - `DELETE /places/{id}/reviews/mine/medias/{mediaId}` → `204`, queues the
+    key, shifts later medias down. Another user's / unknown → `404
+    MEDIA_NOT_FOUND`.
+  - No review by the caller → `404 REVIEW_NOT_FOUND` (presign and add, before
+    anything is presigned or promoted). Upload errors → `400
+    VALIDATION_ERROR`.
+- Response: `{id, place_id, rating, comment, created_at, user{id,name},
+  medias}`; `medias` is `[]` without any, and lists include each review's
+  medias in position order. No edit or delete.
 
 ### 6.5 Sub-districts (`internal/module/subdistricts`)
 
@@ -328,7 +345,7 @@ exits, with status 1 on failure.
 | `UNAUTHORIZED` | 401 | Missing or invalid access token |
 | `INVALID_CREDENTIALS` / `INVALID_REFRESH_TOKEN` | 401 | Auth |
 | `FORBIDDEN` | 403 | Non-admin on an admin route |
-| `*_NOT_FOUND` (place, sub-district, category, suggestion, media) | 404 | Unknown resource, or unknown `GET /places` filter id |
+| `*_NOT_FOUND` (place, sub-district, category, suggestion, media, review) | 404 | Unknown resource, or unknown `GET /places` filter id |
 | `EMAIL_TAKEN` / `SUB_DISTRICT_EXISTS` / `SUB_DISTRICT_IN_USE` / `ALREADY_REVIEWED` / `MEDIA_LIMIT_REACHED` | 409 | Conflicts |
 | `TOO_MANY_PENDING_SUGGESTIONS` | 429 | Pending limit |
 | `INTERNAL_ERROR` | 500 | Anything unexpected |
@@ -376,6 +393,8 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
   - The places cache lives 30 s with no invalidation, so lists can be 30 s
     stale; Redis failure should fall back to PostgreSQL.
 - **Known gaps:** a media added while its owner is deleted can be orphaned;
+  deleting a user cascades to their reviews but leaves the reviews' `MEDIAS`
+  rows and files unqueued;
   medias cannot be reordered; `MEDIAS` has no owner type; bucket objects from the
   old static maps were not queued (the migration was edited in place, so
   databases must be rebuilt).
@@ -417,3 +436,6 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-23 | Each `cmd/cleanup` run is traced as `storage cleanup`; no contract change |
 | 2026-11-23 | slog request log replaces chi's `Logger`; logs exported to Loki with trace IDs, linked with Tempo in Grafana; no contract change |
 | 2026-11-23 | `cmd/cleanup` logs to Loki with a per-run summary; request log records the route pattern instead of the raw path; no contract change |
+| 2026-11-23 | Review medias: presign/add/delete routes under `/places/{id}/reviews/mine/medias`, `medias` in review responses; place delete queues review medias |
+| 2026-11-23 | Web review form picks up to 10 files and adds them through the review media routes once the review is saved; no contract change |
+| 2026-11-23 | Web review images open full size in a modal on click; no contract change |

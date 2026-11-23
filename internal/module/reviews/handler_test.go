@@ -21,6 +21,7 @@ import (
 	"rantau-go/internal/module/reviews"
 	"rantau-go/internal/module/reviews/mock"
 	"rantau-go/internal/pkg/jwt"
+	"rantau-go/internal/storage"
 )
 
 // testConfig signs and checks the access tokens in these tests.
@@ -29,16 +30,25 @@ var testConfig = config.Config{JWTSecret: "test-secret", JWTExpiry: time.Hour}
 // newRouter serves the review handlers on the paths the API uses for them.
 // Creating a review requires an access token, as it does in production.
 func newRouter(svc *mock.MockService) http.Handler {
-	h := reviews.NewHandler(svc)
+	h := reviews.NewHandler(svc, mediaURL)
 	r := chi.NewRouter()
 	r.Route("/places", func(r chi.Router) {
 		r.Route("/{id}/reviews", func(r chi.Router) {
 			r.Get("/", h.List)
 			r.With(middleware.WithAuth(testConfig)).Post("/", h.Create)
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.WithAuth(testConfig))
+				r.Post("/mine/medias/upload-url", h.CreateMediaUpload)
+				r.Post("/mine/medias", h.AddMedia)
+				r.Delete("/mine/medias/{mediaId}", h.DeleteMedia)
+			})
 		})
 	})
 	return r
 }
+
+// mediaURL builds media links as the public storage URL would.
+func mediaURL(key string) string { return "https://cdn.test/" + key }
 
 // serve runs req through h. A panic fails the test instead of the whole binary.
 func serve(t *testing.T, h http.Handler, req *http.Request) *httptest.ResponseRecorder {
@@ -128,6 +138,9 @@ func linReview() domain.Review {
 		Comment:   new("Murah, porsi besar"),
 		CreatedAt: time.Date(2026, 10, 4, 12, 30, 0, 0, time.UTC),
 		User:      domain.Author{ID: 7, Name: "Lin"},
+		Medias: []domain.Media{
+			{ID: 4, Key: "reviews/3/7/a.webp", ContentType: "image/webp", Size: 2048, Position: 1},
+		},
 	}
 }
 
@@ -138,7 +151,8 @@ const linReviewJSON = `{
 	"rating": 4,
 	"comment": "Murah, porsi besar",
 	"created_at": "2026-10-04T12:30:00Z",
-	"user": {"id": 7, "name": "Lin"}
+	"user": {"id": 7, "name": "Lin"},
+	"medias": [{"id": 4, "url": "https://cdn.test/reviews/3/7/a.webp", "content_type": "image/webp", "size": 2048, "position": 1}]
 }`
 
 func TestHandler_List(t *testing.T) {
@@ -208,7 +222,8 @@ func TestHandler_List(t *testing.T) {
 					"rating": 5,
 					"comment": null,
 					"created_at": "2026-10-05T08:00:00Z",
-					"user": {"id": 8, "name": "Sari"}
+					"user": {"id": 8, "name": "Sari"},
+					"medias": []
 				}, ` + linReviewJSON + `]`,
 			},
 		}
@@ -274,7 +289,7 @@ func TestHandler_Create(t *testing.T) {
 		// Without WithAuth in front there is no user to attribute the review
 		// to, so it must never reach the service.
 		r := chi.NewRouter()
-		r.Post("/places/{id}/reviews", reviews.NewHandler(newService(t)).Create)
+		r.Post("/places/{id}/reviews", reviews.NewHandler(newService(t), mediaURL).Create)
 
 		rec := serve(t, r, jsonRequest(http.MethodPost, "/places/3/reviews", `{"rating":4}`))
 		assert.Equal(t, wantError(http.StatusUnauthorized, "UNAUTHORIZED"), readError(t, rec))
@@ -308,7 +323,7 @@ func TestHandler_Create(t *testing.T) {
 			},
 			{
 				name: "place_from_path_author_from_token",
-				body: `{"rating":2,"id":99,"place_id":5,"user_id":1,"created_at":"yesterday"}`,
+				body: `{"rating":2,"id":99,"place_id":5,"user_id":1,"created_at":"yesterday","medias":[{"id":1}]}`,
 				want: &domain.Review{PlaceID: 3, UserID: 7, Rating: 2},
 			},
 		}
@@ -402,6 +417,32 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 				svc.EXPECT().Create(gomock.Any(), &domain.Review{PlaceID: 3, UserID: 7, Rating: 4}).Return(nil, dbErr)
 			},
 		},
+		{
+			name:   "create_media_upload",
+			method: http.MethodPost,
+			target: "/places/3/reviews/mine/medias/upload-url",
+			body:   `{"content_type":"image/png"}`,
+			expect: func(svc *mock.MockService) {
+				svc.EXPECT().MediaUploadURL(gomock.Any(), int64(3), int64(7), "image/png").Return(storage.Upload{}, dbErr)
+			},
+		},
+		{
+			name:   "add_media",
+			method: http.MethodPost,
+			target: "/places/3/reviews/mine/medias",
+			body:   `{"upload_key":"k"}`,
+			expect: func(svc *mock.MockService) {
+				svc.EXPECT().AddMedia(gomock.Any(), int64(3), int64(7), "k").Return(nil, dbErr)
+			},
+		},
+		{
+			name:   "delete_media",
+			method: http.MethodDelete,
+			target: "/places/3/reviews/mine/medias/4",
+			expect: func(svc *mock.MockService) {
+				svc.EXPECT().DeleteMedia(gomock.Any(), int64(3), int64(7), int64(4)).Return(dbErr)
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -416,4 +457,143 @@ func TestHandler_InternalErrorsDoNotLeakDetails(t *testing.T) {
 			}
 		})
 	}
+}
+
+// mediaRequest is a signed-in request by user 7 to one of the review media routes.
+type mediaRequest struct {
+	method string
+	target string
+	body   string
+}
+
+var (
+	uploadURLRequest = mediaRequest{http.MethodPost, "/places/3/reviews/mine/medias/upload-url", `{"content_type":"image/webp"}`}
+	addMediaRequest  = mediaRequest{http.MethodPost, "/places/3/reviews/mine/medias", `{"upload_key":"uploads/reviews/3/7/a.webp"}`}
+	deleteRequest    = mediaRequest{http.MethodDelete, "/places/3/reviews/mine/medias/4", ""}
+)
+
+func TestHandler_MediaRoutes_RejectInvalidRequests(t *testing.T) {
+	tests := []struct {
+		name     string
+		req      mediaRequest
+		wantCode string
+	}{
+		{name: "upload_url_bad_place_id", req: mediaRequest{http.MethodPost, "/places/abc/reviews/mine/medias/upload-url", `{"content_type":"image/png"}`}, wantCode: "INVALID_PLACE_ID"},
+		{name: "upload_url_place_id_zero", req: mediaRequest{http.MethodPost, "/places/0/reviews/mine/medias/upload-url", `{"content_type":"image/png"}`}, wantCode: "INVALID_PLACE_ID"},
+		{name: "upload_url_empty_body", req: mediaRequest{http.MethodPost, uploadURLRequest.target, ``}, wantCode: "INVALID_BODY"},
+		{name: "upload_url_content_type_as_a_number", req: mediaRequest{http.MethodPost, uploadURLRequest.target, `{"content_type":5}`}, wantCode: "INVALID_BODY"},
+		{name: "add_bad_place_id", req: mediaRequest{http.MethodPost, "/places/-1/reviews/mine/medias", `{"upload_key":"k"}`}, wantCode: "INVALID_PLACE_ID"},
+		{name: "add_empty_body", req: mediaRequest{http.MethodPost, addMediaRequest.target, ``}, wantCode: "INVALID_BODY"},
+		{name: "add_upload_key_as_a_number", req: mediaRequest{http.MethodPost, addMediaRequest.target, `{"upload_key":5}`}, wantCode: "INVALID_BODY"},
+		{name: "delete_bad_place_id", req: mediaRequest{http.MethodDelete, "/places/abc/reviews/mine/medias/4", ""}, wantCode: "INVALID_PLACE_ID"},
+		{name: "delete_bad_media_id", req: mediaRequest{http.MethodDelete, "/places/3/reviews/mine/medias/abc", ""}, wantCode: "INVALID_MEDIA_ID"},
+		{name: "delete_media_id_zero", req: mediaRequest{http.MethodDelete, "/places/3/reviews/mine/medias/0", ""}, wantCode: "INVALID_MEDIA_ID"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// An invalid request must never reach the service: the mock has no expectations.
+			rec := serve(t, newRouter(newService(t)), authRequest(t, tc.req.method, tc.req.target, tc.req.body, 7))
+			assert.Equal(t, wantError(http.StatusBadRequest, tc.wantCode), readError(t, rec))
+		})
+	}
+}
+
+func TestHandler_MediaRoutes_RequireAUser(t *testing.T) {
+	h := reviews.NewHandler(newService(t), mediaURL)
+	// Without WithAuth in front there is no user, so nothing reaches the service.
+	r := chi.NewRouter()
+	r.Post("/places/{id}/reviews/mine/medias/upload-url", h.CreateMediaUpload)
+	r.Post("/places/{id}/reviews/mine/medias", h.AddMedia)
+	r.Delete("/places/{id}/reviews/mine/medias/{mediaId}", h.DeleteMedia)
+
+	for _, req := range []mediaRequest{uploadURLRequest, addMediaRequest, deleteRequest} {
+		rec := serve(t, r, jsonRequest(req.method, req.target, req.body))
+		assert.Equal(t, wantError(http.StatusUnauthorized, "UNAUTHORIZED"), readError(t, rec), "%s %s", req.method, req.target)
+	}
+}
+
+func TestHandler_MediaRoutes_MapServiceErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantCode   string
+	}{
+		{name: "no_review", err: domain.ErrReviewNotFound, wantStatus: http.StatusNotFound, wantCode: "REVIEW_NOT_FOUND"},
+		{name: "unknown_media", err: domain.ErrMediaNotFound, wantStatus: http.StatusNotFound, wantCode: "MEDIA_NOT_FOUND"},
+		{name: "review_full", err: domain.ErrMediaLimitReached, wantStatus: http.StatusConflict, wantCode: "MEDIA_LIMIT_REACHED"},
+		{name: "unsupported_type", err: storage.ErrInvalidMediaType, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "not_uploaded", err: storage.ErrMediaNotUploaded, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "too_large", err: storage.ErrImageTooLarge, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "invalid_upload_key", err: storage.ErrInvalidUploadKey, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+		{name: "storage_failure", err: errors.New("storage failure"), wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
+	}
+
+	routes := []struct {
+		req    mediaRequest
+		expect func(svc *mock.MockService, err error)
+	}{
+		{req: uploadURLRequest, expect: func(svc *mock.MockService, err error) {
+			svc.EXPECT().MediaUploadURL(gomock.Any(), int64(3), int64(7), "image/webp").Return(storage.Upload{}, err)
+		}},
+		{req: addMediaRequest, expect: func(svc *mock.MockService, err error) {
+			svc.EXPECT().AddMedia(gomock.Any(), int64(3), int64(7), "uploads/reviews/3/7/a.webp").Return(nil, err)
+		}},
+		{req: deleteRequest, expect: func(svc *mock.MockService, err error) {
+			svc.EXPECT().DeleteMedia(gomock.Any(), int64(3), int64(7), int64(4)).Return(err)
+		}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, route := range routes {
+				svc := newService(t)
+				route.expect(svc, tc.err)
+
+				rec := serve(t, newRouter(svc), authRequest(t, route.req.method, route.req.target, route.req.body, 7))
+				assert.Equal(t, wantError(tc.wantStatus, tc.wantCode), readError(t, rec), "%s %s", route.req.method, route.req.target)
+			}
+		})
+	}
+}
+
+func TestHandler_CreateMediaUpload(t *testing.T) {
+	svc := newService(t)
+	// The place comes from the path and the user from the token.
+	svc.EXPECT().MediaUploadURL(gomock.Any(), int64(3), int64(7), "image/webp").Return(storage.Upload{
+		Key:       "uploads/reviews/3/7/a.webp",
+		URL:       "https://storage.test/signed",
+		Method:    http.MethodPut,
+		Headers:   map[string]string{"Content-Type": "image/webp"},
+		ExpiresAt: time.Date(2026, 10, 4, 12, 35, 0, 0, time.UTC),
+	}, nil)
+
+	rec := serve(t, newRouter(svc), authRequest(t, uploadURLRequest.method, uploadURLRequest.target, uploadURLRequest.body, 7))
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body)
+	assert.JSONEq(t, `{
+		"upload_key": "uploads/reviews/3/7/a.webp",
+		"upload_url": "https://storage.test/signed",
+		"method": "PUT",
+		"headers": {"Content-Type": "image/webp"},
+		"expires_at": "2026-10-04T12:35:00Z"
+	}`, responseData(t, rec))
+}
+
+func TestHandler_AddMedia(t *testing.T) {
+	svc := newService(t)
+	svc.EXPECT().AddMedia(gomock.Any(), int64(3), int64(7), "uploads/reviews/3/7/a.webp").Return(new(linReview()), nil)
+
+	rec := serve(t, newRouter(svc), authRequest(t, addMediaRequest.method, addMediaRequest.target, addMediaRequest.body, 7))
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body)
+	assert.JSONEq(t, linReviewJSON, responseData(t, rec))
+}
+
+func TestHandler_DeleteMedia(t *testing.T) {
+	svc := newService(t)
+	svc.EXPECT().DeleteMedia(gomock.Any(), int64(3), int64(7), int64(4)).Return(nil)
+
+	rec := serve(t, newRouter(svc), authRequest(t, deleteRequest.method, deleteRequest.target, deleteRequest.body, 7))
+	assert.Equal(t, http.StatusNoContent, rec.Code, "body: %s", rec.Body)
+	assert.Empty(t, rec.Body.String())
 }

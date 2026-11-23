@@ -22,4 +22,6 @@ type Review struct {
 	Comment   *string   `db:"comment"`
 	CreatedAt time.Time `db:"created_at"`
 	User      Author    `db:"user"`
+	// Medias are the review's images in position order, loaded separately.
+	Medias []Media `db:"-"`
 }

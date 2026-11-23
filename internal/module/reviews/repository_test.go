@@ -4,8 +4,10 @@ package reviews_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -190,6 +192,26 @@ func TestPostgresRepository_ListByPlace(t *testing.T) {
 		assert.Equal(t, domain.Author{ID: anaID, Name: "Ana"}, got[1].User)
 	})
 
+	t.Run("with_medias", func(t *testing.T) {
+		repo := newRepository(t)
+		placeID := insertPlace(t, "Laundry")
+		anaID := pgtest.InsertUser(t, testDB, "Ana")
+		withMedias := mustCreate(t, repo, &domain.Review{PlaceID: placeID, UserID: anaID, Rating: 5})
+		mustAddMedia(t, repo, placeID, anaID, "reviews/1/1/a.png")
+		mustAddMedia(t, repo, placeID, anaID, "reviews/1/1/b.png")
+		mustCreate(t, repo, &domain.Review{PlaceID: placeID, UserID: pgtest.InsertUser(t, testDB, "Budi"), Rating: 4})
+		want, err := repo.Fetch(t.Context(), placeID, anaID)
+		require.NoError(t, err)
+
+		got, err := repo.ListByPlace(t.Context(), placeID)
+		require.NoError(t, err)
+
+		require.Len(t, got, 2)
+		assert.Empty(t, got[0].Medias, "medias of the review without any")
+		assert.Equal(t, withMedias.ID, got[1].ID)
+		assert.Equal(t, want.Medias, got[1].Medias)
+	})
+
 	t.Run("simultaneous_reviews_later_first", func(t *testing.T) {
 		repo := newRepository(t)
 		placeID := insertPlace(t, "Laundry")
@@ -223,5 +245,243 @@ func TestPostgresRepository_ListByPlace(t *testing.T) {
 
 		assert.ErrorIs(t, err, domain.ErrPlaceNotFound)
 		assert.Nil(t, got)
+	})
+}
+
+func TestPostgresRepository_Fetch(t *testing.T) {
+	t.Run("users_review_of_the_place", func(t *testing.T) {
+		repo := newRepository(t)
+		placeID := insertPlace(t, "Laundry")
+		anaID := pgtest.InsertUser(t, testDB, "Ana")
+		created := mustCreate(t, repo, &domain.Review{PlaceID: placeID, UserID: anaID, Rating: 4})
+		mustCreate(t, repo, &domain.Review{PlaceID: placeID, UserID: pgtest.InsertUser(t, testDB, "Budi"), Rating: 2})
+		mustCreate(t, repo, &domain.Review{PlaceID: insertPlace(t, "Other"), UserID: anaID, Rating: 1})
+
+		got, err := repo.Fetch(t.Context(), placeID, anaID)
+		require.NoError(t, err)
+
+		assert.Equal(t, created.ID, got.ID)
+		assert.Equal(t, domain.Author{ID: anaID, Name: "Ana"}, got.User)
+		assert.Empty(t, got.Medias)
+	})
+
+	t.Run("no_review", func(t *testing.T) {
+		repo := newRepository(t)
+		placeID := insertPlace(t, "Laundry")
+
+		got, err := repo.Fetch(t.Context(), placeID, pgtest.InsertUser(t, testDB, "Ana"))
+
+		assert.ErrorIs(t, err, domain.ErrReviewNotFound)
+		assert.Nil(t, got)
+	})
+}
+
+// newMedia returns a promoted image to store under key.
+func newMedia(key string) domain.Media {
+	return domain.Media{Key: key, ContentType: "image/webp", Size: 2048}
+}
+
+// mustAddMedia stores an image under key for the user's review of the place and returns it.
+func mustAddMedia(t *testing.T, repo *reviews.PostgresRepository, placeID, userID int64, key string) domain.Media {
+	t.Helper()
+
+	got, err := repo.AddMedia(t.Context(), placeID, userID, newMedia(key))
+	require.NoError(t, err, "AddMedia(%d, %d, %q)", placeID, userID, key)
+
+	for _, m := range got.Medias {
+		if m.Key == key {
+			return m
+		}
+	}
+	require.Failf(t, "media missing", "AddMedia(%d, %d, %q) returned a review without the added media", placeID, userID, key)
+
+	return domain.Media{}
+}
+
+// mediaKeys returns the keys of medias, in order.
+func mediaKeys(medias []domain.Media) []string {
+	out := make([]string, 0, len(medias))
+	for _, m := range medias {
+		out = append(out, m.Key)
+	}
+
+	return out
+}
+
+// mediaPositions returns the positions of medias, in order.
+func mediaPositions(medias []domain.Media) []int {
+	out := make([]int, 0, len(medias))
+	for _, m := range medias {
+		out = append(out, m.Position)
+	}
+
+	return out
+}
+
+// storedMediaCount returns the number of MEDIAS rows.
+func storedMediaCount(t *testing.T) int {
+	t.Helper()
+
+	var count int
+	require.NoError(t, testDB.Get(&count, `SELECT COUNT(*) FROM MEDIAS`), "count medias")
+
+	return count
+}
+
+// newReview returns a repository over an emptied database with a review by a
+// new user of a new place, and the ids of the place and the user.
+func newReview(t *testing.T) (*reviews.PostgresRepository, int64, int64) {
+	t.Helper()
+
+	repo := newRepository(t)
+	placeID := insertPlace(t, "Laundry")
+	userID := pgtest.InsertUser(t, testDB, "Ana")
+	mustCreate(t, repo, &domain.Review{PlaceID: placeID, UserID: userID, Rating: 4})
+
+	return repo, placeID, userID
+}
+
+func TestPostgresRepository_AddMedia(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("first_position", func(t *testing.T) {
+		repo, placeID, userID := newReview(t)
+
+		got, err := repo.AddMedia(ctx, placeID, userID, newMedia("reviews/1/1/a.webp"))
+		require.NoError(t, err)
+
+		assert.Equal(t, domain.Author{ID: userID, Name: "Ana"}, got.User)
+		require.Len(t, got.Medias, 1)
+		m := got.Medias[0]
+		assert.NotZero(t, m.ID, "Medias[0].ID")
+		assert.Equal(t, domain.Media{ID: m.ID, Key: "reviews/1/1/a.webp", ContentType: "image/webp", Size: 2048, Position: 1}, m)
+		assert.Empty(t, pgtest.QueuedKeys(t, testDB), "queued keys (adding a media replaces nothing)")
+
+		stored, err := repo.Fetch(ctx, placeID, userID)
+		require.NoError(t, err)
+		assert.Equal(t, got, stored, "Fetch() differs from the returned review")
+	})
+
+	t.Run("after_delete", func(t *testing.T) {
+		repo, placeID, userID := newReview(t)
+		mustAddMedia(t, repo, placeID, userID, "reviews/1/1/a.webp")
+		removed := mustAddMedia(t, repo, placeID, userID, "reviews/1/1/b.webp")
+		mustAddMedia(t, repo, placeID, userID, "reviews/1/1/c.webp")
+		require.NoError(t, repo.DeleteMedia(ctx, placeID, userID, removed.ID))
+
+		got, err := repo.AddMedia(ctx, placeID, userID, newMedia("reviews/1/1/d.webp"))
+		require.NoError(t, err)
+
+		assert.Equal(t, []string{"reviews/1/1/a.webp", "reviews/1/1/c.webp", "reviews/1/1/d.webp"}, mediaKeys(got.Medias))
+		assert.Equal(t, []int{1, 2, 3}, mediaPositions(got.Medias))
+	})
+
+	t.Run("limit_reached", func(t *testing.T) {
+		repo, placeID, userID := newReview(t)
+		for i := range domain.MaxMedias {
+			mustAddMedia(t, repo, placeID, userID, fmt.Sprintf("reviews/1/1/%d.webp", i))
+		}
+
+		got, err := repo.AddMedia(ctx, placeID, userID, newMedia("reviews/1/1/extra.webp"))
+
+		assert.ErrorIs(t, err, domain.ErrMediaLimitReached)
+		assert.Nil(t, got)
+		assert.Equal(t, domain.MaxMedias, storedMediaCount(t), "stored medias (the extra media must not be stored)")
+	})
+
+	t.Run("concurrent_limit", func(t *testing.T) {
+		repo, placeID, userID := newReview(t)
+		const attempts = domain.MaxMedias + 4
+
+		errs := make([]error, attempts)
+		var wg sync.WaitGroup
+		for i := range attempts {
+			wg.Go(func() {
+				_, errs[i] = repo.AddMedia(ctx, placeID, userID, newMedia(fmt.Sprintf("reviews/1/1/%d.webp", i)))
+			})
+		}
+		wg.Wait()
+
+		added, limited := 0, 0
+		for _, err := range errs {
+			switch {
+			case err == nil: // if NO error
+				added++
+			case errors.Is(err, domain.ErrMediaLimitReached):
+				limited++
+			default:
+				assert.Fail(t, "unexpected error", "AddMedia() unexpected error: %v", err)
+			}
+		}
+		assert.Equal(t, domain.MaxMedias, added, "concurrent AddMedia() added")
+		assert.Equal(t, attempts-domain.MaxMedias, limited, "concurrent AddMedia() limited")
+
+		stored, err := repo.Fetch(ctx, placeID, userID)
+		require.NoError(t, err)
+		assert.Equal(t, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, mediaPositions(stored.Medias))
+	})
+
+	t.Run("no_review", func(t *testing.T) {
+		repo, placeID, _ := newReview(t)
+
+		got, err := repo.AddMedia(ctx, placeID, pgtest.InsertUser(t, testDB, "Budi"), newMedia("reviews/1/2/a.webp"))
+
+		assert.ErrorIs(t, err, domain.ErrReviewNotFound)
+		assert.Nil(t, got)
+		assert.Zero(t, storedMediaCount(t), "stored medias")
+	})
+}
+
+func TestPostgresRepository_DeleteMedia(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("queues_image", func(t *testing.T) {
+		repo, placeID, userID := newReview(t)
+		mustAddMedia(t, repo, placeID, userID, "reviews/1/1/a.webp")
+		removed := mustAddMedia(t, repo, placeID, userID, "reviews/1/1/b.webp")
+		mustAddMedia(t, repo, placeID, userID, "reviews/1/1/c.webp")
+
+		require.NoError(t, repo.DeleteMedia(ctx, placeID, userID, removed.ID))
+
+		stored, err := repo.Fetch(ctx, placeID, userID)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"reviews/1/1/a.webp", "reviews/1/1/c.webp"}, mediaKeys(stored.Medias))
+		// The later medias shift down.
+		assert.Equal(t, []int{1, 2}, mediaPositions(stored.Medias))
+		assert.Equal(t, 2, storedMediaCount(t), "stored medias")
+		assert.Equal(t, []string{"reviews/1/1/b.webp"}, pgtest.QueuedKeys(t, testDB), "queued keys")
+	})
+
+	t.Run("already_queued", func(t *testing.T) {
+		repo, placeID, userID := newReview(t)
+		removed := mustAddMedia(t, repo, placeID, userID, "reviews/1/1/a.webp")
+		_, err := testDB.Exec(`INSERT INTO STORAGE_DELETIONS (key) VALUES ('reviews/1/1/a.webp')`)
+		require.NoError(t, err, "queue key")
+
+		require.NoError(t, repo.DeleteMedia(ctx, placeID, userID, removed.ID))
+
+		assert.Equal(t, []string{"reviews/1/1/a.webp"}, pgtest.QueuedKeys(t, testDB), "queued keys")
+	})
+
+	t.Run("other_users_review", func(t *testing.T) {
+		repo, placeID, userID := newReview(t)
+		m := mustAddMedia(t, repo, placeID, userID, "reviews/1/1/a.webp")
+		budiID := pgtest.InsertUser(t, testDB, "Budi")
+		mustCreate(t, repo, &domain.Review{PlaceID: placeID, UserID: budiID, Rating: 3})
+
+		err := repo.DeleteMedia(ctx, placeID, budiID, m.ID)
+
+		assert.ErrorIs(t, err, domain.ErrMediaNotFound)
+		assert.Equal(t, 1, storedMediaCount(t), "stored medias (the media must be kept)")
+		assert.Empty(t, pgtest.QueuedKeys(t, testDB), "queued keys")
+	})
+
+	t.Run("unknown_media_or_review", func(t *testing.T) {
+		repo, placeID, userID := newReview(t)
+		m := mustAddMedia(t, repo, placeID, userID, "reviews/1/1/a.webp")
+
+		assert.ErrorIs(t, repo.DeleteMedia(ctx, placeID, userID, 999), domain.ErrMediaNotFound, "unknown media")
+		assert.ErrorIs(t, repo.DeleteMedia(ctx, 999, userID, m.ID), domain.ErrMediaNotFound, "unknown review")
+		assert.Equal(t, 1, storedMediaCount(t), "stored medias")
 	})
 }

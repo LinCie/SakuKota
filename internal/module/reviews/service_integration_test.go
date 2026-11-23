@@ -26,7 +26,7 @@ func newWiredService(t *testing.T) reviews.Service {
 	t.Helper()
 	pgtest.Reset(t, testDB)
 	placeService := places.NewService(places.NewPostgresRepository(testDB), nil)
-	return reviews.NewService(reviews.NewPostgresRepository(testDB), database.NewTransactor(testDB), placeService)
+	return reviews.NewService(reviews.NewPostgresRepository(testDB), database.NewTransactor(testDB), placeService, nil)
 }
 
 func TestService_Create_RatingTotals(t *testing.T) {
@@ -101,7 +101,7 @@ func TestService_Create_RatingTotals(t *testing.T) {
 		placeService := mock.NewMockPlaceService(gomock.NewController(t))
 		placeService.EXPECT().AddRating(gomock.Any(), placeID, 4).Return(boom)
 		repo := reviews.NewPostgresRepository(testDB)
-		service := reviews.NewService(repo, database.NewTransactor(testDB), placeService)
+		service := reviews.NewService(repo, database.NewTransactor(testDB), placeService, nil)
 
 		_, err := service.Create(t.Context(), &domain.Review{PlaceID: placeID, UserID: pgtest.InsertUser(t, testDB, "Ana"), Rating: 4})
 

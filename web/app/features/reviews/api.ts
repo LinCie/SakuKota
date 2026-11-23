@@ -1,4 +1,5 @@
-import { apiGet, apiPost, unwrap } from "~/shared/api";
+import { apiDelete, apiGet, apiPost, unwrap } from "~/shared/api";
+import type { MediaUpload } from "~/shared/image-upload";
 import type { Review } from "./types";
 
 // Every function here calls one backend route (see internal/router/router.go),
@@ -24,5 +25,41 @@ export async function createPlaceReview(
 ): Promise<Review> {
   return unwrap(
     await apiPost<Review>(`places/${placeId}/reviews`, { json: body }),
+  );
+}
+
+// Media routes act on the signed-in user's own review of the place.
+
+/** Presigns an upload of a new image of the user's review of the place. */
+export async function requestReviewMediaUpload(
+  placeId: number,
+  contentType: string,
+): Promise<MediaUpload> {
+  return unwrap(
+    await apiPost<MediaUpload>(
+      `places/${placeId}/reviews/mine/medias/upload-url`,
+      { json: { content_type: contentType } },
+    ),
+  );
+}
+
+/** Adds the uploaded image to the user's review of the place. */
+export async function addReviewMedia(
+  placeId: number,
+  uploadKey: string,
+): Promise<Review> {
+  return unwrap(
+    await apiPost<Review>(`places/${placeId}/reviews/mine/medias`, {
+      json: { upload_key: uploadKey },
+    }),
+  );
+}
+
+export async function deleteReviewMedia(
+  placeId: number,
+  mediaId: number,
+): Promise<void> {
+  unwrap(
+    await apiDelete<void>(`places/${placeId}/reviews/mine/medias/${mediaId}`),
   );
 }

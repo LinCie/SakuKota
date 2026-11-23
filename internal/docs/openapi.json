@@ -798,7 +798,7 @@
         "tags": ["Reviews"],
         "operationId": "createPlaceReview",
         "summary": "Review a place",
-        "description": "Stores the signed-in user's star rating and optional comment for the place, and adds the rating to the place's rating_average and rating_count. Any signed-in user may review, and each user reviews a place at most once. The comment is trimmed, a blank comment is stored as null, and it may be at most 1000 characters.",
+        "description": "Stores the signed-in user's star rating and optional comment for the place, and adds the rating to the place's rating_average and rating_count. Any signed-in user may review, and each user reviews a place at most once. The comment is trimmed, a blank comment is stored as null, and it may be at most 1000 characters. Add medias afterwards with POST /v1/places/{id}/reviews/mine/medias.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -864,6 +864,188 @@
                   "code": "ALREADY_REVIEWED",
                   "message": "place already reviewed by this user"
                 }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/places/{id}/reviews/mine/medias/upload-url": {
+      "post": {
+        "tags": ["Reviews"],
+        "operationId": "createPlaceReviewMediaUpload",
+        "summary": "Request a review media upload",
+        "description": "Returns a presigned URL for uploading a new media of the signed-in user's review of the place straight to storage. Send the file as the body of a request with the returned method and headers before expires_at (5 minutes), then confirm it with POST /v1/places/{id}/reviews/mine/medias.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Place ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MediaUploadRequest" },
+              "example": { "content_type": "image/webp" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload presigned successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MediaUploadResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The place ID is invalid, the body is malformed, or the content type is not allowed.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidId": { "value": { "code": "INVALID_PLACE_ID", "message": "invalid place_id" } },
+                  "invalidBody": { "value": { "code": "INVALID_BODY", "message": "invalid request body" } },
+                  "validation": { "value": { "code": "VALIDATION_ERROR", "message": "file must be a JPEG, PNG, or WebP image, or an MP4 or WebM video" } }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "The signed-in user has not reviewed the place.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "REVIEW_NOT_FOUND", "message": "review not found" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/places/{id}/reviews/mine/medias": {
+      "post": {
+        "tags": ["Reviews"],
+        "operationId": "addPlaceReviewMedia",
+        "summary": "Add a review media",
+        "description": "Confirms an uploaded file and adds it to the signed-in user's review of the place at the lowest free position (1 to 10). A review has at most 10 medias. The upload must have been requested for this user's review of this place, and the file must be within its size limit and of the type it was requested for.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Place ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ConfirmUploadRequest" },
+              "example": { "upload_key": "uploads/reviews/3/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Media added successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReviewResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The place ID is invalid, the body is malformed, the upload key is not one requested for this user's review of this place, nothing was uploaded under it, or the file is too large or of the wrong type.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidId": { "value": { "code": "INVALID_PLACE_ID", "message": "invalid place_id" } },
+                  "invalidBody": { "value": { "code": "INVALID_BODY", "message": "invalid request body" } },
+                  "validation": { "value": { "code": "VALIDATION_ERROR", "message": "file has not been uploaded" } }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "The signed-in user has not reviewed the place.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "REVIEW_NOT_FOUND", "message": "review not found" }
+              }
+            }
+          },
+          "409": {
+            "description": "The review already has 10 medias.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "MEDIA_LIMIT_REACHED", "message": "at most 10 medias are allowed" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/places/{id}/reviews/mine/medias/{mediaId}": {
+      "delete": {
+        "tags": ["Reviews"],
+        "operationId": "deletePlaceReviewMedia",
+        "summary": "Delete a review media",
+        "description": "Removes the media from the signed-in user's review of the place and deletes its file. Later medias move up one position.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Place ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          },
+          {
+            "name": "mediaId",
+            "in": "path",
+            "required": true,
+            "description": "Media ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Media deleted successfully. No response body." },
+          "400": {
+            "description": "The place ID or the media ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidId": { "value": { "code": "INVALID_PLACE_ID", "message": "invalid place_id" } },
+                  "invalidMediaId": { "value": { "code": "INVALID_MEDIA_ID", "message": "invalid media_id" } }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "The signed-in user's review of the place has no such media.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "MEDIA_NOT_FOUND", "message": "media not found" }
               }
             }
           },
@@ -2204,14 +2386,19 @@
       },
       "Review": {
         "type": "object",
-        "required": ["id", "place_id", "rating", "comment", "created_at", "user"],
+        "required": ["id", "place_id", "rating", "comment", "created_at", "user", "medias"],
         "properties": {
           "id": { "type": "integer", "format": "int64" },
           "place_id": { "type": "integer", "format": "int64" },
           "rating": { "type": "integer", "minimum": 1, "maximum": 5 },
           "comment": { "type": ["string", "null"] },
           "created_at": { "type": "string", "format": "date-time" },
-          "user": { "$ref": "#/components/schemas/ReviewAuthor" }
+          "user": { "$ref": "#/components/schemas/ReviewAuthor" },
+          "medias": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Media" },
+            "description": "The review's medias in position order, or [] if it has none."
+          }
         }
       },
       "ReviewResponse": {

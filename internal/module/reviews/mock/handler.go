@@ -12,6 +12,7 @@ package mock
 import (
 	context "context"
 	domain "rantau-go/internal/domain"
+	storage "rantau-go/internal/storage"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -41,6 +42,21 @@ func (m *MockService) EXPECT() *MockServiceMockRecorder {
 	return m.recorder
 }
 
+// AddMedia mocks base method.
+func (m *MockService) AddMedia(ctx context.Context, placeID, userID int64, uploadKey string) (*domain.Review, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddMedia", ctx, placeID, userID, uploadKey)
+	ret0, _ := ret[0].(*domain.Review)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddMedia indicates an expected call of AddMedia.
+func (mr *MockServiceMockRecorder) AddMedia(ctx, placeID, userID, uploadKey any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMedia", reflect.TypeOf((*MockService)(nil).AddMedia), ctx, placeID, userID, uploadKey)
+}
+
 // Create mocks base method.
 func (m *MockService) Create(ctx context.Context, r *domain.Review) (*domain.Review, error) {
 	m.ctrl.T.Helper()
@@ -56,6 +72,20 @@ func (mr *MockServiceMockRecorder) Create(ctx, r any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockService)(nil).Create), ctx, r)
 }
 
+// DeleteMedia mocks base method.
+func (m *MockService) DeleteMedia(ctx context.Context, placeID, userID, mediaID int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteMedia", ctx, placeID, userID, mediaID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteMedia indicates an expected call of DeleteMedia.
+func (mr *MockServiceMockRecorder) DeleteMedia(ctx, placeID, userID, mediaID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMedia", reflect.TypeOf((*MockService)(nil).DeleteMedia), ctx, placeID, userID, mediaID)
+}
+
 // ListByPlace mocks base method.
 func (m *MockService) ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error) {
 	m.ctrl.T.Helper()
@@ -69,4 +99,19 @@ func (m *MockService) ListByPlace(ctx context.Context, placeID int64) ([]domain.
 func (mr *MockServiceMockRecorder) ListByPlace(ctx, placeID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByPlace", reflect.TypeOf((*MockService)(nil).ListByPlace), ctx, placeID)
+}
+
+// MediaUploadURL mocks base method.
+func (m *MockService) MediaUploadURL(ctx context.Context, placeID, userID int64, contentType string) (storage.Upload, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MediaUploadURL", ctx, placeID, userID, contentType)
+	ret0, _ := ret[0].(storage.Upload)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MediaUploadURL indicates an expected call of MediaUploadURL.
+func (mr *MockServiceMockRecorder) MediaUploadURL(ctx, placeID, userID, contentType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MediaUploadURL", reflect.TypeOf((*MockService)(nil).MediaUploadURL), ctx, placeID, userID, contentType)
 }

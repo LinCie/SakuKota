@@ -18,7 +18,7 @@ export type MediaUpload = {
   expires_at: string;
 };
 
-/** An image of a place or sub-district (see Media in the backend's storage/dto.go). */
+/** An image of a place, sub-district, or review (see Media in the backend's storage/dto.go). */
 export type Media = {
   id: number;
   url: string;
@@ -29,7 +29,7 @@ export type Media = {
   position: number;
 };
 
-/** Most images a place or sub-district can have. */
+/** Most images a place, sub-district, or review can have. */
 export const maxMedias = 10;
 
 /** Error codes for requesting or confirming an image upload. */

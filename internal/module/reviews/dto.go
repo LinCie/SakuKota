@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"rantau-go/internal/domain"
+	"rantau-go/internal/storage"
 )
 
 // CreateRequest is the API payload for reviewing a place. The place comes from
@@ -21,6 +22,8 @@ type Response struct {
 	Comment   *string        `json:"comment"`
 	CreatedAt time.Time      `json:"created_at"`
 	User      AuthorResponse `json:"user"`
+	// Medias are the review's photos in position order, or [] if it has none.
+	Medias []storage.MediaResponse `json:"medias"`
 }
 
 // AuthorResponse is the API representation of a review's domain.Author.
@@ -39,8 +42,9 @@ func toReview(placeID, userID int64, req CreateRequest) *domain.Review {
 	}
 }
 
-// toResponse turns r into the JSON shape sent to clients.
-func toResponse(r domain.Review) Response {
+// toResponse turns r into the JSON shape sent to clients, with media keys
+// turned into URLs by mediaURL.
+func toResponse(r domain.Review, mediaURL func(key string) string) Response {
 	return Response{
 		ID:        r.ID,
 		PlaceID:   r.PlaceID,
@@ -51,5 +55,6 @@ func toResponse(r domain.Review) Response {
 			ID:   r.User.ID,
 			Name: r.User.Name,
 		},
+		Medias: storage.ToMediaResponses(r.Medias, mediaURL),
 	}
 }

@@ -349,11 +349,11 @@ func (r *PostgresRepository) AddRating(ctx context.Context, id int64, rating int
 	return nil
 }
 
-// Delete removes the place and its photos and queues the photo files for deletion.
-// It returns domain.ErrPlaceNotFound if there is no such place.
+// Delete removes the place, its photos, and its reviews' photos, and queues the
+// photo files for deletion. It returns domain.ErrPlaceNotFound if there is no such place.
 func (r *PostgresRepository) Delete(ctx context.Context, id int64) error {
-	// One statement deletes the photos and the place and queues the photo files,
-	// so either all of it commits or none of it does.
+	// One statement deletes the photos and the place (and with it its reviews)
+	// and queues the photo files, so either all of it commits or none of it does.
 	var deleted int
 
 	err := r.db.GetContext(
@@ -362,6 +362,11 @@ func (r *PostgresRepository) Delete(ctx context.Context, id int64) error {
 		`WITH medias AS (
 			DELETE FROM MEDIAS
 			WHERE id IN (SELECT media_id FROM PLACE_MEDIAS WHERE place_id = $1)
+				OR id IN (
+					SELECT rm.media_id FROM PLACE_REVIEW_MEDIAS rm
+					JOIN PLACE_REVIEWS pr ON pr.id = rm.review_id
+					WHERE pr.place_id = $1
+				)
 			RETURNING key
 		), deleted AS (
 			DELETE FROM PLACES WHERE id = $1 RETURNING id

@@ -2,6 +2,8 @@ package reviews
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 
 	"github.com/jmoiron/sqlx"
 
@@ -46,6 +48,97 @@ func (r *PostgresRepository) Create(ctx context.Context, review *domain.Review) 
 	return &created, nil
 }
 
+// Fetch returns the user's review of the place with its author and medias,
+// or domain.ErrReviewNotFound.
+func (r *PostgresRepository) Fetch(ctx context.Context, placeID, userID int64) (*domain.Review, error) {
+	var review domain.Review
+
+	err := r.db.GetContext(
+		ctx,
+		&review,
+		`SELECT `+reviewColumns+`
+		FROM PLACE_REVIEWS r
+		JOIN USERS u ON u.id = r.user_id
+		WHERE r.place_id = $1 AND r.user_id = $2`,
+		placeID,
+		userID,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, domain.ErrReviewNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	reviews := []domain.Review{review}
+	if err := r.attachMedias(ctx, reviews); err != nil {
+		return nil, err
+	}
+
+	return &reviews[0], nil
+}
+
+// AddMedia stores the photo in the first free position of the user's review of
+// the place and returns the review. The review row is locked so concurrent
+// uploads cannot take the same position or exceed the limit.
+func (r *PostgresRepository) AddMedia(ctx context.Context, placeID, userID int64, m domain.Media) (*domain.Review, error) {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	reviewID, err := lockReview(ctx, tx, placeID, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, domain.ErrReviewNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// The lowest unused position; NULL means every position is taken.
+	var position *int
+	err = tx.GetContext(
+		ctx,
+		&position,
+		`SELECT MIN(free) FROM generate_series(1, $2::int) AS free
+		WHERE free NOT IN (SELECT position FROM PLACE_REVIEW_MEDIAS WHERE review_id = $1)`,
+		reviewID,
+		domain.MaxMedias,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if position == nil {
+		return nil, domain.ErrMediaLimitReached
+	}
+
+	_, err = tx.ExecContext(
+		ctx,
+		`WITH media AS (
+			INSERT INTO MEDIAS (key, content_type, size_bytes)
+			VALUES ($2, $3, $4)
+			RETURNING id
+		)
+		INSERT INTO PLACE_REVIEW_MEDIAS (review_id, media_id, position)
+		SELECT $1, id, $5 FROM media`,
+		reviewID,
+		m.Key,
+		m.ContentType,
+		m.Size,
+		*position,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return r.Fetch(ctx, placeID, userID)
+}
+
 // ListByPlace returns the place's reviews, newest first, or domain.ErrPlaceNotFound.
 // Reviews created at the same moment list the later one first.
 func (r *PostgresRepository) ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error) {
@@ -79,7 +172,121 @@ func (r *PostgresRepository) ListByPlace(ctx context.Context, placeID int64) ([]
 		return nil, err
 	}
 
+	if err := r.attachMedias(ctx, reviews); err != nil {
+		return nil, err
+	}
+
 	return reviews, nil
+}
+
+// attachMedias loads the medias of all reviews in one query, in position order.
+func (r *PostgresRepository) attachMedias(ctx context.Context, reviews []domain.Review) error {
+	if len(reviews) == 0 {
+		return nil
+	}
+
+	reviewIDs := make([]int64, 0, len(reviews))
+	for _, review := range reviews {
+		reviewIDs = append(reviewIDs, review.ID)
+	}
+
+	var rows []struct {
+		ReviewID int64 `db:"review_id"`
+		domain.Media
+	}
+
+	err := r.db.SelectContext(
+		ctx,
+		&rows,
+		`SELECT rm.review_id, m.id, m.key, m.content_type, m.size_bytes, rm.position
+		FROM PLACE_REVIEW_MEDIAS rm
+		JOIN MEDIAS m ON m.id = rm.media_id
+		WHERE rm.review_id = ANY($1)
+		ORDER BY rm.review_id, rm.position`,
+		reviewIDs,
+	)
+	if err != nil {
+		return err
+	}
+
+	mediasByReview := make(map[int64][]domain.Media, len(reviews))
+	for _, row := range rows {
+		mediasByReview[row.ReviewID] = append(mediasByReview[row.ReviewID], row.Media)
+	}
+
+	for i := range reviews {
+		reviews[i].Medias = mediasByReview[reviews[i].ID]
+	}
+
+	return nil
+}
+
+// DeleteMedia removes the photo from the user's review of the place, queues its
+// file for deletion, and moves later photos up one position. The shift closes
+// the gap, so the next upload goes to the end.
+func (r *PostgresRepository) DeleteMedia(ctx context.Context, placeID, userID, mediaID int64) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	reviewID, err := lockReview(ctx, tx, placeID, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.ErrMediaNotFound
+	}
+	if err != nil {
+		return err
+	}
+
+	// The file is queued in the same statement as the row delete, so both commit or neither does.
+	// storagecleanup then retries the file delete until it succeeds.
+	var position *int
+	err = tx.GetContext(
+		ctx,
+		&position,
+		`WITH deleted AS (
+			DELETE FROM MEDIAS m
+			USING PLACE_REVIEW_MEDIAS rm
+			WHERE rm.media_id = m.id AND rm.review_id = $1 AND m.id = $2
+			RETURNING m.key, rm.position
+		), queued AS (
+			INSERT INTO STORAGE_DELETIONS (key)
+			SELECT key FROM deleted
+			ON CONFLICT (key) DO NOTHING
+		)
+		SELECT MAX(position) FROM deleted`,
+		reviewID,
+		mediaID,
+	)
+	if err != nil {
+		return err
+	}
+	// No row was deleted: the review has no such photo.
+	if position == nil {
+		return domain.ErrMediaNotFound
+	}
+
+	_, err = tx.ExecContext(
+		ctx,
+		`UPDATE PLACE_REVIEW_MEDIAS SET position = position - 1 WHERE review_id = $1 AND position > $2`,
+		reviewID,
+		*position,
+	)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// lockReview locks the user's review of the place in tx and returns its id,
+// or sql.ErrNoRows if there is none.
+func lockReview(ctx context.Context, tx *sqlx.Tx, placeID, userID int64) (int64, error) {
+	var id int64
+	// FOR NO KEY UPDATE: only non-key data changes, so foreign key inserts elsewhere are not blocked.
+	err := tx.GetContext(ctx, &id, `SELECT id FROM PLACE_REVIEWS WHERE place_id = $1 AND user_id = $2 FOR NO KEY UPDATE`, placeID, userID)
+	return id, err
 }
 
 // reviewColumns selects a review from `r` and its author from `u`, aliased to

@@ -43,7 +43,7 @@ func IsPlaceValidationError(err error) bool {
 		errors.Is(err, ErrPlaceLocationInvalid)
 }
 
-// Errors of the medias of places and sub-districts.
+// Errors of the medias of places, sub-districts, and reviews.
 var (
 	ErrMediaNotFound     = errors.New("media not found")
 	ErrMediaLimitReached = fmt.Errorf("at most %d medias are allowed", MaxMedias)
@@ -54,6 +54,7 @@ var (
 	ErrReviewRatingInvalid  = fmt.Errorf("rating must be between %d and %d", MinRating, MaxRating)
 	ErrReviewCommentTooLong = fmt.Errorf("comment must be %d characters or fewer", MaxReviewCommentLength)
 	ErrPlaceAlreadyReviewed = errors.New("place already reviewed by this user")
+	ErrReviewNotFound       = errors.New("review not found")
 )
 
 // Errors of sub-districts.

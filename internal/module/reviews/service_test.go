@@ -13,6 +13,7 @@ import (
 	"rantau-go/internal/domain"
 	"rantau-go/internal/module/reviews"
 	"rantau-go/internal/module/reviews/mock"
+	"rantau-go/internal/storage"
 )
 
 // txKey marks the context that newTransactor passes to the transaction's function.
@@ -46,7 +47,7 @@ func createReview(t *testing.T, r *domain.Review) (*domain.Review, error) {
 	places := mock.NewMockPlaceService(ctrl)
 	places.EXPECT().AddRating(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	_, err := reviews.NewService(repo, newTransactor(ctrl), places).Create(t.Context(), r)
+	_, err := reviews.NewService(repo, newTransactor(ctrl), places, mock.NewMockMediaStorage(ctrl)).Create(t.Context(), r)
 	return stored, err
 }
 
@@ -171,7 +172,7 @@ func TestService_Create_Storage(t *testing.T) {
 				places.EXPECT().AddRating(inTx, int64(3), 4).Return(tc.ratingErr).After(store)
 			}
 
-			got, err := reviews.NewService(repo, newTransactor(ctrl), places).Create(t.Context(), &domain.Review{PlaceID: 3, UserID: 7, Rating: 4})
+			got, err := reviews.NewService(repo, newTransactor(ctrl), places, mock.NewMockMediaStorage(ctrl)).Create(t.Context(), &domain.Review{PlaceID: 3, UserID: 7, Rating: 4})
 			if tc.wantErr != nil {
 				assert.ErrorIs(t, err, tc.wantErr)
 				assert.Nil(t, got)
@@ -186,7 +187,7 @@ func TestService_Create_Storage(t *testing.T) {
 
 func TestService_Create_InvalidReviewStartsNoTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	service := reviews.NewService(mock.NewMockRepository(ctrl), mock.NewMockTransactor(ctrl), mock.NewMockPlaceService(ctrl))
+	service := reviews.NewService(mock.NewMockRepository(ctrl), mock.NewMockTransactor(ctrl), mock.NewMockPlaceService(ctrl), mock.NewMockMediaStorage(ctrl))
 
 	_, err := service.Create(t.Context(), &domain.Review{PlaceID: 3, UserID: 7, Rating: 0})
 
@@ -199,10 +200,176 @@ func TestService_Create_TransactionFailure(t *testing.T) {
 	tx := mock.NewMockTransactor(ctrl)
 	tx.EXPECT().WithinTx(gomock.Any(), gomock.Any()).Return(boom)
 
-	got, err := reviews.NewService(mock.NewMockRepository(ctrl), tx, mock.NewMockPlaceService(ctrl)).Create(t.Context(), &domain.Review{PlaceID: 3, UserID: 7, Rating: 4})
+	got, err := reviews.NewService(mock.NewMockRepository(ctrl), tx, mock.NewMockPlaceService(ctrl), mock.NewMockMediaStorage(ctrl)).Create(t.Context(), &domain.Review{PlaceID: 3, UserID: 7, Rating: 4})
 
 	assert.ErrorIs(t, err, boom)
 	assert.Nil(t, got)
+}
+
+// Review media fixtures: user 7's review of place 3.
+const (
+	mediaPrefix = "reviews/3/7"
+	uploadKey   = "uploads/reviews/3/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"
+)
+
+var promoted = domain.Media{Key: "reviews/3/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp", ContentType: "image/webp", Size: 2048}
+
+// newMediaMocks returns mocks of the repository and media storage that fail the
+// test on any call without an expectation, and a service using them.
+func newMediaMocks(t *testing.T) (*mock.MockRepository, *mock.MockMediaStorage, reviews.Service) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	repo := mock.NewMockRepository(ctrl)
+	media := mock.NewMockMediaStorage(ctrl)
+	return repo, media, reviews.NewService(repo, mock.NewMockTransactor(ctrl), mock.NewMockPlaceService(ctrl), media)
+}
+
+// fetchReview expects the lookup of user 7's review of place 3, which it finds.
+func fetchReview(repo *mock.MockRepository) *gomock.Call {
+	return repo.EXPECT().Fetch(gomock.Any(), int64(3), int64(7)).Return(&domain.Review{ID: 9, PlaceID: 3, UserID: 7}, nil)
+}
+
+func TestService_MediaUploadURL(t *testing.T) {
+	repo, media, service := newMediaMocks(t)
+	upload := storage.Upload{Key: uploadKey, URL: "http://localhost:3900/signed", Method: "PUT"}
+	gomock.InOrder(
+		fetchReview(repo),
+		media.EXPECT().PresignUpload(gomock.Any(), mediaPrefix, "image/webp").Return(upload, nil),
+	)
+
+	got, err := service.MediaUploadURL(t.Context(), 3, 7, "image/webp")
+
+	require.NoError(t, err)
+	assert.Equal(t, upload, got)
+}
+
+func TestService_MediaUploadURL_LookupFailure(t *testing.T) {
+	for _, lookupErr := range []error{domain.ErrReviewNotFound, errors.New("connection reset")} {
+		// Nothing may be presigned without the user's review.
+		repo, _, service := newMediaMocks(t)
+		repo.EXPECT().Fetch(gomock.Any(), int64(3), int64(7)).Return(nil, lookupErr)
+
+		_, err := service.MediaUploadURL(t.Context(), 3, 7, "image/webp")
+
+		assert.ErrorIs(t, err, lookupErr)
+	}
+}
+
+func TestService_MediaUploadURL_PresignFailure(t *testing.T) {
+	for _, presignErr := range []error{storage.ErrInvalidMediaType, errors.New("connection reset")} {
+		repo, media, service := newMediaMocks(t)
+		fetchReview(repo)
+		media.EXPECT().PresignUpload(gomock.Any(), mediaPrefix, "image/gif").Return(storage.Upload{}, presignErr)
+
+		_, err := service.MediaUploadURL(t.Context(), 3, 7, "image/gif")
+
+		assert.ErrorIs(t, err, presignErr)
+	}
+}
+
+func TestService_AddMedia(t *testing.T) {
+	// The promoted media is stored as it is, and nothing is deleted.
+	repo, media, service := newMediaMocks(t)
+	updated := &domain.Review{ID: 9, Medias: []domain.Media{{ID: 3, Key: promoted.Key, Position: 1}}}
+	gomock.InOrder(
+		fetchReview(repo),
+		media.EXPECT().Promote(gomock.Any(), mediaPrefix, uploadKey).Return(promoted, nil),
+		repo.EXPECT().AddMedia(gomock.Any(), int64(3), int64(7), promoted).Return(updated, nil),
+	)
+
+	got, err := service.AddMedia(t.Context(), 3, 7, uploadKey)
+
+	require.NoError(t, err)
+	assert.Same(t, updated, got, "AddMedia() must return the stored review")
+}
+
+func TestService_AddMedia_LookupFailure(t *testing.T) {
+	for _, lookupErr := range []error{domain.ErrReviewNotFound, errors.New("connection reset")} {
+		// Nothing may be promoted without the user's review.
+		repo, _, service := newMediaMocks(t)
+		repo.EXPECT().Fetch(gomock.Any(), int64(3), int64(7)).Return(nil, lookupErr)
+
+		_, err := service.AddMedia(t.Context(), 3, 7, uploadKey)
+
+		assert.ErrorIs(t, err, lookupErr)
+	}
+}
+
+func TestService_AddMedia_PromoteFailure(t *testing.T) {
+	tests := []struct {
+		name       string
+		promoteErr error
+	}{
+		{name: "invalid_key", promoteErr: storage.ErrInvalidUploadKey},
+		{name: "not_uploaded", promoteErr: storage.ErrMediaNotUploaded},
+		{name: "invalid_type", promoteErr: storage.ErrInvalidMediaType},
+		{name: "image_too_large", promoteErr: storage.ErrImageTooLarge},
+		{name: "storage_failure", promoteErr: errors.New("connection reset")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Nothing may be stored.
+			repo, media, service := newMediaMocks(t)
+			fetchReview(repo)
+			media.EXPECT().Promote(gomock.Any(), mediaPrefix, uploadKey).Return(domain.Media{}, tc.promoteErr)
+
+			_, err := service.AddMedia(t.Context(), 3, 7, uploadKey)
+
+			assert.ErrorIs(t, err, tc.promoteErr)
+		})
+	}
+}
+
+func TestService_AddMedia_StoreFailure(t *testing.T) {
+	boom := errors.New("connection reset")
+	tests := []struct {
+		name      string
+		addErr    error
+		deleteErr error
+	}{
+		{name: "review_deleted", addErr: domain.ErrReviewNotFound},
+		{name: "media_limit", addErr: domain.ErrMediaLimitReached},
+		{name: "storage_failure", addErr: boom},
+		{name: "delete_failure_ignored", addErr: boom, deleteErr: errors.New("timeout")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// The promoted file is removed, even once the request is cancelled.
+			ctx, cancel := context.WithCancel(t.Context())
+			repo, media, service := newMediaMocks(t)
+			gomock.InOrder(
+				fetchReview(repo),
+				media.EXPECT().Promote(gomock.Any(), mediaPrefix, uploadKey).Return(promoted, nil),
+				repo.EXPECT().AddMedia(gomock.Any(), int64(3), int64(7), promoted).DoAndReturn(func(context.Context, int64, int64, domain.Media) (*domain.Review, error) {
+					cancel()
+					return nil, tc.addErr
+				}),
+				media.EXPECT().Delete(gomock.Any(), promoted.Key).DoAndReturn(func(ctx context.Context, _ string) error {
+					assert.NoError(t, ctx.Err(), "cleanup ran with a cancelled context")
+					return tc.deleteErr
+				}),
+			)
+
+			_, err := service.AddMedia(ctx, 3, 7, uploadKey)
+
+			assert.ErrorIs(t, err, tc.addErr)
+		})
+	}
+}
+
+func TestService_DeleteMedia(t *testing.T) {
+	for _, repoErr := range []error{nil, domain.ErrMediaNotFound, errors.New("connection reset")} {
+		// The repository queues the file for deletion, so the service must
+		// not delete it itself.
+		repo, _, service := newMediaMocks(t)
+		repo.EXPECT().DeleteMedia(gomock.Any(), int64(3), int64(7), int64(4)).Return(repoErr)
+
+		err := service.DeleteMedia(t.Context(), 3, 7, 4)
+
+		assert.ErrorIs(t, err, repoErr)
+	}
 }
 
 func TestService_ListByPlace(t *testing.T) {
@@ -225,7 +392,7 @@ func TestService_ListByPlace(t *testing.T) {
 			repo := mock.NewMockRepository(gomock.NewController(t))
 			repo.EXPECT().ListByPlace(gomock.Any(), int64(3)).Return(tc.reviews, tc.repoErr)
 
-			got, err := reviews.NewService(repo, nil, nil).ListByPlace(t.Context(), 3)
+			got, err := reviews.NewService(repo, nil, nil, nil).ListByPlace(t.Context(), 3)
 			if tc.repoErr != nil {
 				assert.ErrorIs(t, err, tc.repoErr)
 				return

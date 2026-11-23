@@ -37,8 +37,8 @@ type Repository interface {
 	// AddRating adds one review rating to the place's rating totals.
 	// It returns domain.ErrPlaceNotFound if there is no such place.
 	AddRating(ctx context.Context, id int64, rating int) error
-	// Delete removes the place and its photos and queues the photo files for deletion.
-	// It returns domain.ErrPlaceNotFound if there is no such place.
+	// Delete removes the place, its photos, and its reviews' photos, and queues the
+	// photo files for deletion. It returns domain.ErrPlaceNotFound if there is no such place.
 	Delete(ctx context.Context, id int64) error
 	// DeleteMedia removes the photo and queues its file for deletion.
 	// It returns domain.ErrMediaNotFound if there is no such photo.

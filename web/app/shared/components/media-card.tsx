@@ -25,12 +25,12 @@ type MediaCardProps = {
   /** Id of the image being deleted, if any. */
   deletingId: number | null;
   error: Error | null;
-  /** Called with the file the admin picked. */
+  /** Called with the file the user picked. */
   onAdd: (file: File) => void;
   onDelete: (media: Media) => void;
 };
 
-/** A place's or sub-district's images, each with a delete button, and a button to add another. */
+/** A place's, sub-district's, or review's images, each with a delete button, and a button to add another. */
 export function MediaCard({
   title,
   medias,

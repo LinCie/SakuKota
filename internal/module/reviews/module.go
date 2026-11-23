@@ -14,13 +14,14 @@ type Module struct {
 	Handler *Handler
 }
 
-// New builds the reviews module on db. Ratings are added to place totals
-// through places, in the same transaction as the review.
-func New(db *sqlx.DB, places PlaceService) *Module {
-	svc := NewService(NewPostgresRepository(db), database.NewTransactor(db), places)
+// New builds the reviews module on db, with review photos kept in media.
+// Ratings are added to place totals through places, in the same transaction
+// as the review.
+func New(db *sqlx.DB, places PlaceService, media MediaStorage) *Module {
+	svc := NewService(NewPostgresRepository(db), database.NewTransactor(db), places, media)
 
 	return &Module{
 		Service: svc,
-		Handler: NewHandler(svc),
+		Handler: NewHandler(svc, media.PublicURL),
 	}
 }

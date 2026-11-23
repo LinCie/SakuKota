@@ -3,6 +3,7 @@ import { lazy, Suspense, type ReactNode } from "react";
 
 import { useSession } from "~/features/auth/session";
 import { cn } from "~/shared/cn";
+import { MediaCard } from "~/shared/components/media-card";
 import {
   menuButtonClass,
   signButtonClass,
@@ -10,8 +11,13 @@ import {
 import { MissingSlot } from "~/shared/components/missing-slot";
 import { formatLocalDate } from "~/shared/format";
 
-import { usePlaceReviews } from "../queries";
+import {
+  useAddReviewMedias,
+  useDeleteReviewMedia,
+  usePlaceReviews,
+} from "../queries";
 import { RatingStars } from "./rating-stars";
+import { ReviewMedia } from "./review-media";
 
 // The form pulls in zod and TanStack Form, so it loads only when shown.
 const ReviewForm = lazy(() =>
@@ -27,6 +33,10 @@ export function PlaceReviews({ placeId }: { placeId: number }) {
   const session = useSession();
   const reviews = usePlaceReviews(placeId);
   const href = useLocation({ select: (location) => location.href });
+  // Here, not in the form or the card, so files picked in the form keep
+  // their progress and errors once the saved review swaps the form for the card.
+  const addMedias = useAddReviewMedias(placeId);
+  const deleteMedia = useDeleteReviewMedia(placeId);
 
   let writer: ReactNode = null;
   if (!session) {
@@ -43,14 +53,39 @@ export function PlaceReviews({ placeId }: { placeId: number }) {
       </Link>
     );
   } else if (reviews.isSuccess) {
-    const reviewed = reviews.data.some(
+    const own = reviews.data.find(
       (review) => review.user.id === session.user.id,
     );
-    writer = reviewed ? (
-      <p className="text-ink-soft text-sm">Kamu sudah mengulas tempat ini.</p>
+    writer = own ? (
+      <>
+        <p className="text-ink-soft text-sm">Kamu sudah mengulas tempat ini.</p>
+        <MediaCard
+          title="Foto ulasanmu"
+          medias={own.medias}
+          alt="Foto ulasanmu"
+          missing="Belum ada foto"
+          aspect="aspect-square"
+          pending={addMedias.isPending}
+          deletingId={deleteMedia.isPending ? deleteMedia.variables : null}
+          error={addMedias.error ?? deleteMedia.error}
+          onAdd={(file) => {
+            deleteMedia.reset();
+            addMedias.mutate([file]);
+          }}
+          onDelete={(media) => {
+            addMedias.reset();
+            deleteMedia.mutate(media.id);
+          }}
+        />
+      </>
     ) : (
       <Suspense fallback={null}>
-        <ReviewForm placeId={placeId} />
+        <ReviewForm
+          placeId={placeId}
+          onCreated={(files) => {
+            if (files.length > 0) addMedias.mutate(files);
+          }}
+        />
       </Suspense>
     );
   }
@@ -96,6 +131,18 @@ export function PlaceReviews({ placeId }: { placeId: number }) {
               <p className="text-ink text-pretty whitespace-pre-line">
                 {review.comment}
               </p>
+            ) : null}
+            {review.medias.length > 0 ? (
+              <ul className="grid grid-cols-3 gap-2">
+                {review.medias.map((media) => (
+                  <li key={media.id}>
+                    <ReviewMedia
+                      media={media}
+                      alt={`Foto ulasan ${review.user.name} ${media.position}`}
+                    />
+                  </li>
+                ))}
+              </ul>
             ) : null}
             <time
               dateTime={review.created_at}
