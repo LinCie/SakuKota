@@ -808,6 +808,31 @@ func TestRepository_AddRating(t *testing.T) {
 	})
 }
 
+func TestRepository_RemoveRating(t *testing.T) {
+	t.Run("takes_the_rating_off_totals", func(t *testing.T) {
+		repo := newRepository(t)
+		subDistrictID := insertSubDistrict(t, "Setiabudi")
+		place := mustCreate(t, repo, newPlace(subDistrictID, categoryID(t, "laundry"), "Laundry"))
+		other := mustCreate(t, repo, newPlace(subDistrictID, categoryID(t, "laundry"), "Other"))
+		for _, rating := range []int{5, 3} {
+			require.NoError(t, repo.AddRating(t.Context(), place.ID, rating), "AddRating(%d)", rating)
+		}
+		require.NoError(t, repo.AddRating(t.Context(), other.ID, 2), "AddRating(other)")
+
+		require.NoError(t, repo.RemoveRating(t.Context(), place.ID, 5))
+
+		assert.Equal(t, [2]int{1, 3}, ratingTotals(t, repo, place.ID))
+		// Other places are untouched.
+		assert.Equal(t, [2]int{1, 2}, ratingTotals(t, repo, other.ID))
+	})
+
+	t.Run("unknown_place", func(t *testing.T) {
+		repo := newRepository(t)
+
+		assert.ErrorIs(t, repo.RemoveRating(t.Context(), 999, 4), domain.ErrPlaceNotFound)
+	})
+}
+
 func TestRepository_Delete(t *testing.T) {
 	ctx := t.Context()
 

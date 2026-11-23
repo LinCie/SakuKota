@@ -1053,6 +1053,99 @@
         }
       }
     },
+    "/v1/places/{id}/reviews/mine": {
+      "delete": {
+        "tags": ["Reviews"],
+        "operationId": "deleteOwnPlaceReview",
+        "summary": "Delete your review",
+        "description": "Deletes the signed-in user's review of the place and its medias, and takes its rating off the place's rating_average and rating_count. The user may then review the place again.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Place ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Review deleted successfully. No response body." },
+          "400": {
+            "description": "The place ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "INVALID_PLACE_ID", "message": "invalid place_id" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "The signed-in user has not reviewed the place.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "REVIEW_NOT_FOUND", "message": "review not found" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/places/{id}/reviews/{reviewId}": {
+      "delete": {
+        "tags": ["Reviews"],
+        "operationId": "deletePlaceReview",
+        "summary": "Delete a review",
+        "description": "Deletes the review and its medias, and takes its rating off the place's rating_average and rating_count. The author may then review the place again. Requires the admin role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Place ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          },
+          {
+            "name": "reviewId",
+            "in": "path",
+            "required": true,
+            "description": "Review ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Review deleted successfully. No response body." },
+          "400": {
+            "description": "The place ID or the review ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidId": { "value": { "code": "INVALID_PLACE_ID", "message": "invalid place_id" } },
+                  "invalidReviewId": { "value": { "code": "INVALID_REVIEW_ID", "message": "invalid review_id" } }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The place has no such review.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "REVIEW_NOT_FOUND", "message": "review not found" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
     "/v1/places/categories": {
       "get": {
         "tags": ["Categories"],

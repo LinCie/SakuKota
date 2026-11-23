@@ -100,6 +100,9 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 					// POST /v1/places/{id}/reviews
 					r.Post("/", reviewModule.Handler.Create)
 
+					// DELETE /v1/places/{id}/reviews/mine
+					r.Delete("/mine", reviewModule.Handler.DeleteMine)
+
 					// POST /v1/places/{id}/reviews/mine/medias/upload-url
 					r.Post("/mine/medias/upload-url", reviewModule.Handler.CreateMediaUpload)
 
@@ -108,6 +111,14 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 
 					// DELETE /v1/places/{id}/reviews/mine/medias/{mediaId}
 					r.Delete("/mine/medias/{mediaId}", reviewModule.Handler.DeleteMedia)
+				})
+
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.WithAuth(cfg))
+					r.Use(middleware.Guard([]string{domain.RoleAdmin}))
+
+					// DELETE /v1/places/{id}/reviews/{reviewId}
+					r.Delete("/{reviewId}", reviewModule.Handler.Delete)
 				})
 			})
 

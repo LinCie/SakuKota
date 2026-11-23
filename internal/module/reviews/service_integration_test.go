@@ -111,3 +111,85 @@ func TestService_Create_RatingTotals(t *testing.T) {
 		assert.Empty(t, stored, "the review outlived the rollback")
 	})
 }
+
+func TestService_Delete_RatingTotals(t *testing.T) {
+	// createReview stores a review through service and returns its id.
+	createReview := func(t *testing.T, service reviews.Service, placeID int64, name string, rating int) int64 {
+		t.Helper()
+		got, err := service.Create(t.Context(), &domain.Review{PlaceID: placeID, UserID: pgtest.InsertUser(t, testDB, name), Rating: rating})
+		require.NoError(t, err, "Create(%s, rating %d)", name, rating)
+		return got.ID
+	}
+
+	t.Run("removes_the_rating", func(t *testing.T) {
+		service := newWiredService(t)
+		placeID := insertPlace(t, "Laundry")
+		reviewID := createReview(t, service, placeID, "Ana", 5)
+		createReview(t, service, placeID, "Budi", 3)
+
+		require.NoError(t, service.Delete(t.Context(), placeID, reviewID))
+
+		assert.Equal(t, [2]int{1, 3}, ratingTotals(t, placeID))
+	})
+
+	t.Run("concurrent_deletes_remove_it_once", func(t *testing.T) {
+		service := newWiredService(t)
+		placeID := insertPlace(t, "Laundry")
+		reviewID := createReview(t, service, placeID, "Ana", 5)
+		createReview(t, service, placeID, "Budi", 3)
+		const deleters = 10
+
+		var wg sync.WaitGroup
+		errs := make([]error, deleters)
+		for i := range deleters {
+			wg.Go(func() {
+				errs[i] = service.Delete(t.Context(), placeID, reviewID)
+			})
+		}
+		wg.Wait()
+
+		deleted := 0
+		for i, err := range errs {
+			if err == nil { // if NO error
+				deleted++
+				continue
+			}
+			assert.ErrorIs(t, err, domain.ErrReviewNotFound, "Delete() by deleter %d", i)
+		}
+		assert.Equal(t, 1, deleted, "successful deletes")
+		assert.Equal(t, [2]int{1, 3}, ratingTotals(t, placeID))
+	})
+
+	t.Run("author_deletes_own_review", func(t *testing.T) {
+		service := newWiredService(t)
+		placeID := insertPlace(t, "Laundry")
+		anaID := pgtest.InsertUser(t, testDB, "Ana")
+		_, err := service.Create(t.Context(), &domain.Review{PlaceID: placeID, UserID: anaID, Rating: 5})
+		require.NoError(t, err)
+		createReview(t, service, placeID, "Budi", 3)
+
+		require.NoError(t, service.DeleteMine(t.Context(), placeID, anaID))
+
+		assert.Equal(t, [2]int{1, 3}, ratingTotals(t, placeID))
+		assert.ErrorIs(t, service.DeleteMine(t.Context(), placeID, anaID), domain.ErrReviewNotFound, "second DeleteMine()")
+	})
+
+	t.Run("failed_rating_keeps_review", func(t *testing.T) {
+		pgtest.Reset(t, testDB)
+		placeID := insertPlace(t, "Laundry")
+		repo := reviews.NewPostgresRepository(testDB)
+		created, err := repo.Create(t.Context(), &domain.Review{PlaceID: placeID, UserID: pgtest.InsertUser(t, testDB, "Ana"), Rating: 4})
+		require.NoError(t, err)
+		boom := errors.New("boom")
+		placeService := mock.NewMockPlaceService(gomock.NewController(t))
+		placeService.EXPECT().RemoveRating(gomock.Any(), placeID, 4).Return(boom)
+		service := reviews.NewService(repo, database.NewTransactor(testDB), placeService, nil)
+
+		err = service.Delete(t.Context(), placeID, created.ID)
+
+		assert.ErrorIs(t, err, boom)
+		stored, err := repo.ListByPlace(t.Context(), placeID)
+		require.NoError(t, err)
+		assert.Len(t, stored, 1, "the review was deleted despite the rollback")
+	})
+}

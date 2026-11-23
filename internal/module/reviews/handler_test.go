@@ -41,7 +41,10 @@ func newRouter(svc *mock.MockService) http.Handler {
 				r.Post("/mine/medias/upload-url", h.CreateMediaUpload)
 				r.Post("/mine/medias", h.AddMedia)
 				r.Delete("/mine/medias/{mediaId}", h.DeleteMedia)
+				r.Delete("/mine", h.DeleteMine)
 			})
+			// Admins only in production; the router test covers that check.
+			r.Delete("/{reviewId}", h.Delete)
 		})
 	})
 	return r
@@ -596,4 +599,128 @@ func TestHandler_DeleteMedia(t *testing.T) {
 	rec := serve(t, newRouter(svc), authRequest(t, deleteRequest.method, deleteRequest.target, deleteRequest.body, 7))
 	assert.Equal(t, http.StatusNoContent, rec.Code, "body: %s", rec.Body)
 	assert.Empty(t, rec.Body.String())
+}
+
+func TestHandler_Delete(t *testing.T) {
+	t.Run("deleted", func(t *testing.T) {
+		svc := newService(t)
+		svc.EXPECT().Delete(gomock.Any(), int64(3), int64(9)).Return(nil)
+
+		rec := serve(t, newRouter(svc), httptest.NewRequest(http.MethodDelete, "/places/3/reviews/9", nil))
+		assert.Equal(t, http.StatusNoContent, rec.Code, "body: %s", rec.Body)
+		assert.Empty(t, rec.Body.String())
+	})
+
+	t.Run("context_reaches_service", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		svc := newService(t)
+		svc.EXPECT().Delete(gomock.Any(), int64(3), int64(9)).DoAndReturn(func(got context.Context, _, _ int64) error {
+			assert.Error(t, got.Err(), "service was not given the request's context")
+			return got.Err()
+		})
+
+		req := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/places/3/reviews/9", nil)
+		rec := serve(t, newRouter(svc), req)
+		assert.NotEqual(t, http.StatusNoContent, rec.Code, "status for a request whose context had ended")
+	})
+}
+
+func TestHandler_Delete_InvalidID(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+		want   string
+	}{
+		{name: "place", target: "/places/abc/reviews/9", want: "INVALID_PLACE_ID"},
+		{name: "zero_place", target: "/places/0/reviews/9", want: "INVALID_PLACE_ID"},
+		{name: "review", target: "/places/3/reviews/abc", want: "INVALID_REVIEW_ID"},
+		{name: "negative_review", target: "/places/3/reviews/-1", want: "INVALID_REVIEW_ID"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := serve(t, newRouter(newService(t)), httptest.NewRequest(http.MethodDelete, tc.target, nil))
+			assert.Equal(t, wantError(http.StatusBadRequest, tc.want), readError(t, rec), "DELETE %s", tc.target)
+		})
+	}
+}
+
+func TestHandler_Delete_Errors(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want errorResult
+	}{
+		{name: "unknown_review", err: domain.ErrReviewNotFound, want: wantError(http.StatusNotFound, "REVIEW_NOT_FOUND")},
+		{name: "storage_failure", err: errors.New("connection reset"), want: wantError(http.StatusInternalServerError, "INTERNAL_ERROR")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := newService(t)
+			svc.EXPECT().Delete(gomock.Any(), int64(3), int64(9)).Return(tc.err)
+
+			rec := serve(t, newRouter(svc), httptest.NewRequest(http.MethodDelete, "/places/3/reviews/9", nil))
+			assert.Equal(t, tc.want, readError(t, rec))
+		})
+	}
+}
+
+func TestHandler_DeleteMine(t *testing.T) {
+	t.Run("deleted", func(t *testing.T) {
+		svc := newService(t)
+		svc.EXPECT().DeleteMine(gomock.Any(), int64(3), int64(7)).Return(nil)
+
+		rec := serve(t, newRouter(svc), authRequest(t, http.MethodDelete, "/places/3/reviews/mine", "", 7))
+		assert.Equal(t, http.StatusNoContent, rec.Code, "body: %s", rec.Body)
+		assert.Empty(t, rec.Body.String())
+	})
+
+	t.Run("context_reaches_service", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		svc := newService(t)
+		svc.EXPECT().DeleteMine(gomock.Any(), int64(3), int64(7)).DoAndReturn(func(got context.Context, _, _ int64) error {
+			assert.Error(t, got.Err(), "service was not given the request's context")
+			return got.Err()
+		})
+
+		req := authRequest(t, http.MethodDelete, "/places/3/reviews/mine", "", 7).WithContext(ctx)
+		rec := serve(t, newRouter(svc), req)
+		assert.NotEqual(t, http.StatusNoContent, rec.Code, "status for a request whose context had ended")
+	})
+
+	t.Run("signed_out", func(t *testing.T) {
+		rec := serve(t, newRouter(newService(t)), httptest.NewRequest(http.MethodDelete, "/places/3/reviews/mine", nil))
+		assert.Equal(t, wantError(http.StatusUnauthorized, "UNAUTHORIZED"), readError(t, rec))
+	})
+
+	t.Run("invalid_place_id", func(t *testing.T) {
+		rec := serve(t, newRouter(newService(t)), authRequest(t, http.MethodDelete, "/places/abc/reviews/mine", "", 7))
+		assert.Equal(t, wantError(http.StatusBadRequest, "INVALID_PLACE_ID"), readError(t, rec))
+	})
+}
+
+func TestHandler_DeleteMine_Errors(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want errorResult
+	}{
+		{name: "no_review", err: domain.ErrReviewNotFound, want: wantError(http.StatusNotFound, "REVIEW_NOT_FOUND")},
+		{name: "storage_failure", err: errors.New("connection reset"), want: wantError(http.StatusInternalServerError, "INTERNAL_ERROR")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := newService(t)
+			svc.EXPECT().DeleteMine(gomock.Any(), int64(3), int64(7)).Return(tc.err)
+
+			rec := serve(t, newRouter(svc), authRequest(t, http.MethodDelete, "/places/3/reviews/mine", "", 7))
+			assert.Equal(t, tc.want, readError(t, rec))
+		})
+	}
 }

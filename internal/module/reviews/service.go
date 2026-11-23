@@ -30,6 +30,10 @@ type Repository interface {
 	// queues its file for deletion. It returns domain.ErrMediaNotFound if
 	// there is no such photo.
 	DeleteMedia(ctx context.Context, placeID, userID, mediaID int64) error
+	// Delete removes the place's review and its photos, queues the photo files
+	// for deletion, and returns the review's rating. It returns
+	// domain.ErrReviewNotFound if the place has no such review.
+	Delete(ctx context.Context, placeID, reviewID int64) (int, error)
 }
 
 // Transactor runs functions in one database transaction.
@@ -44,6 +48,8 @@ type Transactor interface {
 type PlaceService interface {
 	// AddRating adds one review rating to the place's rating totals.
 	AddRating(ctx context.Context, placeID int64, rating int) error
+	// RemoveRating takes one review rating off the place's rating totals.
+	RemoveRating(ctx context.Context, placeID int64, rating int) error
 }
 
 // MediaStorage is the file storage the service needs.
@@ -151,6 +157,30 @@ func (s *service) ListByPlace(ctx context.Context, placeID int64) ([]domain.Revi
 // repository also queues the photo file for deletion.
 func (s *service) DeleteMedia(ctx context.Context, placeID, userID, mediaID int64) error {
 	return s.repo.DeleteMedia(ctx, placeID, userID, mediaID)
+}
+
+// Delete removes the place's review and its photos, and takes its rating off
+// the place's totals in one transaction. It returns domain.ErrReviewNotFound
+// if the place has no such review.
+func (s *service) Delete(ctx context.Context, placeID, reviewID int64) error {
+	return s.tx.WithinTx(ctx, func(ctx context.Context) error {
+		rating, err := s.repo.Delete(ctx, placeID, reviewID)
+		if err != nil {
+			return err
+		}
+		return s.places.RemoveRating(ctx, placeID, rating)
+	})
+}
+
+// DeleteMine deletes the user's review of the place as Delete does. It returns
+// domain.ErrReviewNotFound if the user has not reviewed the place.
+func (s *service) DeleteMine(ctx context.Context, placeID, userID int64) error {
+	review, err := s.repo.Fetch(ctx, placeID, userID)
+	if err != nil {
+		return err
+	}
+
+	return s.Delete(ctx, placeID, review.ID)
 }
 
 // mediaPrefix returns the storage folder of the photos of the user's review of

@@ -6,6 +6,7 @@ import { uploadImage } from "~/shared/image-upload";
 import {
   addReviewMedia,
   createPlaceReview,
+  deletePlaceReview,
   deleteReviewMedia,
   getPlaceReviews,
   requestReviewMediaUpload,
@@ -33,6 +34,19 @@ export function useCreateReview(placeId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: CreateReviewRequest) => createPlaceReview(placeId, body),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: reviewKeys.place(placeId) }),
+        queryClient.invalidateQueries({ queryKey: placeKeys.all }),
+      ]),
+  });
+}
+
+export function useDeleteReview(placeId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (reviewId: number | "mine") =>
+      deletePlaceReview(placeId, reviewId),
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: reviewKeys.place(placeId) }),

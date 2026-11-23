@@ -485,3 +485,63 @@ func TestPostgresRepository_DeleteMedia(t *testing.T) {
 		assert.Equal(t, 1, storedMediaCount(t), "stored medias")
 	})
 }
+
+func TestPostgresRepository_Delete(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("removes_review_and_queues_medias", func(t *testing.T) {
+		repo, placeID, userID := newReview(t)
+		mustAddMedia(t, repo, placeID, userID, "reviews/1/1/a.webp")
+		mustAddMedia(t, repo, placeID, userID, "reviews/1/1/b.webp")
+		review, err := repo.Fetch(ctx, placeID, userID)
+		require.NoError(t, err)
+		budiID := pgtest.InsertUser(t, testDB, "Budi")
+		mustCreate(t, repo, &domain.Review{PlaceID: placeID, UserID: budiID, Rating: 2})
+		mustAddMedia(t, repo, placeID, budiID, "reviews/1/2/a.webp")
+
+		rating, err := repo.Delete(ctx, placeID, review.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, 4, rating, "Delete() rating")
+		_, err = repo.Fetch(ctx, placeID, userID)
+		assert.ErrorIs(t, err, domain.ErrReviewNotFound, "Fetch() after Delete()")
+		assert.Equal(t, []string{"reviews/1/1/a.webp", "reviews/1/1/b.webp"}, pgtest.QueuedKeys(t, testDB), "queued keys")
+		// Other reviews and their medias are untouched.
+		assert.Equal(t, 1, storedMediaCount(t), "stored medias")
+		_, err = repo.Fetch(ctx, placeID, budiID)
+		assert.NoError(t, err, "Fetch() of the other review")
+	})
+
+	t.Run("author_can_review_again", func(t *testing.T) {
+		repo, placeID, userID := newReview(t)
+		review, err := repo.Fetch(ctx, placeID, userID)
+		require.NoError(t, err)
+		_, err = repo.Delete(ctx, placeID, review.ID)
+		require.NoError(t, err)
+
+		_, err = repo.Create(ctx, &domain.Review{PlaceID: placeID, UserID: userID, Rating: 5})
+
+		assert.NoError(t, err, "Create() after Delete()")
+	})
+
+	t.Run("review_of_another_place", func(t *testing.T) {
+		repo, placeID, userID := newReview(t)
+		review, err := repo.Fetch(ctx, placeID, userID)
+		require.NoError(t, err)
+		otherPlaceID := insertPlace(t, "Other")
+
+		_, err = repo.Delete(ctx, otherPlaceID, review.ID)
+
+		assert.ErrorIs(t, err, domain.ErrReviewNotFound)
+		_, err = repo.Fetch(ctx, placeID, userID)
+		assert.NoError(t, err, "the review must be kept")
+	})
+
+	t.Run("unknown_review", func(t *testing.T) {
+		repo, placeID, _ := newReview(t)
+
+		_, err := repo.Delete(ctx, placeID, 999)
+
+		assert.ErrorIs(t, err, domain.ErrReviewNotFound)
+	})
+}

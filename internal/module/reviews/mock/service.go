@@ -72,6 +72,21 @@ func (mr *MockRepositoryMockRecorder) Create(ctx, r any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockRepository)(nil).Create), ctx, r)
 }
 
+// Delete mocks base method.
+func (m *MockRepository) Delete(ctx context.Context, placeID, reviewID int64) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, placeID, reviewID)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockRepositoryMockRecorder) Delete(ctx, placeID, reviewID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockRepository)(nil).Delete), ctx, placeID, reviewID)
+}
+
 // DeleteMedia mocks base method.
 func (m *MockRepository) DeleteMedia(ctx context.Context, placeID, userID, mediaID int64) error {
 	m.ctrl.T.Helper()
@@ -190,6 +205,20 @@ func (m *MockPlaceService) AddRating(ctx context.Context, placeID int64, rating 
 func (mr *MockPlaceServiceMockRecorder) AddRating(ctx, placeID, rating any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRating", reflect.TypeOf((*MockPlaceService)(nil).AddRating), ctx, placeID, rating)
+}
+
+// RemoveRating mocks base method.
+func (m *MockPlaceService) RemoveRating(ctx context.Context, placeID int64, rating int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveRating", ctx, placeID, rating)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveRating indicates an expected call of RemoveRating.
+func (mr *MockPlaceServiceMockRecorder) RemoveRating(ctx, placeID, rating any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveRating", reflect.TypeOf((*MockPlaceService)(nil).RemoveRating), ctx, placeID, rating)
 }
 
 // MockMediaStorage is a mock of MediaStorage interface.

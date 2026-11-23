@@ -1,8 +1,9 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, Suspense, useState, type ReactNode } from "react";
 
-import { useSession } from "~/features/auth/session";
+import { isAdmin, useSession } from "~/features/auth/session";
 import { cn } from "~/shared/cn";
+import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { MediaCard } from "~/shared/components/media-card";
 import {
   menuButtonClass,
@@ -10,12 +11,15 @@ import {
 } from "~/shared/components/menu-board";
 import { MissingSlot } from "~/shared/components/missing-slot";
 import { formatLocalDate } from "~/shared/format";
+import { writeErrorMessage } from "~/shared/write-error";
 
 import {
   useAddReviewMedias,
+  useDeleteReview,
   useDeleteReviewMedia,
   usePlaceReviews,
 } from "../queries";
+import type { Review } from "../types";
 import { RatingStars } from "./rating-stars";
 import { ReviewMedia } from "./review-media";
 
@@ -27,7 +31,8 @@ const ReviewForm = lazy(() =>
 /**
  * A place's reviews under its menu board, newest first. Signed-in users who
  * have not reviewed the place yet get a form for theirs; signed-out visitors
- * get a way to sign in and come back.
+ * get a way to sign in and come back. Users can delete their own review,
+ * admins any review.
  */
 export function PlaceReviews({ placeId }: { placeId: number }) {
   const session = useSession();
@@ -37,6 +42,11 @@ export function PlaceReviews({ placeId }: { placeId: number }) {
   // their progress and errors once the saved review swaps the form for the card.
   const addMedias = useAddReviewMedias(placeId);
   const deleteMedia = useDeleteReviewMedia(placeId);
+  const admin = isAdmin(session);
+  const deleteReview = useDeleteReview(placeId);
+  // The review asked to be deleted, while the confirmation is open.
+  const [toDelete, setToDelete] = useState<Review | null>(null);
+  const isOwn = (review: Review) => review.user.id === session?.user.id;
 
   let writer: ReactNode = null;
   if (!session) {
@@ -144,12 +154,27 @@ export function PlaceReviews({ placeId }: { placeId: number }) {
                 ))}
               </ul>
             ) : null}
-            <time
-              dateTime={review.created_at}
-              className="text-ink-soft text-sm"
-            >
-              {formatLocalDate(new Date(review.created_at))}
-            </time>
+            <div className="flex items-center justify-between gap-3">
+              <time
+                dateTime={review.created_at}
+                className="text-ink-soft text-sm"
+              >
+                {formatLocalDate(new Date(review.created_at))}
+              </time>
+              {admin || isOwn(review) ? (
+                <button
+                  type="button"
+                  onClick={() => setToDelete(review)}
+                  aria-label={`Hapus ulasan ${review.user.name}`}
+                  className={cn(
+                    menuButtonClass,
+                    "text-chili rounded-[3px] px-2 py-1 text-sm font-semibold",
+                  )}
+                >
+                  Hapus
+                </button>
+              ) : null}
+            </div>
           </li>
         ))}
       </ul>
@@ -166,6 +191,30 @@ export function PlaceReviews({ placeId }: { placeId: number }) {
       </h3>
       {writer}
       {list}
+      {session ? (
+        <ConfirmDialog
+          open={toDelete !== null}
+          onOpenChange={(open) => {
+            if (open) return;
+            setToDelete(null);
+            deleteReview.reset();
+          }}
+          title="Hapus ulasan?"
+          description={`${toDelete && !isOwn(toDelete) ? `Ulasan ${toDelete.user.name}` : "Ulasanmu"} beserta fotonya akan dihapus dan ratingnya tidak dihitung lagi. Tindakan ini tidak bisa dibatalkan.`}
+          confirmLabel="Hapus ulasan"
+          pending={deleteReview.isPending}
+          error={
+            deleteReview.error ? writeErrorMessage(deleteReview.error) : null
+          }
+          onConfirm={() => {
+            if (toDelete)
+              // Own reviews go through "mine", which needs no admin role.
+              deleteReview.mutate(isOwn(toDelete) ? "mine" : toDelete.id, {
+                onSuccess: () => setToDelete(null),
+              });
+          }}
+        />
+      ) : null}
     </section>
   );
 }

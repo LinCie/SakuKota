@@ -4,8 +4,8 @@
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-23 (review authors add and delete up to 10 medias
->   on their review through the same promote flow as places).
+> - Last updated: 2026-11-24 (authors delete their own review, admins any
+>   review, taking its rating off the place and queueing its medias).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
@@ -101,11 +101,12 @@ Applies to every module unless §6 says otherwise. All routes live under `/v1`.
   - *Public:* `/docs`, `/openapi.json`, `/v1/auth/*`, `GET /places`,
     `GET /places/{id}`, `GET /places/{id}/reviews`, `GET /places/categories[/{id}]`,
     `GET /subdistricts[/{id}]`.
-  - *Signed in:* `POST /places/{id}/reviews`, the caller's review media
-    routes under `/places/{id}/reviews/mine/medias`, `POST /suggestions`,
-    `GET /suggestions/mine`.
+  - *Signed in:* `POST /places/{id}/reviews`, `DELETE /places/{id}/reviews/mine`,
+    the caller's review media routes under `/places/{id}/reviews/mine/medias`,
+    `POST /suggestions`, `GET /suggestions/mine`.
   - *Admin:* place and sub-district create/update/delete and media routes,
-    `PUT /subdistricts/{id}/boundary`, `GET /suggestions[/{id}]`, approve, reject.
+    `PUT /subdistricts/{id}/boundary`, `DELETE /places/{id}/reviews/{reviewId}`,
+    `GET /suggestions[/{id}]`, approve, reject.
 - **Privacy.** Emails appear only in the caller's own user object from register,
   login, and refresh. Nested authors are `{id, name}`. No password material.
 
@@ -220,9 +221,19 @@ ratings, `medias` is `[]` without images.
   - No review by the caller → `404 REVIEW_NOT_FOUND` (presign and add, before
     anything is presigned or promoted). Upload errors → `400
     VALIDATION_ERROR`.
+- **Delete (admin) `DELETE /places/{id}/reviews/{reviewId}`** → `204`. The
+  review is deleted, its medias deleted and their keys queued, and its rating
+  taken off the place's totals through the place service, all in one
+  transaction: a failed rating change keeps the review. Concurrent deletes take
+  the rating off once. Bad ids → `INVALID_PLACE_ID` / `INVALID_REVIEW_ID`;
+  unknown review or one of another place → `404 REVIEW_NOT_FOUND`. The author
+  may then review the place again.
+- **Delete own (signed in) `DELETE /places/{id}/reviews/mine`** → `204`, with
+  the same effects as an admin delete. No review by the caller → `404
+  REVIEW_NOT_FOUND`.
 - Response: `{id, place_id, rating, comment, created_at, user{id,name},
   medias}`; `medias` is `[]` without any, and lists include each review's
-  medias in position order. No edit or delete.
+  medias in position order. No edit.
 
 ### 6.5 Sub-districts (`internal/module/subdistricts`)
 
@@ -295,8 +306,8 @@ Modules never import each other: a module that needs another (auth → users,
 suggestions → places, reviews → places) declares the interface it consumes, and
 `internal/router` wires the concrete services. Each handler declares the
 `Service` interface it consumes, and `NewService` returns it, backed by the
-unexported `service` struct (`places.Service` also carries `AddRating` for
-reviews). Users and storage cleanup have no handler, so their `NewService`
+unexported `service` struct (`places.Service` also carries `AddRating` and
+`RemoveRating` for reviews). Users and storage cleanup have no handler, so their `NewService`
 returns `*service`. Services own transactions that
 span repositories or services through `database.Transactor.WithinTx`, which
 carries the transaction in `ctx`; repositories run queries on
@@ -339,7 +350,7 @@ exits, with status 1 on failure.
 | ---- | ------ | ---- |
 | `INVALID_BODY` | 400 | Undecodable or wrongly typed body |
 | `VALIDATION_ERROR` | 400 | Business-rule violations, unknown referenced sub-district/category in writes, upload errors |
-| `INVALID_*_ID` (place, sub-district, category, suggestion, media) | 400 | Bad path id or `GET /places` filter |
+| `INVALID_*_ID` (place, sub-district, category, suggestion, media, review) | 400 | Bad path id or `GET /places` filter |
 | `INVALID_LIMIT` / `INVALID_OFFSET` / `INVALID_BBOX` | 400 | `GET /places` |
 | `INVALID_STATUS` | 400 | `GET /suggestions` |
 | `UNAUTHORIZED` | 401 | Missing or invalid access token |
@@ -399,7 +410,7 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
   old static maps were not queued (the migration was edited in place, so
   databases must be rebuilt).
 - **Unspecified:** `UploadTTL`, production token lifetime, cleanup schedule,
-  review edit/delete, a current-user endpoint, listing users.
+  review edit, a current-user endpoint, listing users.
 - **Performance:** the `bbox` spread ranks every place in the box (~4 ms on
   1,092 seeded places; untested at 50,000).
 - **Web (`web/`):** untested. No admin screens for sub-districts. The map sends
@@ -439,3 +450,5 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-23 | Review medias: presign/add/delete routes under `/places/{id}/reviews/mine/medias`, `medias` in review responses; place delete queues review medias |
 | 2026-11-23 | Web review form picks up to 10 files and adds them through the review media routes once the review is saved; no contract change |
 | 2026-11-23 | Web review images open full size in a modal on click; no contract change |
+| 2026-11-24 | Admin review deletion `DELETE /places/{id}/reviews/{reviewId}` (rating removed, medias queued); web shows a delete button with confirmation to admins |
+| 2026-11-24 | Authors delete their own review via `DELETE /places/{id}/reviews/mine`; web shows them the delete button too |

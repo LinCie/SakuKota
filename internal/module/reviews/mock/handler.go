@@ -72,6 +72,20 @@ func (mr *MockServiceMockRecorder) Create(ctx, r any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockService)(nil).Create), ctx, r)
 }
 
+// Delete mocks base method.
+func (m *MockService) Delete(ctx context.Context, placeID, reviewID int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, placeID, reviewID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockServiceMockRecorder) Delete(ctx, placeID, reviewID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockService)(nil).Delete), ctx, placeID, reviewID)
+}
+
 // DeleteMedia mocks base method.
 func (m *MockService) DeleteMedia(ctx context.Context, placeID, userID, mediaID int64) error {
 	m.ctrl.T.Helper()
@@ -84,6 +98,20 @@ func (m *MockService) DeleteMedia(ctx context.Context, placeID, userID, mediaID 
 func (mr *MockServiceMockRecorder) DeleteMedia(ctx, placeID, userID, mediaID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMedia", reflect.TypeOf((*MockService)(nil).DeleteMedia), ctx, placeID, userID, mediaID)
+}
+
+// DeleteMine mocks base method.
+func (m *MockService) DeleteMine(ctx context.Context, placeID, userID int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteMine", ctx, placeID, userID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteMine indicates an expected call of DeleteMine.
+func (mr *MockServiceMockRecorder) DeleteMine(ctx, placeID, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMine", reflect.TypeOf((*MockService)(nil).DeleteMine), ctx, placeID, userID)
 }
 
 // ListByPlace mocks base method.

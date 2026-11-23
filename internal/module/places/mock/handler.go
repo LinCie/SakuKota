@@ -191,6 +191,20 @@ func (mr *MockServiceMockRecorder) MediaUploadURL(ctx, id, contentType any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MediaUploadURL", reflect.TypeOf((*MockService)(nil).MediaUploadURL), ctx, id, contentType)
 }
 
+// RemoveRating mocks base method.
+func (m *MockService) RemoveRating(ctx context.Context, id int64, rating int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveRating", ctx, id, rating)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveRating indicates an expected call of RemoveRating.
+func (mr *MockServiceMockRecorder) RemoveRating(ctx, id, rating any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveRating", reflect.TypeOf((*MockService)(nil).RemoveRating), ctx, id, rating)
+}
+
 // Update mocks base method.
 func (m *MockService) Update(ctx context.Context, id int64, p *domain.Place) (*domain.Place, error) {
 	m.ctrl.T.Helper()

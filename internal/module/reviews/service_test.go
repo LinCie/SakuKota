@@ -206,6 +206,73 @@ func TestService_Create_TransactionFailure(t *testing.T) {
 	assert.Nil(t, got)
 }
 
+func TestService_Delete(t *testing.T) {
+	boom := errors.New("connection reset")
+
+	tests := []struct {
+		name      string
+		deleteErr error // returned when the review is deleted
+		ratingErr error // returned when the rating is removed; not reached if deleteErr is set
+	}{
+		{name: "deleted", deleteErr: nil, ratingErr: nil},
+		{name: "unknown_review", deleteErr: domain.ErrReviewNotFound, ratingErr: nil},
+		{name: "storage_failure", deleteErr: boom, ratingErr: nil},
+		{name: "rating_failure", deleteErr: nil, ratingErr: boom},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			repo := mock.NewMockRepository(ctrl)
+			places := mock.NewMockPlaceService(ctrl)
+			// Both writes run, in order, inside the one transaction.
+			del := repo.EXPECT().Delete(inTx, int64(3), int64(9)).Return(4, tc.deleteErr)
+			if tc.deleteErr == nil {
+				places.EXPECT().RemoveRating(inTx, int64(3), 4).Return(tc.ratingErr).After(del)
+			}
+
+			err := reviews.NewService(repo, newTransactor(ctrl), places, mock.NewMockMediaStorage(ctrl)).Delete(t.Context(), 3, 9)
+
+			wantErr := tc.deleteErr
+			if wantErr == nil {
+				wantErr = tc.ratingErr
+			}
+			if wantErr == nil {
+				assert.NoError(t, err)
+				return
+			}
+			assert.ErrorIs(t, err, wantErr)
+		})
+	}
+}
+
+func TestService_DeleteMine(t *testing.T) {
+	t.Run("deletes_the_users_review", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		repo := mock.NewMockRepository(ctrl)
+		places := mock.NewMockPlaceService(ctrl)
+		fetch := repo.EXPECT().Fetch(gomock.Any(), int64(3), int64(7)).Return(&domain.Review{ID: 9, PlaceID: 3, UserID: 7, Rating: 4}, nil)
+		del := repo.EXPECT().Delete(inTx, int64(3), int64(9)).Return(4, nil).After(fetch)
+		places.EXPECT().RemoveRating(inTx, int64(3), 4).Return(nil).After(del)
+
+		err := reviews.NewService(repo, newTransactor(ctrl), places, mock.NewMockMediaStorage(ctrl)).DeleteMine(t.Context(), 3, 7)
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("lookup_failure_deletes_nothing", func(t *testing.T) {
+		for _, lookupErr := range []error{domain.ErrReviewNotFound, errors.New("connection reset")} {
+			ctrl := gomock.NewController(t)
+			repo := mock.NewMockRepository(ctrl)
+			repo.EXPECT().Fetch(gomock.Any(), int64(3), int64(7)).Return(nil, lookupErr)
+
+			err := reviews.NewService(repo, mock.NewMockTransactor(ctrl), mock.NewMockPlaceService(ctrl), mock.NewMockMediaStorage(ctrl)).DeleteMine(t.Context(), 3, 7)
+
+			assert.ErrorIs(t, err, lookupErr)
+		}
+	})
+}
+
 // Review media fixtures: user 7's review of place 3.
 const (
 	mediaPrefix = "reviews/3/7"

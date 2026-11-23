@@ -280,6 +280,48 @@ func (r *PostgresRepository) DeleteMedia(ctx context.Context, placeID, userID, m
 	return tx.Commit()
 }
 
+// Delete removes the place's review with the given id and its medias, queues
+// the media files for deletion, and returns the review's rating. It joins the
+// transaction carried by ctx if there is one. It returns
+// domain.ErrReviewNotFound if the place has no such review.
+func (r *PostgresRepository) Delete(ctx context.Context, placeID, reviewID int64) (int, error) {
+	var rating int
+	err := database.NewTransactor(r.db).WithinTx(ctx, func(ctx context.Context) error {
+		conn := database.Conn(ctx, r.db)
+
+		// Lock first so the delete below starts after any media being added has
+		// committed, and sees it; otherwise its file would never be queued.
+		var id int64
+		err := conn.GetContext(ctx, &id, `SELECT id FROM PLACE_REVIEWS WHERE id = $1 AND place_id = $2 FOR UPDATE`, reviewID, placeID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.ErrReviewNotFound
+		}
+		if err != nil {
+			return err
+		}
+
+		// The files are queued in the same statement as the row deletes, so both commit or neither does.
+		return conn.GetContext(
+			ctx,
+			&rating,
+			`WITH medias AS (
+				DELETE FROM MEDIAS
+				WHERE id IN (SELECT media_id FROM PLACE_REVIEW_MEDIAS WHERE review_id = $1)
+				RETURNING key
+			), queued AS (
+				INSERT INTO STORAGE_DELETIONS (key)
+				SELECT key FROM medias
+				ON CONFLICT (key) DO NOTHING
+			)
+			DELETE FROM PLACE_REVIEWS WHERE id = $1
+			RETURNING rating`,
+			id,
+		)
+	})
+
+	return rating, err
+}
+
 // lockReview locks the user's review of the place in tx and returns its id,
 // or sql.ErrNoRows if there is none.
 func lockReview(ctx context.Context, tx *sqlx.Tx, placeID, userID int64) (int64, error) {

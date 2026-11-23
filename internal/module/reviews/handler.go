@@ -18,6 +18,7 @@ const (
 	codePlaceNotFound     = "PLACE_NOT_FOUND"
 	codeAlreadyReviewed   = "ALREADY_REVIEWED"
 	codeReviewNotFound    = "REVIEW_NOT_FOUND"
+	codeInvalidReviewID   = "INVALID_REVIEW_ID"
 	codeInvalidMediaID    = "INVALID_MEDIA_ID"
 	codeMediaNotFound     = "MEDIA_NOT_FOUND"
 	codeMediaLimitReached = "MEDIA_LIMIT_REACHED"
@@ -32,6 +33,8 @@ type Service interface {
 	AddMedia(ctx context.Context, placeID, userID int64, uploadKey string) (*domain.Review, error)
 	ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error)
 	DeleteMedia(ctx context.Context, placeID, userID, mediaID int64) error
+	Delete(ctx context.Context, placeID, reviewID int64) error
+	DeleteMine(ctx context.Context, placeID, userID int64) error
 }
 
 // Handler serves the review endpoints.
@@ -165,6 +168,45 @@ func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Delete removes the review in the URL from the place in the URL. The route
+// must be limited to admins.
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, ok := placeID(w, r)
+	if !ok {
+		return
+	}
+
+	reviewID, ok := httpx.PathID(w, r, "reviewId", codeInvalidReviewID, "invalid review_id")
+	if !ok {
+		return
+	}
+
+	respondDeleted(w, h.service.Delete(r.Context(), id, reviewID))
+}
+
+// DeleteMine removes the logged-in user's review of the place in the URL.
+// The route must sit behind middleware.WithAuth, so the user is known.
+func (h *Handler) DeleteMine(w http.ResponseWriter, r *http.Request) {
+	id, userID, ok := placeAndUser(w, r)
+	if !ok {
+		return
+	}
+
+	respondDeleted(w, h.service.DeleteMine(r.Context(), id, userID))
+}
+
+// respondDeleted answers the outcome err of a review delete.
+func respondDeleted(w http.ResponseWriter, err error) {
+	switch {
+	case err == nil:
+		w.WriteHeader(http.StatusNoContent)
+	case errors.Is(err, domain.ErrReviewNotFound):
+		httpx.RespondError(w, http.StatusNotFound, codeReviewNotFound, err.Error())
+	default:
+		httpx.RespondInternalError(w)
+	}
 }
 
 // placeID reads the place id from the URL, or answers 400.

@@ -32,8 +32,9 @@ const (
 
 //go:generate mockgen -source=handler.go -destination=mock/handler.go -package=mock
 
-// Service is the service the Handler uses. AddRating is not called by the
-// Handler; it is part of Service so Module.Service can be wired into reviews.
+// Service is the service the Handler uses. AddRating and RemoveRating are not
+// called by the Handler; they are part of Service so Module.Service can be
+// wired into reviews.
 type Service interface {
 	Create(ctx context.Context, p *domain.Place) (*domain.Place, error)
 	MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error)
@@ -46,6 +47,7 @@ type Service interface {
 	Delete(ctx context.Context, id int64) error
 	DeleteMedia(ctx context.Context, id, mediaID int64) error
 	AddRating(ctx context.Context, id int64, rating int) error
+	RemoveRating(ctx context.Context, id int64, rating int) error
 }
 
 // Handler serves the place and category endpoints.

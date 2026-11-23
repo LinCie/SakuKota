@@ -328,11 +328,25 @@ func (r *PostgresRepository) Update(ctx context.Context, p *domain.Place) (*doma
 // recounting them, means two ratings at once both count.
 // It returns domain.ErrPlaceNotFound if there is no such place.
 func (r *PostgresRepository) AddRating(ctx context.Context, id int64, rating int) error {
+	return r.changeRating(ctx, id, 1, rating)
+}
+
+// RemoveRating takes one review rating off the place's rating totals, in the
+// transaction carried by ctx if there is one.
+// It returns domain.ErrPlaceNotFound if there is no such place.
+func (r *PostgresRepository) RemoveRating(ctx context.Context, id int64, rating int) error {
+	return r.changeRating(ctx, id, -1, -rating)
+}
+
+// changeRating adds count and sum to the place's rating totals, or returns
+// domain.ErrPlaceNotFound.
+func (r *PostgresRepository) changeRating(ctx context.Context, id int64, count, sum int) error {
 	res, err := database.Conn(ctx, r.db).ExecContext(
 		ctx,
-		`UPDATE PLACES SET rating_count = rating_count + 1, rating_sum = rating_sum + $2 WHERE id = $1`,
+		`UPDATE PLACES SET rating_count = rating_count + $2, rating_sum = rating_sum + $3 WHERE id = $1`,
 		id,
-		rating,
+		count,
+		sum,
 	)
 	if err != nil {
 		return err

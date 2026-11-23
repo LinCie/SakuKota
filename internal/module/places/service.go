@@ -37,6 +37,9 @@ type Repository interface {
 	// AddRating adds one review rating to the place's rating totals.
 	// It returns domain.ErrPlaceNotFound if there is no such place.
 	AddRating(ctx context.Context, id int64, rating int) error
+	// RemoveRating takes one review rating off the place's rating totals.
+	// It returns domain.ErrPlaceNotFound if there is no such place.
+	RemoveRating(ctx context.Context, id int64, rating int) error
 	// Delete removes the place, its photos, and its reviews' photos, and queues the
 	// photo files for deletion. It returns domain.ErrPlaceNotFound if there is no such place.
 	Delete(ctx context.Context, id int64) error
@@ -142,6 +145,13 @@ func (s *service) FetchCategory(ctx context.Context, id int64) (*domain.Category
 // It returns domain.ErrPlaceNotFound if there is no such place.
 func (s *service) AddRating(ctx context.Context, id int64, rating int) error {
 	return s.repo.AddRating(ctx, id, rating)
+}
+
+// RemoveRating takes one review rating off the place's rating totals. It joins
+// a transaction carried by ctx, so a review's removal and its rating commit
+// together. It returns domain.ErrPlaceNotFound if there is no such place.
+func (s *service) RemoveRating(ctx context.Context, id int64, rating int) error {
+	return s.repo.RemoveRating(ctx, id, rating)
 }
 
 // Update validates p and overwrites the place with the given id.

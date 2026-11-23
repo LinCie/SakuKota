@@ -63,3 +63,14 @@ export async function deleteReviewMedia(
     await apiDelete<void>(`places/${placeId}/reviews/mine/medias/${mediaId}`),
   );
 }
+
+/**
+ * Deletes the review and takes its rating off the place. `"mine"` is the
+ * signed-in user's own review; any other review needs an admin.
+ */
+export async function deletePlaceReview(
+  placeId: number,
+  reviewId: number | "mine",
+): Promise<void> {
+  unwrap(await apiDelete<void>(`places/${placeId}/reviews/${reviewId}`));
+}

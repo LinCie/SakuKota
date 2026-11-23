@@ -206,6 +206,20 @@ func (mr *MockRepositoryMockRecorder) ListLocations(ctx, filter any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListLocations", reflect.TypeOf((*MockRepository)(nil).ListLocations), ctx, filter)
 }
 
+// RemoveRating mocks base method.
+func (m *MockRepository) RemoveRating(ctx context.Context, id int64, rating int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveRating", ctx, id, rating)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveRating indicates an expected call of RemoveRating.
+func (mr *MockRepositoryMockRecorder) RemoveRating(ctx, id, rating any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveRating", reflect.TypeOf((*MockRepository)(nil).RemoveRating), ctx, id, rating)
+}
+
 // Update mocks base method.
 func (m *MockRepository) Update(ctx context.Context, p *domain.Place) (*domain.Place, error) {
 	m.ctrl.T.Helper()
