@@ -19,6 +19,9 @@ type Repository interface {
 	// Fetch returns the user's review of the place with its author and medias,
 	// or domain.ErrReviewNotFound.
 	Fetch(ctx context.Context, placeID, userID int64) (*domain.Review, error)
+	// FetchByID returns the place's review with its author and medias, or
+	// domain.ErrReviewNotFound.
+	FetchByID(ctx context.Context, placeID, reviewID int64) (*domain.Review, error)
 	// AddMedia stores the photo in the first free position of the user's review
 	// of the place and returns the review. It returns domain.ErrReviewNotFound,
 	// or domain.ErrMediaLimitReached if the review is full.
@@ -151,6 +154,12 @@ func (s *service) AddMedia(ctx context.Context, placeID, userID int64, uploadKey
 // ListByPlace returns the place's reviews, newest first.
 func (s *service) ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error) {
 	return s.repo.ListByPlace(ctx, placeID)
+}
+
+// FetchByID returns the place's review with its author and medias, or
+// domain.ErrReviewNotFound.
+func (s *service) FetchByID(ctx context.Context, placeID, reviewID int64) (*domain.Review, error) {
+	return s.repo.FetchByID(ctx, placeID, reviewID)
 }
 
 // DeleteMedia removes a photo from the user's review of the place. The

@@ -26,12 +26,14 @@ const (
 
 //go:generate mockgen -source=handler.go -destination=mock/handler.go -package=mock
 
-// Service is the service the Handler uses.
+// Service is the service the Handler uses. FetchByID is not called by the
+// Handler; it is part of Service so Module.Service can be wired into reports.
 type Service interface {
 	Create(ctx context.Context, r *domain.Review) (*domain.Review, error)
 	MediaUploadURL(ctx context.Context, placeID, userID int64, contentType string) (storage.Upload, error)
 	AddMedia(ctx context.Context, placeID, userID int64, uploadKey string) (*domain.Review, error)
 	ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error)
+	FetchByID(ctx context.Context, placeID, reviewID int64) (*domain.Review, error)
 	DeleteMedia(ctx context.Context, placeID, userID, mediaID int64) error
 	Delete(ctx context.Context, placeID, reviewID int64) error
 	DeleteMine(ctx context.Context, placeID, userID int64) error

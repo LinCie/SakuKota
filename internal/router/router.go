@@ -15,6 +15,7 @@ import (
 	"rantau-go/internal/middleware"
 	"rantau-go/internal/module/auth"
 	"rantau-go/internal/module/places"
+	"rantau-go/internal/module/reports"
 	"rantau-go/internal/module/reviews"
 	"rantau-go/internal/module/subdistricts"
 	"rantau-go/internal/module/suggestions"
@@ -51,6 +52,7 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 	reviewModule := reviews.New(db, placeModule.Service, media)
 	subdistrictModule := subdistricts.New(db, media)
 	suggestionModule := suggestions.New(db, placeModule.Service)
+	reportModule := reports.New(db, placeModule.Service, reviewModule.Service, media.PublicURL)
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
@@ -66,6 +68,13 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 
 			// GET /v1/places/{id}
 			r.Get("/{id}", placeModule.Handler.Show)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.WithAuth(cfg))
+
+				// POST /v1/places/{id}/reports
+				r.Post("/{id}/reports", reportModule.Handler.CreateForPlace)
+			})
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.WithAuth(cfg))
@@ -111,6 +120,9 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 
 					// DELETE /v1/places/{id}/reviews/mine/medias/{mediaId}
 					r.Delete("/mine/medias/{mediaId}", reviewModule.Handler.DeleteMedia)
+
+					// POST /v1/places/{id}/reviews/{reviewId}/reports
+					r.Post("/{reviewId}/reports", reportModule.Handler.CreateForReview)
 				})
 
 				r.Group(func(r chi.Router) {
@@ -158,6 +170,23 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 				// POST /v1/suggestions/{id}/reject
 				r.Post("/{id}/reject", suggestionModule.Handler.Reject)
 			})
+		})
+
+		r.Route("/reports", func(r chi.Router) {
+			r.Use(middleware.WithAuth(cfg))
+			r.Use(middleware.Guard([]string{domain.RoleAdmin}))
+
+			// GET /v1/reports
+			r.Get("/", reportModule.Handler.List)
+
+			// GET /v1/reports/{id}
+			r.Get("/{id}", reportModule.Handler.Show)
+
+			// POST /v1/reports/{id}/remove
+			r.Post("/{id}/remove", reportModule.Handler.Remove)
+
+			// POST /v1/reports/{id}/dismiss
+			r.Post("/{id}/dismiss", reportModule.Handler.Dismiss)
 		})
 
 		r.Route("/subdistricts", func(r chi.Router) {

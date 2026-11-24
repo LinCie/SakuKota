@@ -26,6 +26,7 @@ import {
   type PlaceListParams,
 } from "~/features/places/queries";
 import type { CategoryDetail, Place } from "~/features/places/types";
+import { ReportButton } from "~/features/reports/components/report-button";
 import { PlaceReviews } from "~/features/reviews/components/place-reviews";
 import { useSubDistricts } from "~/features/subdistricts/queries";
 import type { Boundary, SubDistrict } from "~/features/subdistricts/types";
@@ -399,6 +400,14 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
                   fields={selectedFields}
                   onClose={() => selectPlace(null)}
                 />
+                <div className="flex justify-end px-3 md:px-4">
+                  <ReportButton
+                    key={selectedPlace.id}
+                    placeId={selectedPlace.id}
+                    reviewId={null}
+                    target={`tempat ${selectedPlace.name}`}
+                  />
+                </div>
                 <PlaceReviews
                   key={selectedPlace.id}
                   placeId={selectedPlace.id}

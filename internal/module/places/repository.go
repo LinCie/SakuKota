@@ -364,13 +364,14 @@ func (r *PostgresRepository) changeRating(ctx context.Context, id int64, count, 
 }
 
 // Delete removes the place, its photos, and its reviews' photos, and queues the
-// photo files for deletion. It returns domain.ErrPlaceNotFound if there is no such place.
+// photo files for deletion, in the transaction carried by ctx if there is one.
+// It returns domain.ErrPlaceNotFound if there is no such place.
 func (r *PostgresRepository) Delete(ctx context.Context, id int64) error {
 	// One statement deletes the photos and the place (and with it its reviews)
 	// and queues the photo files, so either all of it commits or none of it does.
 	var deleted int
 
-	err := r.db.GetContext(
+	err := database.Conn(ctx, r.db).GetContext(
 		ctx,
 		&deleted,
 		`WITH medias AS (

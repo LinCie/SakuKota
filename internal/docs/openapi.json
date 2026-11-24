@@ -3,7 +3,7 @@
   "info": {
     "title": "Rantau API",
     "version": "1.0.0",
-    "description": "API for sub-districts, places, place reviews, place suggestions, place categories, and authentication. Successful JSON responses are wrapped in data; errors contain code and message."
+    "description": "API for sub-districts, places, place reviews, place suggestions, reports, place categories, and authentication. Successful JSON responses are wrapped in data; errors contain code and message."
   },
   "servers": [
     {
@@ -35,6 +35,10 @@
     {
       "name": "Suggestions",
       "description": "Suggest places for review, list suggestions, and approve or reject them. Users see their own suggestions; admins review all of them."
+    },
+    {
+      "name": "Reports",
+      "description": "Report abusive places and reviews, list reports, and remove the reported content or dismiss the report. Any signed-in user reports; admins resolve."
     }
   ],
   "paths": {
@@ -1146,6 +1150,176 @@
         }
       }
     },
+    "/v1/places/{id}/reports": {
+      "post": {
+        "tags": ["Reports"],
+        "operationId": "createPlaceReport",
+        "summary": "Report a place",
+        "description": "Stores the signed-in user's report of the place as pending, for an admin to remove the content or dismiss the report. The author is the user in the access token. A user may have one pending report of the same content and at most 5 pending reports at a time.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Place ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateReportRequest" },
+              "example": { "reason": "spam", "note": "Isinya iklan pinjaman online." }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Report created successfully and pending.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReportResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "An ID is invalid, the body is malformed, the reason is not one of the allowed values, or the note is longer than 1000 characters.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidId": { "value": { "code": "INVALID_PLACE_ID", "message": "invalid place_id" } },
+                  "invalidBody": { "value": { "code": "INVALID_BODY", "message": "invalid request body" } },
+                  "validation": {
+                    "value": { "code": "VALIDATION_ERROR", "message": "reason must be spam, offensive, fake, or other" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "The place does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "PLACE_NOT_FOUND", "message": "place not found" }
+              }
+            }
+          },
+          "409": {
+            "description": "The user's report of this content is still pending.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "ALREADY_REPORTED", "message": "already reported and pending" }
+              }
+            }
+          },
+          "429": {
+            "description": "The user already has 5 pending reports.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "TOO_MANY_PENDING_REPORTS", "message": "too many pending reports" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/places/{id}/reviews/{reviewId}/reports": {
+      "post": {
+        "tags": ["Reports"],
+        "operationId": "createReviewReport",
+        "summary": "Report a review",
+        "description": "Stores the signed-in user's report of the place's review as pending, for an admin to remove the content or dismiss the report. The author is the user in the access token. A user may have one pending report of the same content and at most 5 pending reports at a time.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Place ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          },
+          {
+            "name": "reviewId",
+            "in": "path",
+            "required": true,
+            "description": "Review ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateReportRequest" },
+              "example": { "reason": "spam", "note": "Isinya iklan pinjaman online." }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Report created successfully and pending.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReportResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "An ID is invalid, the body is malformed, the reason is not one of the allowed values, or the note is longer than 1000 characters.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidId": { "value": { "code": "INVALID_PLACE_ID", "message": "invalid place_id" } },
+                  "invalidReviewId": { "value": { "code": "INVALID_REVIEW_ID", "message": "invalid review_id" } },
+                  "invalidBody": { "value": { "code": "INVALID_BODY", "message": "invalid request body" } },
+                  "validation": {
+                    "value": { "code": "VALIDATION_ERROR", "message": "reason must be spam, offensive, fake, or other" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "The place has no such review.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "REVIEW_NOT_FOUND", "message": "review not found" }
+              }
+            }
+          },
+          "409": {
+            "description": "The user's report of this content is still pending.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "ALREADY_REPORTED", "message": "already reported and pending" }
+              }
+            }
+          },
+          "429": {
+            "description": "The user already has 5 pending reports.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "TOO_MANY_PENDING_REPORTS", "message": "too many pending reports" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
     "/v1/places/categories": {
       "get": {
         "tags": ["Categories"],
@@ -1608,6 +1782,222 @@
                   "code": "ALREADY_REVIEWED",
                   "message": "suggestion already reviewed"
                 }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/reports": {
+      "get": {
+        "tags": ["Reports"],
+        "operationId": "listReports",
+        "summary": "List reports",
+        "description": "Returns reports, oldest first, optionally filtered by status. Requires the admin role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Only return reports in this status. Omit to return all of them.",
+            "schema": { "$ref": "#/components/schemas/ReportStatus" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reports retrieved successfully. An empty result returns an empty data array.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Report" } }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The status is not pending, removed, or dismissed.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "INVALID_STATUS", "message": "status must be pending, removed, or dismissed" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/reports/{id}": {
+      "get": {
+        "tags": ["Reports"],
+        "operationId": "getReport",
+        "summary": "Get a report with its content",
+        "description": "Returns the report with the reported content as it is now: the place, and the review for a review report. Content that has been deleted is null. Requires the admin role.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Report ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report retrieved successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/ReportDetail" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The report ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "INVALID_REPORT_ID", "message": "invalid report_id" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The report does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "REPORT_NOT_FOUND", "message": "report not found" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/reports/{id}/remove": {
+      "post": {
+        "tags": ["Reports"],
+        "operationId": "removeReportedContent",
+        "summary": "Remove reported content",
+        "description": "Deletes the reported place (with its reviews and medias) or review (with its medias and rating) and marks the report, and every other pending report of that content, removed. Removing a place also resolves the pending reports of its reviews. Content that was already deleted still resolves the report. Requires the admin role. The request has no body.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Report ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Content removed and report resolved successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReportResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The report ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "INVALID_REPORT_ID", "message": "invalid report_id" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The report does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "REPORT_NOT_FOUND", "message": "report not found" }
+              }
+            }
+          },
+          "409": {
+            "description": "The report has already been resolved.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "ALREADY_RESOLVED", "message": "report already resolved" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/reports/{id}/dismiss": {
+      "post": {
+        "tags": ["Reports"],
+        "operationId": "dismissReport",
+        "summary": "Dismiss a report",
+        "description": "Marks the pending report dismissed and keeps the content. Other reports of the same content stay pending. Requires the admin role. The request has no body.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Report ID.",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report dismissed successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReportResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The report ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "INVALID_REPORT_ID", "message": "invalid report_id" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": {
+            "description": "The report does not exist.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "REPORT_NOT_FOUND", "message": "report not found" }
+              }
+            }
+          },
+          "409": {
+            "description": "The report has already been resolved.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "ALREADY_RESOLVED", "message": "report already resolved" }
               }
             }
           },
@@ -2732,6 +3122,113 @@
         "required": ["data"],
         "properties": {
           "data": { "$ref": "#/components/schemas/Suggestion" }
+        }
+      },
+      "ReportReason": {
+        "type": "string",
+        "enum": ["spam", "offensive", "fake", "other"],
+        "description": "Why the content is reported."
+      },
+      "ReportStatus": {
+        "type": "string",
+        "enum": ["pending", "removed", "dismissed"],
+        "description": "A report is pending until an admin removes the content or dismisses the report. It is resolved once and does not change after that."
+      },
+      "CreateReportRequest": {
+        "type": "object",
+        "required": ["reason"],
+        "properties": {
+          "reason": { "$ref": "#/components/schemas/ReportReason" },
+          "note": {
+            "type": ["string", "null"],
+            "maxLength": 1000,
+            "description": "Details for the admin. Trimmed; blank is stored as null."
+          }
+        }
+      },
+      "Report": {
+        "type": "object",
+        "required": ["id", "place_id", "review_id", "reason", "note", "status", "resolved_at", "created_at", "user"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "place_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The reported place, or the place of the reported review. It may no longer exist."
+          },
+          "review_id": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The reported review; null when the place itself is reported. It may no longer exist."
+          },
+          "reason": { "$ref": "#/components/schemas/ReportReason" },
+          "note": { "type": ["string", "null"] },
+          "status": { "$ref": "#/components/schemas/ReportStatus" },
+          "resolved_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the report was resolved; null while it is pending."
+          },
+          "created_at": { "type": "string", "format": "date-time" },
+          "user": { "$ref": "#/components/schemas/ReportAuthor" }
+        }
+      },
+      "ReportDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Report" },
+          {
+            "type": "object",
+            "required": ["place", "review"],
+            "properties": {
+              "place": {
+                "description": "The reported place, or the place of the reported review; null once deleted.",
+                "oneOf": [{ "$ref": "#/components/schemas/ReportedPlace" }, { "type": "null" }]
+              },
+              "review": {
+                "description": "The reported review; null for a place report or once deleted.",
+                "oneOf": [{ "$ref": "#/components/schemas/ReportedReview" }, { "type": "null" }]
+              }
+            }
+          }
+        ]
+      },
+      "ReportedPlace": {
+        "type": "object",
+        "required": ["id", "name", "address", "short_description", "category", "medias"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" },
+          "address": { "type": ["string", "null"] },
+          "short_description": { "type": ["string", "null"] },
+          "category": { "$ref": "#/components/schemas/CategorySummary" },
+          "medias": { "type": "array", "items": { "$ref": "#/components/schemas/Media" } }
+        }
+      },
+      "ReportedReview": {
+        "type": "object",
+        "required": ["id", "rating", "comment", "created_at", "user", "medias"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "rating": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "comment": { "type": ["string", "null"] },
+          "created_at": { "type": "string", "format": "date-time" },
+          "user": { "$ref": "#/components/schemas/ReportAuthor" },
+          "medias": { "type": "array", "items": { "$ref": "#/components/schemas/Media" } }
+        }
+      },
+      "ReportAuthor": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" }
+        }
+      },
+      "ReportResponse": {
+        "type": "object",
+        "required": ["data"],
+        "properties": {
+          "data": { "$ref": "#/components/schemas/Report" }
         }
       },
       "Error": {

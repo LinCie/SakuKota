@@ -847,6 +847,21 @@ func TestRepository_Delete(t *testing.T) {
 		assert.Empty(t, queuedKeys(t), "queued keys (a place without medias queues nothing)")
 	})
 
+	t.Run("joins_the_callers_transaction", func(t *testing.T) {
+		repo := newRepository(t)
+		created := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
+		boom := errors.New("boom")
+
+		err := database.NewTransactor(testDB).WithinTx(ctx, func(ctx context.Context) error {
+			require.NoError(t, repo.Delete(ctx, created.ID), "Delete(%d)", created.ID)
+			return boom
+		})
+		require.ErrorIs(t, err, boom)
+
+		_, err = repo.Fetch(ctx, created.ID)
+		assert.NoError(t, err, "Fetch(%d) after the transaction rolled back", created.ID)
+	})
+
 	t.Run("queues_images", func(t *testing.T) {
 		repo := newRepository(t)
 		subDistrictID := insertSubDistrict(t, "Setiabudi")

@@ -51,6 +51,18 @@ func (r *PostgresRepository) Create(ctx context.Context, review *domain.Review) 
 // Fetch returns the user's review of the place with its author and medias,
 // or domain.ErrReviewNotFound.
 func (r *PostgresRepository) Fetch(ctx context.Context, placeID, userID int64) (*domain.Review, error) {
+	return r.fetch(ctx, `r.place_id = $1 AND r.user_id = $2`, placeID, userID)
+}
+
+// FetchByID returns the place's review with its author and medias, or
+// domain.ErrReviewNotFound.
+func (r *PostgresRepository) FetchByID(ctx context.Context, placeID, reviewID int64) (*domain.Review, error) {
+	return r.fetch(ctx, `r.place_id = $1 AND r.id = $2`, placeID, reviewID)
+}
+
+// fetch returns the one review matching where with its author and medias, or
+// domain.ErrReviewNotFound.
+func (r *PostgresRepository) fetch(ctx context.Context, where string, args ...any) (*domain.Review, error) {
 	var review domain.Review
 
 	err := r.db.GetContext(
@@ -59,9 +71,8 @@ func (r *PostgresRepository) Fetch(ctx context.Context, placeID, userID int64) (
 		`SELECT `+reviewColumns+`
 		FROM PLACE_REVIEWS r
 		JOIN USERS u ON u.id = r.user_id
-		WHERE r.place_id = $1 AND r.user_id = $2`,
-		placeID,
-		userID,
+		WHERE `+where,
+		args...,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, domain.ErrReviewNotFound

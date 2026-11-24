@@ -1,11 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { Inbox, MapPin } from "lucide-react";
+import { Flag, Inbox, MapPin } from "lucide-react";
 
 import { Wordmark } from "~/shared/components/wordmark";
 
 const sections = [
   { to: "/admin/places", label: "Tempat", icon: MapPin },
   { to: "/admin/suggestions", label: "Usulan", icon: Inbox },
+  { to: "/admin/reports", label: "Laporan", icon: Flag },
 ] as const;
 
 /** The admin's navigation: a column on desktop, a scrolling strip on phones. */

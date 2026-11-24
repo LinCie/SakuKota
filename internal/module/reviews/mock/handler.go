@@ -114,6 +114,21 @@ func (mr *MockServiceMockRecorder) DeleteMine(ctx, placeID, userID any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMine", reflect.TypeOf((*MockService)(nil).DeleteMine), ctx, placeID, userID)
 }
 
+// FetchByID mocks base method.
+func (m *MockService) FetchByID(ctx context.Context, placeID, reviewID int64) (*domain.Review, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FetchByID", ctx, placeID, reviewID)
+	ret0, _ := ret[0].(*domain.Review)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FetchByID indicates an expected call of FetchByID.
+func (mr *MockServiceMockRecorder) FetchByID(ctx, placeID, reviewID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchByID", reflect.TypeOf((*MockService)(nil).FetchByID), ctx, placeID, reviewID)
+}
+
 // ListByPlace mocks base method.
 func (m *MockService) ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error) {
 	m.ctrl.T.Helper()

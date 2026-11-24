@@ -4,8 +4,8 @@
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-24 (authors delete their own review, admins any
->   review, taking its rating off the place and queueing its medias).
+> - Last updated: 2026-11-24 (admins read one report with its reported place
+>   and review at `GET /reports/{id}`).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
@@ -35,6 +35,7 @@ is **Rantau** / `rantau-go`.
 | Attributes | A place's values for its category's fields (JSON object) |
 | Suggestion | A user-proposed place awaiting admin review |
 | Review | A user's 1–5 star rating of a place, with optional comment and medias |
+| Report | A user's flag of an abusive place or review, with a reason, awaiting an admin |
 
 ## 3. Sources of truth
 
@@ -59,8 +60,8 @@ is **Rantau** / `rantau-go`.
 | Won't | Kost listings | Absent |
 
 Beyond the docs: JWT auth with rotating refresh cookies, up to 10 medias per
-place, sub-district, and review in S3-compatible storage (Garage), and a cleanup queue
-for deleted objects. Only the Must features have user stories; the rest are
+place, sub-district, and review in S3-compatible storage (Garage), a cleanup queue
+for deleted objects, and abuse reports of places and reviews. Only the Must features have user stories; the rest are
 specified only by tests.
 
 ## 5. Cross-cutting API contract
@@ -86,8 +87,8 @@ Applies to every module unless §6 says otherwise. All routes live under `/v1`.
   stored as `null`. Length limits count Unicode code points after trimming.
 - **Length limits** (`VALIDATION_ERROR` when exceeded): user name 100, email 255;
   sub-district name/slug 100; place/suggestion name 150, address 255, operating
-  hours 255, price range 100; suggestion note, rejection reason, review comment
-  1000. Descriptions and sub-district free text are unlimited.
+  hours 255, price range 100; suggestion note, rejection reason, review comment,
+  report note 1000. Descriptions and sub-district free text are unlimited.
 - **Locations** are GeoJSON Points `[lon, lat]` inside the **Indonesia box**
   (lon 95–141, lat −11–6, edges included) and round-trip exactly.
 - **JSON fidelity.** Attributes round-trip exactly (big ints, `1.50`, any text).
@@ -103,10 +104,12 @@ Applies to every module unless §6 says otherwise. All routes live under `/v1`.
     `GET /subdistricts[/{id}]`.
   - *Signed in:* `POST /places/{id}/reviews`, `DELETE /places/{id}/reviews/mine`,
     the caller's review media routes under `/places/{id}/reviews/mine/medias`,
-    `POST /suggestions`, `GET /suggestions/mine`.
+    `POST /suggestions`, `GET /suggestions/mine`, `POST /places/{id}/reports`,
+    `POST /places/{id}/reviews/{reviewId}/reports`.
   - *Admin:* place and sub-district create/update/delete and media routes,
     `PUT /subdistricts/{id}/boundary`, `DELETE /places/{id}/reviews/{reviewId}`,
-    `GET /suggestions[/{id}]`, approve, reject.
+    `GET /suggestions[/{id}]`, approve, reject, `GET /reports[/{id}]`,
+    `POST /reports/{id}/remove`, `POST /reports/{id}/dismiss`.
 - **Privacy.** Emails appear only in the caller's own user object from register,
   login, and refresh. Nested authors are `{id, name}`. No password material.
 
@@ -278,7 +281,47 @@ estimated_daily_spending, medias, boundary` (GeoJSON MultiPolygon or `null`).
 - Reviewed suggestions are immutable. Deleting a user or sub-district deletes
   their suggestions.
 
-### 6.7 Media storage (`internal/storage`)
+### 6.7 Reports (`internal/module/reports`)
+
+- **Report (signed in).** `POST /places/{id}/reports` reports the place;
+  `POST /places/{id}/reviews/{reviewId}/reports` reports the place's review.
+  Body `{reason, note?}`: `reason` is `spam`, `offensive`, `fake`, or `other`
+  (wrong JSON type → `INVALID_BODY`; missing or other value → `VALIDATION_ERROR`);
+  `note` is optional, ≤1000. Status is always `pending`. Returns `201`.
+  - Unknown place → `404 PLACE_NOT_FOUND`; unknown review, or one of another
+    place → `404 REVIEW_NOT_FOUND`. Bad ids → `INVALID_PLACE_ID` /
+    `INVALID_REVIEW_ID`.
+  - One pending report per user and content → `409 ALREADY_REPORTED`; once
+    resolved, the user may report it again. Another user may report the same
+    content. Holds under concurrency.
+  - **Pending limit.** 5 per user → `429 TOO_MANY_PENDING_REPORTS` (holds under
+    concurrency); a resolved report frees a slot.
+- **Response:** `{id, place_id, review_id|null, reason, note, status,
+  resolved_at, created_at, user{id,name}}`. `resolved_by` is never exposed.
+- **Show (admin) `GET /reports/{id}`:** the report plus its content as it is
+  now: `place {id, name, address, short_description, category, medias}` (the
+  place, or the reviewed place) and, for a review report, `review {id, rating,
+  comment, created_at, user{id,name}, medias}`. Deleted content is `null`;
+  `review` is `null` for a place report. Read through the place and review
+  services. Unknown → `404 REPORT_NOT_FOUND`; bad id → `INVALID_REPORT_ID`.
+- **List (admin) `GET /reports?status=`:** oldest first, without content;
+  `pending|removed|dismissed` or empty, else `400 INVALID_STATUS`.
+- **Remove (admin) `POST /reports/{id}/remove`** → `200` with the report. In one
+  transaction it marks the report `removed`, deletes the place (as place delete)
+  or the review (as review delete, taking its rating off), and marks `removed`
+  every other pending report of that content; removing a place also resolves
+  the pending reports of its reviews. A failed delete keeps the report pending.
+  Content already deleted another way still resolves the report. Concurrent
+  removes delete once; the others get `409`.
+- **Dismiss (admin) `POST /reports/{id}/dismiss`** → `200`; marks only that
+  report `dismissed` and keeps the content.
+- Both: not pending → `409 ALREADY_RESOLVED`; unknown → `404 REPORT_NOT_FOUND`;
+  bad id → `INVALID_REPORT_ID`. Resolved reports are immutable.
+- **History.** Reports keep only the ids of their content (no foreign keys), so
+  they outlive the place or review. Deleting the reporter deletes their
+  reports.
+
+### 6.8 Media storage (`internal/storage`)
 
 - **Types:** `image/jpeg`, `image/png`, `image/webp` (≤5 MB), `video/mp4`,
   `video/webm` (≤50 MB). Anything else, or parameters → `ErrInvalidMediaType`.
@@ -292,32 +335,33 @@ estimated_daily_spending, medias, boundary` (GeoJSON MultiPolygon or `null`).
 - Media responses are `{id, url, content_type, size, position}`; `url` is the
   public base plus key.
 
-### 6.8 Storage cleanup (`internal/module/storagecleanup`)
+### 6.9 Storage cleanup (`internal/module/storagecleanup`)
 
 `STORAGE_DELETIONS` queues keys of deleted medias. `cmd/cleanup` runs one batch
 of up to 100 due keys: success removes the row; failure records the error and
 retries in 1 hour without failing the run. Overlapping runs may read the same
 rows, which is harmless because deletes are idempotent.
 
-### 6.9 Code structure
+### 6.10 Code structure
 
 Entities, shared rules and every sentinel error live in `internal/domain`.
 Modules never import each other: a module that needs another (auth → users,
-suggestions → places, reviews → places) declares the interface it consumes, and
+suggestions → places, reviews → places, reports → places and reviews) declares the interface it consumes, and
 `internal/router` wires the concrete services. Each handler declares the
 `Service` interface it consumes, and `NewService` returns it, backed by the
 unexported `service` struct (`places.Service` also carries `AddRating` and
-`RemoveRating` for reviews). Users and storage cleanup have no handler, so their `NewService`
+`RemoveRating` for reviews, `reviews.Service` carries `FetchByID` for
+reports). Users and storage cleanup have no handler, so their `NewService`
 returns `*service`. Services own transactions that
 span repositories or services through `database.Transactor.WithinTx`, which
 carries the transaction in `ctx`; repositories run queries on
-`database.Conn(ctx, db)` to join it, and a nested `WithinTx` joins the outer
-transaction. Each module's handler maps `domain` errors to codes;
+`database.Conn(ctx, db)` to join it (place delete included), and a nested
+`WithinTx` joins the outer transaction. Each module's handler maps `domain` errors to codes;
 only the five cross-cutting codes live in `internal/pkg/httpx`. Tests use
 `testing` with testify and gomock; mocks are generated by `mockgen` into each
 module's `mock/` package (`go generate ./...`).
 
-### 6.10 Telemetry (`internal/middleware`, `internal/database`)
+### 6.11 Telemetry (`internal/middleware`, `internal/database`)
 
 `WithTelemetry` traces every request and records OpenTelemetry HTTP server
 metrics. Metrics are labelled and spans named by the matched chi route pattern
@@ -350,15 +394,15 @@ exits, with status 1 on failure.
 | ---- | ------ | ---- |
 | `INVALID_BODY` | 400 | Undecodable or wrongly typed body |
 | `VALIDATION_ERROR` | 400 | Business-rule violations, unknown referenced sub-district/category in writes, upload errors |
-| `INVALID_*_ID` (place, sub-district, category, suggestion, media, review) | 400 | Bad path id or `GET /places` filter |
+| `INVALID_*_ID` (place, sub-district, category, suggestion, media, review, report) | 400 | Bad path id or `GET /places` filter |
 | `INVALID_LIMIT` / `INVALID_OFFSET` / `INVALID_BBOX` | 400 | `GET /places` |
-| `INVALID_STATUS` | 400 | `GET /suggestions` |
+| `INVALID_STATUS` | 400 | `GET /suggestions`, `GET /reports` |
 | `UNAUTHORIZED` | 401 | Missing or invalid access token |
 | `INVALID_CREDENTIALS` / `INVALID_REFRESH_TOKEN` | 401 | Auth |
 | `FORBIDDEN` | 403 | Non-admin on an admin route |
-| `*_NOT_FOUND` (place, sub-district, category, suggestion, media, review) | 404 | Unknown resource, or unknown `GET /places` filter id |
-| `EMAIL_TAKEN` / `SUB_DISTRICT_EXISTS` / `SUB_DISTRICT_IN_USE` / `ALREADY_REVIEWED` / `MEDIA_LIMIT_REACHED` | 409 | Conflicts |
-| `TOO_MANY_PENDING_SUGGESTIONS` | 429 | Pending limit |
+| `*_NOT_FOUND` (place, sub-district, category, suggestion, media, review, report) | 404 | Unknown resource, or unknown `GET /places` filter id |
+| `EMAIL_TAKEN` / `SUB_DISTRICT_EXISTS` / `SUB_DISTRICT_IN_USE` / `ALREADY_REVIEWED` / `MEDIA_LIMIT_REACHED` / `ALREADY_REPORTED` / `ALREADY_RESOLVED` | 409 | Conflicts |
+| `TOO_MANY_PENDING_SUGGESTIONS` / `TOO_MANY_PENDING_REPORTS` | 429 | Pending limits |
 | `INTERNAL_ERROR` | 500 | Anything unexpected |
 
 An unknown sub-district or category is **404** as a `GET /places` filter but
@@ -406,11 +450,14 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 - **Known gaps:** a media added while its owner is deleted can be orphaned;
   deleting a user cascades to their reviews but leaves the reviews' `MEDIAS`
   rows and files unqueued;
-  medias cannot be reordered; `MEDIAS` has no owner type; bucket objects from the
+  medias cannot be reordered; `MEDIAS` has no owner type; a report shows its
+  content live, so once removed it cannot show what the content said, and
+  content deleted outside a report leaves its reports pending; bucket objects from the
   old static maps were not queued (the migration was edited in place, so
   databases must be rebuilt).
 - **Unspecified:** `UploadTTL`, production token lifetime, cleanup schedule,
-  review edit, a current-user endpoint, listing users.
+  review edit, a current-user endpoint, listing users, a reporter's view of
+  their own reports.
 - **Performance:** the `bbox` spread ranks every place in the box (~4 ms on
   1,092 seeded places; untested at 50,000).
 - **Web (`web/`):** untested. No admin screens for sub-districts. The map sends
@@ -452,3 +499,5 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-23 | Web review images open full size in a modal on click; no contract change |
 | 2026-11-24 | Admin review deletion `DELETE /places/{id}/reviews/{reviewId}` (rating removed, medias queued); web shows a delete button with confirmation to admins |
 | 2026-11-24 | Authors delete their own review via `DELETE /places/{id}/reviews/mine`; web shows them the delete button too |
+| 2026-11-24 | Abuse reports of places and reviews (`REPORTS`, reasons, pending limit 5); admins list, remove content, or dismiss; place delete joins the caller's transaction; web report drawer and `/admin/reports` |
+| 2026-11-24 | `GET /reports/{id}` returns the reported place and review; web `/admin/reports/$reportId` shows them and holds remove and dismiss |

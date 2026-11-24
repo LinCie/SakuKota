@@ -2,6 +2,7 @@ import { Link, useLocation } from "@tanstack/react-router";
 import { lazy, Suspense, useState, type ReactNode } from "react";
 
 import { isAdmin, useSession } from "~/features/auth/session";
+import { ReportButton } from "~/features/reports/components/report-button";
 import { cn } from "~/shared/cn";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { MediaCard } from "~/shared/components/media-card";
@@ -31,8 +32,8 @@ const ReviewForm = lazy(() =>
 /**
  * A place's reviews under its menu board, newest first. Signed-in users who
  * have not reviewed the place yet get a form for theirs; signed-out visitors
- * get a way to sign in and come back. Users can delete their own review,
- * admins any review.
+ * get a way to sign in and come back. Users can delete their own review and
+ * report the others; admins can delete any review.
  */
 export function PlaceReviews({ placeId }: { placeId: number }) {
   const session = useSession();
@@ -173,7 +174,13 @@ export function PlaceReviews({ placeId }: { placeId: number }) {
                 >
                   Hapus
                 </button>
-              ) : null}
+              ) : (
+                <ReportButton
+                  placeId={placeId}
+                  reviewId={review.id}
+                  target={`ulasan ${review.user.name}`}
+                />
+              )}
             </div>
           </li>
         ))}

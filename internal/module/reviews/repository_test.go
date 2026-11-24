@@ -276,6 +276,37 @@ func TestPostgresRepository_Fetch(t *testing.T) {
 	})
 }
 
+func TestPostgresRepository_FetchByID(t *testing.T) {
+	t.Run("review_of_the_place_with_author_and_medias", func(t *testing.T) {
+		repo := newRepository(t)
+		placeID := insertPlace(t, "Laundry")
+		anaID := pgtest.InsertUser(t, testDB, "Ana")
+		created := mustCreate(t, repo, &domain.Review{PlaceID: placeID, UserID: anaID, Rating: 4, Comment: new("Bersih")})
+		mustCreate(t, repo, &domain.Review{PlaceID: placeID, UserID: pgtest.InsertUser(t, testDB, "Budi"), Rating: 2})
+		media := mustAddMedia(t, repo, placeID, anaID, "reviews/1/1/a.webp")
+
+		got, err := repo.FetchByID(t.Context(), placeID, created.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, created.ID, got.ID)
+		assert.Equal(t, new("Bersih"), got.Comment)
+		assert.Equal(t, domain.Author{ID: anaID, Name: "Ana"}, got.User)
+		assert.Equal(t, []domain.Media{media}, got.Medias)
+	})
+
+	t.Run("unknown_or_of_another_place", func(t *testing.T) {
+		repo := newRepository(t)
+		placeID := insertPlace(t, "Laundry")
+		created := mustCreate(t, repo, &domain.Review{PlaceID: placeID, UserID: pgtest.InsertUser(t, testDB, "Ana"), Rating: 4})
+
+		for _, ids := range [][2]int64{{insertPlace(t, "Other"), created.ID}, {placeID, created.ID + 1}} {
+			got, err := repo.FetchByID(t.Context(), ids[0], ids[1])
+			assert.ErrorIs(t, err, domain.ErrReviewNotFound, "FetchByID(%d, %d)", ids[0], ids[1])
+			assert.Nil(t, got)
+		}
+	})
+}
+
 // newMedia returns a promoted image to store under key.
 func newMedia(key string) domain.Media {
 	return domain.Media{Key: key, ContentType: "image/webp", Size: 2048}

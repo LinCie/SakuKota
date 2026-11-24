@@ -14,6 +14,7 @@ import {
 } from "./api";
 
 export const reviewKeys = {
+  all: ["reviews"] as const,
   place: (placeId: number) => ["reviews", "place", placeId] as const,
 };
 

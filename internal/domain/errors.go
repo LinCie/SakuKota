@@ -57,6 +57,17 @@ var (
 	ErrReviewNotFound       = errors.New("review not found")
 )
 
+// Errors of reports.
+var (
+	ErrReportNotFound        = errors.New("report not found")
+	ErrReportReasonInvalid   = errors.New("reason must be spam, offensive, fake, or other")
+	ErrReportNoteTooLong     = fmt.Errorf("note must be %d characters or fewer", MaxReportNoteLength)
+	ErrReportLimitReached    = errors.New("too many pending reports")
+	ErrAlreadyReported       = errors.New("already reported and pending")
+	ErrReportAlreadyResolved = errors.New("report already resolved")
+	ErrReportStatusInvalid   = errors.New("status must be pending, removed, or dismissed")
+)
+
 // Errors of sub-districts.
 var (
 	ErrSubDistrictNotFound        = errors.New("sub-district not found")

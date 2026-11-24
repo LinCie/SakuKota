@@ -18,6 +18,8 @@ import { Route as AuthMasukRouteImport } from './routes/_auth/masuk'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminPlacesIndexRouteImport } from './routes/admin/places/index'
 import { Route as AdminPlacesPlaceIdRouteImport } from './routes/admin/places/$placeId'
+import { Route as AdminReportsIndexRouteImport } from './routes/admin/reports/index'
+import { Route as AdminReportsReportIdRouteImport } from './routes/admin/reports/$reportId'
 import { Route as AdminSuggestionsIndexRouteImport } from './routes/admin/suggestions/index'
 import { Route as AdminSuggestionsSuggestionIdRouteImport } from './routes/admin/suggestions/$suggestionId'
 
@@ -65,6 +67,16 @@ const AdminPlacesPlaceIdRoute = AdminPlacesPlaceIdRouteImport.update({
   path: '/places/$placeId',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminReportsIndexRoute = AdminReportsIndexRouteImport.update({
+  id: '/reports/',
+  path: '/reports/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminReportsReportIdRoute = AdminReportsReportIdRouteImport.update({
+  id: '/reports/$reportId',
+  path: '/reports/$reportId',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminSuggestionsIndexRoute = AdminSuggestionsIndexRouteImport.update({
   id: '/suggestions/',
   path: '/suggestions/',
@@ -85,8 +97,10 @@ export interface FileRoutesByFullPath {
   '/masuk': typeof AuthMasukRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/places/$placeId': typeof AdminPlacesPlaceIdRoute
+  '/admin/reports/$reportId': typeof AdminReportsReportIdRoute
   '/admin/suggestions/$suggestionId': typeof AdminSuggestionsSuggestionIdRoute
   '/admin/places/': typeof AdminPlacesIndexRoute
+  '/admin/reports/': typeof AdminReportsIndexRoute
   '/admin/suggestions/': typeof AdminSuggestionsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -96,8 +110,10 @@ export interface FileRoutesByTo {
   '/masuk': typeof AuthMasukRoute
   '/admin': typeof AdminIndexRoute
   '/admin/places/$placeId': typeof AdminPlacesPlaceIdRoute
+  '/admin/reports/$reportId': typeof AdminReportsReportIdRoute
   '/admin/suggestions/$suggestionId': typeof AdminSuggestionsSuggestionIdRoute
   '/admin/places': typeof AdminPlacesIndexRoute
+  '/admin/reports': typeof AdminReportsIndexRoute
   '/admin/suggestions': typeof AdminSuggestionsIndexRoute
 }
 export interface FileRoutesById {
@@ -110,8 +126,10 @@ export interface FileRoutesById {
   '/_auth/masuk': typeof AuthMasukRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/places/$placeId': typeof AdminPlacesPlaceIdRoute
+  '/admin/reports/$reportId': typeof AdminReportsReportIdRoute
   '/admin/suggestions/$suggestionId': typeof AdminSuggestionsSuggestionIdRoute
   '/admin/places/': typeof AdminPlacesIndexRoute
+  '/admin/reports/': typeof AdminReportsIndexRoute
   '/admin/suggestions/': typeof AdminSuggestionsIndexRoute
 }
 export interface FileRouteTypes {
@@ -124,8 +142,10 @@ export interface FileRouteTypes {
     | '/masuk'
     | '/admin/'
     | '/admin/places/$placeId'
+    | '/admin/reports/$reportId'
     | '/admin/suggestions/$suggestionId'
     | '/admin/places/'
+    | '/admin/reports/'
     | '/admin/suggestions/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -135,8 +155,10 @@ export interface FileRouteTypes {
     | '/masuk'
     | '/admin'
     | '/admin/places/$placeId'
+    | '/admin/reports/$reportId'
     | '/admin/suggestions/$suggestionId'
     | '/admin/places'
+    | '/admin/reports'
     | '/admin/suggestions'
   id:
     | '__root__'
@@ -148,8 +170,10 @@ export interface FileRouteTypes {
     | '/_auth/masuk'
     | '/admin/'
     | '/admin/places/$placeId'
+    | '/admin/reports/$reportId'
     | '/admin/suggestions/$suggestionId'
     | '/admin/places/'
+    | '/admin/reports/'
     | '/admin/suggestions/'
   fileRoutesById: FileRoutesById
 }
@@ -225,6 +249,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPlacesPlaceIdRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/reports/': {
+      id: '/admin/reports/'
+      path: '/reports'
+      fullPath: '/admin/reports/'
+      preLoaderRoute: typeof AdminReportsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/reports/$reportId': {
+      id: '/admin/reports/$reportId'
+      path: '/reports/$reportId'
+      fullPath: '/admin/reports/$reportId'
+      preLoaderRoute: typeof AdminReportsReportIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/suggestions/': {
       id: '/admin/suggestions/'
       path: '/suggestions'
@@ -257,16 +295,20 @@ const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 interface AdminRouteChildren {
   AdminIndexRoute: typeof AdminIndexRoute
   AdminPlacesPlaceIdRoute: typeof AdminPlacesPlaceIdRoute
+  AdminReportsReportIdRoute: typeof AdminReportsReportIdRoute
   AdminSuggestionsSuggestionIdRoute: typeof AdminSuggestionsSuggestionIdRoute
   AdminPlacesIndexRoute: typeof AdminPlacesIndexRoute
+  AdminReportsIndexRoute: typeof AdminReportsIndexRoute
   AdminSuggestionsIndexRoute: typeof AdminSuggestionsIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminIndexRoute: AdminIndexRoute,
   AdminPlacesPlaceIdRoute: AdminPlacesPlaceIdRoute,
+  AdminReportsReportIdRoute: AdminReportsReportIdRoute,
   AdminSuggestionsSuggestionIdRoute: AdminSuggestionsSuggestionIdRoute,
   AdminPlacesIndexRoute: AdminPlacesIndexRoute,
+  AdminReportsIndexRoute: AdminReportsIndexRoute,
   AdminSuggestionsIndexRoute: AdminSuggestionsIndexRoute,
 }
 

@@ -27,8 +27,8 @@ type User struct {
 	UpdatedAt    time.Time `db:"updated_at"`
 }
 
-// Author is the user who wrote a Review or submitted a Suggestion, as shown
-// next to it.
+// Author is the user who wrote a Review, submitted a Suggestion, or filed a
+// Report, as shown next to it.
 type Author struct {
 	ID   int64  `db:"id"`
 	Name string `db:"name"`

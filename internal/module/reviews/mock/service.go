@@ -116,6 +116,21 @@ func (mr *MockRepositoryMockRecorder) Fetch(ctx, placeID, userID any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fetch", reflect.TypeOf((*MockRepository)(nil).Fetch), ctx, placeID, userID)
 }
 
+// FetchByID mocks base method.
+func (m *MockRepository) FetchByID(ctx context.Context, placeID, reviewID int64) (*domain.Review, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FetchByID", ctx, placeID, reviewID)
+	ret0, _ := ret[0].(*domain.Review)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FetchByID indicates an expected call of FetchByID.
+func (mr *MockRepositoryMockRecorder) FetchByID(ctx, placeID, reviewID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchByID", reflect.TypeOf((*MockRepository)(nil).FetchByID), ctx, placeID, reviewID)
+}
+
 // ListByPlace mocks base method.
 func (m *MockRepository) ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error) {
 	m.ctrl.T.Helper()

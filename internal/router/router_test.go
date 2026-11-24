@@ -60,6 +60,8 @@ var routeAccess = map[string]access{
 	"POST /v1/places/{id}/reviews/mine/medias":             authenticated,
 	"DELETE /v1/places/{id}/reviews/mine/medias/{mediaId}": authenticated,
 	"DELETE /v1/places/{id}/reviews/{reviewId}":            adminOnly,
+	"POST /v1/places/{id}/reviews/{reviewId}/reports":      authenticated,
+	"POST /v1/places/{id}/reports":                         authenticated,
 	"POST /v1/places/":                                     adminOnly,
 	"PUT /v1/places/{id}":                                  adminOnly,
 	"DELETE /v1/places/{id}":                               adminOnly,
@@ -73,6 +75,11 @@ var routeAccess = map[string]access{
 	"GET /v1/suggestions/{id}":          adminOnly,
 	"POST /v1/suggestions/{id}/approve": adminOnly,
 	"POST /v1/suggestions/{id}/reject":  adminOnly,
+
+	"GET /v1/reports/":              adminOnly,
+	"GET /v1/reports/{id}":          adminOnly,
+	"POST /v1/reports/{id}/remove":  adminOnly,
+	"POST /v1/reports/{id}/dismiss": adminOnly,
 
 	"GET /v1/subdistricts/":                         public,
 	"GET /v1/subdistricts/{id}":                     public,
