@@ -4,7 +4,7 @@ services:
       context: ./docker/postgres
       dockerfile: Dockerfile
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-rantaugo}
+      POSTGRES_DB: ${POSTGRES_DB:-sakukotago}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
@@ -12,7 +12,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-rantaugo}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sakukotago}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -48,7 +48,7 @@ services:
       target: init
     env_file: .env
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-rantaugo}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-sakukotago}?sslmode=disable
       STORAGE_ENDPOINT: http://garage:3900
       CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:8081}
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:-ab585f3faae621737dbe043edb29dfe69a95d3194d76218cda428e47c2f25338}
@@ -69,14 +69,14 @@ services:
     env_file: .env
     environment:
       # .env points at localhost for running the API on the host.
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-rantaugo}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-sakukotago}?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       STORAGE_ENDPOINT: http://garage:3900
       # Scraped by prometheus; not published to the host.
       METRICS_ADDR: ":9464"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
       OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://loki:3100/otlp/v1/logs
-      OTEL_SERVICE_NAME: rantau-go
+      OTEL_SERVICE_NAME: sakukota-go
     depends_on:
       postgres:
         condition: service_healthy

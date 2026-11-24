@@ -11,9 +11,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"rantau-go/internal/config"
-	"rantau-go/internal/domain"
-	"rantau-go/internal/pkg/jwt"
+	"sakukota-go/internal/config"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/pkg/jwt"
 )
 
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock

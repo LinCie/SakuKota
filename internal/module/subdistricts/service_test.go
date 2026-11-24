@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/module/subdistricts"
-	"rantau-go/internal/module/subdistricts/mock"
-	"rantau-go/internal/pkg/postgis"
-	"rantau-go/internal/storage"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/module/subdistricts"
+	"sakukota-go/internal/module/subdistricts/mock"
+	"sakukota-go/internal/pkg/postgis"
+	"sakukota-go/internal/storage"
 )
 
 // family is one emoji made of five code points: man, ZWJ, woman, ZWJ, girl.

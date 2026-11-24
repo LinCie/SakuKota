@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"rantau-go/internal/database"
-	"rantau-go/internal/testutil/pgtest"
+	"sakukota-go/internal/database"
+	"sakukota-go/internal/testutil/pgtest"
 )
 
 // testDB is shared by the tests in this file. pgtest.Reset empties it before

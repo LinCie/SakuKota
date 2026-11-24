@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"rantau-go/internal/pkg/postgis"
+	"sakukota-go/internal/pkg/postgis"
 )
 
 // squareJSON is a small square in Jakarta as a GeoJSON MultiPolygon.

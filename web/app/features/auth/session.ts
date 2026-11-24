@@ -101,7 +101,7 @@ async function withRefreshLock(
   // Web Locks need a secure context (HTTPS or localhost); without them, the
   // tabs are not kept apart.
   if ("locks" in navigator) {
-    return navigator.locks.request("rantau:refresh", callback);
+    return navigator.locks.request("sakukota:refresh", callback);
   }
   return callback();
 }

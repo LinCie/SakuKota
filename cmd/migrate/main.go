@@ -10,8 +10,8 @@ import (
 
 	"github.com/pressly/goose/v3"
 
-	"rantau-go/internal/config"
-	"rantau-go/internal/database"
+	"sakukota-go/internal/config"
+	"sakukota-go/internal/database"
 )
 
 const defaultMigrationsDir = "migrations"

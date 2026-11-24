@@ -15,10 +15,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"rantau-go/internal/database"
-	"rantau-go/internal/domain"
-	"rantau-go/internal/module/reviews"
-	"rantau-go/internal/testutil/pgtest"
+	"sakukota-go/internal/database"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/module/reviews"
+	"sakukota-go/internal/testutil/pgtest"
 )
 
 // checkViolation is the PostgreSQL error code for CHECK constraint violations.

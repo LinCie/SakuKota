@@ -11,7 +11,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"rantau-go/internal/domain"
+	"sakukota-go/internal/domain"
 )
 
 // CachedRepository serves List from a Redis index of place ids, categories, and coordinates.

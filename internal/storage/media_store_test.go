@@ -12,13 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/storage"
-	"rantau-go/internal/storage/mock"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/storage"
+	"sakukota-go/internal/storage/mock"
 )
 
 const (
-	publicBaseURL = "http://rantau-media.web.localhost:3902"
+	publicBaseURL = "http://sakukota-media.web.localhost:3902"
 	uploadKey     = "uploads/places/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"
 	promotedKey   = "places/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp"
 )
@@ -46,7 +46,7 @@ func TestMediaStore_PresignUpload(t *testing.T) {
 		t.Run(strings.ReplaceAll(tc.contentType, "/", "_"), func(t *testing.T) {
 			media, store := newMediaStore(t)
 			presigned := storage.Upload{
-				URL:       "http://localhost:3900/rantau-images/signed",
+				URL:       "http://localhost:3900/sakukota-images/signed",
 				Method:    "PUT",
 				Headers:   map[string]string{"Content-Type": tc.contentType},
 				ExpiresAt: time.Date(2026, 10, 31, 12, 5, 0, 0, time.UTC),

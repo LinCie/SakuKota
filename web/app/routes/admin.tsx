@@ -15,7 +15,7 @@ export const Route = createFileRoute("/admin")({
       });
     }
   },
-  head: () => ({ meta: [{ title: "Admin · Rantau" }] }),
+  head: () => ({ meta: [{ title: "Admin · SakuKota" }] }),
   component: AdminShell,
   errorComponent: AdminRouteError,
 });

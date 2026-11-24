@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"rantau-go/internal/config"
-	"rantau-go/internal/database"
+	"sakukota-go/internal/config"
+	"sakukota-go/internal/database"
 )
 
 //go:embed seed.sql

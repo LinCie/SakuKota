@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"rantau-go/internal/domain"
+	"sakukota-go/internal/domain"
 )
 
 // MediaUploadRequest is the API payload for requesting an image or video upload.

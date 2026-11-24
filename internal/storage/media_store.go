@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"rantau-go/internal/domain"
+	"sakukota-go/internal/domain"
 )
 
 const (

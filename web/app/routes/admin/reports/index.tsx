@@ -21,7 +21,7 @@ export const Route = createFileRoute("/admin/reports/")({
     queryClient.query({ ...reportsQuery(deps), staleTime: "static" }),
   pendingComponent: () => <AdminListSkeleton filter />,
   errorComponent: AdminRouteError,
-  head: () => ({ meta: [{ title: "Laporan · Admin Rantau" }] }),
+  head: () => ({ meta: [{ title: "Laporan · Admin SakuKota" }] }),
   component: ReportsRoute,
 });
 

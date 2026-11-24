@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/storage"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/storage"
 )
 
 func TestToMediaResponses(t *testing.T) {

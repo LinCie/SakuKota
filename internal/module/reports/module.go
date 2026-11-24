@@ -5,7 +5,7 @@ package reports
 import (
 	"github.com/jmoiron/sqlx"
 
-	"rantau-go/internal/database"
+	"sakukota-go/internal/database"
 )
 
 // Module bundles the report service and its HTTP handler.

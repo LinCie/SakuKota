@@ -1,8 +1,8 @@
 {
-  "uid": "rantau-api",
-  "title": "Rantau API",
+  "uid": "sakukota-api",
+  "title": "SakuKota API",
   "tags": [
-    "rantau"
+    "sakukota"
   ],
   "timezone": "browser",
   "schemaVersion": 39,

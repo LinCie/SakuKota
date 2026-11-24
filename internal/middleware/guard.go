@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"slices"
 
-	"rantau-go/internal/pkg/httpx"
+	"sakukota-go/internal/pkg/httpx"
 )
 
 // Guard allows the request only if the role set by WithAuth is one of the

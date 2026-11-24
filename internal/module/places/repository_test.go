@@ -18,12 +18,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"rantau-go/internal/database"
-	"rantau-go/internal/domain"
-	"rantau-go/internal/module/places"
-	"rantau-go/internal/pkg/postgis"
-	"rantau-go/internal/testutil/pgtest"
-	"rantau-go/internal/testutil/redistest"
+	"sakukota-go/internal/database"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/module/places"
+	"sakukota-go/internal/pkg/postgis"
+	"sakukota-go/internal/testutil/pgtest"
+	"sakukota-go/internal/testutil/redistest"
 )
 
 // testDB and testRedis are shared by the tests in this package. pgtest.Reset and

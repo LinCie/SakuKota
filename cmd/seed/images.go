@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 
-	"rantau-go/internal/storage"
+	"sakukota-go/internal/storage"
 )
 
 // imageSeeder uploads the seed images and records them in the seed transaction.

@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/module/reviews"
-	"rantau-go/internal/module/reviews/mock"
-	"rantau-go/internal/storage"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/module/reviews"
+	"sakukota-go/internal/module/reviews/mock"
+	"sakukota-go/internal/storage"
 )
 
 // txKey marks the context that newTransactor passes to the transaction's function.

@@ -16,10 +16,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/module/subdistricts"
-	"rantau-go/internal/module/subdistricts/mock"
-	"rantau-go/internal/storage"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/module/subdistricts"
+	"sakukota-go/internal/module/subdistricts/mock"
+	"sakukota-go/internal/storage"
 )
 
 // newRouter serves the sub-district handlers on the paths the API uses for
@@ -690,7 +690,7 @@ func TestHandler_CreateMediaUpload(t *testing.T) {
 				router, svc := newRouter(t)
 				svc.EXPECT().MediaUploadURL(gomock.Any(), int64(3), hs.slot, "image/png").Return(storage.Upload{
 					Key:       "uploads/subdistricts/3/" + hs.path + "/a.png",
-					URL:       "http://localhost:3900/rantau-images/uploads/subdistricts/3/" + hs.path + "/a.png?X-Amz-Signature=abc",
+					URL:       "http://localhost:3900/sakukota-images/uploads/subdistricts/3/" + hs.path + "/a.png?X-Amz-Signature=abc",
 					Method:    "PUT",
 					Headers:   map[string]string{"Content-Type": "image/png"},
 					ExpiresAt: time.Date(2026, 10, 31, 12, 5, 0, 0, time.UTC),
@@ -699,7 +699,7 @@ func TestHandler_CreateMediaUpload(t *testing.T) {
 				rec := serve(t, router, jsonRequest(http.MethodPost, "/subdistricts/3/"+hs.path+"/upload-url", `{"content_type":"image/png"}`))
 				want := wantData(t, http.StatusOK, `{
 					"upload_key": "uploads/subdistricts/3/`+hs.path+`/a.png",
-					"upload_url": "http://localhost:3900/rantau-images/uploads/subdistricts/3/`+hs.path+`/a.png?X-Amz-Signature=abc",
+					"upload_url": "http://localhost:3900/sakukota-images/uploads/subdistricts/3/`+hs.path+`/a.png?X-Amz-Signature=abc",
 					"method": "PUT",
 					"headers": {"Content-Type": "image/png"},
 					"expires_at": "2026-10-31T12:05:00Z"

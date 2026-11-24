@@ -7,9 +7,9 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	"rantau-go/internal/database"
-	"rantau-go/internal/domain"
-	"rantau-go/internal/pkg/postgis"
+	"sakukota-go/internal/database"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/pkg/postgis"
 )
 
 // PostgresRepository stores sub-districts in PostgreSQL.

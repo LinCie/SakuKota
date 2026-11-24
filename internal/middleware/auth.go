@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"rantau-go/internal/config"
-	"rantau-go/internal/pkg/httpx"
-	"rantau-go/internal/pkg/jwt"
+	"sakukota-go/internal/config"
+	"sakukota-go/internal/pkg/httpx"
+	"sakukota-go/internal/pkg/jwt"
 )
 
 type contextKey string

@@ -11,11 +11,11 @@ package mock
 
 import (
 	context "context"
-	domain "rantau-go/internal/domain"
-	subdistricts "rantau-go/internal/module/subdistricts"
-	postgis "rantau-go/internal/pkg/postgis"
-	storage "rantau-go/internal/storage"
 	reflect "reflect"
+	domain "sakukota-go/internal/domain"
+	subdistricts "sakukota-go/internal/module/subdistricts"
+	postgis "sakukota-go/internal/pkg/postgis"
+	storage "sakukota-go/internal/storage"
 
 	gomock "go.uber.org/mock/gomock"
 )

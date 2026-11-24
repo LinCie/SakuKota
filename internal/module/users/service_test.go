@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/module/users"
-	"rantau-go/internal/module/users/mock"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/module/users"
+	"sakukota-go/internal/module/users/mock"
 )
 
 const testEmail = "ana@example.com"

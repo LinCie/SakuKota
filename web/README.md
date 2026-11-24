@@ -1,6 +1,6 @@
-# Rantau web
+# SakuKota web
 
-The React frontend for Rantau: a public survival map of curated daily essentials in Jakarta, where signed-in users can review places and suggest new ones, plus an admin area for managing places and reviewing suggestions. Categories are defined by the backend and are read-only here; kecamatan have no admin screens yet. See [`PRODUCT.md`](PRODUCT.md) for the product, [`DESIGN.md`](DESIGN.md) for the visual system, and [`../docs/frontend.md`](../docs/frontend.md) for routes, components, and state.
+The React frontend for SakuKota: a public survival map of curated daily essentials in Jakarta, where signed-in users can review places and suggest new ones, plus an admin area for managing places and reviewing suggestions. Categories are defined by the backend and are read-only here; kecamatan have no admin screens yet. See [`PRODUCT.md`](PRODUCT.md) for the product, [`DESIGN.md`](DESIGN.md) for the visual system, and [`../docs/frontend.md`](../docs/frontend.md) for routes, components, and state.
 
 ## Stack
 

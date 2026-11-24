@@ -18,10 +18,10 @@ import (
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
-	"rantau-go/internal/config"
-	"rantau-go/internal/database"
-	"rantau-go/internal/module/storagecleanup"
-	"rantau-go/internal/storage"
+	"sakukota-go/internal/config"
+	"sakukota-go/internal/database"
+	"sakukota-go/internal/module/storagecleanup"
+	"sakukota-go/internal/storage"
 )
 
 func main() {
@@ -33,7 +33,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	runCtx, span := otel.Tracer("rantau-go/cmd/cleanup").Start(ctx, "storage cleanup")
+	runCtx, span := otel.Tracer("sakukota-go/cmd/cleanup").Start(ctx, "storage cleanup")
 	err = run(runCtx)
 	if err != nil {
 		span.RecordError(err)
@@ -104,7 +104,7 @@ func setupTelemetry(ctx context.Context) (flush func(context.Context) error, err
 			return nil, fmt.Errorf("create log exporter: %w", err)
 		}
 		provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)))
-		otlpHandler := otelslog.NewHandler("rantau-go/cmd/cleanup", otelslog.WithLoggerProvider(provider))
+		otlpHandler := otelslog.NewHandler("sakukota-go/cmd/cleanup", otelslog.WithLoggerProvider(provider))
 		slog.SetDefault(slog.New(slog.NewMultiHandler(slog.Default().Handler(), otlpHandler)))
 		flushers = append(flushers, provider.Shutdown)
 	}

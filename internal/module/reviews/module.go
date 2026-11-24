@@ -5,7 +5,7 @@ package reviews
 import (
 	"github.com/jmoiron/sqlx"
 
-	"rantau-go/internal/database"
+	"sakukota-go/internal/database"
 )
 
 // Module bundles the service and handler of the reviews feature.

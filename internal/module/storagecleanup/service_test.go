@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/module/storagecleanup"
-	"rantau-go/internal/module/storagecleanup/mock"
+	"sakukota-go/internal/module/storagecleanup"
+	"sakukota-go/internal/module/storagecleanup/mock"
 )
 
 const (

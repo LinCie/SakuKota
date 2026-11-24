@@ -12,7 +12,7 @@ Fresh graduates, trainees, and young professionals who have just relocated to Ja
 
 ## Product Purpose
 
-Rantau is a hyper-local survival map for young perantau in Jakarta. It surfaces curated, budget-friendly daily essentials that standard map platforms bury or get wrong, alongside practical neighborhood insight per kecamatan. Success: a newcomer finds a suitable nearby essential and understands their area's flood, safety, and spending picture without trial-and-error or asking random locals.
+SakuKota is a hyper-local survival map for young perantau in Jakarta. It surfaces curated, budget-friendly daily essentials that standard map platforms bury or get wrong, alongside practical neighborhood insight per kecamatan. Success: a newcomer finds a suitable nearby essential and understands their area's flood, safety, and spending picture without trial-and-error or asking random locals.
 
 ## Positioning
 
@@ -46,7 +46,7 @@ Curated micro-services (warung, tailors, local clinics, laundries, pharmacies, p
 
 ## Brand Commitments
 
-- Name: Rantau.
+- Name: SakuKota.
 - Layout reference: the original low-fi wireframe (not published) (header with kecamatan picker, View Info, and search; category filter dropdown; result count; map with place detail panel; kecamatan info modal). The homepage layout should stay similar to it.
 
 ## Evidence on Hand

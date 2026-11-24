@@ -1,9 +1,9 @@
 package subdistricts
 
 import (
-	"rantau-go/internal/domain"
-	"rantau-go/internal/pkg/postgis"
-	"rantau-go/internal/storage"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/pkg/postgis"
+	"sakukota-go/internal/storage"
 )
 
 // Request is the API payload for creating a sub-district or replacing one. An

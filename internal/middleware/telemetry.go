@@ -18,7 +18,7 @@ import (
 // port fixes the server address label, which otelhttp would otherwise take from
 // the client's Host header and so let clients create unbounded label values.
 func WithTelemetry(port int) func(http.Handler) http.Handler {
-	instrument := otelhttp.NewMiddleware("api", otelhttp.WithServerName(fmt.Sprintf("rantau-go:%d", port)))
+	instrument := otelhttp.NewMiddleware("api", otelhttp.WithServerName(fmt.Sprintf("sakukota-go:%d", port)))
 	return func(next http.Handler) http.Handler {
 		return instrument(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			next.ServeHTTP(w, r)

@@ -5,7 +5,7 @@ package auth
 import (
 	"github.com/redis/go-redis/v9"
 
-	"rantau-go/internal/config"
+	"sakukota-go/internal/config"
 )
 
 // Module bundles the service and handler of the auth feature.

@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/pkg/httpx"
-	"rantau-go/internal/pkg/utils"
-	"rantau-go/internal/storage"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/pkg/httpx"
+	"sakukota-go/internal/pkg/utils"
+	"sakukota-go/internal/storage"
 )
 
 // Codes of the error responses only places sends.

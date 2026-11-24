@@ -9,11 +9,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/module/places"
-	"rantau-go/internal/module/places/mock"
-	"rantau-go/internal/pkg/postgis"
-	"rantau-go/internal/testutil/redistest"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/module/places"
+	"sakukota-go/internal/module/places/mock"
+	"sakukota-go/internal/pkg/postgis"
+	"sakukota-go/internal/testutil/redistest"
 )
 
 // newCached returns a cached repository over repo and Redis, where repo expects

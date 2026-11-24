@@ -2,7 +2,7 @@
 
 -include .env
 
-DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/rantaugo?sslmode=disable
+DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/sakukotago?sslmode=disable
 MIGRATIONS_DIR ?= migrations
 # Pass everything from .env (JWT_SECRET, PORT, ...) on to the commands below.
 .EXPORT_ALL_VARIABLES:

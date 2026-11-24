@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"rantau-go/internal/pkg/httpx"
+	"sakukota-go/internal/pkg/httpx"
 )
 
 type payload struct {

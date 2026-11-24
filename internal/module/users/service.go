@@ -3,7 +3,7 @@ package users
 import (
 	"context"
 
-	"rantau-go/internal/domain"
+	"sakukota-go/internal/domain"
 )
 
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock

@@ -23,9 +23,9 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
-	"rantau-go/internal/config"
-	"rantau-go/internal/database"
-	"rantau-go/internal/router"
+	"sakukota-go/internal/config"
+	"sakukota-go/internal/database"
+	"sakukota-go/internal/router"
 )
 
 func main() {
@@ -74,7 +74,7 @@ func main() {
 		}
 		// shortcut: like spans, buffered records are lost when the process exits.
 		provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)))
-		otlpHandler := otelslog.NewHandler("rantau-go/cmd/api", otelslog.WithLoggerProvider(provider))
+		otlpHandler := otelslog.NewHandler("sakukota-go/cmd/api", otelslog.WithLoggerProvider(provider))
 		slog.SetDefault(slog.New(slog.NewMultiHandler(slog.Default().Handler(), otlpHandler)))
 	}
 

@@ -12,12 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/database"
-	"rantau-go/internal/domain"
-	"rantau-go/internal/module/places"
-	"rantau-go/internal/module/suggestions"
-	"rantau-go/internal/module/suggestions/mock"
-	"rantau-go/internal/pkg/postgis"
+	"sakukota-go/internal/database"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/module/places"
+	"sakukota-go/internal/module/suggestions"
+	"sakukota-go/internal/module/suggestions/mock"
+	"sakukota-go/internal/pkg/postgis"
 )
 
 // newPlaceService returns the place service as production wires it, without media storage.

@@ -12,11 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/module/places"
-	"rantau-go/internal/module/places/mock"
-	"rantau-go/internal/pkg/postgis"
-	"rantau-go/internal/storage"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/module/places"
+	"sakukota-go/internal/module/places/mock"
+	"sakukota-go/internal/pkg/postgis"
+	"sakukota-go/internal/storage"
 )
 
 var errBoom = errors.New("connection reset")

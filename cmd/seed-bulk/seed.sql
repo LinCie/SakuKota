@@ -887,18 +887,18 @@ ORDER BY bp.n;
 INSERT INTO USERS (name, email, password_hash, role)
 VALUES (
     'Admin',
-    'admin@rantau.go',
+    'admin@sakukota.go',
     '$argon2id$v=19$m=19456,t=2,p=1$8BH3b7P0mSW3iajNf9Rv4w$NDJvbJFopj4gJxJqltPEI+QcFoBc0dopSeoKBZyXrIQ',
     'admin'
 )
 ON CONFLICT (email) DO NOTHING;
 
--- Demo reviewers. Password for each: rantau123.
+-- Demo reviewers. Password for each: sakukota123.
 INSERT INTO USERS (name, email, password_hash)
 VALUES
-    ('Dimas Pratama', 'dimas@rantau.go', '$argon2id$v=19$m=19456,t=2,p=1$4J1vYlVEKumQ27YLztkdpg$ejdsIaD1PeuemJYoeZHUcFi0X/70iM9/NaGc5/3ymiU'),
-    ('Sari Wulandari', 'sari@rantau.go', '$argon2id$v=19$m=19456,t=2,p=1$4J1vYlVEKumQ27YLztkdpg$ejdsIaD1PeuemJYoeZHUcFi0X/70iM9/NaGc5/3ymiU'),
-    ('Budi Santoso', 'budi@rantau.go', '$argon2id$v=19$m=19456,t=2,p=1$4J1vYlVEKumQ27YLztkdpg$ejdsIaD1PeuemJYoeZHUcFi0X/70iM9/NaGc5/3ymiU')
+    ('Dimas Pratama', 'dimas@sakukota.go', '$argon2id$v=19$m=19456,t=2,p=1$CU8t66QxfAc7yy5IrrFljg$bk0MQ0DdfX4fqeHeErH5aAen0/T43SlpdotFcAldYDE'),
+    ('Sari Wulandari', 'sari@sakukota.go', '$argon2id$v=19$m=19456,t=2,p=1$CU8t66QxfAc7yy5IrrFljg$bk0MQ0DdfX4fqeHeErH5aAen0/T43SlpdotFcAldYDE'),
+    ('Budi Santoso', 'budi@sakukota.go', '$argon2id$v=19$m=19456,t=2,p=1$CU8t66QxfAc7yy5IrrFljg$bk0MQ0DdfX4fqeHeErH5aAen0/T43SlpdotFcAldYDE')
 ON CONFLICT (email) DO NOTHING;
 
 WITH SEEDED_REVIEWS (
@@ -909,15 +909,15 @@ WITH SEEDED_REVIEWS (
     comment
 ) AS (
     VALUES
-        ('Warung Nasi Sari Rasa', 'setiabudi', 'dimas@rantau.go', 5, 'Generous portions and the prices have stayed the same for months.'),
-        ('Warung Nasi Sari Rasa', 'setiabudi', 'sari@rantau.go', 4, 'Good home-style food. Go before noon, the best dishes sell out.'),
-        ('Warung Nasi Sari Rasa', 'setiabudi', 'budi@rantau.go', 4, NULL),
-        ('Kedai Pagi Karet', 'setiabudi', 'dimas@rantau.go', 3, 'Fine for a quick breakfast, but the queue gets long after 7.'),
-        ('Jarum Rapi Setiabudi', 'setiabudi', 'sari@rantau.go', 5, 'Hemmed two pairs of trousers the same day for a fair price.'),
-        ('Busa Laundry 24 Jam', 'setiabudi', 'budi@rantau.go', 4, 'Clothes come back folded and on time.'),
-        ('Busa Laundry 24 Jam', 'setiabudi', 'dimas@rantau.go', 2, 'Lost a sock twice. Cheap, though.'),
-        ('Warung Bu Narti Mampang', 'mampang-prapatan', 'sari@rantau.go', 5, 'Cheapest proper lunch around here.'),
-        ('Apotek Prapanca', 'mampang-prapatan', 'budi@rantau.go', 4, NULL)
+        ('Warung Nasi Sari Rasa', 'setiabudi', 'dimas@sakukota.go', 5, 'Generous portions and the prices have stayed the same for months.'),
+        ('Warung Nasi Sari Rasa', 'setiabudi', 'sari@sakukota.go', 4, 'Good home-style food. Go before noon, the best dishes sell out.'),
+        ('Warung Nasi Sari Rasa', 'setiabudi', 'budi@sakukota.go', 4, NULL),
+        ('Kedai Pagi Karet', 'setiabudi', 'dimas@sakukota.go', 3, 'Fine for a quick breakfast, but the queue gets long after 7.'),
+        ('Jarum Rapi Setiabudi', 'setiabudi', 'sari@sakukota.go', 5, 'Hemmed two pairs of trousers the same day for a fair price.'),
+        ('Busa Laundry 24 Jam', 'setiabudi', 'budi@sakukota.go', 4, 'Clothes come back folded and on time.'),
+        ('Busa Laundry 24 Jam', 'setiabudi', 'dimas@sakukota.go', 2, 'Lost a sock twice. Cheap, though.'),
+        ('Warung Bu Narti Mampang', 'mampang-prapatan', 'sari@sakukota.go', 5, 'Cheapest proper lunch around here.'),
+        ('Apotek Prapanca', 'mampang-prapatan', 'budi@sakukota.go', 4, NULL)
 )
 INSERT INTO PLACE_REVIEWS (place_id, user_id, rating, comment)
 SELECT p.id, u.id, sr.rating, sr.comment

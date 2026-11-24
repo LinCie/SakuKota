@@ -1,6 +1,6 @@
 package suggestions
 
-import "rantau-go/internal/domain"
+import "sakukota-go/internal/domain"
 
 // Filter narrows the suggestions returned by List. The zero value applies no filter.
 type Filter struct {

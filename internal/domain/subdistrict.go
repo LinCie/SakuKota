@@ -1,6 +1,6 @@
 package domain
 
-import "rantau-go/internal/pkg/postgis"
+import "sakukota-go/internal/pkg/postgis"
 
 const (
 	// MaxSubDistrictNameLength is the size of the VARCHAR(100) name and slug

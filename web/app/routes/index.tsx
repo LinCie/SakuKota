@@ -91,7 +91,7 @@ export const Route = createFileRoute("/")({
   },
   head: () => ({
     meta: [
-      { title: "Rantau — Peta bertahan hidup perantau Jakarta" },
+      { title: "SakuKota — Peta bertahan hidup perantau Jakarta" },
       {
         name: "description",
         content:

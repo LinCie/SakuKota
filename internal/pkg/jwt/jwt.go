@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"time"
 
-	"rantau-go/internal/config"
+	"sakukota-go/internal/config"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
 // issuer names this service in the tokens it signs, so a token signed with the
 // same secret by something else is not accepted.
-const issuer = "rantau-go"
+const issuer = "sakukota-go"
 
 type Claims struct {
 	Role string `json:"role"`

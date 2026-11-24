@@ -1,5 +1,5 @@
 ---
-name: Rantau
+name: SakuKota
 description: A hyper-local survival map for young perantau in Jakarta, lettered like the street's own warung signs.
 colors:
   board: "#1e6b3a"
@@ -219,13 +219,13 @@ components:
     textColor: "{colors.paint}"
 ---
 
-# Design System: Rantau
+# Design System: SakuKota
 
 ## Overview
 
 **Creative North Star: "The Warung Signboard"**
 
-Rantau is lettered the way a Jakarta street is lettered: hand-painted warung and kaki-lima signage. Every surface is a flat painted panel (warung-green board, sign yellow, chili red, painted blue, plum, paint white, ink) with no gradients and no glossy app chrome. Components are signboards: rectangular plates with a thin painted inset border, category codes (W, J, K, L, A, and more) lettered in Bungee, and pins that are miniature signs planted on a post. The map is a quiet, slightly warmed street canvas so the painted signs are the only loud things on it.
+SakuKota is lettered the way a Jakarta street is lettered: hand-painted warung and kaki-lima signage. Every surface is a flat painted panel (warung-green board, sign yellow, chili red, painted blue, plum, paint white, ink) with no gradients and no glossy app chrome. Components are signboards: rectangular plates with a thin painted inset border, category codes (W, J, K, L, A, and more) lettered in Bungee, and pins that are miniature signs planted on a post. The map is a quiet, slightly warmed street canvas so the painted signs are the only loud things on it.
 
 Density is working-app density, not marketing density. A green header board carries the wordmark, kecamatan picker, the yellow "Lihat info" plate, and search; a paint-white strip of category plates and a live count sits under it; the map owns the rest. Place details read as a menu board with dotted leaders; kecamatan facts are a notice board. Missing data is never hidden: it is drawn as an empty dashed slot. State changes by the mark itself: an active plate is solid paint, an inactive plate is a dashed outline, a selected pin inverts to ink with a yellow code.
 
@@ -285,7 +285,7 @@ A signwriter's tin set: a few saturated, flat enamel colours over warm paint whi
 
 ### Hierarchy
 
-- **Display** (Bungee 400, 1.5rem, line-height 1, tracking 0.025em): the RANTAU wordmark, yellow inside its inset frame.
+- **Display** (Bungee 400, 1.5rem, line-height 1, tracking 0.025em): the SAKUKOTA wordmark, yellow inside its inset frame.
 - **Figure** (Bungee 400, 2.25rem, line-height 1, tabular numerals): the daily-spending amount on the notice board, in chili.
 - **Headline** (Bungee 400, 1.5rem, line-height 1.25, balanced wrapping): the place name on the menu board; the notice-board title (1.25rem on phones, 1.5rem from 640px).
 - **Title** (Bungee 400, 1rem): the "Daftar tempat" column heading and the live result count number.

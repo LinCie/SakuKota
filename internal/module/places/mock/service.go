@@ -11,10 +11,10 @@ package mock
 
 import (
 	context "context"
-	domain "rantau-go/internal/domain"
-	places "rantau-go/internal/module/places"
-	storage "rantau-go/internal/storage"
 	reflect "reflect"
+	domain "sakukota-go/internal/domain"
+	places "sakukota-go/internal/module/places"
+	storage "sakukota-go/internal/storage"
 
 	gomock "go.uber.org/mock/gomock"
 )

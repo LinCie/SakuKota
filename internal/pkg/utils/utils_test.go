@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"rantau-go/internal/pkg/utils"
+	"sakukota-go/internal/pkg/utils"
 )
 
 func TestMap(t *testing.T) {

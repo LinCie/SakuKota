@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"rantau-go/internal/pkg/postgis"
-	"rantau-go/internal/pkg/text"
+	"sakukota-go/internal/pkg/postgis"
+	"sakukota-go/internal/pkg/text"
 )
 
 // Data types of a CategoryField. A CHECK on CATEGORY_FIELDS.data_type allows

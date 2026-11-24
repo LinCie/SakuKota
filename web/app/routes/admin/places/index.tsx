@@ -59,7 +59,7 @@ export const Route = createFileRoute("/admin/places/")({
     ]),
   pendingComponent: () => <AdminListSkeleton action />,
   errorComponent: AdminRouteError,
-  head: () => ({ meta: [{ title: "Tempat · Admin Rantau" }] }),
+  head: () => ({ meta: [{ title: "Tempat · Admin SakuKota" }] }),
   component: PlacesRoute,
 });
 

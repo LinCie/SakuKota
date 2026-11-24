@@ -4,7 +4,7 @@ package suggestions
 import (
 	"github.com/jmoiron/sqlx"
 
-	"rantau-go/internal/database"
+	"sakukota-go/internal/database"
 )
 
 // Module bundles the suggestion service and its HTTP handler.

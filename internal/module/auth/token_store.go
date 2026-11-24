@@ -8,7 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"rantau-go/internal/domain"
+	"sakukota-go/internal/domain"
 )
 
 // RedisRefreshStore keeps refresh tokens in Redis. Redis expires them, and

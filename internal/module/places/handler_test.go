@@ -16,11 +16,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/module/places"
-	"rantau-go/internal/module/places/mock"
-	"rantau-go/internal/pkg/postgis"
-	"rantau-go/internal/storage"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/module/places"
+	"sakukota-go/internal/module/places/mock"
+	"sakukota-go/internal/pkg/postgis"
+	"sakukota-go/internal/storage"
 )
 
 // newRouter serves the place handlers on the paths the API uses for them, so
@@ -896,7 +896,7 @@ func TestHandler_CreateMediaUpload(t *testing.T) {
 		svc := newService(t)
 		svc.EXPECT().MediaUploadURL(gomock.Any(), int64(3), "image/webp").Return(storage.Upload{
 			Key:       "uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp",
-			URL:       "http://localhost:3900/rantau-images/uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp?X-Amz-Signature=abc",
+			URL:       "http://localhost:3900/sakukota-images/uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp?X-Amz-Signature=abc",
 			Method:    "PUT",
 			Headers:   map[string]string{"Content-Type": "image/webp"},
 			ExpiresAt: time.Date(2026, 10, 31, 12, 5, 0, 0, time.UTC),
@@ -905,7 +905,7 @@ func TestHandler_CreateMediaUpload(t *testing.T) {
 		rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/places/3/medias/upload-url", `{"content_type":"image/webp"}`))
 		want := `{
 			"upload_key": "uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp",
-			"upload_url": "http://localhost:3900/rantau-images/uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp?X-Amz-Signature=abc",
+			"upload_url": "http://localhost:3900/sakukota-images/uploads/places/3/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp?X-Amz-Signature=abc",
 			"method": "PUT",
 			"headers": {"Content-Type": "image/webp"},
 			"expires_at": "2026-10-31T12:05:00Z"

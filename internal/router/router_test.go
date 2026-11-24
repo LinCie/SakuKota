@@ -17,11 +17,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"rantau-go/internal/config"
-	"rantau-go/internal/domain"
-	"rantau-go/internal/pkg/httpx"
-	"rantau-go/internal/pkg/jwt"
-	"rantau-go/internal/router"
+	"sakukota-go/internal/config"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/pkg/httpx"
+	"sakukota-go/internal/pkg/jwt"
+	"sakukota-go/internal/router"
 )
 
 // access is who may call a route.

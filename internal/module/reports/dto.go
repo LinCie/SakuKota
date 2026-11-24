@@ -3,8 +3,8 @@ package reports
 import (
 	"time"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/storage"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/storage"
 )
 
 // MaxPendingPerUser is the number of reports a user may have waiting for an

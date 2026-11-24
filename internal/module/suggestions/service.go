@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/pkg/postgis"
-	"rantau-go/internal/pkg/text"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/pkg/postgis"
+	"sakukota-go/internal/pkg/text"
 )
 
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock

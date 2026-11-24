@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"rantau-go/internal/config"
-	"rantau-go/internal/pkg/jwt"
+	"sakukota-go/internal/config"
+	"sakukota-go/internal/pkg/jwt"
 )
 
 const secret = "0123456789abcdef0123456789abcdef"
@@ -31,7 +31,7 @@ func TestValidateToken_AcceptsIssuedToken(t *testing.T) {
 func TestValidateToken_RejectsTokensNotIssuedByThisService(t *testing.T) {
 	valid := func() gojwt.RegisteredClaims {
 		return gojwt.RegisteredClaims{
-			Issuer:    "rantau-go",
+			Issuer:    "sakukota-go",
 			Subject:   "7",
 			ExpiresAt: gojwt.NewNumericDate(time.Now().Add(time.Minute)),
 		}

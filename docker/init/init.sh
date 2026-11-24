@@ -39,7 +39,7 @@ if garage layout show | grep -q "No nodes currently have a role"; then
 fi
 
 if ! garage key info "$STORAGE_ACCESS_KEY_ID" >/dev/null 2>&1; then
-	garage key import -n rantau-api --yes "$STORAGE_ACCESS_KEY_ID" "$STORAGE_SECRET_ACCESS_KEY"
+	garage key import -n sakukota-api --yes "$STORAGE_ACCESS_KEY_ID" "$STORAGE_SECRET_ACCESS_KEY"
 fi
 
 if ! garage bucket info "$STORAGE_BUCKET" >/dev/null 2>&1; then

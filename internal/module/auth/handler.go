@@ -5,9 +5,9 @@ import (
 	"errors"
 	"net/http"
 
-	"rantau-go/internal/config"
-	"rantau-go/internal/domain"
-	"rantau-go/internal/pkg/httpx"
+	"sakukota-go/internal/config"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/pkg/httpx"
 )
 
 // Error codes sent to clients, in addition to the shared ones in httpx.

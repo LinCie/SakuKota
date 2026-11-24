@@ -3,8 +3,8 @@ package reviews
 import (
 	"time"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/storage"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/storage"
 )
 
 // CreateRequest is the API payload for reviewing a place. The place comes from

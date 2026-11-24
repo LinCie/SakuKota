@@ -11,8 +11,8 @@ package mock
 
 import (
 	context "context"
-	storage "rantau-go/internal/storage"
 	reflect "reflect"
+	storage "sakukota-go/internal/storage"
 
 	gomock "go.uber.org/mock/gomock"
 )

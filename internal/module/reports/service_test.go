@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/module/reports"
-	"rantau-go/internal/module/reports/mock"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/module/reports"
+	"sakukota-go/internal/module/reports/mock"
 )
 
 // txKey marks the context that newService's transactor passes to the

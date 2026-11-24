@@ -7,8 +7,8 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	"rantau-go/internal/database"
-	"rantau-go/internal/domain"
+	"sakukota-go/internal/database"
+	"sakukota-go/internal/domain"
 )
 
 // PostgresRepository stores suggestions in PostgreSQL. It is safe for concurrent use.

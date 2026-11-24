@@ -11,9 +11,9 @@ package mock
 
 import (
 	context "context"
-	domain "rantau-go/internal/domain"
-	suggestions "rantau-go/internal/module/suggestions"
 	reflect "reflect"
+	domain "sakukota-go/internal/domain"
+	suggestions "sakukota-go/internal/module/suggestions"
 
 	gomock "go.uber.org/mock/gomock"
 )

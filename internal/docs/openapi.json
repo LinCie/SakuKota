@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Rantau API",
+    "title": "SakuKota API",
     "version": "1.0.0",
     "description": "API for sub-districts, places, place reviews, place suggestions, reports, place categories, and authentication. Successful JSON responses are wrapped in data; errors contain code and message."
   },

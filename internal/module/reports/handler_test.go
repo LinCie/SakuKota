@@ -14,12 +14,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/config"
-	"rantau-go/internal/domain"
-	"rantau-go/internal/middleware"
-	"rantau-go/internal/module/reports"
-	"rantau-go/internal/module/reports/mock"
-	"rantau-go/internal/pkg/jwt"
+	"sakukota-go/internal/config"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/middleware"
+	"sakukota-go/internal/module/reports"
+	"sakukota-go/internal/module/reports/mock"
+	"sakukota-go/internal/pkg/jwt"
 )
 
 // testConfig signs and checks the access tokens in these tests.

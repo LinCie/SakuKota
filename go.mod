@@ -1,4 +1,4 @@
-module rantau-go
+module sakukota-go
 
 go 1.27.4
 

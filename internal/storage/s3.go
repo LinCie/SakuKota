@@ -12,7 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
-	"rantau-go/internal/config"
+	"sakukota-go/internal/config"
 )
 
 // S3 is an ObjectStore backed by an S3-compatible API such as Garage.

@@ -40,7 +40,7 @@ export const Route = createFileRoute("/usulan")({
         staleTime: "static",
       }),
     ]),
-  head: () => ({ meta: [{ title: "Usulkan tempat · Rantau" }] }),
+  head: () => ({ meta: [{ title: "Usulkan tempat · SakuKota" }] }),
   component: SuggestRoute,
   errorComponent: SuggestError,
 });

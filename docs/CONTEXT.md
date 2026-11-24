@@ -1,17 +1,16 @@
-# Rantau — Project Context
+# SakuKota — Project Context
 
 > **Living document.** What the project is for and what the backend is specified
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-25 (references to unpublished planning docs
->   generalized; README disclaimer added).
+> - Last updated: 2026-11-25 (project renamed to SakuKota).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
 
 The original planning docs (not published) call it **Perantau Helper**; here it
-is **Rantau** / `rantau-go`.
+is **SakuKota** / `sakukota-go`.
 
 - **Problem.** People who move to Jakarta for work (*perantau*) struggle to find
   cheap everyday essentials (warung, laundry, clinics, pharmacies, mosques,
@@ -95,7 +94,7 @@ Applies to every module unless §6 says otherwise. All routes live under `/v1`.
 - **Context.** Every service call gets the request context; a cancelled request
   never produces a success.
 - **Auth.** `Authorization: Bearer <JWT>` (HS256, configured secret, issuer
-  `rantau-go`, unexpired; anything else rejected). The token carries user ID and
+  `sakukota-go`, unexpired; anything else rejected). The token carries user ID and
   role (`user`/`admin`). No valid token → `401 UNAUTHORIZED`; non-admin on an
   admin route → `403 FORBIDDEN`. Admin checks live in the router.
 - **Route access** (the router test fails on any missing or extra route):
@@ -381,7 +380,7 @@ runtime and `database/sql` pool metrics) on a separate listener,
 their trace and span IDs (stderr output stays). Compose wires Prometheus,
 Tempo (local storage inside its container), Loki (OTLP ingestion), and
 Grafana with all three sources, span-to-logs and log-to-trace links, and the
-"Rantau API" dashboard provisioned.
+"SakuKota API" dashboard provisioned.
 `cmd/cleanup` honours the same two endpoints: each run is a `storage cleanup`
 trace, marked as an error when the run fails; its log lines (a `storage cleanup
 run` line with the `due` count on success, the error on failure, including
@@ -502,3 +501,4 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-24 | Abuse reports of places and reviews (`REPORTS`, reasons, pending limit 5); admins list, remove content, or dismiss; place delete joins the caller's transaction; web report drawer and `/admin/reports` |
 | 2026-11-24 | `GET /reports/{id}` returns the reported place and review; web `/admin/reports/$reportId` shows them and holds remove and dismiss |
 | 2026-11-25 | Docs only: unpublished planning-doc paths generalized for public release; README disclaimer |
+| 2026-11-25 | Project renamed to SakuKota (module `sakukota-go`, database `sakukotago`, bucket `sakukota-images`, demo password `sakukota123`) |

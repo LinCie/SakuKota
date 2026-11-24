@@ -36,7 +36,7 @@ export const Route = createFileRoute("/admin/suggestions/")({
     ]),
   pendingComponent: () => <AdminListSkeleton filter />,
   errorComponent: AdminRouteError,
-  head: () => ({ meta: [{ title: "Usulan · Admin Rantau" }] }),
+  head: () => ({ meta: [{ title: "Usulan · Admin SakuKota" }] }),
   component: SuggestionsRoute,
 });
 

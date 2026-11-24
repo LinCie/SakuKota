@@ -19,7 +19,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	"rantau-go/internal/database"
+	"sakukota-go/internal/database"
 )
 
 // image provides PostgreSQL with PostGIS, like docker/postgres/Dockerfile.
@@ -33,7 +33,7 @@ var keptTables = []string{"goose_db_version", "categories", "category_fields", "
 // Call stop to remove it. Start one per test package, not per test, since starting is slow.
 func Start(ctx context.Context) (db *sqlx.DB, stop func(), err error) {
 	container, err := postgres.Run(ctx, image,
-		postgres.WithDatabase("rantaugo_test"),
+		postgres.WithDatabase("sakukotago_test"),
 		postgres.WithUsername("postgres"),
 		postgres.WithPassword("postgres"),
 		postgres.BasicWaitStrategies(),

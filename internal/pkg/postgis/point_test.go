@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"rantau-go/internal/pkg/postgis"
+	"sakukota-go/internal/pkg/postgis"
 )
 
 func TestPoint_RoundTrips(t *testing.T) {

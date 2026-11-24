@@ -15,7 +15,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
-	"rantau-go/internal/middleware"
+	"sakukota-go/internal/middleware"
 )
 
 func TestWithTelemetry(t *testing.T) {
@@ -49,7 +49,7 @@ func TestWithTelemetry(t *testing.T) {
 				route, _ := dp.Attributes.Value("http.route")
 				status, _ := dp.Attributes.Value("http.response.status_code")
 				host, _ := dp.Attributes.Value("server.address")
-				assert.Equal(t, attribute.StringValue("rantau-go"), host)
+				assert.Equal(t, attribute.StringValue("sakukota-go"), host)
 				counts[route.Emit()+" "+status.Emit()] += dp.Count
 			}
 		}

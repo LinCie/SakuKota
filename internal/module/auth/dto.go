@@ -3,7 +3,7 @@ package auth
 import (
 	"time"
 
-	"rantau-go/internal/domain"
+	"sakukota-go/internal/domain"
 )
 
 // RegisterRequest is the API payload for registering a domain.User.

@@ -12,12 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"rantau-go/internal/database"
-	"rantau-go/internal/domain"
-	"rantau-go/internal/module/places"
-	"rantau-go/internal/module/reviews"
-	"rantau-go/internal/module/reviews/mock"
-	"rantau-go/internal/testutil/pgtest"
+	"sakukota-go/internal/database"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/module/places"
+	"sakukota-go/internal/module/reviews"
+	"sakukota-go/internal/module/reviews/mock"
+	"sakukota-go/internal/testutil/pgtest"
 )
 
 // newWiredService returns a Service over an emptied database, wired as in

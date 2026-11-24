@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"rantau-go/internal/domain"
+	"sakukota-go/internal/domain"
 )
 
 // validateAttributes checks the attributes against the category's fields and returns clean JSON.

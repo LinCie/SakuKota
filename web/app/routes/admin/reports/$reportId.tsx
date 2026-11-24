@@ -21,7 +21,7 @@ export const Route = createFileRoute("/admin/reports/$reportId")({
     />
   ),
   errorComponent: AdminRouteError,
-  head: () => ({ meta: [{ title: "Laporan · Admin Rantau" }] }),
+  head: () => ({ meta: [{ title: "Laporan · Admin SakuKota" }] }),
   component: ReportDetailRoute,
 });
 

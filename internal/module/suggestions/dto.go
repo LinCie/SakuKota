@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/pkg/postgis"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/pkg/postgis"
 )
 
 // CreateRequest is the API payload for suggesting a place. The author comes

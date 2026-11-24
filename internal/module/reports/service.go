@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"rantau-go/internal/domain"
-	"rantau-go/internal/pkg/text"
+	"sakukota-go/internal/domain"
+	"sakukota-go/internal/pkg/text"
 )
 
 //go:generate mockgen -source=service.go -destination=mock/service.go -package=mock
