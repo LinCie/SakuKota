@@ -27,17 +27,17 @@ export function DataTable<T>({
   empty,
 }: DataTableProps<T>) {
   return (
-    <div className="border-ink/15 bg-paint overflow-x-auto rounded-[5px] border">
+    <div className="bg-card ring-foreground/10 overflow-x-auto rounded-xl ring-1">
       <table className="w-full min-w-max border-collapse text-left text-sm">
-        <thead className="bg-paint-deep text-ink-soft text-xs font-semibold">
+        <thead className="bg-muted text-muted-foreground text-xs font-medium">
           <tr>
             {columns.map((column) => (
               <th
                 key={column.key}
                 scope="col"
                 className={cn(
-                  "h-10 px-4 font-semibold whitespace-nowrap",
-                  column.pinned && "bg-paint-deep sticky left-0",
+                  "h-10 px-4 font-medium whitespace-nowrap",
+                  column.pinned && "bg-muted sticky left-0",
                   column.className,
                 )}
               >
@@ -50,14 +50,15 @@ export function DataTable<T>({
           {rows.map((row) => (
             <tr
               key={getRowKey(row)}
-              className="border-ink/10 hover:bg-paint-deep/50 border-t transition-colors"
+              className="group hover:bg-muted border-t transition-colors"
             >
               {columns.map((column) => (
                 <td
                   key={column.key}
                   className={cn(
                     "px-4 py-3 align-middle",
-                    column.pinned && "bg-paint sticky left-0",
+                    column.pinned &&
+                      "bg-card group-hover:bg-muted sticky left-0 transition-colors",
                     column.className,
                   )}
                 >

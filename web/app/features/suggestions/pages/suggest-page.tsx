@@ -6,8 +6,8 @@ import type { CategoryDetail, Place } from "~/features/places/types";
 import type { SubDistrict } from "~/features/subdistricts/types";
 import { cn } from "~/shared/cn";
 import { ErrorBoard } from "~/shared/components/error-board";
-import { menuButtonClass } from "~/shared/components/menu-board";
 import { Toaster } from "~/shared/components/toaster";
+import { buttonVariants } from "~/shared/components/ui/button";
 import { Wordmark } from "~/shared/components/wordmark";
 
 import { MySuggestions } from "../components/my-suggestions";
@@ -31,13 +31,12 @@ export function SuggestPage({
 }: SuggestPageProps) {
   return (
     <Toaster>
-      <div className="bg-paint text-ink flex min-h-dvh flex-col">
-        <header className="bg-board text-paint">
-          <div className="flex items-center justify-between gap-3 px-3 py-3 md:px-5">
+      <div className="bg-background text-foreground flex min-h-dvh flex-col">
+        <header className="bg-background border-b">
+          <div className="flex items-center justify-between gap-3 px-3 py-2 md:px-5 md:py-3">
             <Wordmark />
             <AccountControl />
           </div>
-          <div aria-hidden="true" className="bg-chili h-1.5" />
         </header>
 
         <main className="mx-auto grid w-full max-w-5xl gap-10 px-3 py-6 md:px-5 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
@@ -49,24 +48,20 @@ export function SuggestPage({
               <Link
                 to="/"
                 className={cn(
-                  menuButtonClass,
-                  "inline-flex h-10 items-center gap-2 self-start rounded-[3px] px-2 text-sm font-semibold",
+                  buttonVariants({ variant: "ghost" }),
+                  "text-muted-foreground -ml-3 self-start",
                 )}
               >
-                <ArrowLeft
-                  aria-hidden="true"
-                  className="size-4"
-                  strokeWidth={2.5}
-                />
+                <ArrowLeft aria-hidden="true" data-icon="inline-start" />
                 Kembali ke peta
               </Link>
               <h1
                 id="suggest-title"
-                className="font-sign text-ink text-2xl leading-tight text-balance"
+                className="text-foreground text-2xl leading-tight font-semibold tracking-[-0.01em] text-balance"
               >
                 Usulkan tempat
               </h1>
-              <p className="text-ink-soft max-w-prose text-sm text-pretty">
+              <p className="text-muted-foreground max-w-prose text-sm text-pretty">
                 Tahu tempat terjangkau yang belum ada di peta? Usulkan di sini.
                 Admin meninjaunya dulu sebelum tempat itu tampil di peta.
               </p>
@@ -81,18 +76,19 @@ export function SuggestPage({
 
           <section
             aria-labelledby="my-suggestions"
-            className="border-ink flex flex-col gap-3 rounded-[5px] border-2 p-1 lg:sticky lg:top-6"
+            className="bg-card ring-foreground/10 flex flex-col gap-3 rounded-xl p-5 ring-1 lg:sticky lg:top-6"
           >
-            <div className="border-ink/40 flex flex-col gap-3 rounded-[3px] border p-4">
-              <h2 id="my-suggestions" className="font-sign text-ink text-base">
-                Usulanku
-              </h2>
-              <MySuggestions
-                suggestions={suggestions}
-                categories={categories}
-                subDistricts={subDistricts}
-              />
-            </div>
+            <h2
+              id="my-suggestions"
+              className="text-foreground text-base font-semibold"
+            >
+              Usulanku
+            </h2>
+            <MySuggestions
+              suggestions={suggestions}
+              categories={categories}
+              subDistricts={subDistricts}
+            />
           </section>
         </main>
       </div>

@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { useEffect, useEffectEvent, useState } from "react";
 
 import type { SubDistrict } from "~/features/subdistricts/types";
-import { Button } from "~/shared/components/button";
+import { Button } from "~/shared/components/ui/button";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { PageHeader } from "~/shared/components/page-header";
 import { Pagination } from "~/shared/components/pagination";
@@ -100,8 +100,8 @@ export function PlacesPage({
         title="Tempat"
         description="Tempat bertahan hidup di setiap kecamatan."
         actions={
-          <Button variant="primary" onClick={openCreate}>
-            <Plus aria-hidden="true" className="size-4" strokeWidth={2.5} />
+          <Button size="sm" onClick={openCreate}>
+            <Plus aria-hidden="true" data-icon="inline-start" />
             Tambah tempat
           </Button>
         }
@@ -114,7 +114,7 @@ export function PlacesPage({
           label="Cari tempat"
           placeholder="Cari nama, alamat, atau kategori"
         />
-        <p className="text-ink-soft text-sm tabular-nums">
+        <p className="text-muted-foreground text-sm tabular-nums">
           {formatNumber(total)} tempat
         </p>
       </div>

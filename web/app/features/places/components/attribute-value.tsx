@@ -24,12 +24,11 @@ export function formatAttribute(
       if (typeof value !== "boolean") return null;
       const Icon = value ? Check : X;
       return (
-        // The word sets the baseline so the row's leader lines up with it.
+        // The word sets the baseline so it lines up with the row's label.
         <span className="inline-flex items-baseline gap-1">
           <Icon
             aria-hidden="true"
-            className="size-4 self-center"
-            strokeWidth={2.5}
+            className="text-muted-foreground size-4 self-center"
           />
           {value ? "Ya" : "Tidak"}
         </span>

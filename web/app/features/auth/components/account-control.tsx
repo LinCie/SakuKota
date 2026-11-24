@@ -1,22 +1,28 @@
-import { Menu } from "@base-ui/react/menu";
 import { Link, useLocation } from "@tanstack/react-router";
 import { LogOut, MapPinPlus, ShieldCheck, UserRound } from "lucide-react";
 
+import { Button, buttonVariants } from "~/shared/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/shared/components/ui/dropdown-menu";
 import { cn } from "~/shared/cn";
 import { logout } from "../api";
 import { clearSession, isAdmin, useSession } from "../session";
 
-const plateClass =
-  "border-paint/35 text-paint hover:border-paint/60 hover:bg-board-deep focus-visible:outline-sign inline-flex h-11 shrink-0 items-center gap-2 rounded-[3px] border-2 px-3 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2";
-
-const itemClass =
-  "data-highlighted:bg-paint-deep flex h-11 cursor-pointer items-center gap-2.5 rounded-[3px] px-2.5 text-sm font-bold outline-none";
+const outlineClass = buttonVariants({ variant: "outline" });
+const iconClass = buttonVariants({ variant: "outline", size: "icon" });
 
 /**
- * The header's account corner: a "Masuk" plate when signed out (returning to
- * the current page afterwards), a "Usulkan" plate (not for admins), the user's first name, and
- * "Keluar" when signed in. On phones it is a single icon plate; signed in, it
- * opens a menu of the same actions.
+ * The header's account corner: "Masuk" when signed out (returning to the
+ * current page afterwards); when signed in, "Usulkan" (not for admins),
+ * "Admin" (admins only), the user's first name, and "Keluar". On phones it is
+ * a single icon button; signed in, it opens a menu of the same actions.
  */
 export function AccountControl({ className }: { className?: string }) {
   const session = useSession();
@@ -29,15 +35,16 @@ export function AccountControl({ className }: { className?: string }) {
         to="/masuk"
         search={{ kembali: href === "/" ? undefined : href }}
         className={cn(
-          plateClass,
-          "max-sm:size-11 max-sm:justify-center max-sm:px-0",
+          outlineClass,
+          "max-sm:size-11 max-sm:px-0",
+          "shrink-0",
           className,
         )}
       >
         <UserRound
           aria-hidden="true"
-          className="size-4 max-sm:size-5"
-          strokeWidth={2.5}
+          data-icon="inline-start"
+          className="max-sm:size-5"
         />
         <span className="sr-only sm:not-sr-only">Masuk</span>
       </Link>
@@ -58,87 +65,59 @@ export function AccountControl({ className }: { className?: string }) {
     !admin && pathname !== "/usulan" && !pathname.startsWith("/admin");
 
   return (
-    <div className={cn("flex items-center gap-3", className)}>
-      <Menu.Root>
-        <Menu.Trigger
+    <div className={cn("flex shrink-0 items-center gap-2", className)}>
+      <DropdownMenu>
+        <DropdownMenuTrigger
           aria-label={`Akun ${firstName}`}
-          className={cn(plateClass, "size-11 justify-center px-0 sm:hidden")}
+          className={cn(iconClass, "sm:hidden")}
         >
-          <UserRound aria-hidden="true" className="size-5" strokeWidth={2.5} />
-        </Menu.Trigger>
-        <Menu.Portal>
-          <Menu.Positioner sideOffset={4} align="end" className="z-50">
-            <Menu.Popup className="border-ink/15 bg-paint text-ink min-w-52 rounded-[5px] border p-1 shadow-[0_8px_24px_rgb(26_26_23/0.2)] outline-none">
-              <p className="text-ink-soft max-w-60 truncate px-2.5 py-2 text-sm font-semibold">
-                {session.user.name}
-              </p>
-              <div aria-hidden="true" className="bg-ink/15 mx-1 my-1 h-px" />
-              {suggestLink ? (
-                <Menu.LinkItem
-                  render={<Link to="/usulan" />}
-                  className={itemClass}
-                >
-                  <MapPinPlus
-                    aria-hidden="true"
-                    className="size-4"
-                    strokeWidth={2.5}
-                  />
-                  Usulkan
-                </Menu.LinkItem>
-              ) : null}
-              {adminLink ? (
-                <Menu.LinkItem
-                  render={<Link to="/admin" />}
-                  className={itemClass}
-                >
-                  <ShieldCheck
-                    aria-hidden="true"
-                    className="size-4"
-                    strokeWidth={2.5}
-                  />
-                  Admin
-                </Menu.LinkItem>
-              ) : null}
-              <Menu.Item onClick={signOut} className={itemClass}>
-                <LogOut
-                  aria-hidden="true"
-                  className="size-4"
-                  strokeWidth={2.5}
-                />
-                Keluar
-              </Menu.Item>
-            </Menu.Popup>
-          </Menu.Positioner>
-        </Menu.Portal>
-      </Menu.Root>
+          <UserRound aria-hidden="true" className="size-5" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-auto min-w-52">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="max-w-60 truncate">
+              {session.user.name}
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          {suggestLink ? (
+            <DropdownMenuItem render={<Link to="/usulan" />}>
+              <MapPinPlus aria-hidden="true" />
+              Usulkan
+            </DropdownMenuItem>
+          ) : null}
+          {adminLink ? (
+            <DropdownMenuItem render={<Link to="/admin" />}>
+              <ShieldCheck aria-hidden="true" />
+              Admin
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem onClick={signOut}>
+            <LogOut aria-hidden="true" />
+            Keluar
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {suggestLink ? (
-        <Link to="/usulan" className={cn(plateClass, "max-sm:hidden")}>
-          <MapPinPlus aria-hidden="true" className="size-4" strokeWidth={2.5} />
+        <Link to="/usulan" className={cn(outlineClass, "max-sm:hidden")}>
+          <MapPinPlus aria-hidden="true" data-icon="inline-start" />
           Usulkan
         </Link>
       ) : null}
       {adminLink ? (
-        <Link to="/admin" className={cn(plateClass, "max-sm:hidden")}>
-          <ShieldCheck
-            aria-hidden="true"
-            className="size-4"
-            strokeWidth={2.5}
-          />
+        <Link to="/admin" className={cn(outlineClass, "max-sm:hidden")}>
+          <ShieldCheck aria-hidden="true" data-icon="inline-start" />
           Admin
         </Link>
       ) : null}
-      <span className="text-paint max-w-[10ch] truncate text-sm font-bold max-sm:hidden">
+      <span className="text-foreground ml-1 max-w-[10ch] truncate text-sm font-semibold max-sm:hidden">
         {firstName}
       </span>
-      <button
-        type="button"
-        onClick={signOut}
-        className={cn(plateClass, "max-sm:hidden")}
-      >
-        <LogOut aria-hidden="true" className="size-4" strokeWidth={2.5} />
+      <Button variant="ghost" onClick={signOut} className="max-sm:hidden">
+        <LogOut aria-hidden="true" data-icon="inline-start" />
         Keluar
-      </button>
+      </Button>
     </div>
   );
 }

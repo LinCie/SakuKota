@@ -1,8 +1,7 @@
+import { ImageOff } from "lucide-react";
 import { useState } from "react";
 
 import { cn } from "~/shared/cn";
-
-import { MissingSlot } from "./missing-slot";
 
 type ImageFrameProps = {
   src: string | null;
@@ -15,7 +14,7 @@ type ImageFrameProps = {
   contentType?: string;
 };
 
-/** An image or video in a bordered frame, or a drawn slot when it is missing or fails to load. */
+/** An image or video in a rounded frame, or a muted frame naming what is missing when there is none or it fails to load. */
 export function ImageFrame({
   src,
   alt,
@@ -30,11 +29,12 @@ export function ImageFrame({
     return (
       <div
         className={cn(
-          "border-ink/30 grid w-full place-items-center rounded-[3px] border-2 border-dashed",
+          "bg-muted text-muted-foreground flex w-full flex-col items-center justify-center gap-2 rounded-xl p-3 text-center text-sm",
           aspect,
         )}
       >
-        <MissingSlot>{missing}</MissingSlot>
+        <ImageOff aria-hidden="true" className="size-6" />
+        {missing}
       </div>
     );
   }
@@ -47,10 +47,7 @@ export function ImageFrame({
         controls
         preload="metadata"
         onError={() => setFailedSrc(src)}
-        className={cn(
-          "border-ink bg-paint-deep w-full rounded-[3px] border-2 object-cover",
-          aspect,
-        )}
+        className={cn("bg-muted w-full rounded-xl object-cover", aspect)}
       />
     );
   }
@@ -61,10 +58,7 @@ export function ImageFrame({
       alt={alt}
       loading="lazy"
       onError={() => setFailedSrc(src)}
-      className={cn(
-        "border-ink bg-paint-deep w-full rounded-[3px] border-2 object-cover",
-        aspect,
-      )}
+      className={cn("bg-muted w-full rounded-xl object-cover", aspect)}
     />
   );
 }

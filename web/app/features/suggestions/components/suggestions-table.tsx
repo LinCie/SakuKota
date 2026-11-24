@@ -37,7 +37,7 @@ export function SuggestionsTable({
       cell: (suggestion) => (
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="font-semibold">{suggestion.name}</span>
-          <span className="text-ink-soft max-w-80 truncate text-xs">
+          <span className="text-muted-foreground max-w-80 truncate text-xs">
             {suggestion.address ?? "Alamat tidak tersedia"}
           </span>
         </div>

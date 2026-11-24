@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { formatNumber } from "~/shared/format";
 
-import { Button } from "./button";
+import { Button } from "./ui/button";
 
 type PaginationProps = {
   /** The current page, counting from 1. */
@@ -18,22 +18,26 @@ export function Pagination({ page, pageCount, onPageChange }: PaginationProps) {
       aria-label="Halaman"
       className="flex items-center justify-end gap-3 text-sm"
     >
-      <p className="text-ink-soft tabular-nums">
+      <p className="text-muted-foreground tabular-nums">
         Halaman {formatNumber(page)} dari {formatNumber(pageCount)}
       </p>
       <Button
+        variant="outline"
+        size="icon-sm"
         aria-label="Halaman sebelumnya"
         disabled={page <= 1}
         onClick={() => onPageChange(page - 1)}
       >
-        <ChevronLeft aria-hidden="true" className="size-4" strokeWidth={2.5} />
+        <ChevronLeft aria-hidden="true" />
       </Button>
       <Button
+        variant="outline"
+        size="icon-sm"
         aria-label="Halaman berikutnya"
         disabled={page >= pageCount}
         onClick={() => onPageChange(page + 1)}
       >
-        <ChevronRight aria-hidden="true" className="size-4" strokeWidth={2.5} />
+        <ChevronRight aria-hidden="true" />
       </Button>
     </nav>
   );

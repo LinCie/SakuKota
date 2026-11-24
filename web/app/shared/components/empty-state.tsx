@@ -12,9 +12,9 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center gap-2">
-      <p className="font-bold">{title}</p>
+      <p className="font-semibold">{title}</p>
       {description ? (
-        <p className="text-ink-soft max-w-sm text-sm text-pretty">
+        <p className="text-muted-foreground max-w-sm text-sm text-pretty">
           {description}
         </p>
       ) : null}

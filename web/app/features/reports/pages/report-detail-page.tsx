@@ -5,7 +5,7 @@ import { useState } from "react";
 import { CategoryBadge } from "~/features/places/components/category-sign";
 import { RatingStars } from "~/features/reviews/components/rating-stars";
 import { ReviewMedia } from "~/features/reviews/components/review-media";
-import { Button } from "~/shared/components/button";
+import { Button, buttonVariants } from "~/shared/components/ui/button";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { DetailList, type DetailItem } from "~/shared/components/detail-list";
 import { MediaGallery } from "~/shared/components/media-gallery";
@@ -87,14 +87,17 @@ export function ReportDetailPage({ report }: { report: ReportDetail }) {
 
   return (
     <>
-      <Button
-        variant="ghost"
-        className="self-start"
-        render={<Link to="/admin/reports" />}
+      <Link
+        to="/admin/reports"
+        className={buttonVariants({
+          variant: "ghost",
+          size: "sm",
+          className: "text-muted-foreground -ml-3 self-start",
+        })}
       >
-        <ArrowLeft aria-hidden="true" className="size-4" strokeWidth={2.5} />
+        <ArrowLeft aria-hidden="true" data-icon="inline-start" />
         Daftar laporan
-      </Button>
+      </Link>
 
       <PageHeader
         title={`Laporan ${isReview ? "ulasan" : "tempat"}`}
@@ -102,20 +105,20 @@ export function ReportDetailPage({ report }: { report: ReportDetail }) {
         actions={
           report.status === "pending" ? (
             <>
-              <Button onClick={() => setConfirming("dismiss")}>
-                <Check
-                  aria-hidden="true"
-                  className="size-4"
-                  strokeWidth={2.5}
-                />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirming("dismiss")}
+              >
+                <Check aria-hidden="true" data-icon="inline-start" />
                 Abaikan
               </Button>
-              <Button variant="danger" onClick={() => setConfirming("remove")}>
-                <Trash2
-                  aria-hidden="true"
-                  className="size-4"
-                  strokeWidth={2.5}
-                />
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setConfirming("remove")}
+              >
+                <Trash2 aria-hidden="true" data-icon="inline-start" />
                 Hapus konten
               </Button>
             </>
@@ -177,11 +180,13 @@ function ReviewContent({ review }: { review: ReportedReview }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <span className="text-ink font-semibold">{review.user.name}</span>
+        <span className="text-foreground font-semibold">
+          {review.user.name}
+        </span>
         <RatingStars rating={review.rating} />
       </div>
       {review.comment ? (
-        <p className="text-ink text-pretty whitespace-pre-line">
+        <p className="text-foreground text-pretty whitespace-pre-line">
           {review.comment}
         </p>
       ) : (
@@ -199,7 +204,10 @@ function ReviewContent({ review }: { review: ReportedReview }) {
           ))}
         </ul>
       ) : null}
-      <time dateTime={review.created_at} className="text-ink-soft text-sm">
+      <time
+        dateTime={review.created_at}
+        className="text-muted-foreground text-sm"
+      >
         {formatLocalDate(new Date(review.created_at))}
       </time>
     </div>
@@ -250,7 +258,7 @@ function PlaceContent({
       <Link
         to="/admin/places/$placeId"
         params={{ placeId: String(place.id) }}
-        className="text-cat self-start text-sm font-semibold underline underline-offset-2"
+        className="text-primary self-start text-sm font-medium underline underline-offset-2"
       >
         Buka di admin tempat
       </Link>

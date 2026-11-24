@@ -56,18 +56,15 @@ export function AdminListSkeleton({
         <Skeleton className="h-5 w-28" />
       </div>
 
-      <div className="border-ink/15 bg-paint overflow-hidden rounded-[5px] border">
-        <div className="bg-paint-deep flex h-10 items-center gap-8 px-4">
-          <Skeleton className="h-3 w-24" />
-          <Skeleton className="h-3 w-16" />
-          <Skeleton className="hidden h-3 w-20 sm:block" />
-          <Skeleton className="hidden h-3 w-20 md:block" />
+      <div className="bg-card ring-foreground/10 overflow-hidden rounded-xl ring-1">
+        <div className="bg-muted flex h-10 items-center gap-8 px-4">
+          <Skeleton className="bg-foreground/10 h-3 w-24" />
+          <Skeleton className="bg-foreground/10 h-3 w-16" />
+          <Skeleton className="bg-foreground/10 hidden h-3 w-20 sm:block" />
+          <Skeleton className="bg-foreground/10 hidden h-3 w-20 md:block" />
         </div>
         {Array.from({ length: TABLE_ROWS }, (_, i) => (
-          <div
-            key={i}
-            className="border-ink/10 flex items-center gap-8 border-t px-4 py-3"
-          >
+          <div key={i} className="flex items-center gap-8 border-t px-4 py-3">
             <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:max-w-56 sm:flex-none sm:basis-56">
               <Skeleton className="h-5 w-40 max-w-full" />
               <Skeleton className="h-4 w-56 max-w-full" />
@@ -90,8 +87,8 @@ function CardSkeleton({
   children: ReactNode;
 }) {
   return (
-    <div className="border-ink/15 bg-paint flex min-w-0 flex-col gap-4 rounded-[5px] border p-5">
-      <h2 className="text-sm font-bold">{title}</h2>
+    <div className="bg-card ring-foreground/10 flex min-w-0 flex-col gap-4 rounded-xl p-5 ring-1">
+      <h2 className="text-foreground text-sm font-semibold">{title}</h2>
       {children}
     </div>
   );

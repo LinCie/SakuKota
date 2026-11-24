@@ -3,7 +3,7 @@ import { LocateFixed } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { SubDistrict } from "~/features/subdistricts/types";
-import { Button } from "~/shared/components/button";
+import { Button } from "~/shared/components/ui/button";
 import {
   SelectField,
   TextAreaField,
@@ -121,26 +121,23 @@ export function PlaceForm({
             category={category}
             focusKey={subDistrictId}
           />
-          <p className="text-ink-soft text-sm text-pretty">
+          <p className="text-muted-foreground text-sm text-pretty">
             Ketuk peta untuk menanam tanda, lalu seret untuk menggesernya.
           </p>
         </div>
 
         <div className="flex flex-col gap-2">
           <Button
+            variant="outline"
             onClick={() => position.locate(pick)}
             disabled={position.locating}
             className="self-start"
           >
-            <LocateFixed
-              aria-hidden="true"
-              className="size-4"
-              strokeWidth={2.5}
-            />
+            <LocateFixed aria-hidden="true" data-icon="inline-start" />
             {position.locating ? "Mencari lokasi…" : "Pakai lokasi saya"}
           </Button>
           {position.error ? (
-            <p role="status" className="text-chili text-sm font-semibold">
+            <p role="status" className="text-destructive text-sm">
               {position.error}
             </p>
           ) : null}

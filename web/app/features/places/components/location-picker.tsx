@@ -4,7 +4,7 @@ import { useEffect, useEffectEvent, useRef } from "react";
 import type { Category, Place } from "../types";
 import { useLeafletMap } from "../hooks";
 import { JAKARTA_CENTER, locatedPlaces, MAP_CANVAS_CLASS } from "./leaflet-map";
-import { neighbourIcon, pinIcon } from "./map-icons";
+import { neighbourIcon, pickedIcon } from "./map-icons";
 import { ZoomPlate } from "./zoom-plate";
 
 export type Pin = { lat: number; lng: number };
@@ -51,7 +51,7 @@ export function LocationPicker({
   const pinLng = pin?.lng;
   // Reads the latest category without re-planting the pin.
   const pinIconFor = useEffectEvent((L: typeof Leaflet) =>
-    pinIcon(L, category),
+    pickedIcon(L, category),
   );
 
   // Frame the chosen kecamatan: its places, or the pin, or Jakarta.
@@ -140,7 +140,7 @@ export function LocationPicker({
   // Re-letter the sign when the category changes.
   useEffect(() => {
     if (leaflet && markerRef.current) {
-      markerRef.current.setIcon(pinIcon(leaflet.L, category));
+      markerRef.current.setIcon(pickedIcon(leaflet.L, category));
     }
   }, [leaflet, category]);
 
@@ -148,7 +148,7 @@ export function LocationPicker({
     // Inside a drawer, a drag here pans the map instead of swiping the drawer.
     <div
       data-base-ui-swipe-ignore
-      className="border-ink bg-paint-deep relative isolate h-64 overflow-hidden rounded-[3px] border-2"
+      className="bg-muted relative isolate h-64 overflow-hidden rounded-xl border"
     >
       <div
         ref={containerRef}

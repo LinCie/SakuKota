@@ -25,41 +25,41 @@ import type { Category, CategoryColor } from "../types";
 type CategoryStyle = {
   icon: LucideIcon;
   label: string;
-  /** Solid painted plate: active filter, map sign, badge. */
-  solid: string;
-  /** Outlined plate: inactive filter. */
-  outline: string;
+  /** Soft tint behind its deep tone: category tiles (see DESIGN.md). */
+  tint: string;
+  /** Solid tint with its icon colour: map pins. */
+  pin: string;
 };
 
-// The paints a category's `color` selects. Class strings are complete literals
+// The tints a category's `color` selects (see DESIGN.md). Class strings are complete literals
 // so Tailwind can see them, including inside the map's marker HTML.
 const CATEGORY_COLORS: Record<
   CategoryColor,
-  Pick<CategoryStyle, "solid" | "outline">
+  Pick<CategoryStyle, "tint" | "pin">
 > = {
   chili: {
-    solid: "bg-chili text-paint border-chili",
-    outline: "border-chili text-chili",
+    tint: "bg-sambal-soft text-sambal-deep",
+    pin: "bg-sambal text-card",
   },
   plum: {
-    solid: "bg-plum text-paint border-plum",
-    outline: "border-plum text-plum",
+    tint: "bg-ubi-soft text-ubi-deep",
+    pin: "bg-ubi text-card",
   },
   cat: {
-    solid: "bg-cat text-paint border-cat",
-    outline: "border-cat text-cat",
+    tint: "bg-telang-soft text-telang-deep",
+    pin: "bg-telang text-card",
   },
   sign: {
-    solid: "bg-sign text-ink border-ink",
-    outline: "border-ink/60 text-ink",
+    tint: "bg-kunyit-soft text-kunyit-deep",
+    pin: "bg-kunyit text-kunyit-deep",
   },
   board: {
-    solid: "bg-board text-paint border-board",
-    outline: "border-board text-board",
+    tint: "bg-pandan-soft text-pandan-deep",
+    pin: "bg-pandan text-card",
   },
 };
 
-// The icon a category shows on its sign, keyed by the migrations' `slug`.
+// The icon a category shows on its pin, tile, and badge, keyed by the migrations' `slug`.
 // Categories without an entry fall back to a generic map pin.
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
   "affordable-food-warung": UtensilsCrossed,
@@ -88,8 +88,8 @@ export function categoryStyle(category: Category): CategoryStyle {
   };
 }
 
-/** Small painted plate with the category's icon, e.g. the cutlery on a warung sign. */
-export function CodePlate({
+/** The category's icon in its deep tone on a soft-tinted tile. */
+export function CategoryTile({
   category,
   className,
 }: {
@@ -102,23 +102,28 @@ export function CodePlate({
     <span
       aria-hidden="true"
       className={cn(
-        "inline-grid size-7 shrink-0 place-items-center rounded-[3px] border-2",
-        style.solid,
+        "inline-grid size-8 shrink-0 place-items-center rounded-lg",
+        style.tint,
         className,
       )}
     >
-      <style.icon className="size-4" strokeWidth={2.5} />
+      <style.icon className="size-4" />
     </span>
   );
 }
 
-/** Code plate plus label, used for a place's category on the menu board. */
+/** The category's icon and label as a soft-tinted pill, e.g. on a place's details. */
 export function CategoryBadge({ category }: { category: Category }) {
   const style = categoryStyle(category);
 
   return (
-    <span className="text-ink inline-flex items-center gap-2 text-sm font-semibold">
-      <CodePlate category={category} className="size-6" />
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+        style.tint,
+      )}
+    >
+      <style.icon aria-hidden="true" className="size-3.5" />
       {style.label}
     </span>
   );

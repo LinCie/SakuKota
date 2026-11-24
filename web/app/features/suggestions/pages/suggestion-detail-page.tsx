@@ -5,7 +5,7 @@ import { formatAttribute } from "~/features/places/components/attribute-value";
 import { CategoryBadge } from "~/features/places/components/category-sign";
 import type { CategoryDetail, Place } from "~/features/places/types";
 import type { SubDistrict } from "~/features/subdistricts/types";
-import { Button } from "~/shared/components/button";
+import { Button, buttonVariants } from "~/shared/components/ui/button";
 import { DetailList, type DetailItem } from "~/shared/components/detail-list";
 import { MissingSlot, orMissing } from "~/shared/components/missing-slot";
 import { PageHeader } from "~/shared/components/page-header";
@@ -68,7 +68,7 @@ export function SuggestionDetailPage({
           <Link
             to="/admin/places/$placeId"
             params={{ placeId: String(suggestion.place_id) }}
-            className="text-cat font-semibold underline underline-offset-2"
+            className="text-primary font-medium underline underline-offset-2"
           >
             Lihat tempat
           </Link>
@@ -140,14 +140,17 @@ export function SuggestionDetailPage({
 
   return (
     <>
-      <Button
-        variant="ghost"
-        className="self-start"
-        render={<Link to="/admin/suggestions" />}
+      <Link
+        to="/admin/suggestions"
+        className={buttonVariants({
+          variant: "ghost",
+          size: "sm",
+          className: "text-muted-foreground -ml-3 self-start",
+        })}
       >
-        <ArrowLeft aria-hidden="true" className="size-4" strokeWidth={2.5} />
+        <ArrowLeft aria-hidden="true" data-icon="inline-start" />
         Daftar usulan
-      </Button>
+      </Link>
 
       <PageHeader
         title={suggestion.name}
@@ -161,21 +164,15 @@ export function SuggestionDetailPage({
           suggestion.status === "pending" ? (
             <>
               <Button
-                className="text-chili"
+                variant="destructive"
+                size="sm"
                 onClick={() => rejectDrawer.setOpen(true)}
               >
-                <X aria-hidden="true" className="size-4" strokeWidth={2.5} />
+                <X aria-hidden="true" data-icon="inline-start" />
                 Tolak
               </Button>
-              <Button
-                variant="primary"
-                onClick={() => approveDrawer.setOpen(true)}
-              >
-                <Check
-                  aria-hidden="true"
-                  className="size-4"
-                  strokeWidth={2.5}
-                />
+              <Button size="sm" onClick={() => approveDrawer.setOpen(true)}>
+                <Check aria-hidden="true" data-icon="inline-start" />
                 Setujui
               </Button>
             </>

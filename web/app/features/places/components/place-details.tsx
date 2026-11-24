@@ -1,15 +1,11 @@
 import { ArrowLeft, Star, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
-import { cn } from "~/shared/cn";
 import { MediaGallery } from "~/shared/components/media-gallery";
+import { DetailBlock, DetailRow } from "~/shared/components/menu-board";
 import { MissingSlot, orMissing } from "~/shared/components/missing-slot";
+import { Button } from "~/shared/components/ui/button";
 import { formatNumber, formatRating } from "~/shared/format";
-import {
-  LeaderRow,
-  menuButtonClass,
-  StackedRow,
-} from "~/shared/components/menu-board";
 import { attributeValue } from "./attribute-value";
 import type { CategoryField, Place } from "../types";
 import { CategoryBadge } from "./category-sign";
@@ -21,13 +17,13 @@ type PlaceDetailsProps = {
   onClose: () => void;
 };
 
-/** One place on the menu board: its details, with a way back to the list. */
+/** One place's details, with a way back to the list. */
 export function PlaceDetails({ place, fields, onClose }: PlaceDetailsProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
 
-  // Short values sit on leader rows; free text follows as full-width blocks,
-  // so `sort_order` applies within each group.
-  const leaderFields = fields.filter((field) => field.data_type !== "text");
+  // Short values sit on rows; free text follows as full-width blocks, so
+  // `sort_order` applies within each group.
+  const rowFields = fields.filter((field) => field.data_type !== "text");
   const textFields = fields.filter((field) => field.data_type === "text");
 
   useEffect(() => {
@@ -36,106 +32,98 @@ export function PlaceDetails({ place, fields, onClose }: PlaceDetailsProps) {
 
   return (
     <article aria-labelledby="place-name" className="flex flex-col">
-      <div className="border-ink flex items-center justify-between gap-2 border-b-2 px-2 py-2 md:px-3">
-        <button
-          type="button"
+      <div className="flex items-center justify-between gap-2 border-b px-2 py-2 md:px-3">
+        <Button
+          variant="ghost"
           onClick={onClose}
-          className={cn(
-            menuButtonClass,
-            "hidden items-center gap-2 rounded-[3px] px-2 py-1.5 text-sm font-semibold md:inline-flex",
-          )}
+          className="hidden md:inline-flex"
         >
-          <ArrowLeft aria-hidden="true" className="size-4" strokeWidth={2.5} />
+          <ArrowLeft aria-hidden="true" data-icon="inline-start" />
           Daftar tempat
-        </button>
+        </Button>
         <span
           aria-hidden="true"
-          className="bg-ink/20 mx-auto h-1.5 w-12 rounded-full md:hidden"
+          className="bg-input mx-auto h-1.5 w-10 rounded-full md:hidden"
         />
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={onClose}
           aria-label="Tutup detail tempat"
-          className={cn(
-            menuButtonClass,
-            "grid size-9 place-items-center rounded-[3px] md:hidden",
-          )}
+          className="md:hidden"
         >
-          <X aria-hidden="true" className="size-5" strokeWidth={2.5} />
-        </button>
+          <X aria-hidden="true" className="size-5" />
+        </Button>
       </div>
 
-      <div className="p-3 md:p-4">
-        <div className="border-ink bg-paint rounded-[5px] border-2 p-1">
-          <div className="border-ink/40 flex flex-col gap-4 rounded-[3px] border px-4 py-4">
-            <div>
-              <CategoryBadge category={place.category} />
-            </div>
-
-            <h2
-              id="place-name"
-              ref={headingRef}
-              tabIndex={-1}
-              className="font-sign text-ink text-2xl leading-tight text-balance outline-none"
-            >
-              {place.name}
-            </h2>
-
-            <MediaGallery
-              medias={place.medias}
-              alt={`Foto ${place.name}`}
-              missing="Foto tidak tersedia"
-              aspect="aspect-4/3"
-            />
-
-            {place.short_description ? (
-              <p className="text-ink max-w-prose text-pretty">
-                {place.short_description}
-              </p>
-            ) : (
-              <MissingSlot>Deskripsi tidak tersedia</MissingSlot>
-            )}
-
-            <dl className="border-ink border-t-2 pt-1">
-              <LeaderRow label="Rating">
-                {place.rating_average === null ? (
-                  <MissingSlot>Belum ada ulasan</MissingSlot>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Star
-                      aria-hidden="true"
-                      className="fill-sign text-ink size-4 shrink-0"
-                      strokeWidth={2.5}
-                    />
-                    {formatRating(place.rating_average)}
-                    <span className="text-ink-soft text-sm font-normal">
-                      ({formatNumber(place.rating_count)} ulasan)
-                    </span>
-                  </span>
-                )}
-              </LeaderRow>
-              <LeaderRow label="Jam buka">
-                {orMissing(place.operating_hours, "Jam buka tidak tersedia")}
-              </LeaderRow>
-              <LeaderRow label="Kisaran harga">
-                {orMissing(place.estimated_price_range, "Harga tidak tersedia")}
-              </LeaderRow>
-              {leaderFields.map((field) => (
-                <LeaderRow key={field.id} label={field.label}>
-                  {attributeValue(field, place)}
-                </LeaderRow>
-              ))}
-              {textFields.map((field) => (
-                <StackedRow key={field.id} label={field.label}>
-                  {attributeValue(field, place)}
-                </StackedRow>
-              ))}
-              <StackedRow label="Alamat">
-                {orMissing(place.address, "Alamat tidak tersedia")}
-              </StackedRow>
-            </dl>
-          </div>
+      <div className="flex flex-col gap-4 px-4 pt-4 pb-2 md:px-5">
+        <div>
+          <CategoryBadge category={place.category} />
         </div>
+
+        <h2
+          id="place-name"
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-foreground -mt-1 text-xl leading-snug font-semibold tracking-[-0.01em] text-balance outline-none"
+        >
+          {place.name}
+        </h2>
+
+        <MediaGallery
+          medias={place.medias}
+          alt={`Foto ${place.name}`}
+          missing="Foto tidak tersedia"
+          aspect="aspect-4/3"
+        />
+
+        {place.short_description ? (
+          <p className="text-foreground max-w-prose text-pretty">
+            {place.short_description}
+          </p>
+        ) : (
+          <div>
+            <MissingSlot>Deskripsi tidak tersedia</MissingSlot>
+          </div>
+        )}
+
+        <dl className="divide-y border-t">
+          <DetailRow label="Rating">
+            {place.rating_average === null ? (
+              <MissingSlot>Belum ada ulasan</MissingSlot>
+            ) : (
+              <span className="inline-flex items-center gap-1.5">
+                <Star
+                  aria-hidden="true"
+                  className="fill-kunyit text-kunyit size-4 shrink-0 self-center"
+                />
+                {formatRating(place.rating_average)}
+                <span className="text-muted-foreground text-sm font-normal">
+                  ({formatNumber(place.rating_count)} ulasan)
+                </span>
+              </span>
+            )}
+          </DetailRow>
+          <DetailRow label="Jam buka">
+            {orMissing(place.operating_hours, "Jam buka tidak tersedia")}
+          </DetailRow>
+          <DetailRow label="Kisaran harga">
+            {orMissing(place.estimated_price_range, "Harga tidak tersedia")}
+          </DetailRow>
+          {rowFields.map((field) => (
+            <DetailRow key={field.id} label={field.label}>
+              {attributeValue(field, place)}
+            </DetailRow>
+          ))}
+          {textFields.map((field) => (
+            <DetailBlock key={field.id} label={field.label}>
+              {attributeValue(field, place)}
+            </DetailBlock>
+          ))}
+          <DetailBlock label="Alamat">
+            {orMissing(place.address, "Alamat tidak tersedia")}
+          </DetailBlock>
+        </dl>
       </div>
     </article>
   );

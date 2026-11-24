@@ -5,6 +5,7 @@ import { cn } from "~/shared/cn";
 import type { Media } from "~/shared/image-upload";
 
 import { ImageFrame } from "./image-frame";
+import { buttonVariants } from "./ui/button";
 
 type MediaGalleryProps = {
   medias: Media[];
@@ -15,8 +16,10 @@ type MediaGalleryProps = {
   aspect: string;
 };
 
-const arrowClass =
-  "bg-paint/90 text-ink border-ink hover:bg-paint focus-visible:outline-cat absolute top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-[3px] border-2 focus-visible:outline-2";
+const arrowClass = cn(
+  buttonVariants({ variant: "floating", size: "icon-sm" }),
+  "absolute top-1/2 -translate-y-1/2",
+);
 
 // Full class names, so Tailwind finds them: one shift per image, up to maxMedias.
 const shift = [
@@ -84,7 +87,7 @@ export function MediaGallery({
           show(index + 1);
         }
       }}
-      className="focus-visible:outline-cat flex flex-col gap-2 rounded-[3px] focus-visible:outline-2 focus-visible:outline-offset-2"
+      className="focus-visible:ring-ring/50 flex flex-col gap-2.5 rounded-xl outline-none focus-visible:ring-3"
     >
       <div
         role="group"
@@ -92,7 +95,7 @@ export function MediaGallery({
         aria-label={`${index + 1} dari ${medias.length}`}
         className="relative"
       >
-        <div className="overflow-hidden rounded-[3px]">
+        <div className="overflow-hidden rounded-xl">
           <ul
             className={cn(
               "flex transition-transform duration-300 ease-out motion-reduce:transition-none",
@@ -122,11 +125,7 @@ export function MediaGallery({
           onClick={() => show(index - 1)}
           className={cn(arrowClass, "left-2")}
         >
-          <ChevronLeft
-            aria-hidden="true"
-            className="size-5"
-            strokeWidth={2.5}
-          />
+          <ChevronLeft aria-hidden="true" className="size-5" />
         </button>
         <button
           type="button"
@@ -134,11 +133,7 @@ export function MediaGallery({
           onClick={() => show(index + 1)}
           className={cn(arrowClass, "right-2")}
         >
-          <ChevronRight
-            aria-hidden="true"
-            className="size-5"
-            strokeWidth={2.5}
-          />
+          <ChevronRight aria-hidden="true" className="size-5" />
         </button>
       </div>
       <div className="flex justify-center gap-1.5">
@@ -150,8 +145,10 @@ export function MediaGallery({
             aria-current={i === index}
             onClick={() => show(i)}
             className={cn(
-              "border-ink focus-visible:outline-cat size-2.5 rounded-full border focus-visible:outline-2",
-              i === index ? "bg-ink" : "bg-paint",
+              "focus-visible:outline-ring size-2 rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2",
+              i === index
+                ? "bg-foreground"
+                : "bg-input hover:bg-muted-foreground",
             )}
           />
         ))}

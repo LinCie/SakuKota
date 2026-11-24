@@ -1,21 +1,10 @@
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-// Shared look of the menu board: painted rows and dashed dividers.
+// Detail rows for places, and the titled sections of the kecamatan info.
 
-/**
- * Class names for a yellow sign-plate button. Each use adds its size, and any
- * disabled style.
- */
-export const signButtonClass =
-  "border-ink bg-sign font-sign text-ink hover:bg-sign-soft focus-visible:outline-cat rounded-[3px] border-2 px-4 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2";
-
-/** Class names for the board's icon-and-text buttons on paper. */
-export const menuButtonClass =
-  "text-ink hover:bg-sign-soft focus-visible:bg-sign-soft focus-visible:outline-cat transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2";
-
-/** A menu-board row: label, dotted leader, value. */
-export function LeaderRow({
+/** A detail row for short values: label left, value right. Rows sit in a `dl` that draws the hairlines between them. */
+export function DetailRow({
   label,
   children,
 }: {
@@ -23,23 +12,19 @@ export function LeaderRow({
   children: ReactNode;
 }) {
   return (
-    <div className="flex items-baseline gap-2 py-2">
-      <dt className="text-ink-soft max-w-[50%] shrink-0 text-sm font-semibold">
+    <div className="flex items-baseline justify-between gap-4 py-2.5">
+      <dt className="text-muted-foreground max-w-[50%] shrink-0 text-sm font-medium">
         {label}
       </dt>
-      <span
-        aria-hidden="true"
-        className="border-ink/25 min-w-6 flex-1 -translate-y-1 border-b-2 border-dotted"
-      />
-      <dd className="text-ink max-w-[65%] text-right font-semibold tabular-nums">
+      <dd className="text-foreground max-w-[65%] text-right font-semibold tabular-nums">
         {children}
       </dd>
     </div>
   );
 }
 
-/** A menu-board block for long values: label above, value below. */
-export function StackedRow({
+/** A detail block for long values: label above, value below. */
+export function DetailBlock({
   label,
   children,
 }: {
@@ -47,14 +32,14 @@ export function StackedRow({
   children: ReactNode;
 }) {
   return (
-    <div className="border-ink/25 flex flex-col gap-1 border-t border-dashed py-2">
-      <dt className="text-ink-soft text-sm font-semibold">{label}</dt>
-      <dd className="text-ink text-pretty">{children}</dd>
+    <div className="flex flex-col gap-1 py-2.5">
+      <dt className="text-muted-foreground text-sm font-medium">{label}</dt>
+      <dd className="text-foreground text-pretty">{children}</dd>
     </div>
   );
 }
 
-/** A titled menu-board section with an icon, separated by a dashed rule. */
+/** A titled section with an icon; sections are divided by hairlines. */
 export function InfoSection({
   icon: Icon,
   title,
@@ -65,13 +50,9 @@ export function InfoSection({
   children: ReactNode;
 }) {
   return (
-    <section className="border-ink/25 flex flex-col gap-2 border-t border-dashed pt-4 first:border-t-0 first:pt-0">
-      <h3 className="text-ink flex items-center gap-2 text-sm font-bold">
-        <Icon
-          aria-hidden={true}
-          className="text-board size-4"
-          strokeWidth={2.5}
-        />
+    <section className="flex flex-col gap-2.5 border-t py-5 first:border-t-0 first:pt-0 last:pb-0">
+      <h3 className="text-foreground flex items-center gap-2 text-base font-semibold">
+        <Icon aria-hidden={true} className="text-muted-foreground size-5" />
         {title}
       </h3>
       {children}

@@ -21,8 +21,10 @@ export function DetailList({ items }: { items: DetailItem[] }) {
             item.wide && "sm:col-span-2",
           )}
         >
-          <dt className="text-ink-soft text-xs font-semibold">{item.label}</dt>
-          <dd className="text-ink text-sm text-pretty wrap-break-word">
+          <dt className="text-muted-foreground text-xs font-medium">
+            {item.label}
+          </dt>
+          <dd className="text-foreground text-sm text-pretty wrap-break-word">
             {item.value}
           </dd>
         </div>

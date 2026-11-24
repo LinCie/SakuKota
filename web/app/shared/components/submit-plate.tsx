@@ -1,11 +1,9 @@
 import type { ReactNode } from "react";
 
-import { cn } from "~/shared/cn";
-
-import { signButtonClass } from "./menu-board";
+import { Button } from "./ui/button";
 
 /**
- * The full-width yellow sign plate that submits a form. `form` targets a form
+ * The full-width primary button that submits a form. `form` targets a form
  * elsewhere in the page, such as one in a scrolling body above a sticky footer.
  */
 export function SubmitPlate({
@@ -18,13 +16,13 @@ export function SubmitPlate({
   children: ReactNode;
 }) {
   return (
-    <button
+    <Button
       type="submit"
       form={form}
       disabled={pending}
-      className={cn(signButtonClass, "disabled:bg-sign-soft mt-1 h-11 w-full")}
+      className="mt-1 w-full"
     >
       {pending ? "Memproses…" : children}
-    </button>
+    </Button>
   );
 }

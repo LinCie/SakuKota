@@ -3,14 +3,10 @@ import { lazy, Suspense, useState, type ReactNode } from "react";
 
 import { isAdmin, useSession } from "~/features/auth/session";
 import { ReportButton } from "~/features/reports/components/report-button";
-import { cn } from "~/shared/cn";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { MediaCard } from "~/shared/components/media-card";
-import {
-  menuButtonClass,
-  signButtonClass,
-} from "~/shared/components/menu-board";
 import { MissingSlot } from "~/shared/components/missing-slot";
+import { Button, buttonVariants } from "~/shared/components/ui/button";
 import { formatLocalDate } from "~/shared/format";
 import { writeErrorMessage } from "~/shared/write-error";
 
@@ -30,7 +26,7 @@ const ReviewForm = lazy(() =>
 );
 
 /**
- * A place's reviews under its menu board, newest first. Signed-in users who
+ * A place's reviews under its details, newest first. Signed-in users who
  * have not reviewed the place yet get a form for theirs; signed-out visitors
  * get a way to sign in and come back. Users can delete their own review and
  * report the others; admins can delete any review.
@@ -55,10 +51,7 @@ export function PlaceReviews({ placeId }: { placeId: number }) {
       <Link
         to="/masuk"
         search={{ kembali: href === "/" ? undefined : href }}
-        className={cn(
-          signButtonClass,
-          "inline-flex h-11 items-center justify-center",
-        )}
+        className={buttonVariants({ variant: "secondary" })}
       >
         Masuk untuk menulis ulasan
       </Link>
@@ -69,7 +62,9 @@ export function PlaceReviews({ placeId }: { placeId: number }) {
     );
     writer = own ? (
       <>
-        <p className="text-ink-soft text-sm">Kamu sudah mengulas tempat ini.</p>
+        <p className="text-muted-foreground text-sm">
+          Kamu sudah mengulas tempat ini.
+        </p>
         <MediaCard
           title="Foto ulasanmu"
           medias={own.medias}
@@ -103,21 +98,19 @@ export function PlaceReviews({ placeId }: { placeId: number }) {
 
   let list: ReactNode;
   if (reviews.isPending) {
-    list = <p className="text-ink-soft text-sm">Memuat ulasan…</p>;
+    list = <p className="text-muted-foreground text-sm">Memuat ulasan…</p>;
   } else if (reviews.isError) {
     list = (
-      <p className="text-ink-soft flex items-center gap-2 text-sm">
+      <p className="text-muted-foreground flex items-center gap-2 text-sm">
         Ulasan belum bisa dimuat.
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => void reviews.refetch()}
-          className={cn(
-            menuButtonClass,
-            "rounded-[3px] px-2 py-1 font-semibold",
-          )}
+          className="text-foreground"
         >
           Coba lagi
-        </button>
+        </Button>
       </p>
     );
   } else if (reviews.data.length === 0) {
@@ -130,16 +123,15 @@ export function PlaceReviews({ placeId }: { placeId: number }) {
     list = (
       <ul>
         {reviews.data.map((review) => (
-          <li
-            key={review.id}
-            className="border-ink/25 flex flex-col gap-1 border-t border-dashed py-3"
-          >
+          <li key={review.id} className="flex flex-col gap-1.5 border-t py-3">
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-              <span className="text-ink font-semibold">{review.user.name}</span>
+              <span className="text-foreground font-semibold">
+                {review.user.name}
+              </span>
               <RatingStars rating={review.rating} />
             </div>
             {review.comment ? (
-              <p className="text-ink text-pretty whitespace-pre-line">
+              <p className="text-foreground text-pretty whitespace-pre-line">
                 {review.comment}
               </p>
             ) : null}
@@ -158,22 +150,20 @@ export function PlaceReviews({ placeId }: { placeId: number }) {
             <div className="flex items-center justify-between gap-3">
               <time
                 dateTime={review.created_at}
-                className="text-ink-soft text-sm"
+                className="text-muted-foreground text-xs"
               >
                 {formatLocalDate(new Date(review.created_at))}
               </time>
               {admin || isOwn(review) ? (
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setToDelete(review)}
                   aria-label={`Hapus ulasan ${review.user.name}`}
-                  className={cn(
-                    menuButtonClass,
-                    "text-chili rounded-[3px] px-2 py-1 text-sm font-semibold",
-                  )}
+                  className="text-destructive hover:text-destructive"
                 >
                   Hapus
-                </button>
+                </Button>
               ) : (
                 <ReportButton
                   placeId={placeId}
@@ -191,9 +181,12 @@ export function PlaceReviews({ placeId }: { placeId: number }) {
   return (
     <section
       aria-labelledby="place-reviews"
-      className="flex flex-col gap-3 px-3 pb-6 md:px-4"
+      className="flex flex-col gap-3 px-4 pb-6 md:px-5"
     >
-      <h3 id="place-reviews" className="font-sign text-ink text-base">
+      <h3
+        id="place-reviews"
+        className="text-foreground text-base font-semibold"
+      >
         Ulasan
       </h3>
       {writer}

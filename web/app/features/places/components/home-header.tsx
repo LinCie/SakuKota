@@ -1,10 +1,16 @@
-import { ChevronDown } from "lucide-react";
+import { Info, MapPin } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { Button } from "~/shared/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/shared/components/ui/select";
 import { AccountControl } from "~/features/auth/components/account-control";
 import type { SubDistrict } from "~/features/subdistricts/types";
-import { cn } from "~/shared/cn";
-import { signButtonClass } from "~/shared/components/menu-board";
 import { Wordmark } from "~/shared/components/wordmark";
 
 type HomeHeaderProps = {
@@ -17,9 +23,9 @@ type HomeHeaderProps = {
 };
 
 /**
- * The top board: wordmark, kecamatan picker, search, and account. On phones it
- * is one row (wordmark, picker, account); search moves to the category strip
- * and "Lihat info" onto the map.
+ * The header: wordmark, kecamatan picker, search, and account. On phones it is
+ * one row (wordmark, picker, account); search moves to the filter row and
+ * "Lihat info" onto the map.
  */
 export function HomeHeader({
   subDistricts,
@@ -28,47 +34,48 @@ export function HomeHeader({
   onKecamatanChange,
   onOpenInfo,
 }: HomeHeaderProps) {
+  const items = subDistricts.map((sd) => ({
+    value: sd.slug,
+    label: `Kec. ${sd.name}`,
+  }));
+
   return (
-    <header className="bg-board text-paint">
+    <header className="bg-background border-b">
       <div className="flex items-center gap-2 px-3 py-2 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-3 md:px-5 md:py-3 lg:flex lg:gap-6">
         <Wordmark />
 
         <div className="flex min-w-0 flex-1 flex-col gap-2 sm:col-span-2 sm:flex-row sm:items-center lg:justify-end">
           <div className="flex gap-2">
-            <label className="relative min-w-0 flex-1 sm:flex-none">
-              <span className="sr-only">Kecamatan</span>
-              <select
-                value={subDistrict?.slug ?? ""}
-                onChange={(event) => onKecamatanChange(event.target.value)}
-                className="border-paint/35 bg-board-deep text-paint hover:border-paint/60 focus-visible:border-sign h-11 w-full appearance-none truncate rounded-[3px] border-2 py-0 pr-9 pl-3 font-semibold transition-colors focus-visible:outline-none sm:w-64 sm:pr-10"
+            <Select
+              items={items}
+              value={subDistrict?.slug ?? null}
+              onValueChange={(slug) => {
+                if (slug) onKecamatanChange(slug);
+              }}
+            >
+              <SelectTrigger
+                aria-label="Kecamatan"
+                className="min-w-0 flex-1 pr-3 pl-3.5 font-semibold sm:w-64 sm:flex-none"
               >
-                {subDistricts.map((sd) => (
-                  <option
-                    key={sd.id}
-                    value={sd.slug}
-                    className="bg-paint text-ink"
-                  >
-                    Kec. {sd.name}
-                  </option>
+                <MapPin aria-hidden="true" className="text-primary" />
+                <SelectValue className="truncate" />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false} align="start">
+                {items.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
                 ))}
-              </select>
-              <ChevronDown
-                aria-hidden="true"
-                className="text-sign pointer-events-none absolute top-1/2 right-2.5 size-5 -translate-y-1/2 sm:right-3"
-                strokeWidth={2.5}
-              />
-            </label>
-            <button
-              type="button"
+              </SelectContent>
+            </Select>
+            <Button
               onClick={onOpenInfo}
               disabled={!subDistrict}
-              className={cn(
-                signButtonClass,
-                "focus-visible:outline-sign hidden h-11 shrink-0 disabled:opacity-50 sm:block",
-              )}
+              className="hidden sm:inline-flex"
             >
+              <Info aria-hidden="true" data-icon="inline-start" />
               Lihat info
-            </button>
+            </Button>
           </div>
 
           <div className="hidden sm:block sm:flex-1 lg:max-w-md">{search}</div>
@@ -76,7 +83,6 @@ export function HomeHeader({
 
         <AccountControl className="sm:col-start-2 sm:row-start-1 sm:justify-self-end" />
       </div>
-      <div aria-hidden="true" className="bg-chili h-1.5" />
     </header>
   );
 }

@@ -3,7 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 
 import type { SubDistrict } from "~/features/subdistricts/types";
-import { Button } from "~/shared/components/button";
+import { Button, buttonVariants } from "~/shared/components/ui/button";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { DetailList, type DetailItem } from "~/shared/components/detail-list";
 import { MediaCard } from "~/shared/components/media-card";
@@ -111,14 +111,17 @@ export function PlaceDetailPage({
 
   return (
     <>
-      <Button
-        variant="ghost"
-        className="self-start"
-        render={<Link to="/admin/places" />}
+      <Link
+        to="/admin/places"
+        className={buttonVariants({
+          variant: "ghost",
+          size: "sm",
+          className: "text-muted-foreground -ml-3 self-start",
+        })}
       >
-        <ArrowLeft aria-hidden="true" className="size-4" strokeWidth={2.5} />
+        <ArrowLeft aria-hidden="true" data-icon="inline-start" />
         Daftar tempat
-      </Button>
+      </Link>
 
       <PageHeader
         title={place.name}
@@ -130,15 +133,20 @@ export function PlaceDetailPage({
           .join(" · ")}
         actions={
           <>
-            <Button onClick={() => drawer.setOpen(true)}>
-              <Pencil aria-hidden="true" className="size-4" strokeWidth={2.5} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => drawer.setOpen(true)}
+            >
+              <Pencil aria-hidden="true" data-icon="inline-start" />
               Ubah
             </Button>
             <Button
-              className="text-chili"
+              variant="destructive"
+              size="sm"
               onClick={() => confirm.setOpen(true)}
             >
-              <Trash2 aria-hidden="true" className="size-4" strokeWidth={2.5} />
+              <Trash2 aria-hidden="true" data-icon="inline-start" />
               Hapus
             </Button>
           </>

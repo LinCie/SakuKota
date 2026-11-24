@@ -1,5 +1,4 @@
-import { cn } from "~/shared/cn";
-import { signButtonClass } from "~/shared/components/menu-board";
+import { Button } from "~/shared/components/ui/button";
 
 export type EmptyState = {
   message: string;
@@ -8,19 +7,13 @@ export type EmptyState = {
   onAction: () => void;
 };
 
-/** The board laid over the map when no places match. */
+/** The card laid over the map when no places match. */
 export function MapEmptyState({ message, action, onAction }: EmptyState) {
   return (
-    <div className="bg-paint/70 absolute inset-0 z-1000 grid place-items-center p-4">
-      <div className="border-ink bg-paint flex max-w-sm flex-col items-center gap-3 rounded-[5px] border-2 p-5 text-center shadow-[0_8px_24px_rgb(26_26_23/0.2)]">
-        <p className="text-ink font-semibold text-pretty">{message}</p>
-        <button
-          type="button"
-          onClick={onAction}
-          className={cn(signButtonClass, "h-10")}
-        >
-          {action}
-        </button>
+    <div className="bg-background/70 absolute inset-0 z-1000 grid place-items-center p-4">
+      <div className="bg-card shadow-float flex max-w-sm flex-col items-center gap-4 rounded-xl p-5 text-center">
+        <p className="text-foreground font-medium text-pretty">{message}</p>
+        <Button onClick={onAction}>{action}</Button>
       </div>
     </div>
   );

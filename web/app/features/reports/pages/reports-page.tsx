@@ -45,10 +45,10 @@ export function ReportsPage({
               value: s,
               label: STATUS_LABELS[s],
             }))}
-            className="border-ink/20 h-9 border text-sm"
+            size="sm"
           />
         </div>
-        <p className="text-ink-soft text-sm tabular-nums">
+        <p className="text-muted-foreground text-sm tabular-nums">
           {formatNumber(reports.length)} laporan
         </p>
       </div>

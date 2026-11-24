@@ -8,10 +8,10 @@ import {
   type Media,
 } from "~/shared/image-upload";
 
-import { Button } from "./button";
 import { FormAlert } from "./form-alert";
 import { ImageFrame } from "./image-frame";
 import { SectionCard } from "./section-card";
+import { Button } from "./ui/button";
 
 type MediaCardProps = {
   title: string;
@@ -62,15 +62,13 @@ export function MediaCard({
                 aspect={aspect}
               />
               <Button
-                className="text-chili"
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive"
                 disabled={deletingId === media.id}
                 onClick={() => onDelete(media)}
               >
-                <Trash2
-                  aria-hidden="true"
-                  className="size-4"
-                  strokeWidth={2.5}
-                />
+                <Trash2 aria-hidden="true" data-icon="inline-start" />
                 {deletingId === media.id ? "Menghapus…" : "Hapus"}
               </Button>
             </li>
@@ -80,13 +78,15 @@ export function MediaCard({
       {error ? <FormAlert>{imageErrorMessage(error)}</FormAlert> : null}
       <div className="flex flex-wrap items-center gap-3">
         <Button
+          variant="outline"
+          size="sm"
           disabled={pending || full}
           onClick={() => inputRef.current?.click()}
         >
-          <ImageUp aria-hidden="true" className="size-4" strokeWidth={2.5} />
+          <ImageUp aria-hidden="true" data-icon="inline-start" />
           {pending ? "Mengunggah…" : "Tambah file"}
         </Button>
-        <p className="text-ink-soft text-xs">
+        <p className="text-muted-foreground text-xs">
           {full
             ? `Sudah ${maxMedias} file. Hapus satu untuk menambah.`
             : `Gambar JPEG, PNG, atau WebP (maks. 5 MB); video MP4 atau WebM (maks. 50 MB). ${medias.length}/${maxMedias} file.`}

@@ -35,7 +35,7 @@ export function PlacesTable({
       cell: (place) => (
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="font-semibold">{place.name}</span>
-          <span className="text-ink-soft max-w-80 truncate text-xs">
+          <span className="text-muted-foreground max-w-80 truncate text-xs">
             {place.address ?? "Alamat tidak tersedia"}
           </span>
         </div>

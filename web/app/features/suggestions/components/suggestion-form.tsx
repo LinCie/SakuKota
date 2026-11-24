@@ -80,7 +80,7 @@ export function SuggestionForm({
         </FormSection>
       </PlaceForm>
 
-      {/* Next to the submit plate, so the outcome shows where the form ends. */}
+      {/* Next to the submit button, so the outcome shows where the form ends. */}
       {createSuggestion.error ? (
         <FormAlert>
           {hasErrorCode(createSuggestion.error, "TOO_MANY_PENDING_SUGGESTIONS")

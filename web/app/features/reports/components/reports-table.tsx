@@ -1,6 +1,6 @@
 import { Eye } from "lucide-react";
 
-import { Badge } from "~/shared/components/badge";
+import { Badge } from "~/shared/components/ui/badge";
 import { DataTable, type Column } from "~/shared/components/data-table";
 import { RowActionsMenu } from "~/shared/components/row-actions-menu";
 import { formatLocalDate } from "~/shared/format";
@@ -13,12 +13,12 @@ export const STATUS_LABELS: Record<ReportStatus, string> = {
   dismissed: "Diabaikan",
 };
 
-// State by mark, as for suggestions: a pending report is still open, so it is
-// a dashed outline; a resolved one is a solid plate.
+// As for suggestions: a pending report is still open, so it stays quiet; a
+// resolved one takes its outcome's tint.
 const STATUS_CLASSES: Record<ReportStatus, string> = {
-  pending: "border-ink/60 border-dashed text-ink",
-  removed: "border-chili bg-chili text-paint",
-  dismissed: "border-board bg-board text-paint",
+  pending: "bg-muted text-muted-foreground",
+  removed: "bg-sambal-soft text-sambal-deep",
+  dismissed: "bg-pandan-soft text-pandan-deep",
 };
 
 export function ReportStatusBadge({ status }: { status: ReportStatus }) {
@@ -61,7 +61,7 @@ export function ReportsTable({ reports, onView }: ReportsTableProps) {
           {report.note ? (
             <span
               title={report.note}
-              className="text-ink-soft max-w-80 truncate text-xs"
+              className="text-muted-foreground max-w-80 truncate text-xs"
             >
               {report.note}
             </span>

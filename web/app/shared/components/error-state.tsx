@@ -1,4 +1,4 @@
-import { Button } from "./button";
+import { Button } from "./ui/button";
 
 /** A page or panel that failed to load, with a retry. */
 export function ErrorState({
@@ -13,13 +13,13 @@ export function ErrorState({
   return (
     <div
       role="alert"
-      className="border-chili/40 bg-paint flex flex-col items-start gap-3 rounded-[5px] border p-5"
+      className="bg-card ring-foreground/10 flex flex-col items-start gap-3 rounded-xl p-5 ring-1"
     >
-      <p className="font-bold">{title}</p>
+      <p className="font-semibold">{title}</p>
       {message ? (
-        <p className="text-ink-soft text-sm text-pretty">{message}</p>
+        <p className="text-muted-foreground text-sm text-pretty">{message}</p>
       ) : null}
-      <Button variant="secondary" onClick={onRetry}>
+      <Button variant="outline" size="sm" onClick={onRetry}>
         Coba lagi
       </Button>
     </div>

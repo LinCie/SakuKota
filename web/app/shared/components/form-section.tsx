@@ -10,7 +10,7 @@ export function FormSection({
 }) {
   return (
     <section className="flex flex-col gap-4">
-      <h3 className="text-ink-soft text-xs font-bold tracking-wide uppercase">
+      <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
         {title}
       </h3>
       {children}

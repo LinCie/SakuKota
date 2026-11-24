@@ -14,7 +14,7 @@ export function AdminShell() {
 
   return (
     <Toaster>
-      <div className="bg-paint text-ink flex min-h-dvh flex-col md:grid md:grid-cols-[15rem_minmax(0,1fr)]">
+      <div className="bg-background text-foreground flex min-h-dvh flex-col md:grid md:grid-cols-[15rem_minmax(0,1fr)]">
         <AdminSidebar />
         <div className="flex min-w-0 flex-col">
           <AdminTopbar />

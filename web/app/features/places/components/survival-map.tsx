@@ -12,7 +12,7 @@ import type { Place } from "../types";
 import { useLeafletMap } from "../hooks";
 import { JAKARTA_CENTER, locatedPlaces, MAP_CANVAS_CLASS } from "./leaflet-map";
 import { LocatePlate } from "./locate-plate";
-import { signIcon } from "./map-icons";
+import { placeIcon } from "./map-icons";
 import { ZoomPlate } from "./zoom-plate";
 
 const FIT_OPTIONS = { padding: [56, 56] as [number, number], maxZoom: 16 };
@@ -33,31 +33,32 @@ const MAP_OPTIONS: Leaflet.MapOptions = {
 // focus a path on mousedown (never by Tab), so its focus ring, a box around
 // the whole kecamatan, is hidden.
 const SHOWN_OUTLINE: Leaflet.PathOptions = {
-  className: "stroke-board fill-board/5",
-  weight: 3,
+  className: "stroke-primary fill-primary/6",
+  weight: 2,
   fillOpacity: 1,
 };
 const OTHER_OUTLINE: Leaflet.PathOptions = {
   className:
-    "stroke-ink-soft fill-transparent outline-none hover:fill-board/10 transition-[fill]",
-  weight: 2,
+    "stroke-muted-foreground/50 fill-transparent outline-none hover:fill-primary/10 transition-[fill]",
+  weight: 1.5,
   dashArray: "6 6",
   fillOpacity: 1,
 };
 
-// Signs plant west to east in a quick stagger. Literal class names so
+// Pins settle west to east in a quick stagger. Literal class names so
 // Tailwind generates them.
-const PLANT_DELAYS = [
+const SETTLE_DELAYS = [
   "delay-0",
-  "delay-40",
-  "delay-80",
+  "delay-30",
+  "delay-60",
+  "delay-90",
   "delay-120",
-  "delay-160",
-  "delay-200",
+  "delay-150",
+  "delay-180",
+  "delay-210",
   "delay-240",
-  "delay-280",
-  "delay-320",
-  "delay-360",
+  "delay-270",
+  "delay-300",
 ];
 
 /** Height of the fixed bottom sheet covering the map; 0 when it doesn't overlap. */
@@ -304,9 +305,9 @@ export function SurvivalMap({
       .sort((a, b) => a.lng - b.lng);
 
     westToEast.forEach(({ place, lat, lng }, index) => {
-      const delay = PLANT_DELAYS[Math.min(index, PLANT_DELAYS.length - 1)];
+      const delay = SETTLE_DELAYS[Math.min(index, SETTLE_DELAYS.length - 1)];
       const marker = L.marker([lat, lng], {
-        icon: signIcon(L, place.category, delay),
+        icon: placeIcon(L, place.category, delay),
         title: place.name,
         alt: place.name,
         riseOnHover: true,
@@ -345,14 +346,17 @@ export function SurvivalMap({
     }
   }, [leaflet, flyRequest, sheetRef]);
 
-  // Invert the selected sign and keep it in view.
+  // Mark the selected pin and keep it in view.
   useEffect(() => {
     if (!leaflet) return;
     const markers = markersRef.current;
 
     for (const [id, marker] of markers) {
       const selected = id === selectedId;
-      marker.getElement()?.toggleAttribute("data-selected", selected);
+      // shadcn's `data-selected` variant matches only data-selected="true".
+      const element = marker.getElement();
+      if (selected) element?.setAttribute("data-selected", "true");
+      else element?.removeAttribute("data-selected");
       marker.setZIndexOffset(selected ? 1000 : 0);
     }
 

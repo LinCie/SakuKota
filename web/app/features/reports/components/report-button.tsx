@@ -3,7 +3,7 @@ import { lazy, Suspense, useState } from "react";
 
 import { isAdmin, useSession } from "~/features/auth/session";
 import { cn } from "~/shared/cn";
-import { menuButtonClass } from "~/shared/components/menu-board";
+import { buttonVariants } from "~/shared/components/ui/button";
 
 // The drawer pulls in zod and TanStack Form, so it loads on the first click.
 const ReportDrawer = lazy(() =>
@@ -48,12 +48,12 @@ export function ReportButton({
         }}
         aria-label={`Laporkan ${target}`}
         className={cn(
-          menuButtonClass,
-          "text-ink-soft inline-flex items-center gap-1.5 rounded-[3px] px-2 py-1 text-sm font-semibold",
+          buttonVariants({ variant: "ghost", size: "sm" }),
+          "text-muted-foreground",
           className,
         )}
       >
-        <Flag aria-hidden="true" className="size-3.5" strokeWidth={2.5} />
+        <Flag aria-hidden="true" data-icon="inline-start" />
         Laporkan
       </button>
       {opened ? (

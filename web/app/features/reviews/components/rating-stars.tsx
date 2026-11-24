@@ -4,7 +4,7 @@ import { cn } from "~/shared/cn";
 
 export const STARS = [1, 2, 3, 4, 5] as const;
 
-/** A rating as five stars, the first `rating` of them painted yellow. */
+/** A rating as five stars, the first `rating` of them filled kunyit. */
 export function RatingStars({
   rating,
   className,
@@ -22,10 +22,9 @@ export function RatingStars({
         <Star
           key={star}
           aria-hidden="true"
-          strokeWidth={2.5}
           className={cn(
             "size-4",
-            star <= rating ? "fill-sign text-ink" : "text-ink/25",
+            star <= rating ? "fill-kunyit text-kunyit" : "text-input",
           )}
         />
       ))}

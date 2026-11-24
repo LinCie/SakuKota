@@ -1,5 +1,4 @@
 import type { AnyFieldApi } from "@tanstack/react-form";
-import { ChevronDown } from "lucide-react";
 import type {
   InputHTMLAttributes,
   ReactNode,
@@ -9,13 +8,9 @@ import type {
 
 import { cn } from "~/shared/cn";
 
-/** Shared look of a paint-white control; the border turns chili when invalid. */
-export function controlClass(invalid: boolean) {
-  return cn(
-    "bg-paint text-ink focus-visible:outline-cat w-full rounded-[3px] border-2 px-3 focus-visible:outline-2 focus-visible:outline-offset-2",
-    invalid ? "border-chili" : "border-ink",
-  );
-}
+import { Input } from "./ui/input";
+import { NativeSelect, NativeSelectOption } from "./ui/native-select";
+import { Textarea } from "./ui/textarea";
 
 /** A field's label; optional fields say so, so required ones need no mark. */
 export function FieldLabel({
@@ -28,16 +23,18 @@ export function FieldLabel({
   children: ReactNode;
 }) {
   return (
-    <label htmlFor={htmlFor} className="text-ink text-sm font-bold">
+    <label htmlFor={htmlFor} className="text-foreground text-sm font-medium">
       {children}
       {optional ? (
-        <span className="text-ink-soft ml-1.5 font-normal">opsional</span>
+        <span className="text-muted-foreground ml-1.5 font-normal">
+          opsional
+        </span>
       ) : null}
     </label>
   );
 }
 
-/** The error (chili) or hint (soft ink) line under a field. */
+/** The error (clay red) or hint (muted) line under a field. */
 export function FieldMessage({
   id,
   error,
@@ -49,13 +46,13 @@ export function FieldMessage({
 }) {
   if (error) {
     return (
-      <p id={id} className="text-chili text-sm font-semibold">
+      <p id={id} className="text-destructive text-sm">
         {error}
       </p>
     );
   }
   return hint ? (
-    <p id={id} className="text-ink-soft text-sm">
+    <p id={id} className="text-muted-foreground text-sm">
       {hint}
     </p>
   ) : null;
@@ -81,7 +78,7 @@ type TextFieldProps = Omit<
   onValueChange?: (value: string) => void;
 };
 
-/** A labelled paint-white input with its validation error or hint. */
+/** A labelled input with its validation error or hint. */
 export function TextField({
   field,
   label,
@@ -104,12 +101,12 @@ export function TextField({
         {prefix ? (
           <span
             aria-hidden="true"
-            className="text-ink-soft pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm font-bold"
+            className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm font-medium"
           >
             {prefix}
           </span>
         ) : null}
-        <input
+        <Input
           id={field.name}
           name={field.name}
           value={field.state.value}
@@ -120,12 +117,7 @@ export function TextField({
           onBlur={field.handleBlur}
           aria-invalid={error ? true : undefined}
           aria-describedby={error || hint ? messageId : undefined}
-          className={cn(
-            controlClass(Boolean(error)),
-            "h-11",
-            prefix && "pl-10",
-            className,
-          )}
+          className={cn(prefix && "pl-10", className)}
           {...input}
         />
       </div>
@@ -161,7 +153,7 @@ export function TextAreaField({
       <FieldLabel htmlFor={field.name} optional={optional}>
         {label}
       </FieldLabel>
-      <textarea
+      <Textarea
         id={field.name}
         name={field.name}
         value={field.state.value}
@@ -170,11 +162,7 @@ export function TextAreaField({
         aria-invalid={error ? true : undefined}
         aria-describedby={error || hint ? messageId : undefined}
         rows={3}
-        className={cn(
-          controlClass(Boolean(error)),
-          "min-h-24 py-2 text-pretty",
-          className,
-        )}
+        className={cn("min-h-24 text-pretty", className)}
         {...input}
       />
       <FieldMessage id={messageId} error={error} hint={hint} />
@@ -186,8 +174,10 @@ export type SelectOption = { value: string; label: string };
 
 type SelectControlProps = Omit<
   SelectHTMLAttributes<HTMLSelectElement>,
-  "value" | "onChange"
+  "value" | "onChange" | "size"
 > & {
+  /** `sm` is the 36px height of admin toolbars. */
+  size?: "sm" | "default";
   value: string;
   onValueChange: (value: string) => void;
   /** Label of the empty option; it is also what a cleared value reads as. */
@@ -196,43 +186,37 @@ type SelectControlProps = Omit<
   invalid?: boolean;
 };
 
-/** A native select (the best picker on a phone) drawn as a paint-white field. */
+/** A native select, the best picker on a phone, drawn as a pill field. */
 export function SelectControl({
   value,
   onValueChange,
   placeholder,
   options,
   invalid = false,
+  size,
   className,
   ...select
 }: SelectControlProps) {
   return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(event) => onValueChange(event.target.value)}
-        aria-invalid={invalid ? true : undefined}
-        className={cn(
-          controlClass(invalid),
-          "h-11 appearance-none pr-10",
-          value === "" && "text-ink-soft",
-          className,
-        )}
-        {...select}
-      >
-        <option value="">{placeholder}</option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value} className="text-ink">
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown
-        aria-hidden="true"
-        className="text-ink pointer-events-none absolute top-1/2 right-3 size-5 -translate-y-1/2"
-        strokeWidth={2.5}
-      />
-    </div>
+    <NativeSelect
+      value={value}
+      onChange={(event) => onValueChange(event.target.value)}
+      aria-invalid={invalid ? true : undefined}
+      size={size}
+      className={cn(
+        "w-full",
+        value === "" ? "text-muted-foreground" : "text-foreground",
+        className,
+      )}
+      {...select}
+    >
+      <NativeSelectOption value="">{placeholder}</NativeSelectOption>
+      {options.map((option) => (
+        <NativeSelectOption key={option.value} value={option.value}>
+          {option.label}
+        </NativeSelectOption>
+      ))}
+    </NativeSelect>
   );
 }
 

@@ -1,4 +1,4 @@
-import { Badge } from "~/shared/components/badge";
+import { Badge } from "~/shared/components/ui/badge";
 
 import type { SuggestionStatus } from "../types";
 
@@ -8,12 +8,12 @@ export const STATUS_LABELS: Record<SuggestionStatus, string> = {
   rejected: "Ditolak",
 };
 
-// State by mark: a pending suggestion is still open, so it is a dashed
-// outline; a reviewed one is a solid plate.
+// A pending suggestion is still open, so it stays quiet; a reviewed one
+// takes its outcome's tint.
 const STATUS_CLASSES: Record<SuggestionStatus, string> = {
-  pending: "border-ink/60 border-dashed text-ink",
-  approved: "border-board bg-board text-paint",
-  rejected: "border-chili bg-chili text-paint",
+  pending: "bg-muted text-muted-foreground",
+  approved: "bg-pandan-soft text-pandan-deep",
+  rejected: "bg-sambal-soft text-sambal-deep",
 };
 
 export function SuggestionStatusBadge({

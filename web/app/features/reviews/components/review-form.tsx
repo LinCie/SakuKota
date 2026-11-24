@@ -3,13 +3,13 @@ import { Star } from "lucide-react";
 
 import { cn } from "~/shared/cn";
 import {
-  controlClass,
   FieldLabel,
   FieldMessage,
   TextAreaField,
 } from "~/shared/components/field";
 import { FormAlert } from "~/shared/components/form-alert";
 import { SubmitPlate } from "~/shared/components/submit-plate";
+import { Input } from "~/shared/components/ui/input";
 import { imageAccept, maxMedias } from "~/shared/image-upload";
 import { hasErrorCode, writeErrorMessage } from "~/shared/write-error";
 
@@ -98,7 +98,7 @@ function FilesField({ field }: { field: AnyFieldApi }) {
       <FieldLabel htmlFor={field.name} optional>
         Foto atau video
       </FieldLabel>
-      <input
+      <Input
         id={field.name}
         name={field.name}
         type="file"
@@ -110,10 +110,7 @@ function FilesField({ field }: { field: AnyFieldApi }) {
         onBlur={field.handleBlur}
         aria-invalid={error ? true : undefined}
         aria-describedby={messageId}
-        className={cn(
-          controlClass(Boolean(error)),
-          "file:text-ink py-2 text-sm file:mr-3 file:font-semibold",
-        )}
+        className="h-auto min-h-11 py-2 file:mr-3 md:min-h-10"
       />
       <FieldMessage
         id={messageId}
@@ -131,21 +128,23 @@ function StarField({ field }: { field: AnyFieldApi }) {
   const messageId = `${field.name}-message`;
   const value = field.state.value as number;
 
-  // Stars up to the picked one are painted; the rest turn red on an error.
+  // Stars up to the picked one are filled; the rest turn red on an error.
   function starClass(star: number) {
-    if (star <= value) return "fill-sign text-ink";
-    if (error) return "text-chili";
-    return "text-ink/40";
+    if (star <= value) return "fill-kunyit text-kunyit";
+    if (error) return "text-destructive";
+    return "text-input";
   }
 
   return (
     <fieldset aria-describedby={error ? messageId : undefined}>
-      <legend className="text-ink mb-1.5 text-sm font-bold">Rating</legend>
+      <legend className="text-foreground mb-1.5 text-sm font-medium">
+        Rating
+      </legend>
       <div className="flex">
         {STARS.map((star) => (
           <label
             key={star}
-            className="hover:bg-sign-soft has-focus-visible:outline-cat relative grid size-11 cursor-pointer place-items-center rounded-[3px] transition-colors has-focus-visible:outline-2"
+            className="hover:bg-kunyit-soft has-focus-visible:ring-ring/50 relative grid size-11 cursor-pointer place-items-center rounded-full transition-colors has-focus-visible:ring-3"
           >
             <input
               type="radio"
@@ -158,7 +157,6 @@ function StarField({ field }: { field: AnyFieldApi }) {
             />
             <Star
               aria-hidden="true"
-              strokeWidth={2.5}
               className={cn("size-7", starClass(star))}
             />
             <span className="sr-only">{star} bintang</span>

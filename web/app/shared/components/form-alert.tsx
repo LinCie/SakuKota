@@ -6,13 +6,9 @@ export function FormAlert({ children }: { children: ReactNode }) {
   return (
     <div
       role="alert"
-      className="border-chili text-ink flex items-start gap-2 rounded-[3px] border-2 px-3 py-2.5 text-sm font-semibold"
+      className="bg-sambal-soft text-sambal-deep flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm font-medium"
     >
-      <CircleAlert
-        aria-hidden="true"
-        className="text-chili mt-0.5 size-4 shrink-0"
-        strokeWidth={2.5}
-      />
+      <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
       <p>{children}</p>
     </div>
   );

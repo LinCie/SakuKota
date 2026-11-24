@@ -33,10 +33,7 @@ import type { Boundary, SubDistrict } from "~/features/subdistricts/types";
 import { KecamatanBoard } from "~/features/subdistricts/components/kecamatan-board";
 import { cn } from "~/shared/cn";
 import { ErrorBoard } from "~/shared/components/error-board";
-import {
-  menuButtonClass,
-  signButtonClass,
-} from "~/shared/components/menu-board";
+import { Button } from "~/shared/components/ui/button";
 
 export type HomeSearch = {
   kecamatan?: string;
@@ -298,7 +295,7 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
       <main className="flex min-h-0 flex-1">
         <section
           aria-label="Peta tempat penting"
-          className="relative min-w-0 flex-1"
+          className="relative isolate min-w-0 flex-1"
         >
           <SurvivalMap
             places={mapPlaces}
@@ -314,33 +311,36 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
           >
             {/* On phones "Lihat info" leaves the header for the map. */}
             {subDistrict ? (
-              <button
-                type="button"
+              <Button
+                variant="floating"
                 onClick={() => setInfoOpen(true)}
-                className={cn(
-                  signButtonClass,
-                  "absolute top-3 right-3 z-1000 inline-flex h-10 items-center gap-2 px-3 shadow-[0_3px_8px_rgb(26_26_23/0.25)] sm:hidden",
-                )}
+                className="absolute top-3 right-3 z-1000 sm:hidden"
               >
-                <Info aria-hidden="true" className="size-4" strokeWidth={2.5} />
+                <Info
+                  aria-hidden="true"
+                  data-icon="inline-start"
+                  className="text-primary"
+                />
                 Info kecamatan
-              </button>
+              </Button>
             ) : null}
-            <button
-              type="button"
+            <Button
+              variant="floating"
               onClick={togglePanel}
               aria-expanded={panelOpen}
               className={cn(
-                "border-ink bg-paint font-sign text-ink hover:bg-sign-soft focus-visible:outline-cat absolute bottom-6 left-3 z-1000 inline-flex h-11 items-center gap-2 rounded-[3px] border-2 px-4 text-sm shadow-[0_3px_8px_rgb(26_26_23/0.25)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 md:top-3 md:right-3 md:bottom-auto md:left-auto md:h-10",
+                "absolute bottom-6 left-3 z-1000 md:top-3 md:right-3 md:bottom-auto md:left-auto",
                 panelOpen && "max-md:hidden",
               )}
             >
-              <List aria-hidden="true" className="size-4" strokeWidth={2.5} />
+              <List aria-hidden="true" data-icon="inline-start" />
               {panelOpen ? "Sembunyikan daftar" : "Daftar tempat"}
               {panelOpen ? null : (
-                <span className="tabular-nums md:hidden">{listTotal}</span>
+                <span className="text-muted-foreground font-semibold tabular-nums md:hidden">
+                  {listTotal}
+                </span>
               )}
-            </button>
+            </Button>
             {emptyState ? <MapEmptyState {...emptyState} /> : null}
           </SurvivalMap>
         </section>
@@ -349,37 +349,33 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
           <aside
             ref={sheetRef}
             aria-label="Daftar dan detail tempat"
-            className="border-ink bg-paint fixed inset-x-0 bottom-0 z-1100 max-h-[60dvh] overflow-y-auto overscroll-contain rounded-t-[10px] border-2 border-b-0 shadow-[0_-10px_30px_rgb(26_26_23/0.3)] motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out md:static md:z-auto md:max-h-none md:w-96 md:shrink-0 md:overflow-y-auto md:rounded-none md:border-0 md:border-l-2 md:shadow-none motion-safe:starting:translate-y-full md:motion-safe:starting:translate-y-0"
+            className="bg-card shadow-sheet md:bg-background fixed inset-x-0 bottom-0 z-40 max-h-[60dvh] overflow-y-auto overscroll-contain rounded-t-3xl motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.16,1,0.3,1)] md:static md:z-auto md:max-h-none md:w-96 md:shrink-0 md:overflow-y-auto md:rounded-none md:border-l md:shadow-none motion-safe:starting:translate-y-full md:motion-safe:starting:translate-y-0"
           >
             <div className={selectedPlace ? "hidden" : undefined}>
-              <div className="border-ink bg-paint sticky top-0 z-10 flex items-center justify-between gap-3 border-b-2 py-2 pr-2 pl-4 md:px-5 md:py-3">
-                <h2 className="font-sign text-ink text-base">Daftar tempat</h2>
+              <div className="bg-card md:bg-background sticky top-0 z-10 flex items-center justify-between gap-3 border-b py-2 pr-2 pl-4 md:px-5 md:py-3">
+                <h2 className="text-foreground text-base font-semibold">
+                  Daftar tempat
+                </h2>
                 <div className="flex items-center gap-2">
                   {/* The strip's count is for screen readers only on phones. */}
                   <p
                     aria-hidden="true"
-                    className="text-ink-soft text-sm sm:hidden"
+                    className="text-muted-foreground text-sm sm:hidden"
                   >
-                    <span className="font-sign text-ink text-base tabular-nums">
+                    <span className="text-foreground font-semibold tabular-nums">
                       {listTotal}
                     </span>{" "}
                     tempat
                   </p>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={() => setListOpen(false)}
                     aria-label="Tutup daftar tempat"
-                    className={cn(
-                      menuButtonClass,
-                      "grid size-9 place-items-center rounded-[3px] md:hidden",
-                    )}
+                    className="md:hidden"
                   >
-                    <X
-                      aria-hidden="true"
-                      className="size-5"
-                      strokeWidth={2.5}
-                    />
-                  </button>
+                    <X aria-hidden="true" className="size-5" />
+                  </Button>
                 </div>
               </div>
               <PlaceList
@@ -400,7 +396,7 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
                   fields={selectedFields}
                   onClose={() => selectPlace(null)}
                 />
-                <div className="flex justify-end px-3 md:px-4">
+                <div className="flex justify-end px-2 md:px-3">
                   <ReportButton
                     key={selectedPlace.id}
                     placeId={selectedPlace.id}

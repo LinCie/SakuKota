@@ -11,7 +11,6 @@ import {
 import { setAuthHandlers } from "~/shared/api";
 
 import { routeTree } from "./routeTree.gen";
-import "@fontsource/bungee/latin-400.css";
 import "@fontsource-variable/figtree";
 import "./app.css";
 

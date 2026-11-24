@@ -12,7 +12,7 @@ const sections = [
 /** The admin's navigation: a column on desktop, a scrolling strip on phones. */
 export function AdminSidebar() {
   return (
-    <aside className="border-ink/15 bg-paint-deep flex flex-col gap-4 border-b px-4 py-3 md:sticky md:top-0 md:h-dvh md:border-r md:border-b-0 md:py-5">
+    <aside className="bg-background flex flex-col gap-4 border-b px-4 py-3 md:sticky md:top-0 md:h-dvh md:border-r md:border-b-0 md:py-5">
       <Wordmark tagline={false} />
       <nav
         aria-label="Menu admin"
@@ -22,10 +22,10 @@ export function AdminSidebar() {
           <Link
             key={to}
             to={to}
-            className="text-ink not-data-[status=active]:hover:bg-paint focus-visible:outline-cat inline-flex h-9 shrink-0 items-center gap-2.5 rounded-[3px] px-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-            activeProps={{ className: "bg-board text-paint" }}
+            className="text-foreground not-data-[status=active]:hover:bg-muted focus-visible:ring-ring/50 inline-flex h-9 shrink-0 items-center gap-2.5 rounded-[10px] px-3 text-sm font-medium transition-colors outline-none focus-visible:ring-3"
+            activeProps={{ className: "bg-pandan-soft text-pandan-deep" }}
           >
-            <Icon aria-hidden="true" className="size-4" strokeWidth={2.5} />
+            <Icon aria-hidden="true" className="size-4" />
             {label}
           </Link>
         ))}

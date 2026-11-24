@@ -3,7 +3,7 @@ import { LoaderCircle, Locate, LocateFixed } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "~/shared/cn";
-import { menuButtonClass } from "~/shared/components/menu-board";
+import { Button } from "~/shared/components/ui/button";
 
 import type { LeafletMap } from "../hooks";
 import { userLocationIcon } from "./map-icons";
@@ -31,7 +31,7 @@ function errorMessage(error: GeolocationPositionError) {
 }
 
 /**
- * The paint-white "Lokasi saya" plate: finds the visitor, flies the map there,
+ * The floating "Lokasi saya" button: finds the visitor, flies the map there,
  * and marks the spot with a dot and its accuracy circle.
  */
 export function LocatePlate({ leaflet }: { leaflet: LeafletMap | null }) {
@@ -68,7 +68,7 @@ export function LocatePlate({ leaflet }: { leaflet: LeafletMap | null }) {
     } else {
       accuracyRef.current = L.circle(latLng, {
         radius: coords.accuracy,
-        className: "fill-cat stroke-cat",
+        className: "fill-telang stroke-telang",
         weight: 1.5,
         opacity: 0.6,
         fillOpacity: 0.12,
@@ -119,32 +119,29 @@ export function LocatePlate({ leaflet }: { leaflet: LeafletMap | null }) {
     <div className="pointer-events-none absolute right-3 bottom-6 z-1000 flex flex-col items-end gap-2">
       <p
         role="status"
-        className="bg-ink text-paint pointer-events-auto max-w-[min(100vw-1.5rem,18rem)] rounded-[5px] px-3 py-2.5 text-sm font-semibold text-pretty shadow-[0_3px_8px_rgb(26_26_23/0.25)] empty:hidden"
+        className="bg-foreground text-card shadow-float pointer-events-auto max-w-[min(100vw-1.5rem,18rem)] rounded-xl px-3.5 py-2.5 text-sm font-medium text-pretty empty:hidden"
       >
         {note}
       </p>
-      <button
-        type="button"
+      <Button
+        variant="floating"
+        size="icon"
         onClick={locate}
         disabled={!leaflet}
         aria-label="Tampilkan lokasi saya"
         aria-busy={locating}
         title="Lokasi saya"
-        className={cn(
-          menuButtonClass,
-          "border-ink bg-paint pointer-events-auto grid size-11 place-items-center rounded-[3px] border-2 shadow-[0_3px_8px_rgb(26_26_23/0.25)] disabled:opacity-50 aria-busy:cursor-progress md:size-10",
-        )}
+        className="pointer-events-auto aria-busy:cursor-progress"
       >
         <Icon
           aria-hidden="true"
           className={cn(
             "size-5",
             locating && "motion-safe:animate-spin",
-            status === "located" && "text-cat",
+            status === "located" && "text-telang",
           )}
-          strokeWidth={2.5}
         />
-      </button>
+      </Button>
     </div>
   );
 }

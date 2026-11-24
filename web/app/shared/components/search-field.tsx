@@ -1,4 +1,11 @@
 import { Search } from "lucide-react";
+import { useId } from "react";
+
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "~/shared/components/ui/input-group";
 
 /** A search box for filtering the rows of a table. */
 export function SearchField({
@@ -12,22 +19,26 @@ export function SearchField({
   label: string;
   placeholder: string;
 }) {
+  const id = useId();
+
   return (
-    <label className="relative block w-full max-w-sm">
-      <span className="sr-only">{label}</span>
-      <Search
-        aria-hidden="true"
-        className="text-ink-soft pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
-        strokeWidth={2.5}
-      />
-      <input
-        type="search"
-        value={value}
-        onChange={(event) => onValueChange(event.target.value)}
-        placeholder={placeholder}
-        autoComplete="off"
-        className="border-ink/20 bg-paint text-ink placeholder:text-ink-soft focus-visible:outline-cat h-9 w-full rounded-[3px] border pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
-      />
-    </label>
+    <div className="w-full max-w-sm">
+      <label htmlFor={id} className="sr-only">
+        {label}
+      </label>
+      <InputGroup className="h-9 md:h-9">
+        <InputGroupAddon>
+          <Search aria-hidden="true" />
+        </InputGroupAddon>
+        <InputGroupInput
+          id={id}
+          type="search"
+          value={value}
+          onChange={(event) => onValueChange(event.target.value)}
+          placeholder={placeholder}
+          autoComplete="off"
+        />
+      </InputGroup>
+    </div>
   );
 }

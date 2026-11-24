@@ -3,11 +3,12 @@ import { RadioGroup } from "@base-ui/react/radio-group";
 
 import { cn } from "~/shared/cn";
 import {
-  controlClass,
   FieldLabel,
   FieldMessage,
   SelectControl,
 } from "~/shared/components/field";
+import { buttonVariants } from "~/shared/components/ui/button";
+import { Input } from "~/shared/components/ui/input";
 import { rangeOf, textOf, type AttributeValue } from "../values";
 import type { CategoryField } from "../types";
 
@@ -18,8 +19,11 @@ type CategoryFieldInputProps = {
   error?: string;
 };
 
-const choiceClass =
-  "focus-visible:outline-cat inline-flex h-10 cursor-pointer items-center rounded-[3px] border-2 px-4 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 data-checked:border-ink data-checked:bg-ink data-checked:text-paint data-unchecked:border-ink/60 data-unchecked:hover:border-ink data-unchecked:border-dashed data-unchecked:hover:border-solid";
+// The picked choice fills pandan; the others are outline pills.
+const choiceClass = cn(
+  buttonVariants({ variant: "outline" }),
+  "data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground data-checked:hover:bg-primary/90 data-checked:hover:text-primary-foreground min-w-16",
+);
 
 // A real button: a drawer's swipe handler captures the pointer from anything
 // else, so a click on a `span role="radio"` never reaches it.
@@ -44,7 +48,6 @@ export function CategoryFieldInput({
   const optional = !field.required;
   const described = error ? messageId : undefined;
   const invalid = Boolean(error);
-  const inputClass = cn(controlClass(invalid), "h-11");
 
   let control;
   switch (field.data_type) {
@@ -96,7 +99,7 @@ export function CategoryFieldInput({
           aria-describedby={described}
           className="grid grid-cols-2 gap-3"
         >
-          <input
+          <Input
             type="number"
             step="any"
             inputMode="decimal"
@@ -107,9 +110,8 @@ export function CategoryFieldInput({
               onChange({ ...range, min: event.target.value })
             }
             aria-invalid={invalid ? true : undefined}
-            className={inputClass}
           />
-          <input
+          <Input
             type="number"
             step="any"
             inputMode="decimal"
@@ -120,7 +122,6 @@ export function CategoryFieldInput({
               onChange({ ...range, max: event.target.value })
             }
             aria-invalid={invalid ? true : undefined}
-            className={inputClass}
           />
         </div>
       );
@@ -128,7 +129,7 @@ export function CategoryFieldInput({
     }
     case "number":
       control = (
-        <input
+        <Input
           id={id}
           type="number"
           step="any"
@@ -137,21 +138,19 @@ export function CategoryFieldInput({
           onChange={(event) => onChange(event.target.value)}
           aria-invalid={invalid ? true : undefined}
           aria-describedby={described}
-          className={inputClass}
         />
       );
       break;
     default:
       // Text, and any type this frontend doesn't know yet.
       control = (
-        <input
+        <Input
           id={id}
           type={field.data_type === "date" ? "date" : "text"}
           value={textOf(value)}
           onChange={(event) => onChange(event.target.value)}
           aria-invalid={invalid ? true : undefined}
           aria-describedby={described}
-          className={inputClass}
         />
       );
   }
