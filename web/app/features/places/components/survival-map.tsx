@@ -191,15 +191,6 @@ export function SurvivalMap({
   const onViewChangeEvent = useEffectEvent(onViewChange);
   const onSubDistrictSelectEvent = useEffectEvent(onSubDistrictSelect);
 
-  // The list panel opens and closes beside the map, so it follows its container's size.
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!leaflet || !container) return;
-    const observer = new ResizeObserver(() => leaflet.map.invalidateSize());
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, [leaflet]);
-
   // Registered before the framing effect below, so the move its fitBounds
   // causes is seen, and skipped when the kecamatan's places are loaded.
   useEffect(() => {

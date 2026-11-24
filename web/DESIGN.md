@@ -494,7 +494,7 @@ Text selection is pandan-soft with warm ink; the caret is pandan; scrollbars use
 
 ### Motion
 
-One ease for everything that enters: `cubic-bezier(0.16, 1, 0.3, 1)`. The bottom sheet slides up over 300ms; dialogs and menus use shadcn's fade and 95% zoom over 150–200ms; the auth card rises 8px and fades in over 400ms; hovers transition colour at 150ms. The map pin settle is the one authored moment. Everything is gated on `prefers-reduced-motion: no-preference`.
+One ease for everything that enters: `cubic-bezier(0.16, 1, 0.3, 1)`. The bottom sheet slides up over 300ms; from 768px the list panel opens its width over 300ms and closes over 200ms with an ease-in, its content at full width sliding with the edge and the map yielding beside it (the map reports its new view once, after the resize settles); dialogs and menus use shadcn's fade and 95% zoom over 150–200ms; the auth card rises 8px and fades in over 400ms; hovers transition colour at 150ms. The map pin settle is the one authored moment. Everything is gated on `prefers-reduced-motion: no-preference`.
 
 ## Do's and Don'ts
 

@@ -48,7 +48,11 @@ export function useLeafletMap(
         map,
       );
 
-      observer = new ResizeObserver(() => map?.invalidateSize());
+      // A container whose size animates reports its view once it settles,
+      // not on every frame.
+      observer = new ResizeObserver(() =>
+        map?.invalidateSize({ debounceMoveend: true }),
+      );
       observer.observe(container);
 
       setLeaflet({ L, map });

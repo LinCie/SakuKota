@@ -167,9 +167,6 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
     enabled: search.tempat !== undefined && listedPlace === null,
   });
   const selectedPlace = listedPlace ?? detachedPlace ?? null;
-  const selectedFields =
-    categories.find((category) => category.id === selectedPlace?.category.id)
-      ?.fields ?? [];
 
   function selectPlace(placeId: number | null) {
     onSearchChange({ tempat: placeId ?? undefined });
@@ -225,6 +222,13 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
   }, [selectedPlace]);
 
   const panelOpen = listOpen || selectedPlace !== null;
+  // The panel keeps showing what it last showed while it slides away.
+  const [shownPlace, setShownPlace] = useState(selectedPlace);
+  if (panelOpen && shownPlace !== selectedPlace) setShownPlace(selectedPlace);
+  const panelPlace = panelOpen ? selectedPlace : shownPlace;
+  const panelFields =
+    categories.find((category) => category.id === panelPlace?.category.id)
+      ?.fields ?? [];
 
   function togglePanel() {
     if (panelOpen) {
@@ -345,13 +349,21 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
           </SurvivalMap>
         </section>
 
-        {panelOpen ? (
-          <aside
-            ref={sheetRef}
-            aria-label="Daftar dan detail tempat"
-            className="bg-card shadow-sheet md:bg-background fixed inset-x-0 bottom-0 z-40 max-h-[60dvh] overflow-y-auto overscroll-contain rounded-t-3xl motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.16,1,0.3,1)] md:static md:z-auto md:max-h-none md:w-96 md:shrink-0 md:overflow-y-auto md:rounded-none md:border-l md:shadow-none motion-safe:starting:translate-y-full md:motion-safe:starting:translate-y-0"
-          >
-            <div className={selectedPlace ? "hidden" : undefined}>
+        {/* From 768px the column stays mounted and opens and closes its width, so the map yields to it on the way in and out. */}
+        <aside
+          ref={sheetRef}
+          aria-label="Daftar dan detail tempat"
+          inert={!panelOpen}
+          className={cn(
+            "bg-card shadow-sheet md:bg-background fixed inset-x-0 bottom-0 z-40 max-h-[60dvh] overflow-y-auto overscroll-contain rounded-t-3xl motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.16,1,0.3,1)] md:static md:z-auto md:max-h-none md:shrink-0 md:overflow-hidden md:rounded-none md:shadow-none md:motion-safe:transition-[width] motion-safe:starting:translate-y-full md:motion-safe:starting:translate-y-0",
+            panelOpen
+              ? "md:w-96"
+              : "max-md:hidden md:w-0 md:motion-safe:duration-200 md:motion-safe:ease-in",
+          )}
+        >
+          {/* A fixed width, so the content slides with the column's edge instead of reflowing. */}
+          <div className="md:h-full md:w-96 md:overflow-y-auto md:overscroll-contain md:border-l">
+            <div className={panelPlace ? "hidden" : undefined}>
               <div className="bg-card md:bg-background sticky top-0 z-10 flex items-center justify-between gap-3 border-b py-2 pr-2 pl-4 md:px-5 md:py-3">
                 <h2 className="text-foreground text-base font-semibold">
                   Daftar tempat
@@ -389,29 +401,26 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
               />
             </div>
 
-            {selectedPlace ? (
+            {panelPlace ? (
               <>
                 <PlaceDetails
-                  place={selectedPlace}
-                  fields={selectedFields}
+                  place={panelPlace}
+                  fields={panelFields}
                   onClose={() => selectPlace(null)}
                 />
                 <div className="flex justify-end px-2 md:px-3">
                   <ReportButton
-                    key={selectedPlace.id}
-                    placeId={selectedPlace.id}
+                    key={panelPlace.id}
+                    placeId={panelPlace.id}
                     reviewId={null}
-                    target={`tempat ${selectedPlace.name}`}
+                    target={`tempat ${panelPlace.name}`}
                   />
                 </div>
-                <PlaceReviews
-                  key={selectedPlace.id}
-                  placeId={selectedPlace.id}
-                />
+                <PlaceReviews key={panelPlace.id} placeId={panelPlace.id} />
               </>
             ) : null}
-          </aside>
-        ) : null}
+          </div>
+        </aside>
       </main>
 
       {subDistrict ? (
