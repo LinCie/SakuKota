@@ -4,7 +4,7 @@
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-27 (user profiles; web account menu; web profile layout; web headers; web list panel motion; admin bulk place create and web CSV import; structured operating hours and category-based prices).
+> - Last updated: 2026-11-27 (web logout and file-delete confirmations; user profiles; web account menu; web profile layout; web headers; web list panel motion; admin bulk place create and web CSV import; structured operating hours and category-based prices).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
@@ -602,3 +602,4 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-27 | Web map: the desktop list panel opens and closes with a width animation, keeping its content while it closes; the map reports its view once a resize settles; no contract change |
 | 2026-11-27 | Admin `POST /places/bulk` (1–500 places, all or none, failing position in `PlaceBatchError`); web `/admin/places` imports a category's places from CSV, with a per-category template download and row-by-row checks |
 | 2026-11-27 | Structured `operating_hours` (weekly periods) and `estimated_price_range` (`{min, max}` rupiah) replace the text fields; categories gain `has_price` and `price_unit`, and a price for a category without prices is `VALIDATION_ERROR`; `open_24h` fields removed; migrations edited in place (rebuild and reseed); web hours editor, price inputs, display, and CSV import follow |
+| 2026-11-27 | Web asks for confirmation before signing out and before deleting a place, kecamatan, or review file (review deletion already did); no contract change |

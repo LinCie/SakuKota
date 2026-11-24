@@ -1,6 +1,8 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { LogOut, MapPinPlus, ShieldCheck, UserRound } from "lucide-react";
+import { useState } from "react";
 
+import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { buttonVariants } from "~/shared/components/ui/button";
 import {
   DropdownMenu,
@@ -21,13 +23,14 @@ const outlineClass = buttonVariants({ variant: "outline" });
  * The header's account corner: "Masuk" when signed out (returning to the
  * current page afterwards); when signed in, "Usulkan" (not for admins),
  * "Admin" (admins only), and a menu under the user's first name with
- * "Profil" and "Keluar". On phones it is a single icon button whose menu also
+ * "Profil" and "Keluar" (which asks for confirmation first). On phones it is a single icon button whose menu also
  * holds "Usulkan" and "Admin".
  */
 export function AccountControl({ className }: { className?: string }) {
   const session = useSession();
   const href = useLocation({ select: (location) => location.href });
   const pathname = useLocation({ select: (location) => location.pathname });
+  const [confirmingLogout, setConfirmingLogout] = useState(false);
 
   if (!session) {
     return (
@@ -52,6 +55,7 @@ export function AccountControl({ className }: { className?: string }) {
   }
 
   function signOut() {
+    setConfirmingLogout(false);
     clearSession();
     // Revoking and clearing the refresh cookie is best effort; if it fails,
     // the next page load restores the session from the cookie.
@@ -123,12 +127,23 @@ export function AccountControl({ className }: { className?: string }) {
               Admin
             </DropdownMenuItem>
           ) : null}
-          <DropdownMenuItem onClick={signOut}>
+          <DropdownMenuItem onClick={() => setConfirmingLogout(true)}>
             <LogOut aria-hidden="true" />
             Keluar
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <ConfirmDialog
+        open={confirmingLogout}
+        onOpenChange={setConfirmingLogout}
+        title="Keluar dari akun?"
+        description="Peta tetap bisa dipakai tanpa akun. Untuk memakai fitur akun lagi, kamu perlu masuk kembali."
+        confirmLabel="Keluar"
+        tone="primary"
+        pending={false}
+        error={null}
+        onConfirm={signOut}
+      />
     </div>
   );
 }

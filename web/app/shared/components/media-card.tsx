@@ -1,5 +1,5 @@
 import { ImageUp, Trash2 } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import {
   imageAccept,
@@ -8,6 +8,7 @@ import {
   type Media,
 } from "~/shared/image-upload";
 
+import { ConfirmDialog } from "./confirm-dialog";
 import { FormAlert } from "./form-alert";
 import { ImageFrame } from "./image-frame";
 import { SectionCard } from "./section-card";
@@ -30,7 +31,10 @@ type MediaCardProps = {
   onDelete: (media: Media) => void;
 };
 
-/** A place's, sub-district's, or review's images, each with a delete button, and a button to add another. */
+/**
+ * A place's, sub-district's, or review's images, each with a delete button
+ * that asks for confirmation first, and a button to add another.
+ */
 export function MediaCard({
   title,
   medias,
@@ -45,6 +49,8 @@ export function MediaCard({
 }: MediaCardProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const full = medias.length >= maxMedias;
+  // The file asked to be deleted, while the confirmation is open.
+  const [toDelete, setToDelete] = useState<Media | null>(null);
 
   return (
     <SectionCard title={title}>
@@ -66,7 +72,7 @@ export function MediaCard({
                 size="sm"
                 className="text-destructive hover:text-destructive"
                 disabled={deletingId === media.id}
-                onClick={() => onDelete(media)}
+                onClick={() => setToDelete(media)}
               >
                 <Trash2 aria-hidden="true" data-icon="inline-start" />
                 {deletingId === media.id ? "Menghapus…" : "Hapus"}
@@ -102,6 +108,22 @@ export function MediaCard({
           // Cleared so picking the same file again still uploads it.
           event.target.value = "";
           if (file) onAdd(file);
+        }}
+      />
+      <ConfirmDialog
+        open={toDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setToDelete(null);
+        }}
+        title="Hapus file?"
+        description={`File ${toDelete?.position ?? ""} dari ${title.toLowerCase()} akan dihapus. Tindakan ini tidak bisa dibatalkan.`}
+        confirmLabel="Hapus file"
+        // The delete's progress and error show on the card, so the dialog closes at once.
+        pending={false}
+        error={null}
+        onConfirm={() => {
+          if (toDelete) onDelete(toDelete);
+          setToDelete(null);
         }}
       />
     </SectionCard>
