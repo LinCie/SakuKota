@@ -4,7 +4,7 @@
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-27 (user profiles; web account menu; web profile layout; web headers; web list panel motion; admin bulk place create and web CSV import).
+> - Last updated: 2026-11-27 (user profiles; web account menu; web profile layout; web headers; web list panel motion; admin bulk place create and web CSV import; structured operating hours and category-based prices).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
@@ -30,7 +30,7 @@ is **SakuKota** / `sakukota-go`.
 | ---- | ------- |
 | Kecamatan / sub-district | Jakarta district; `subdistrict` / `sub_district` in code and API |
 | Place / pin | A curated spot on the map |
-| Category | Place type (e.g. Warung), defined in migrations with `code`, `label`, `color` (palette key) and custom **fields** |
+| Category | Place type (e.g. Warung), defined in migrations with `code`, `label`, `color` (palette key), `has_price`, `price_unit` and custom **fields** |
 | Attributes | A place's values for its category's fields (JSON object) |
 | Suggestion | A user-proposed place awaiting admin review |
 | Review | A user's 1–5 star rating of a place, with optional comment and medias |
@@ -87,8 +87,7 @@ Applies to every module unless §6 says otherwise. All routes live under `/v1`.
 - **Text.** Inputs are trimmed (inner whitespace kept). Blank optional text is
   stored as `null`. Length limits count Unicode code points after trimming.
 - **Length limits** (`VALIDATION_ERROR` when exceeded): user name 100, email 255;
-  sub-district name/slug 100; place/suggestion name 150, address 255, operating
-  hours 255, price range 100; suggestion note, rejection reason, review comment,
+  sub-district name/slug 100; place/suggestion name 150, address 255; suggestion note, rejection reason, review comment,
   report note 1000. Descriptions and sub-district free text are unlimited.
 - **Locations** are GeoJSON Points `[lon, lat]` inside the **Indonesia box**
   (lon 95–141, lat −11–6, edges included) and round-trip exactly.
@@ -186,11 +185,28 @@ Profile routes under `/v1/users/me` (signed in; the user comes from the token):
 
 **Response:** `id, sub_district_id, name, address, location, operating_hours,
 estimated_price_range, short_description, attributes, rating_average,
-rating_count, medias, category{id,name,slug,code,label,color}`. Missing values
-are `null`, attributes default to `{}`, `rating_average` is `null` without
-ratings, `medias` is `[]` without images.
+rating_count, medias, category{id,name,slug,code,label,color,has_price,price_unit}`.
+Missing values are `null`, attributes default to `{}`, `rating_average` is
+`null` without ratings, `medias` is `[]` without images.
 
 - **Fields.** Name required (may repeat). Location optional, in the Indonesia box.
+- **Operating hours** (`operating_hours`) are `null` or a list of periods
+  `{day, open, close}`: `day` 1 (Monday) to 7 (Sunday), `open` and `close`
+  `HH:MM` with `close` up to `24:00`, `open` before `close` (a place open past
+  midnight has a period on each day). A day has at most 3 periods, and they must
+  not overlap (touching is fine). They are saved sorted by day and opening
+  time, and an empty list is saved as `null`. A rule broken is
+  `VALIDATION_ERROR`; a wrong JSON type (text for the list, a text or
+  fractional `day`, a number for a time) is `INVALID_BODY`.
+- **Price** (`estimated_price_range`) is `null` or `{min, max}` in whole
+  rupiah, `0 ≤ min ≤ max ≤ 1,000,000,000`, both bounds required (one alone,
+  negative, reversed, or too high is `VALIDATION_ERROR`; a text or fractional
+  bound is `INVALID_BODY`). It follows the category: `has_price` says whether
+  places of the category have a price, and `price_unit` what it is per (`kg`,
+  `lembar`, or `null`). A price for a category without prices is `400
+  VALIDATION_ERROR` on create, update, bulk create (with the place's
+  position), and suggestion approval. The database also rejects one bound
+  alone, a negative price, a reversed range, and hours that are not an array.
 - **Attributes** are validated against the category's fields: types `text`,
   `number`, `boolean`, `select` (one of `options`), `range` (`{min, max}`,
   `min ≤ max`), `date` (`YYYY-MM-DD`). Required fields must be present and
@@ -244,10 +260,13 @@ ratings, `medias` is `[]` without images.
   `sort_order`. Each field: `{id, category_id, key, label, data_type, required,
   options|null, sort_order}`. Unknown → `404 CATEGORY_NOT_FOUND`.
 
-  The 16 categories come from migrations (untested): Warung, Minimarket, Air &
-  Gas (chili); Penjahit, Fotokopi (plum); Klinik, Rumah Sakit, Puskesmas, Pos
-  Polisi (cat); Laundry, Bank & ATM, Halte/Stasiun, Layanan Publik (sign);
-  Apotek, Masjid, Ibadah Lain (board).
+  The 16 categories come from migrations (their colors untested): Warung,
+  Minimarket, Air & Gas (chili); Penjahit, Fotokopi (plum); Klinik, Rumah Sakit,
+  Puskesmas, Pos Polisi (cat); Laundry, Bank & ATM, Halte/Stasiun, Layanan
+  Publik (sign); Apotek, Masjid, Ibadah Lain (board). Without prices (tested
+  against the migrated data): Masjid, Ibadah Lain, Pos Polisi, Bank & ATM,
+  Layanan Publik. Laundry is priced per `kg` and Fotokopi per `lembar`. No
+  category has an `open_24h` field: hours say it.
 
 ### 6.4 Reviews (`internal/module/reviews`)
 
@@ -315,7 +334,9 @@ estimated_daily_spending, medias, boundary` (GeoJSON MultiPolygon or `null`).
 
 - **Submit (`POST /suggestions`).** Place fields plus `note`. **Location is
   required.** Attributes must be an object but are not checked against the
-  category until approval. Status is always `pending`. Unknown sub-district or
+  category until approval; operating hours and the price range take the place
+  rules (shape and ranges checked on submit, a price for a category without
+  prices only on approval, which leaves the suggestion pending). Status is always `pending`. Unknown sub-district or
   category → `VALIDATION_ERROR`. Never creates a place.
 - **Pending limit.** 5 per user → `429 TOO_MANY_PENDING_SUGGESTIONS` (holds
   under concurrency).
@@ -518,7 +539,12 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 - **Performance:** the `bbox` spread ranks every place in the box (~4 ms on
   1,092 seeded places; untested at 50,000).
 - **Web (`web/`):** untested. The map sends
-  a `limit` sized to its screen area (20–100).
+  a `limit` sized to its screen area (20–100). Place forms edit hours per day
+  (closed, 24 jam, or up to three periods) and show price inputs only for
+  categories with `has_price`; the CSV import reads `operating_hours` as text
+  (`Sen-Jum, 08:00-20:00; Sab, 08:00-14:00`, `Setiap hari, 24 jam`) and takes
+  `estimated_price_min` and `estimated_price_max` columns for priced categories.
+  The seed data's hours and prices were converted from text by script.
 - **`scripts/k6/get-places.js`** still reads the removed `X-Cache` header.
 
 ## Maintaining this file
@@ -575,3 +601,4 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-27 | Web headers: one site header on the map, `/usulan`, and `/profil`; the map's kecamatan, info, search, and category filter in one search bar, the count in the list heading; tagline only on auth pages; admin top bar folded into the sidebar; shared page header with back link; no contract change |
 | 2026-11-27 | Web map: the desktop list panel opens and closes with a width animation, keeping its content while it closes; the map reports its view once a resize settles; no contract change |
 | 2026-11-27 | Admin `POST /places/bulk` (1–500 places, all or none, failing position in `PlaceBatchError`); web `/admin/places` imports a category's places from CSV, with a per-category template download and row-by-row checks |
+| 2026-11-27 | Structured `operating_hours` (weekly periods) and `estimated_price_range` (`{min, max}` rupiah) replace the text fields; categories gain `has_price` and `price_unit`, and a price for a category without prices is `VALIDATION_ERROR`; `open_24h` fields removed; migrations edited in place (rebuild and reseed); web hours editor, price inputs, display, and CSV import follow |

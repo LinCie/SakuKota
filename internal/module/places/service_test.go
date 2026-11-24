@@ -25,9 +25,10 @@ var errBoom = errors.New("connection reset")
 // type that attributes can hold.
 func warungCategory() *domain.Category {
 	return &domain.Category{
-		ID:   1,
-		Name: "Warung",
-		Slug: "warung",
+		ID:       1,
+		Name:     "Warung",
+		Slug:     "warung",
+		HasPrice: true,
 		Fields: []domain.CategoryField{
 			{Key: "contact", Label: "Contact", DataType: domain.FieldTypeText, Required: true},
 			{Key: "seats", Label: "Seats", DataType: domain.FieldTypeNumber},
@@ -42,9 +43,10 @@ func warungCategory() *domain.Category {
 // openCategory has no required fields.
 func openCategory() *domain.Category {
 	return &domain.Category{
-		ID:   2,
-		Name: "Kopi",
-		Slug: "kopi",
+		ID:       2,
+		Name:     "Kopi",
+		Slug:     "kopi",
+		HasPrice: true,
 		Fields: []domain.CategoryField{
 			{Key: "seats", Label: "Seats", DataType: domain.FieldTypeNumber},
 			{Key: "halal", Label: "Halal", DataType: domain.FieldTypeBoolean},
@@ -56,14 +58,20 @@ func openCategory() *domain.Category {
 // the text attribute the blank-as-absent rule applies to.
 func cafeCategory() *domain.Category {
 	return &domain.Category{
-		ID:   3,
-		Name: "Cafe",
-		Slug: "cafe",
+		ID:       3,
+		Name:     "Cafe",
+		Slug:     "cafe",
+		HasPrice: true,
 		Fields: []domain.CategoryField{
 			{Key: "website", Label: "Website", DataType: domain.FieldTypeText},
 			{Key: "seats", Label: "Seats", DataType: domain.FieldTypeNumber},
 		},
 	}
+}
+
+// mosqueCategory has no prices and no fields.
+func mosqueCategory() *domain.Category {
+	return &domain.Category{ID: 4, Name: "Masjid", Slug: "mosque"}
 }
 
 // newMocks returns a mock repository and media storage that fail the test when
@@ -431,6 +439,9 @@ func TestService_CreateMany(t *testing.T) {
 			{name: "unknown_attribute", second: domain.Place{Name: "Kopi", SubDistrictID: 1, CategoryID: 2, Attributes: json.RawMessage(`{"wifi":true}`)}, wantErr: domain.ErrPlaceAttributesInvalid},
 			{name: "missing_required_attribute", second: domain.Place{Name: "Warung", SubDistrictID: 1, CategoryID: 1}, wantErr: domain.ErrPlaceAttributesInvalid},
 			{name: "unknown_category", second: domain.Place{Name: "Kopi", SubDistrictID: 1, CategoryID: 99}, wantErr: domain.ErrCategoryNotFound},
+			{name: "invalid_hours", second: domain.Place{Name: "Kopi", SubDistrictID: 1, CategoryID: 2, OperatingHours: domain.OperatingHours{{Day: 1, Open: "09:00", Close: "08:00"}}}, wantErr: domain.ErrPlaceOperatingHoursInvalid},
+			{name: "invalid_price", second: domain.Place{Name: "Kopi", SubDistrictID: 1, CategoryID: 2, PriceMin: new(5), PriceMax: new(1)}, wantErr: domain.ErrPlacePriceRangeInvalid},
+			{name: "price_in_unpriced_category", second: domain.Place{Name: "Masjid", SubDistrictID: 1, CategoryID: 4, PriceMin: new(1), PriceMax: new(2)}, wantErr: domain.ErrPlacePriceNotApplicable},
 		}
 
 		for _, tc := range tests {
@@ -497,17 +508,18 @@ func TestService_CreateMany(t *testing.T) {
 // with every optional field set.
 func savedKopi() *domain.Place {
 	return &domain.Place{
-		ID:                  7,
-		SubDistrictID:       1,
-		CategoryID:          2,
-		Name:                "Kopi Senja",
-		Address:             new("Jl. Sudirman 9"),
-		Location:            postgis.MustPoint(106.8, -6.2),
-		OperatingHours:      new("08:00-17:00"),
-		EstimatedPriceRange: new("Rp20.000-50.000"),
-		ShortDescription:    new("Kopi tubruk"),
-		Attributes:          json.RawMessage(`{"halal":true,"seats":12}`),
-		Category:            domain.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
+		ID:               7,
+		SubDistrictID:    1,
+		CategoryID:       2,
+		Name:             "Kopi Senja",
+		Address:          new("Jl. Sudirman 9"),
+		Location:         postgis.MustPoint(106.8, -6.2),
+		OperatingHours:   domain.OperatingHours{{Day: 1, Open: "08:00", Close: "17:00"}},
+		PriceMin:         new(20000),
+		PriceMax:         new(50000),
+		ShortDescription: new("Kopi tubruk"),
+		Attributes:       json.RawMessage(`{"halal":true,"seats":12}`),
+		Category:         domain.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
 	}
 }
 
@@ -521,6 +533,8 @@ func lookupCategory(_ context.Context, id int64) (*domain.Category, error) {
 		return openCategory(), nil
 	case 3:
 		return cafeCategory(), nil
+	case 4:
+		return mosqueCategory(), nil
 	}
 	return nil, domain.ErrCategoryNotFound
 }
@@ -529,15 +543,16 @@ func lookupCategory(_ context.Context, id int64) (*domain.Category, error) {
 // optional field set. Updates change one field of it at a time.
 func kopiInput() *domain.Place {
 	return &domain.Place{
-		SubDistrictID:       1,
-		CategoryID:          2,
-		Name:                "Kopi Senja",
-		Address:             new("Jl. Sudirman 9"),
-		Location:            postgis.MustPoint(106.8, -6.2),
-		OperatingHours:      new("08:00-17:00"),
-		EstimatedPriceRange: new("Rp20.000-50.000"),
-		ShortDescription:    new("Kopi tubruk"),
-		Attributes:          json.RawMessage(`{"halal":true,"seats":12}`),
+		SubDistrictID:    1,
+		CategoryID:       2,
+		Name:             "Kopi Senja",
+		Address:          new("Jl. Sudirman 9"),
+		Location:         postgis.MustPoint(106.8, -6.2),
+		OperatingHours:   domain.OperatingHours{{Day: 1, Open: "08:00", Close: "17:00"}},
+		PriceMin:         new(20000),
+		PriceMax:         new(50000),
+		ShortDescription: new("Kopi tubruk"),
+		Attributes:       json.RawMessage(`{"halal":true,"seats":12}`),
 	}
 }
 
@@ -582,11 +597,11 @@ func TestService_Update_Fields(t *testing.T) {
 		{name: "nullable_cleared",
 			change: func(p *domain.Place) {
 				p.Address, p.Location, p.OperatingHours = nil, nil, nil
-				p.EstimatedPriceRange, p.ShortDescription = nil, nil
+				p.PriceMin, p.PriceMax, p.ShortDescription = nil, nil, nil
 			},
 			want: func(p *domain.Place) {
 				p.Address, p.Location, p.OperatingHours = nil, nil, nil
-				p.EstimatedPriceRange, p.ShortDescription = nil, nil
+				p.PriceMin, p.PriceMax, p.ShortDescription = nil, nil, nil
 			}},
 	}
 
@@ -915,15 +930,98 @@ var placeTextFields = []placeTextField{
 	{name: "address", limit: domain.MaxPlaceAddressLength, tooLong: domain.ErrPlaceAddressTooLong,
 		set: func(p *domain.Place, v *string) { p.Address = v },
 		get: func(p *domain.Place) *string { return p.Address }},
-	{name: "operating_hours", limit: domain.MaxPlaceOperatingHoursLength, tooLong: domain.ErrPlaceOperatingHoursTooLong,
-		set: func(p *domain.Place, v *string) { p.OperatingHours = v },
-		get: func(p *domain.Place) *string { return p.OperatingHours }},
-	{name: "estimated_price_range", limit: domain.MaxPlaceEstimatedPriceRangeLength, tooLong: domain.ErrPlaceEstimatedPriceRangeTooLong,
-		set: func(p *domain.Place, v *string) { p.EstimatedPriceRange = v },
-		get: func(p *domain.Place) *string { return p.EstimatedPriceRange }},
 	{name: "short_description",
 		set: func(p *domain.Place, v *string) { p.ShortDescription = v },
 		get: func(p *domain.Place) *string { return p.ShortDescription }},
+}
+
+func TestService_Create_HoursAndPrice(t *testing.T) {
+	hours := domain.OperatingHours{{Day: 6, Open: "08:00", Close: "14:00"}, {Day: 1, Open: "08:00", Close: "20:00"}}
+
+	t.Run("stored_sorted", func(t *testing.T) {
+		stored, err := createPlace(t, openCategory(), &domain.Place{
+			Name: "Kopi Senja", SubDistrictID: 1, CategoryID: 2,
+			OperatingHours: hours, PriceMin: new(9000), PriceMax: new(12000),
+		})
+		require.NoError(t, err, "Create(hours and price)")
+		assert.Equal(t, domain.OperatingHours{{Day: 1, Open: "08:00", Close: "20:00"}, {Day: 6, Open: "08:00", Close: "14:00"}}, stored.OperatingHours, "stored hours")
+		assert.Equal(t, new(9000), stored.PriceMin, "stored price min")
+		assert.Equal(t, new(12000), stored.PriceMax, "stored price max")
+	})
+
+	t.Run("empty_hours_absent", func(t *testing.T) {
+		stored, err := createPlace(t, openCategory(), &domain.Place{
+			Name: "Kopi Senja", SubDistrictID: 1, CategoryID: 2, OperatingHours: domain.OperatingHours{},
+		})
+		require.NoError(t, err, "Create(empty hours)")
+		assert.Nil(t, stored.OperatingHours, "stored hours")
+	})
+
+	t.Run("invalid", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			place   domain.Place
+			wantErr error
+		}{
+			{name: "bad_day", place: domain.Place{OperatingHours: domain.OperatingHours{{Day: 8, Open: "08:00", Close: "09:00"}}}, wantErr: domain.ErrPlaceOperatingHoursInvalid},
+			{name: "overlap", place: domain.Place{OperatingHours: domain.OperatingHours{{Day: 1, Open: "08:00", Close: "10:00"}, {Day: 1, Open: "09:00", Close: "11:00"}}}, wantErr: domain.ErrPlaceOperatingHoursInvalid},
+			{name: "min_above_max", place: domain.Place{PriceMin: new(9), PriceMax: new(1)}, wantErr: domain.ErrPlacePriceRangeInvalid},
+			{name: "one_bound", place: domain.Place{PriceMin: new(9)}, wantErr: domain.ErrPlacePriceRangeInvalid},
+			{name: "negative", place: domain.Place{PriceMin: new(-1), PriceMax: new(9)}, wantErr: domain.ErrPlacePriceRangeInvalid},
+		}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				p := tc.place
+				p.Name, p.SubDistrictID, p.CategoryID = "Kopi Senja", 1, 2
+
+				stored, err := createPlace(t, openCategory(), &p)
+				assert.ErrorIs(t, err, tc.wantErr, "Create(%+v)", p)
+				assert.Nil(t, stored, "Create(%+v) must keep a refused place out of storage", p)
+			})
+		}
+	})
+}
+
+func TestService_Create_PriceFollowsCategory(t *testing.T) {
+	tests := []struct {
+		name     string
+		category *domain.Category
+		min, max *int
+		wantErr  error
+	}{
+		{name: "priced_with_price", category: openCategory(), min: new(1), max: new(2)},
+		{name: "priced_without_price", category: openCategory()},
+		{name: "unpriced_without_price", category: mosqueCategory()},
+		{name: "unpriced_with_price", category: mosqueCategory(), min: new(1), max: new(2), wantErr: domain.ErrPlacePriceNotApplicable},
+		{name: "unpriced_free", category: mosqueCategory(), min: new(0), max: new(0), wantErr: domain.ErrPlacePriceNotApplicable},
+		{name: "unpriced_one_bound", category: mosqueCategory(), min: new(1), wantErr: domain.ErrPlacePriceRangeInvalid},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			stored, err := createPlace(t, tc.category, &domain.Place{
+				Name: "Tempat", SubDistrictID: 1, CategoryID: tc.category.ID, PriceMin: tc.min, PriceMax: tc.max,
+			})
+			assert.ErrorIs(t, err, tc.wantErr, "Create(price %v-%v in %s)", tc.min, tc.max, tc.category.Slug)
+			if tc.wantErr != nil {
+				assert.Nil(t, stored, "Create() must keep a refused place out of storage")
+			}
+		})
+	}
+
+	t.Run("update_to_unpriced_category", func(t *testing.T) {
+		input := kopiInput()
+		input.CategoryID = 4
+
+		stored, err := updatePlace(t, 7, input)
+		assert.ErrorIs(t, err, domain.ErrPlacePriceNotApplicable, "Update(7, mosque with a price)")
+		assert.Nil(t, stored, "Update(7, mosque with a price) must store nothing")
+
+		input.PriceMin, input.PriceMax, input.Attributes = nil, nil, nil
+		stored, err = updatePlace(t, 7, input)
+		require.NoError(t, err, "Update(7, mosque without a price)")
+		assert.Nil(t, stored.PriceMin, "stored price min")
+	})
 }
 
 func TestService_Create_OptionalText(t *testing.T) {

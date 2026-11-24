@@ -163,18 +163,21 @@ func diffData(t *testing.T, rec *httptest.ResponseRecorder, status int, want str
 // linSuggestion is a stored, pending suggestion by Lin with most fields set.
 func linSuggestion() domain.Suggestion {
 	return domain.Suggestion{
-		ID:            3,
-		UserID:        7,
-		SubDistrictID: 1,
-		CategoryID:    2,
-		Name:          "Warung Bu Ani",
-		Address:       new("Jl. Sabang 12"),
-		Location:      postgis.MustPoint(106.8, -6.2),
-		Attributes:    json.RawMessage(`{"halal":true}`),
-		Note:          new("Murah, porsi besar"),
-		Status:        domain.StatusPending,
-		CreatedAt:     time.Date(2026, 10, 4, 12, 30, 0, 0, time.UTC),
-		User:          domain.Author{ID: 7, Name: "Lin"},
+		ID:             3,
+		UserID:         7,
+		SubDistrictID:  1,
+		CategoryID:     2,
+		Name:           "Warung Bu Ani",
+		Address:        new("Jl. Sabang 12"),
+		Location:       postgis.MustPoint(106.8, -6.2),
+		OperatingHours: domain.OperatingHours{{Day: 1, Open: "07:00", Close: "21:00"}},
+		PriceMin:       new(15000),
+		PriceMax:       new(30000),
+		Attributes:     json.RawMessage(`{"halal":true}`),
+		Note:           new("Murah, porsi besar"),
+		Status:         domain.StatusPending,
+		CreatedAt:      time.Date(2026, 10, 4, 12, 30, 0, 0, time.UTC),
+		User:           domain.Author{ID: 7, Name: "Lin"},
 	}
 }
 
@@ -187,8 +190,8 @@ const linSuggestionJSON = `{
 	"name": "Warung Bu Ani",
 	"address": "Jl. Sabang 12",
 	"location": {"type": "Point", "coordinates": [106.8, -6.2]},
-	"operating_hours": null,
-	"estimated_price_range": null,
+	"operating_hours": [{"day": 1, "open": "07:00", "close": "21:00"}],
+	"estimated_price_range": {"min": 15000, "max": 30000},
 	"short_description": null,
 	"attributes": {"halal": true},
 	"note": "Murah, porsi besar",
@@ -217,8 +220,8 @@ const linApprovedJSON = `{
 	"name": "Warung Bu Ani",
 	"address": "Jl. Sabang 12",
 	"location": {"type": "Point", "coordinates": [106.8, -6.2]},
-	"operating_hours": null,
-	"estimated_price_range": null,
+	"operating_hours": [{"day": 1, "open": "07:00", "close": "21:00"}],
+	"estimated_price_range": {"min": 15000, "max": 30000},
 	"short_description": null,
 	"attributes": {"halal": true},
 	"note": "Murah, porsi besar",
@@ -247,8 +250,8 @@ const linRejectedJSON = `{
 	"name": "Warung Bu Ani",
 	"address": "Jl. Sabang 12",
 	"location": {"type": "Point", "coordinates": [106.8, -6.2]},
-	"operating_hours": null,
-	"estimated_price_range": null,
+	"operating_hours": [{"day": 1, "open": "07:00", "close": "21:00"}],
+	"estimated_price_range": {"min": 15000, "max": 30000},
 	"short_description": null,
 	"attributes": {"halal": true},
 	"note": "Murah, porsi besar",
@@ -294,6 +297,10 @@ func TestHandler_Create(t *testing.T) {
 			{name: "name_is_a_number", body: `{"name":5,"sub_district_id":1,"category_id":2}`},
 			{name: "sub_district_id_is_a_string", body: `{"name":"Warung","sub_district_id":"one","category_id":2}`},
 			{name: "category_id_is_fractional", body: `{"name":"Warung","sub_district_id":1,"category_id":2.5}`},
+			{name: "hours_is_text", body: `{"name":"Warung","sub_district_id":1,"category_id":2,"operating_hours":"07:00-21:00"}`},
+			{name: "hours_day_is_text", body: `{"name":"Warung","sub_district_id":1,"category_id":2,"operating_hours":[{"day":"1","open":"07:00","close":"21:00"}]}`},
+			{name: "price_is_text", body: `{"name":"Warung","sub_district_id":1,"category_id":2,"estimated_price_range":"Rp15.000"}`},
+			{name: "price_bound_is_fractional", body: `{"name":"Warung","sub_district_id":1,"category_id":2,"estimated_price_range":{"min":1.5,"max":2}}`},
 			{name: "note_is_a_number", body: `{"name":"Warung","sub_district_id":1,"category_id":2,"note":5}`},
 			{name: "location_is_a_line", body: prefix + `{"type":"LineString","coordinates":[[106.8,-6.2],[106.9,-6.3]]}}`},
 			{name: "coordinates_are_swapped", body: prefix + `{"type":"Point","coordinates":[-6.2,106.8]}}`},
@@ -347,18 +354,19 @@ func TestHandler_Create(t *testing.T) {
 				name: "every_field",
 				body: `{"name":"Warung Bu Ani","sub_district_id":1,"category_id":2,` +
 					`"location":{"type":"Point","coordinates":[106.8,-6.2]},` +
-					`"address":"Jl. Sabang 12","operating_hours":"07:00-21:00",` +
-					`"estimated_price_range":"Rp15.000-30.000","short_description":"Masakan Padang",` +
+					`"address":"Jl. Sabang 12","operating_hours":[{"day":1,"open":"07:00","close":"21:00"}],` +
+					`"estimated_price_range":{"min":15000,"max":30000},"short_description":"Masakan Padang",` +
 					`"attributes":{"halal":true},"note":"Murah, porsi besar"}`,
 				want: &domain.Suggestion{
 					UserID: 7, SubDistrictID: 1, CategoryID: 2, Name: "Warung Bu Ani",
-					Location:            postgis.MustPoint(106.8, -6.2),
-					Address:             new("Jl. Sabang 12"),
-					OperatingHours:      new("07:00-21:00"),
-					EstimatedPriceRange: new("Rp15.000-30.000"),
-					ShortDescription:    new("Masakan Padang"),
-					Attributes:          json.RawMessage(`{"halal":true}`),
-					Note:                new("Murah, porsi besar"),
+					Location:         postgis.MustPoint(106.8, -6.2),
+					Address:          new("Jl. Sabang 12"),
+					OperatingHours:   domain.OperatingHours{{Day: 1, Open: "07:00", Close: "21:00"}},
+					PriceMin:         new(15000),
+					PriceMax:         new(30000),
+					ShortDescription: new("Masakan Padang"),
+					Attributes:       json.RawMessage(`{"halal":true}`),
+					Note:             new("Murah, porsi besar"),
 				},
 			},
 			{
@@ -429,8 +437,8 @@ func TestHandler_Create(t *testing.T) {
 			{name: "invalid_location", err: domain.ErrSuggestionLocationInvalid, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "note_too_long", err: domain.ErrSuggestionNoteTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "address_too_long", err: domain.ErrPlaceAddressTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "operating_hours_too_long", err: domain.ErrPlaceOperatingHoursTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "price_range_too_long", err: domain.ErrPlaceEstimatedPriceRangeTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "operating_hours_invalid", err: domain.ErrPlaceOperatingHoursInvalid, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "price_range_invalid", err: domain.ErrPlacePriceRangeInvalid, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "attributes_not_object", err: domain.ErrSuggestionAttributesInvalid, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "unknown_sub_district", err: domain.ErrSubDistrictNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "unknown_category", err: domain.ErrCategoryNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
@@ -708,6 +716,10 @@ func TestHandler_Approve(t *testing.T) {
 			{name: "truncated_JSON", body: `{"name":"Warung"`},
 			{name: "array_instead_of_object", body: `[]`},
 			{name: "sub_district_id_is_a_string", body: `{"name":"Warung","sub_district_id":"one","category_id":2}`},
+			{name: "hours_is_text", body: `{"name":"Warung","sub_district_id":1,"category_id":2,"operating_hours":"07:00-21:00"}`},
+			{name: "hours_day_is_text", body: `{"name":"Warung","sub_district_id":1,"category_id":2,"operating_hours":[{"day":"1","open":"07:00","close":"21:00"}]}`},
+			{name: "price_is_text", body: `{"name":"Warung","sub_district_id":1,"category_id":2,"estimated_price_range":"Rp15.000"}`},
+			{name: "price_bound_is_fractional", body: `{"name":"Warung","sub_district_id":1,"category_id":2,"estimated_price_range":{"min":1.5,"max":2}}`},
 			{name: "location_is_a_line", body: prefix + `{"type":"LineString","coordinates":[[106.8,-6.2],[106.9,-6.3]]}}`},
 			{name: "coordinates_are_swapped", body: prefix + `{"type":"Point","coordinates":[-6.2,106.8]}}`},
 		}
@@ -750,17 +762,18 @@ func TestHandler_Approve(t *testing.T) {
 				name: "every_field",
 				body: `{"name":"Warung Bu Ani","sub_district_id":1,"category_id":2,` +
 					`"location":{"type":"Point","coordinates":[106.8,-6.2]},` +
-					`"address":"Jl. Sabang 12","operating_hours":"07:00-21:00",` +
-					`"estimated_price_range":"Rp15.000-30.000","short_description":"Masakan Padang",` +
+					`"address":"Jl. Sabang 12","operating_hours":[{"day":1,"open":"07:00","close":"21:00"}],` +
+					`"estimated_price_range":{"min":15000,"max":30000},"short_description":"Masakan Padang",` +
 					`"attributes":{"halal":true}}`,
 				want: &domain.Place{
 					Name: "Warung Bu Ani", SubDistrictID: 1, CategoryID: 2,
-					Location:            postgis.MustPoint(106.8, -6.2),
-					Address:             new("Jl. Sabang 12"),
-					OperatingHours:      new("07:00-21:00"),
-					EstimatedPriceRange: new("Rp15.000-30.000"),
-					ShortDescription:    new("Masakan Padang"),
-					Attributes:          json.RawMessage(`{"halal":true}`),
+					Location:         postgis.MustPoint(106.8, -6.2),
+					Address:          new("Jl. Sabang 12"),
+					OperatingHours:   domain.OperatingHours{{Day: 1, Open: "07:00", Close: "21:00"}},
+					PriceMin:         new(15000),
+					PriceMax:         new(30000),
+					ShortDescription: new("Masakan Padang"),
+					Attributes:       json.RawMessage(`{"halal":true}`),
 				},
 			},
 			{
@@ -805,8 +818,9 @@ func TestHandler_Approve(t *testing.T) {
 			{name: "blank_place_name", err: domain.ErrPlaceNameRequired, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "place_name_too_long", err: domain.ErrPlaceNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "place_address_too_long", err: domain.ErrPlaceAddressTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "place_operating_hours_too_long", err: domain.ErrPlaceOperatingHoursTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "place_price_range_too_long", err: domain.ErrPlaceEstimatedPriceRangeTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "place_operating_hours_invalid", err: domain.ErrPlaceOperatingHoursInvalid, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "place_price_range_invalid", err: domain.ErrPlacePriceRangeInvalid, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "place_price_not_applicable", err: domain.ErrPlacePriceNotApplicable, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "place_outside_Indonesia", err: domain.ErrPlaceLocationInvalid, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "place_attributes_invalid", err: domain.ErrPlaceAttributesInvalid, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "wrapped_place_attributes_invalid", err: fmt.Errorf("%w: %q is required", domain.ErrPlaceAttributesInvalid, "contact"), wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},

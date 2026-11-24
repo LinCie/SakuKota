@@ -18,6 +18,7 @@ import type { CategoryDetail, Place } from "../types";
 import { parseNumber, type PlaceValues } from "../values";
 import { CategoryFieldInput } from "./category-field-input";
 import { LocationPicker, type Pin } from "./location-picker";
+import { OperatingHoursInput } from "./operating-hours-input";
 
 type PlaceFormProps = {
   form: AppFormApi<PlaceValues>;
@@ -100,8 +101,16 @@ export function PlaceForm({
                 value: String(c.id),
                 label: c.name,
               }))}
-              // Each category has its own custom fields.
-              onValueChange={() => form.setFieldValue("attributes", {})}
+              // Each category has its own custom fields, and only some have prices.
+              onValueChange={(value) => {
+                form.setFieldValue("attributes", {});
+                if (
+                  !categories.find((c) => String(c.id) === value)?.has_price
+                ) {
+                  form.setFieldValue("priceMin", "");
+                  form.setFieldValue("priceMax", "");
+                }
+              }}
             />
           )}
         </form.Field>
@@ -176,28 +185,62 @@ export function PlaceForm({
       </FormSection>
 
       <FormSection title="Detail">
-        <form.Field name="operatingHours">
+        <form.Field name="hours">
           {(field) => (
-            <TextField
-              field={field}
-              label="Jam buka"
-              optional
-              hint="Contoh: 07.00–21.00"
-              autoComplete="off"
+            <OperatingHoursInput
+              value={field.state.value}
+              onChange={field.handleChange}
+              error={field.state.meta.errors[0]?.message}
             />
           )}
         </form.Field>
-        <form.Field name="priceRange">
-          {(field) => (
-            <TextField
-              field={field}
-              label="Kisaran harga"
-              optional
-              hint="Contoh: Rp15.000–25.000"
-              autoComplete="off"
-            />
-          )}
-        </form.Field>
+        {category?.has_price ? (
+          <div className="flex flex-col gap-1.5">
+            <span
+              id="price-label"
+              className="text-foreground text-sm font-medium"
+            >
+              Kisaran harga
+              {category.price_unit ? ` per ${category.price_unit}` : ""}
+              <span className="text-muted-foreground ml-1.5 font-normal">
+                opsional
+              </span>
+            </span>
+            <div
+              role="group"
+              aria-labelledby="price-label"
+              className="grid grid-cols-2 gap-3"
+            >
+              <form.Field name="priceMin">
+                {(field) => (
+                  <TextField
+                    field={field}
+                    label="Terendah"
+                    prefix="Rp"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="15000"
+                  />
+                )}
+              </form.Field>
+              <form.Field name="priceMax">
+                {(field) => (
+                  <TextField
+                    field={field}
+                    label="Tertinggi"
+                    prefix="Rp"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="25000"
+                  />
+                )}
+              </form.Field>
+            </div>
+            <p className="text-muted-foreground text-sm">
+              Isi hanya Terendah untuk harga tunggal. Rupiah bulat, tanpa titik.
+            </p>
+          </div>
+        ) : null}
         <form.Field name="description">
           {(field) => (
             <TextAreaField field={field} label="Deskripsi singkat" optional />

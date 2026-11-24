@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent, useRef } from "react";
 
+import { formatPrice } from "../price";
 import type { Place } from "../types";
 import { CategoryTile } from "./category-sign";
 
@@ -54,30 +55,36 @@ export function PlaceList({
 
   return (
     <ul>
-      {places.map((place) => (
-        <li key={place.id} className="border-b last:border-b-0">
-          <button
-            type="button"
-            onClick={() => onSelect(place)}
-            className="hover:bg-muted focus-visible:bg-muted focus-visible:ring-ring/50 flex w-full items-start gap-3 px-4 py-3 text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-inset md:px-5"
-          >
-            <CategoryTile category={place.category} className="mt-0.5" />
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="text-foreground font-semibold">
-                {place.name}
+      {places.map((place) => {
+        const price = formatPrice(
+          place.estimated_price_range,
+          place.category.price_unit,
+        );
+        return (
+          <li key={place.id} className="border-b last:border-b-0">
+            <button
+              type="button"
+              onClick={() => onSelect(place)}
+              className="hover:bg-muted focus-visible:bg-muted focus-visible:ring-ring/50 flex w-full items-start gap-3 px-4 py-3 text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-inset md:px-5"
+            >
+              <CategoryTile category={place.category} className="mt-0.5" />
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-foreground font-semibold">
+                  {place.name}
+                </span>
+                <span className="text-muted-foreground truncate text-sm">
+                  {place.address ?? "Alamat tidak tersedia"}
+                </span>
               </span>
-              <span className="text-muted-foreground truncate text-sm">
-                {place.address ?? "Alamat tidak tersedia"}
-              </span>
-            </span>
-            {place.estimated_price_range ? (
-              <span className="text-foreground mt-0.5 shrink-0 text-right text-sm font-medium tabular-nums">
-                {place.estimated_price_range}
-              </span>
-            ) : null}
-          </button>
-        </li>
-      ))}
+              {price ? (
+                <span className="text-foreground mt-0.5 shrink-0 text-right text-sm font-medium tabular-nums">
+                  {price}
+                </span>
+              ) : null}
+            </button>
+          </li>
+        );
+      })}
       {waiting ? (
         <li ref={sentinelRef} aria-hidden="true" className="h-px" />
       ) : null}

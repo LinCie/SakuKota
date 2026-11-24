@@ -35,10 +35,12 @@ type Suggestion struct {
 	Name          string         `db:"name"`
 	Address       *string        `db:"address"`
 	Location      *postgis.Point `db:"location"`
-	// OperatingHours, EstimatedPriceRange and ShortDescription describe the place as the user knows it.
-	OperatingHours      *string `db:"operating_hours"`
-	EstimatedPriceRange *string `db:"estimated_price_range"`
-	ShortDescription    *string `db:"short_description"`
+	// OperatingHours, PriceMin, PriceMax and ShortDescription describe the place
+	// as the user knows it, in the forms of Place.
+	OperatingHours   OperatingHours `db:"operating_hours"`
+	PriceMin         *int           `db:"price_min"`
+	PriceMax         *int           `db:"price_max"`
+	ShortDescription *string        `db:"short_description"`
 	// Attributes is a JSON object of the category's custom field values. It
 	// is checked against the category when the suggestion is approved.
 	Attributes json.RawMessage `db:"attributes"`

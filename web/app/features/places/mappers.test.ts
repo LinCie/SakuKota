@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { category, field, place } from "./fixtures";
+import { emptyHours } from "./hours";
 import { attributesToValues, placeToValues, toPlaceRequest } from "./mappers";
 import { attributeErrors } from "./schemas";
 import { emptyPlaceValues, type PlaceValues } from "./values";
@@ -13,6 +14,10 @@ const fields = [
   field({ key: "since", data_type: "date" }),
   field({ key: "kind", data_type: "select" }),
 ];
+
+/** A category with prices holding the given custom fields. */
+const withFields = (list: typeof fields) => ({ fields: list, has_price: true });
+const noFields = withFields([]);
 
 describe("placeToValues", () => {
   it("reads GeoJSON [lng, lat] into lat and lng", () => {
@@ -42,10 +47,31 @@ describe("placeToValues", () => {
     );
     expect(values).toMatchObject({
       address: "",
-      operatingHours: "",
-      priceRange: "",
+      hours: emptyHours(),
+      priceMin: "",
+      priceMax: "",
       description: "",
     });
+  });
+
+  it("reads hours into days and the price into min and max", () => {
+    const values = placeToValues(
+      place({
+        operating_hours: [
+          { day: 1, open: "08:00", close: "20:00" },
+          { day: 7, open: "00:00", close: "24:00" },
+        ],
+        estimated_price_range: { min: 9000, max: 12000 },
+      }),
+      [],
+    );
+    expect(values.hours[0]).toEqual({
+      mode: "hours",
+      periods: [{ open: "08:00", close: "20:00" }],
+    });
+    expect(values.hours[6]).toEqual({ mode: "24h", periods: [] });
+    expect(values.hours[1].mode).toBe("closed");
+    expect(values).toMatchObject({ priceMin: "9000", priceMax: "12000" });
   });
 
   it("takes ids as strings", () => {
@@ -117,7 +143,7 @@ describe("toPlaceRequest", () => {
   });
 
   it("writes coordinates as [lng, lat]", () => {
-    expect(toPlaceRequest(values(), []).location).toEqual({
+    expect(toPlaceRequest(values(), noFields).location).toEqual({
       type: "Point",
       coordinates: [106.8, -6.2],
     });
@@ -125,7 +151,7 @@ describe("toPlaceRequest", () => {
 
   it("reads decimal commas in coordinates", () => {
     expect(
-      toPlaceRequest(values({ lat: "-6,2", lng: "106,8" }), []).location
+      toPlaceRequest(values({ lat: "-6,2", lng: "106,8" }), noFields).location
         ?.coordinates,
     ).toEqual([106.8, -6.2]);
   });
@@ -135,11 +161,11 @@ describe("toPlaceRequest", () => {
       values({
         name: "  Warung  ",
         address: "   ",
-        operatingHours: "",
-        priceRange: "\t",
+        priceMin: "\t",
+        priceMax: "",
         description: " ",
       }),
-      [],
+      noFields,
     );
     expect(request).toMatchObject({
       name: "Warung",
@@ -150,8 +176,41 @@ describe("toPlaceRequest", () => {
     });
   });
 
+  describe("hours and price", () => {
+    const hours = emptyHours();
+    hours[0] = { mode: "hours", periods: [{ open: "08:00", close: "20:00" }] };
+    hours[1] = { mode: "24h", periods: [] };
+
+    it("sends the open days as periods", () => {
+      expect(
+        toPlaceRequest(values({ hours }), noFields).operating_hours,
+      ).toEqual([
+        { day: 1, open: "08:00", close: "20:00" },
+        { day: 2, open: "00:00", close: "24:00" },
+      ]);
+    });
+
+    it("sends a range, and one filled bound as a single price", () => {
+      const price = (priceMin: string, priceMax: string) =>
+        toPlaceRequest(values({ priceMin, priceMax }), noFields)
+          .estimated_price_range;
+      expect(price("9000", "12000")).toEqual({ min: 9000, max: 12000 });
+      expect(price("3500", "")).toEqual({ min: 3500, max: 3500 });
+      expect(price("", "3500")).toEqual({ min: 3500, max: 3500 });
+      expect(price("0", "0")).toEqual({ min: 0, max: 0 });
+    });
+
+    it("sends no price for a category without prices", () => {
+      const request = toPlaceRequest(
+        values({ priceMin: "9000", priceMax: "12000" }),
+        { fields: [], has_price: false },
+      );
+      expect(request.estimated_price_range).toBeNull();
+    });
+  });
+
   it("sends ids as numbers", () => {
-    expect(toPlaceRequest(values(), [])).toMatchObject({
+    expect(toPlaceRequest(values(), noFields)).toMatchObject({
       sub_district_id: 7,
       category_id: 3,
     });
@@ -159,7 +218,7 @@ describe("toPlaceRequest", () => {
 
   describe("attributes", () => {
     const send = (attributes: PlaceValues["attributes"]) =>
-      toPlaceRequest(values({ attributes }), fields).attributes;
+      toPlaceRequest(values({ attributes }), withFields(fields)).attributes;
 
     it("omits blank fields", () => {
       expect(
@@ -240,13 +299,16 @@ describe("round trip", () => {
       kind: "warung",
     };
     const p = place({ attributes });
-    const request = toPlaceRequest(placeToValues(p, fields), fields);
+    const request = toPlaceRequest(
+      placeToValues(p, fields),
+      withFields(fields),
+    );
     expect(request.attributes).toEqual(attributes);
   });
 
   it("returns the same place fields", () => {
     const p = place();
-    const request = toPlaceRequest(placeToValues(p, []), []);
+    const request = toPlaceRequest(placeToValues(p, []), noFields);
     expect(request).toEqual({
       sub_district_id: p.sub_district_id,
       category_id: p.category.id,

@@ -56,9 +56,9 @@ func (r *PostgresRepository) Create(ctx context.Context, s *domain.Suggestion) (
 		&created,
 		`WITH inserted AS (
 			INSERT INTO PLACE_SUGGESTIONS (user_id, sub_district_id, category_id, name, address,
-				location, operating_hours, estimated_price_range, short_description,
+				location, operating_hours, price_min, price_max, short_description,
 				attributes, note)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 			RETURNING *
 		)
 		SELECT `+suggestionColumns+`
@@ -71,7 +71,8 @@ func (r *PostgresRepository) Create(ctx context.Context, s *domain.Suggestion) (
 		s.Address,
 		s.Location,
 		s.OperatingHours,
-		s.EstimatedPriceRange,
+		s.PriceMin,
+		s.PriceMax,
 		s.ShortDescription,
 		s.Attributes,
 		s.Note,
@@ -165,7 +166,7 @@ func (r *PostgresRepository) Reject(ctx context.Context, id, adminID int64, reas
 // suggestionColumns selects a suggestion from `s` and its author from `u`,
 // aliased to match the nested Suggestion.User fields.
 const suggestionColumns = `s.id, s.user_id, s.sub_district_id, s.category_id, s.name, s.address,
-	s.location, s.operating_hours, s.estimated_price_range, s.short_description,
+	s.location, s.operating_hours, s.price_min, s.price_max, s.short_description,
 	s.attributes, s.note, s.status, s.rejection_reason, s.place_id, s.reviewed_by,
 	s.reviewed_at, s.created_at, u.id AS "user.id", u.name AS "user.name"`
 

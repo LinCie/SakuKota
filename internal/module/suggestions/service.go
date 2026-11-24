@@ -82,12 +82,13 @@ func (s *service) Create(ctx context.Context, sg *domain.Suggestion) (*domain.Su
 		return nil, err
 	}
 
-	// The optional place text follows the place rules, so they check and trim it.
+	// The optional place details follow the place rules, so they check and clean them.
 	place := &domain.Place{
-		Address:             sg.Address,
-		OperatingHours:      sg.OperatingHours,
-		EstimatedPriceRange: sg.EstimatedPriceRange,
-		ShortDescription:    sg.ShortDescription,
+		Address:          sg.Address,
+		OperatingHours:   sg.OperatingHours,
+		PriceMin:         sg.PriceMin,
+		PriceMax:         sg.PriceMax,
+		ShortDescription: sg.ShortDescription,
 	}
 	if err := domain.NormalizePlaceFields(place); err != nil {
 		return nil, err
@@ -101,7 +102,8 @@ func (s *service) Create(ctx context.Context, sg *domain.Suggestion) (*domain.Su
 	sg.Name = name
 	sg.Address = place.Address
 	sg.OperatingHours = place.OperatingHours
-	sg.EstimatedPriceRange = place.EstimatedPriceRange
+	sg.PriceMin = place.PriceMin
+	sg.PriceMax = place.PriceMax
 	sg.ShortDescription = place.ShortDescription
 	sg.Attributes = attributes
 	sg.Note = note

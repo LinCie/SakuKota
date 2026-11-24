@@ -171,12 +171,6 @@ func TestService_Create_OptionalText(t *testing.T) {
 		{name: "address",
 			set: func(s *domain.Suggestion, v *string) { s.Address = v },
 			get: func(s *domain.Suggestion) *string { return s.Address }},
-		{name: "operating_hours",
-			set: func(s *domain.Suggestion, v *string) { s.OperatingHours = v },
-			get: func(s *domain.Suggestion) *string { return s.OperatingHours }},
-		{name: "estimated_price_range",
-			set: func(s *domain.Suggestion, v *string) { s.EstimatedPriceRange = v },
-			get: func(s *domain.Suggestion) *string { return s.EstimatedPriceRange }},
 		{name: "short_description",
 			set: func(s *domain.Suggestion, v *string) { s.ShortDescription = v },
 			get: func(s *domain.Suggestion) *string { return s.ShortDescription }},
@@ -212,6 +206,55 @@ func TestService_Create_OptionalText(t *testing.T) {
 	}
 }
 
+func TestService_Create_HoursAndPrice(t *testing.T) {
+	t.Run("stored_cleaned", func(t *testing.T) {
+		s := submitted()
+		s.OperatingHours = domain.OperatingHours{{Day: 2, Open: "08:00", Close: "12:00"}, {Day: 1, Open: "08:00", Close: "12:00"}}
+		s.PriceMin, s.PriceMax = new(5000), new(9000)
+
+		stored, err := createSuggestion(t, s, true)
+		require.NoError(t, err)
+		assert.Equal(t, domain.OperatingHours{{Day: 1, Open: "08:00", Close: "12:00"}, {Day: 2, Open: "08:00", Close: "12:00"}}, stored.OperatingHours)
+		assert.Equal(t, new(5000), stored.PriceMin)
+		assert.Equal(t, new(9000), stored.PriceMax)
+	})
+
+	t.Run("empty_hours_stored_as_absent", func(t *testing.T) {
+		s := submitted()
+		s.OperatingHours = domain.OperatingHours{}
+
+		stored, err := createSuggestion(t, s, true)
+		require.NoError(t, err)
+		assert.Nil(t, stored.OperatingHours)
+	})
+
+	t.Run("invalid", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			change  func(*domain.Suggestion)
+			wantErr error
+		}{
+			{name: "day_out_of_range", change: func(s *domain.Suggestion) {
+				s.OperatingHours = domain.OperatingHours{{Day: 0, Open: "08:00", Close: "12:00"}}
+			}, wantErr: domain.ErrPlaceOperatingHoursInvalid},
+			{name: "overlap", change: func(s *domain.Suggestion) {
+				s.OperatingHours = domain.OperatingHours{{Day: 1, Open: "08:00", Close: "12:00"}, {Day: 1, Open: "11:00", Close: "13:00"}}
+			}, wantErr: domain.ErrPlaceOperatingHoursInvalid},
+			{name: "min_above_max", change: func(s *domain.Suggestion) { s.PriceMin, s.PriceMax = new(9), new(1) }, wantErr: domain.ErrPlacePriceRangeInvalid},
+			{name: "one_bound", change: func(s *domain.Suggestion) { s.PriceMax = new(1) }, wantErr: domain.ErrPlacePriceRangeInvalid},
+		}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				s := submitted()
+				tc.change(s)
+
+				_, err := createSuggestion(t, s, false)
+				assert.ErrorIs(t, err, tc.wantErr)
+			})
+		}
+	})
+}
+
 func TestService_Create_OptionalTextLimits(t *testing.T) {
 	fields := []struct {
 		name    string
@@ -221,10 +264,6 @@ func TestService_Create_OptionalTextLimits(t *testing.T) {
 	}{
 		{name: "address", limit: domain.MaxPlaceAddressLength, tooLong: domain.ErrPlaceAddressTooLong,
 			set: func(s *domain.Suggestion, v *string) { s.Address = v }},
-		{name: "operating_hours", limit: domain.MaxPlaceOperatingHoursLength, tooLong: domain.ErrPlaceOperatingHoursTooLong,
-			set: func(s *domain.Suggestion, v *string) { s.OperatingHours = v }},
-		{name: "estimated_price_range", limit: domain.MaxPlaceEstimatedPriceRangeLength, tooLong: domain.ErrPlaceEstimatedPriceRangeTooLong,
-			set: func(s *domain.Suggestion, v *string) { s.EstimatedPriceRange = v }},
 	}
 
 	for _, f := range fields {

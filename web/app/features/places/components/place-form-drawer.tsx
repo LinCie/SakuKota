@@ -36,17 +36,23 @@ export function PlaceFormDrawer({
   const updatePlace = useUpdatePlace();
   const mutation = place ? updatePlace : createPlace;
 
-  const fieldsOf = (categoryId: number) =>
-    categories.find((c) => c.id === categoryId)?.fields ?? [];
+  const categoryOf = (categoryId: number) =>
+    categories.find((c) => c.id === categoryId);
   const initial = place
-    ? placeToValues(place, fieldsOf(place.category.id))
+    ? placeToValues(place, categoryOf(place.category.id)?.fields ?? [])
     : emptyPlaceValues(subDistricts);
 
   const form = useForm({
     defaultValues: initial,
     validators: { onSubmit: placeSchema },
     onSubmit: ({ value }) => {
-      const body = toPlaceRequest(value, fieldsOf(Number(value.categoryId)));
+      const body = toPlaceRequest(
+        value,
+        categoryOf(Number(value.categoryId)) ?? {
+          fields: [],
+          has_price: false,
+        },
+      );
       const onSuccess = () => {
         toastManager.add({
           title: place

@@ -61,6 +61,32 @@ func TestService_Approve_Transaction(t *testing.T) {
 		assert.Equal(t, "Laundry Kilat", place.Name)
 	})
 
+	t.Run("price_in_category_without_prices_leaves_pending", func(t *testing.T) {
+		f := newFixture(t)
+		created := f.create(t, "Laundry")
+		var mosqueID int64
+		require.NoError(t, testDB.Get(&mosqueID, `SELECT id FROM CATEGORIES WHERE slug = 'mosque'`), "find mosque category")
+		service := suggestions.NewService(f.repo, database.NewTransactor(testDB), newPlaceService())
+
+		place := f.laundryPlace("Masjid Al-Ikhlas")
+		place.CategoryID = mosqueID
+		place.Attributes = json.RawMessage(`{"facility_type":"Masjid","friday_prayer":true}`)
+		place.PriceMin, place.PriceMax = new(1000), new(2000)
+
+		_, err := service.Approve(t.Context(), created.ID, f.reviewerID, place)
+
+		assert.ErrorIs(t, err, domain.ErrPlacePriceNotApplicable)
+		assert.Zero(t, placeCount(t), "places")
+		stored, err := f.repo.Fetch(t.Context(), created.ID)
+		require.NoError(t, err, "Fetch(%d)", created.ID)
+		assert.Equal(t, domain.StatusPending, stored.Status)
+
+		place.PriceMin, place.PriceMax = nil, nil
+		got, err := service.Approve(t.Context(), created.ID, f.reviewerID, place)
+		require.NoError(t, err, "Approve() without a price")
+		assert.Equal(t, domain.StatusApproved, got.Status)
+	})
+
 	t.Run("concurrent_approvals_create_one_place", func(t *testing.T) {
 		f := newFixture(t)
 		created := f.create(t, "Laundry")

@@ -1,5 +1,6 @@
 import type { SubDistrict } from "~/features/subdistricts/types";
 
+import { emptyHours, type HoursValues } from "./hours";
 import type { CategoryField } from "./types";
 
 // The place form's values, as typed: everything is text until it is submitted.
@@ -18,8 +19,11 @@ export type PlaceValues = {
   lat: string;
   lng: string;
   address: string;
-  operatingHours: string;
-  priceRange: string;
+  /** The seven days, Monday first. */
+  hours: HoursValues;
+  /** The lowest and highest price in rupiah; one filled bound is a single price. */
+  priceMin: string;
+  priceMax: string;
   description: string;
   attributes: AttributeValues;
 };
@@ -33,8 +37,9 @@ export function emptyPlaceValues(subDistricts: SubDistrict[]): PlaceValues {
     lat: "",
     lng: "",
     address: "",
-    operatingHours: "",
-    priceRange: "",
+    hours: emptyHours(),
+    priceMin: "",
+    priceMax: "",
     description: "",
     attributes: {},
   };

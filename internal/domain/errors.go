@@ -21,16 +21,17 @@ var (
 
 // Errors of places and categories.
 var (
-	ErrPlaceNotFound                   = errors.New("place not found")
-	ErrCategoryNotFound                = errors.New("category not found")
-	ErrPlaceNameRequired               = errors.New("name is required")
-	ErrPlaceNameTooLong                = fmt.Errorf("name must be %d characters or fewer", MaxPlaceNameLength)
-	ErrPlaceAddressTooLong             = fmt.Errorf("address must be %d characters or fewer", MaxPlaceAddressLength)
-	ErrPlaceOperatingHoursTooLong      = fmt.Errorf("operating_hours must be %d characters or fewer", MaxPlaceOperatingHoursLength)
-	ErrPlaceEstimatedPriceRangeTooLong = fmt.Errorf("estimated_price_range must be %d characters or fewer", MaxPlaceEstimatedPriceRangeLength)
-	ErrPlaceAttributesInvalid          = errors.New("invalid attributes")
-	ErrPlaceLocationInvalid            = errors.New("location must be within Indonesia")
-	ErrPlaceBatchSizeInvalid           = fmt.Errorf("places must hold between 1 and %d places", MaxPlaceBatchSize)
+	ErrPlaceNotFound              = errors.New("place not found")
+	ErrCategoryNotFound           = errors.New("category not found")
+	ErrPlaceNameRequired          = errors.New("name is required")
+	ErrPlaceNameTooLong           = fmt.Errorf("name must be %d characters or fewer", MaxPlaceNameLength)
+	ErrPlaceAddressTooLong        = fmt.Errorf("address must be %d characters or fewer", MaxPlaceAddressLength)
+	ErrPlaceOperatingHoursInvalid = errors.New("invalid operating_hours")
+	ErrPlacePriceRangeInvalid     = errors.New("invalid estimated_price_range")
+	ErrPlacePriceNotApplicable    = errors.New("estimated_price_range must be null: the category has no prices")
+	ErrPlaceAttributesInvalid     = errors.New("invalid attributes")
+	ErrPlaceLocationInvalid       = errors.New("location must be within Indonesia")
+	ErrPlaceBatchSizeInvalid      = fmt.Errorf("places must hold between 1 and %d places", MaxPlaceBatchSize)
 )
 
 // IsPlaceValidationError reports whether err means the place's data was refused.
@@ -39,8 +40,9 @@ func IsPlaceValidationError(err error) bool {
 	return errors.Is(err, ErrPlaceNameRequired) ||
 		errors.Is(err, ErrPlaceNameTooLong) ||
 		errors.Is(err, ErrPlaceAddressTooLong) ||
-		errors.Is(err, ErrPlaceOperatingHoursTooLong) ||
-		errors.Is(err, ErrPlaceEstimatedPriceRangeTooLong) ||
+		errors.Is(err, ErrPlaceOperatingHoursInvalid) ||
+		errors.Is(err, ErrPlacePriceRangeInvalid) ||
+		errors.Is(err, ErrPlacePriceNotApplicable) ||
 		errors.Is(err, ErrPlaceAttributesInvalid) ||
 		errors.Is(err, ErrPlaceLocationInvalid) ||
 		errors.Is(err, ErrPlaceBatchSizeInvalid)

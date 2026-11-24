@@ -18,6 +18,7 @@ import { attributeValue } from "../components/attribute-value";
 import type { CategoryDetail, Place } from "../types";
 import { CategoryBadge } from "../components/category-sign";
 import { PlaceFormDrawer } from "../components/place-form-drawer";
+import { hoursValue, priceValue } from "../components/schedule-values";
 import {
   placeKeys,
   useAddPlaceMedia,
@@ -80,14 +81,15 @@ export function PlaceDetailPage({
       value: orMissing(place.address, "Alamat tidak tersedia"),
       wide: true,
     },
-    {
-      label: "Jam buka",
-      value: orMissing(place.operating_hours, "Jam buka tidak tersedia"),
-    },
-    {
-      label: "Kisaran harga",
-      value: orMissing(place.estimated_price_range, "Harga tidak tersedia"),
-    },
+    { label: "Jam buka", value: hoursValue(place.operating_hours) },
+    ...(place.category.has_price
+      ? [
+          {
+            label: "Kisaran harga",
+            value: priceValue(place.estimated_price_range, place.category),
+          },
+        ]
+      : []),
     {
       label: "Koordinat",
       value: coordinates ? (

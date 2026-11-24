@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { emptyHours } from "~/features/places/hours";
+
 import { emptySuggestionValues } from "./mappers";
 import { rejectSchema, suggestionSchema } from "./schemas";
 
@@ -30,6 +32,19 @@ describe("suggesting a place", () => {
     expect(
       problems(suggestionSchema, { ...valid(), name: "  ", lat: "40" }).sort(),
     ).toEqual(["lat", "name"]);
+  });
+
+  it("holds the suggestion's hours and price to the place's rules", () => {
+    const hours = emptyHours();
+    hours[0] = { mode: "hours", periods: [{ open: "", close: "" }] };
+    expect(
+      problems(suggestionSchema, {
+        ...valid(),
+        hours,
+        priceMin: "9",
+        priceMax: "1",
+      }).sort(),
+    ).toEqual(["hours", "priceMin"]);
   });
 
   it("allows a note of 1000 characters and rejects 1001", () => {

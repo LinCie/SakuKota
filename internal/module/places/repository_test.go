@@ -138,31 +138,33 @@ func TestRepository_Create(t *testing.T) {
 		laundryID := categoryID(t, "laundry")
 
 		got, err := repo.Create(ctx, &domain.Place{
-			SubDistrictID:       subDistrictID,
-			CategoryID:          laundryID,
-			Name:                "Laundry Bersih",
-			Address:             new("Jl. Sudirman 1"),
-			Location:            postgis.MustPoint(106.82, -6.2),
-			OperatingHours:      new("08:00-20:00"),
-			EstimatedPriceRange: new("Rp5.000-Rp10.000"),
-			ShortDescription:    new("Cuci kilat"),
-			Attributes:          json.RawMessage(`{"service_type": "Swalayan"}`),
+			SubDistrictID:    subDistrictID,
+			CategoryID:       laundryID,
+			Name:             "Laundry Bersih",
+			Address:          new("Jl. Sudirman 1"),
+			Location:         postgis.MustPoint(106.82, -6.2),
+			OperatingHours:   domain.OperatingHours{{Day: 1, Open: "08:00", Close: "20:00"}, {Day: 6, Open: "08:00", Close: "14:00"}},
+			PriceMin:         new(5000),
+			PriceMax:         new(10000),
+			ShortDescription: new("Cuci kilat"),
+			Attributes:       json.RawMessage(`{"service_type": "Swalayan"}`),
 		})
 		require.NoError(t, err, "Create()")
 
 		assert.NotZero(t, got.ID, "Create().ID")
 		wantFields := domain.Place{
-			SubDistrictID:       subDistrictID,
-			CategoryID:          laundryID,
-			Name:                "Laundry Bersih",
-			Address:             new("Jl. Sudirman 1"),
-			Location:            got.Location,
-			OperatingHours:      new("08:00-20:00"),
-			EstimatedPriceRange: new("Rp5.000-Rp10.000"),
-			ShortDescription:    new("Cuci kilat"),
-			Attributes:          got.Attributes,
-			Medias:              []domain.Media{},
-			Category:            domain.Category{ID: laundryID, Name: got.Category.Name, Slug: "laundry", Code: "L", Label: "Laundry", Color: "sign"},
+			SubDistrictID:    subDistrictID,
+			CategoryID:       laundryID,
+			Name:             "Laundry Bersih",
+			Address:          new("Jl. Sudirman 1"),
+			Location:         got.Location,
+			OperatingHours:   domain.OperatingHours{{Day: 1, Open: "08:00", Close: "20:00"}, {Day: 6, Open: "08:00", Close: "14:00"}},
+			PriceMin:         new(5000),
+			PriceMax:         new(10000),
+			ShortDescription: new("Cuci kilat"),
+			Attributes:       got.Attributes,
+			Medias:           []domain.Media{},
+			Category:         domain.Category{ID: laundryID, Name: got.Category.Name, Slug: "laundry", Code: "L", Label: "Laundry", Color: "sign", HasPrice: true, PriceUnit: new("kg")},
 		}
 		wantFields.ID = got.ID
 		assert.Equal(t, wantFields, *got, "Create()")
@@ -179,8 +181,41 @@ func TestRepository_Create(t *testing.T) {
 
 		got := mustCreate(t, repo, newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry"))
 
-		assert.True(t, got.Address == nil && got.Location == nil && got.OperatingHours == nil && got.EstimatedPriceRange == nil && got.ShortDescription == nil,
+		assert.True(t, got.Address == nil && got.Location == nil && got.OperatingHours == nil && got.PriceMin == nil && got.PriceMax == nil && got.ShortDescription == nil,
 			"Create() = %+v, want every optional field nil", got)
+	})
+
+	t.Run("price_checks", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			min, max *int
+			wantErr  bool
+		}{
+			{name: "range", min: new(0), max: new(10)},
+			{name: "only_min", min: new(1), wantErr: true},
+			{name: "only_max", max: new(1), wantErr: true},
+			{name: "negative", min: new(-1), max: new(1), wantErr: true},
+			{name: "min_above_max", min: new(2), max: new(1), wantErr: true},
+		}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				repo := newRepository(t)
+				p := newPlace(insertSubDistrict(t, "Setiabudi"), categoryID(t, "laundry"), "Laundry")
+				p.PriceMin, p.PriceMax = tc.min, tc.max
+
+				_, err := repo.Create(ctx, p)
+				assert.Equal(t, tc.wantErr, err != nil, "Create(price %v-%v) error = %v", tc.min, tc.max, err)
+			})
+		}
+	})
+
+	t.Run("hours_must_be_an_array", func(t *testing.T) {
+		repo := newRepository(t)
+		subDistrictID := insertSubDistrict(t, "Setiabudi")
+		created := mustCreate(t, repo, newPlace(subDistrictID, categoryID(t, "laundry"), "Laundry"))
+
+		_, err := testDB.Exec(`UPDATE PLACES SET operating_hours = '{}'::jsonb WHERE id = $1`, created.ID)
+		assert.Error(t, err, "storing an object as operating_hours")
 	})
 
 	t.Run("own_ids", func(t *testing.T) {
@@ -602,6 +637,27 @@ func TestRepository_ListCategories(t *testing.T) {
 		wantKeys := []string{"service_type", "turnaround_hours", "express_available", "minimum_weight_kg"}
 		assert.Equal(t, wantKeys, keys, "laundry field keys")
 	})
+
+	t.Run("prices_by_category", func(t *testing.T) {
+		repo := newRepository(t)
+
+		got, err := repo.ListCategories(t.Context())
+		require.NoError(t, err, "ListCategories()")
+
+		unpriced := []string{"mosque", "worship-other", "police-post", "bank-atm", "public-service"}
+		units := map[string]string{"laundry": "kg", "print-copy": "lembar"}
+		for _, c := range got {
+			assert.Equal(t, !slices.Contains(unpriced, c.Slug), c.HasPrice, "category %q HasPrice", c.Slug)
+			if unit, ok := units[c.Slug]; ok {
+				assert.Equal(t, new(unit), c.PriceUnit, "category %q PriceUnit", c.Slug)
+			} else {
+				assert.Nil(t, c.PriceUnit, "category %q PriceUnit", c.Slug)
+			}
+			for _, f := range c.Fields {
+				assert.NotEqual(t, "open_24h", f.Key, "category %q must express 24 hours through operating hours", c.Slug)
+			}
+		}
+	})
 }
 
 func TestRepository_FetchCategory(t *testing.T) {
@@ -675,16 +731,17 @@ func TestRepository_Update(t *testing.T) {
 		tailorID := categoryID(t, "tailor")
 
 		got, err := repo.Update(ctx, &domain.Place{
-			ID:                  created.ID,
-			SubDistrictID:       menteng,
-			CategoryID:          tailorID,
-			Name:                "New",
-			Address:             new("Jl. Baru"),
-			Location:            postgis.MustPoint(106.9, -6.3),
-			OperatingHours:      new("24 jam"),
-			EstimatedPriceRange: new("Rp1"),
-			ShortDescription:    new("Baru"),
-			Attributes:          json.RawMessage(`{"specialty": "Permak"}`),
+			ID:               created.ID,
+			SubDistrictID:    menteng,
+			CategoryID:       tailorID,
+			Name:             "New",
+			Address:          new("Jl. Baru"),
+			Location:         postgis.MustPoint(106.9, -6.3),
+			OperatingHours:   domain.OperatingHours{{Day: 7, Open: "00:00", Close: "24:00"}},
+			PriceMin:         new(1),
+			PriceMax:         new(1),
+			ShortDescription: new("Baru"),
+			Attributes:       json.RawMessage(`{"specialty": "Permak"}`),
 		})
 		require.NoError(t, err, "Update()")
 
@@ -692,9 +749,11 @@ func TestRepository_Update(t *testing.T) {
 		assert.Equal(t, menteng, got.SubDistrictID, "Update().SubDistrictID")
 		assert.Equal(t, tailorID, got.CategoryID, "Update().CategoryID")
 		assert.Equal(t, "New", got.Name, "Update().Name")
-		wantTexts := []*string{new("Jl. Baru"), new("24 jam"), new("Rp1"), new("Baru")}
-		gotTexts := []*string{got.Address, got.OperatingHours, got.EstimatedPriceRange, got.ShortDescription}
+		wantTexts := []*string{new("Jl. Baru"), new("Baru")}
+		gotTexts := []*string{got.Address, got.ShortDescription}
 		assert.Equal(t, wantTexts, gotTexts, "Update() text fields")
+		assert.Equal(t, domain.OperatingHours{{Day: 7, Open: "00:00", Close: "24:00"}}, got.OperatingHours, "Update().OperatingHours")
+		assert.Equal(t, []*int{new(1), new(1)}, []*int{got.PriceMin, got.PriceMax}, "Update() price bounds")
 		assert.JSONEq(t, `{"specialty": "Permak"}`, string(got.Attributes), "Update().Attributes")
 		require.NotNil(t, got.Location, "Update().Location")
 		assert.InDelta(t, 106.9, got.Location.X(), 1e-9, "Update().Location longitude")
@@ -717,6 +776,9 @@ func TestRepository_Update(t *testing.T) {
 
 		assert.Nil(t, got.Address, "Update().Address")
 		assert.Nil(t, got.Location, "Update().Location")
+		assert.Nil(t, got.OperatingHours, "Update().OperatingHours")
+		assert.Nil(t, got.PriceMin, "Update().PriceMin")
+		assert.Nil(t, got.PriceMax, "Update().PriceMax")
 	})
 
 	t.Run("keeps_ratings_medias", func(t *testing.T) {

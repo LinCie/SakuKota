@@ -534,7 +534,7 @@
         "tags": ["Places"],
         "operationId": "createPlace",
         "summary": "Create a place",
-        "description": "Creates a place. Requires the admin role. The attributes object must match the fields of the chosen category: required fields must be present, and unknown keys are rejected.",
+        "description": "Creates a place. Requires the admin role. The attributes object must match the fields of the chosen category: required fields must be present, and unknown keys are rejected. Operating hours and the price range are checked too; a category without prices rejects any price.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
@@ -550,8 +550,11 @@
                   "type": "Point",
                   "coordinates": [106.8456, -6.2088]
                 },
-                "operating_hours": "07:00-21:00",
-                "estimated_price_range": "Rp 10.000-25.000",
+                "operating_hours": [
+                  { "day": 1, "open": "07:00", "close": "21:00" },
+                  { "day": 2, "open": "07:00", "close": "21:00" }
+                ],
+                "estimated_price_range": { "min": 10000, "max": 25000 },
                 "short_description": "Nasi campur and soto.",
                 "attributes": {
                   "halal": true,
@@ -694,7 +697,7 @@
         "tags": ["Places"],
         "operationId": "updatePlace",
         "summary": "Replace a place",
-        "description": "Replaces a place's editable fields. Requires the admin role. Send every field: nullable fields left out or sent as null are cleared. The attributes are validated against the category's fields. The place's rating and medias are kept.",
+        "description": "Replaces a place's editable fields. Requires the admin role. Send every field: nullable fields left out or sent as null are cleared. The attributes are validated against the category's fields, and the operating hours and price range against their rules. The place's rating and medias are kept.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -714,7 +717,7 @@
                 "sub_district_id": 1,
                 "category_id": 1,
                 "name": "Warung Bu Sri Pusat",
-                "operating_hours": "08:00-22:00",
+                "operating_hours": [{ "day": 1, "open": "08:00", "close": "22:00" }],
                 "attributes": { "halal": true, "serving_style": "Dimasak saat dipesan" }
               }
             }
@@ -1756,8 +1759,8 @@
                   "type": "Point",
                   "coordinates": [106.8461, -6.2083]
                 },
-                "operating_hours": "08:00-17:00",
-                "estimated_price_range": "Rp 15.000-30.000",
+                "operating_hours": [{ "day": 1, "open": "08:00", "close": "17:00" }],
+                "estimated_price_range": { "min": 15000, "max": 30000 },
                 "short_description": "Kopi susu dan roti bakar.",
                 "attributes": {
                   "halal": true,
@@ -1921,8 +1924,8 @@
                   "type": "Point",
                   "coordinates": [106.8461, -6.2083]
                 },
-                "operating_hours": "08:00-17:00",
-                "estimated_price_range": "Rp 15.000-30.000",
+                "operating_hours": [{ "day": 1, "open": "08:00", "close": "17:00" }],
+                "estimated_price_range": { "min": 15000, "max": 30000 },
                 "short_description": "Kopi susu dan roti bakar.",
                 "attributes": {
                   "halal": true,
@@ -1942,7 +1945,7 @@
             }
           },
           "400": {
-            "description": "The suggestion ID is invalid, the body is malformed, or a place value failed validation. A missing location, an unknown sub-district or category, and a place name or attributes that are not valid are all reported here.",
+            "description": "The suggestion ID is invalid, the body is malformed, or a place value failed validation. A missing location, an unknown sub-district or category, and a place name, attributes, operating hours, or price that are not valid (including a price for a category without prices) are all reported here.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" },
@@ -2933,6 +2936,31 @@
           "data": { "$ref": "#/components/schemas/Session" }
         }
       },
+      "OperatingHours": {
+        "type": "array",
+        "description": "The periods a place is open, each on one weekday. A place open past midnight has a period on each day. Periods are saved sorted by day and opening time; an empty array is saved as null.",
+        "maxItems": 21,
+        "items": { "$ref": "#/components/schemas/OperatingPeriod" }
+      },
+      "OperatingPeriod": {
+        "type": "object",
+        "required": ["day", "open", "close"],
+        "description": "A day has at most 3 periods, and they must not overlap.",
+        "properties": {
+          "day": { "type": "integer", "minimum": 1, "maximum": 7, "description": "1 is Monday, 7 is Sunday." },
+          "open": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "example": "08:00", "description": "Local time as HH:MM; before `close`." },
+          "close": { "type": "string", "pattern": "^(([01][0-9]|2[0-3]):[0-5][0-9]|24:00)$", "example": "20:00", "description": "Local time as HH:MM, or 24:00 for midnight." }
+        }
+      },
+      "PriceRange": {
+        "type": "object",
+        "required": ["min", "max"],
+        "description": "A price range in whole rupiah. A single price has equal bounds, and free is 0.",
+        "properties": {
+          "min": { "type": "integer", "minimum": 0, "maximum": 1000000000 },
+          "max": { "type": "integer", "minimum": 0, "maximum": 1000000000, "description": "At least `min`." }
+        }
+      },
       "Point": {
         "type": "object",
         "description": "GeoJSON Point in WGS 84 (SRID 4326). Coordinates are [longitude, latitude] and must lie within Indonesia: longitude 95 to 141, latitude -11 to 6.",
@@ -3000,8 +3028,19 @@
               { "type": "null" }
             ]
           },
-          "operating_hours": { "type": ["string", "null"], "maxLength": 255 },
-          "estimated_price_range": { "type": ["string", "null"], "maxLength": 100 },
+          "operating_hours": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/OperatingHours" },
+              { "type": "null" }
+            ]
+          },
+          "estimated_price_range": {
+            "description": "Must be null when the category has no prices (`has_price` is false). Both bounds are required when the range is given.",
+            "oneOf": [
+              { "$ref": "#/components/schemas/PriceRange" },
+              { "type": "null" }
+            ]
+          },
           "short_description": { "type": ["string", "null"] },
           "attributes": {
             "type": ["object", "null"],
@@ -3011,14 +3050,16 @@
       },
       "CategorySummary": {
         "type": "object",
-        "required": ["id", "name", "slug", "code", "label", "color"],
+        "required": ["id", "name", "slug", "code", "label", "color", "has_price", "price_unit"],
         "properties": {
           "id": { "type": "integer", "format": "int64" },
           "name": { "type": "string" },
           "slug": { "type": "string" },
           "code": { "type": "string", "description": "The single character that marks the category on a map sign." },
           "label": { "type": "string", "description": "Short name to display." },
-          "color": { "$ref": "#/components/schemas/CategoryColor" }
+          "color": { "$ref": "#/components/schemas/CategoryColor" },
+          "has_price": { "type": "boolean", "description": "Whether places of the category have a price. A mosque has none, and a place of such a category must send a null `estimated_price_range`." },
+          "price_unit": { "type": ["string", "null"], "description": "What the price is per, such as `kg`; null when it is for the whole item or service." }
         }
       },
       "Place": {
@@ -3049,8 +3090,20 @@
               { "type": "null" }
             ]
           },
-          "operating_hours": { "type": ["string", "null"] },
-          "estimated_price_range": { "type": ["string", "null"] },
+          "operating_hours": {
+            "description": "Sorted by day and opening time; null when unknown.",
+            "oneOf": [
+              { "$ref": "#/components/schemas/OperatingHours" },
+              { "type": "null" }
+            ]
+          },
+          "estimated_price_range": {
+            "description": "Null when unknown, and always for a category without prices.",
+            "oneOf": [
+              { "$ref": "#/components/schemas/PriceRange" },
+              { "type": "null" }
+            ]
+          },
           "short_description": { "type": ["string", "null"] },
           "attributes": {
             "type": "object",
@@ -3208,7 +3261,7 @@
       },
       "CategoryDetail": {
         "type": "object",
-        "required": ["id", "name", "slug", "code", "label", "color", "fields"],
+        "required": ["id", "name", "slug", "code", "label", "color", "has_price", "price_unit", "fields"],
         "properties": {
           "id": { "type": "integer", "format": "int64" },
           "name": { "type": "string" },
@@ -3216,6 +3269,8 @@
           "code": { "type": "string", "description": "The single character that marks the category on a map sign." },
           "label": { "type": "string", "description": "Short name to display." },
           "color": { "$ref": "#/components/schemas/CategoryColor" },
+          "has_price": { "type": "boolean", "description": "Whether places of the category have a price. A mosque has none, and a place of such a category must send a null `estimated_price_range`." },
+          "price_unit": { "type": ["string", "null"], "description": "What the price is per, such as `kg`; null when it is for the whole item or service." },
           "fields": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/CategoryField" }
@@ -3321,8 +3376,19 @@
           "name": { "type": "string", "minLength": 1, "maxLength": 150, "description": "Trimmed before it is checked." },
           "address": { "type": ["string", "null"], "description": "Trimmed; blank is stored as null." },
           "location": { "$ref": "#/components/schemas/Point" },
-          "operating_hours": { "type": ["string", "null"], "description": "Trimmed; blank is stored as null." },
-          "estimated_price_range": { "type": ["string", "null"], "description": "Trimmed; blank is stored as null." },
+          "operating_hours": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/OperatingHours" },
+              { "type": "null" }
+            ]
+          },
+          "estimated_price_range": {
+            "description": "Must be null when the category has no prices (`has_price` is false). Both bounds are required when the range is given.",
+            "oneOf": [
+              { "$ref": "#/components/schemas/PriceRange" },
+              { "type": "null" }
+            ]
+          },
           "short_description": { "type": ["string", "null"], "description": "Trimmed; blank is stored as null." },
           "attributes": {
             "type": ["object", "null"],
@@ -3345,8 +3411,19 @@
           "name": { "type": "string", "minLength": 1, "maxLength": 150 },
           "address": { "type": ["string", "null"], "maxLength": 255 },
           "location": { "$ref": "#/components/schemas/Point" },
-          "operating_hours": { "type": ["string", "null"], "maxLength": 255 },
-          "estimated_price_range": { "type": ["string", "null"], "maxLength": 100 },
+          "operating_hours": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/OperatingHours" },
+              { "type": "null" }
+            ]
+          },
+          "estimated_price_range": {
+            "description": "Must be null when the category has no prices (`has_price` is false). Both bounds are required when the range is given.",
+            "oneOf": [
+              { "$ref": "#/components/schemas/PriceRange" },
+              { "type": "null" }
+            ]
+          },
           "short_description": { "type": ["string", "null"] },
           "attributes": {
             "type": ["object", "null"],
@@ -3405,8 +3482,20 @@
               { "type": "null" }
             ]
           },
-          "operating_hours": { "type": ["string", "null"] },
-          "estimated_price_range": { "type": ["string", "null"] },
+          "operating_hours": {
+            "description": "Sorted by day and opening time; null when unknown.",
+            "oneOf": [
+              { "$ref": "#/components/schemas/OperatingHours" },
+              { "type": "null" }
+            ]
+          },
+          "estimated_price_range": {
+            "description": "Null when unknown, and always for a category without prices.",
+            "oneOf": [
+              { "$ref": "#/components/schemas/PriceRange" },
+              { "type": "null" }
+            ]
+          },
           "short_description": { "type": ["string", "null"] },
           "attributes": {
             "type": "object",

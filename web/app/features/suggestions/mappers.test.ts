@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { field } from "~/features/places/fixtures";
+import { emptyHours } from "~/features/places/hours";
 import { toPlaceRequest } from "~/features/places/mappers";
 
 import {
@@ -16,6 +17,8 @@ const fields = [
   field({ key: "price", data_type: "range" }),
 ];
 
+const category = { fields, has_price: true };
+
 function suggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   return {
     id: 1,
@@ -24,8 +27,8 @@ function suggestion(overrides: Partial<Suggestion> = {}): Suggestion {
     name: "Warung Bu Tini",
     address: "Jl. Mawar 1",
     location: { type: "Point", coordinates: [106.8, -6.2] },
-    operating_hours: "08:00-17:00",
-    estimated_price_range: "10-20k",
+    operating_hours: [{ day: 1, open: "08:00", close: "17:00" }],
+    estimated_price_range: { min: 10000, max: 20000 },
     short_description: "Enak",
     attributes: {},
     note: null,
@@ -50,23 +53,26 @@ describe("sending a suggestion", () => {
   };
 
   it("is the place request plus the note", () => {
-    const request = toSuggestionRequest({ ...values, note: "Dekat pasar" }, []);
+    const request = toSuggestionRequest(
+      { ...values, note: "Dekat pasar" },
+      category,
+    );
     expect(request).toEqual({
-      ...toPlaceRequest(values, []),
+      ...toPlaceRequest(values, category),
       note: "Dekat pasar",
     });
   });
 
   it("sends a blank note as null", () => {
     expect(
-      toSuggestionRequest({ ...values, note: "  \n" }, []).note,
+      toSuggestionRequest({ ...values, note: "  \n" }, category).note,
     ).toBeNull();
   });
 
   it("trims the note", () => {
-    expect(toSuggestionRequest({ ...values, note: " hi " }, []).note).toBe(
-      "hi",
-    );
+    expect(
+      toSuggestionRequest({ ...values, note: " hi " }, category).note,
+    ).toBe("hi");
   });
 });
 
@@ -85,8 +91,11 @@ describe("approving a suggestion", () => {
       lat: "-6.2",
       lng: "106.8",
       address: "Jl. Mawar 1",
-      operatingHours: "08:00-17:00",
-      priceRange: "10-20k",
+      hours: expect.arrayContaining([
+        { mode: "hours", periods: [{ open: "08:00", close: "17:00" }] },
+      ]),
+      priceMin: "10000",
+      priceMax: "20000",
       description: "Enak",
       attributes: {
         count: "0",
@@ -111,8 +120,9 @@ describe("approving a suggestion", () => {
       lat: "",
       lng: "",
       address: "",
-      operatingHours: "",
-      priceRange: "",
+      hours: emptyHours(),
+      priceMin: "",
+      priceMax: "",
       description: "",
     });
   });
@@ -126,12 +136,17 @@ describe("approving a suggestion", () => {
 
   it("comes out as the same place when sent unchanged", () => {
     const s = suggestion({ attributes: { count: 0, open: false } });
-    const request = toPlaceRequest(suggestionToPlaceValues(s, fields), fields);
+    const request = toPlaceRequest(
+      suggestionToPlaceValues(s, fields),
+      category,
+    );
     expect(request).toMatchObject({
       sub_district_id: 7,
       category_id: 3,
       name: s.name,
       location: s.location,
+      operating_hours: s.operating_hours,
+      estimated_price_range: s.estimated_price_range,
       attributes: { count: 0, open: false },
     });
   });

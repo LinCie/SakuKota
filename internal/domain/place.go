@@ -26,26 +26,31 @@ const (
 
 // Maximum lengths in characters, counted after trimming. They match the VARCHAR columns of PLACES.
 const (
-	MaxPlaceNameLength                = 150
-	MaxPlaceAddressLength             = 255
-	MaxPlaceOperatingHoursLength      = 255
-	MaxPlaceEstimatedPriceRangeLength = 100
+	MaxPlaceNameLength    = 150
+	MaxPlaceAddressLength = 255
 )
+
+// MaxPlacePrice is the highest price in rupiah a place may have. It keeps prices within an INTEGER column.
+const MaxPlacePrice = 1_000_000_000
 
 // MaxPlaceBatchSize is the most places one bulk create may hold.
 const MaxPlaceBatchSize = 500
 
 // Place is a row of PLACES, joined with its category.
 type Place struct {
-	ID                  int64          `db:"id"`
-	SubDistrictID       int64          `db:"sub_district_id"`
-	CategoryID          int64          `db:"category_id"`
-	Name                string         `db:"name"`
-	Address             *string        `db:"address"`
-	Location            *postgis.Point `db:"location"`
-	OperatingHours      *string        `db:"operating_hours"`
-	EstimatedPriceRange *string        `db:"estimated_price_range"`
-	ShortDescription    *string        `db:"short_description"`
+	ID            int64          `db:"id"`
+	SubDistrictID int64          `db:"sub_district_id"`
+	CategoryID    int64          `db:"category_id"`
+	Name          string         `db:"name"`
+	Address       *string        `db:"address"`
+	Location      *postgis.Point `db:"location"`
+	// OperatingHours are the periods the place is open; nil if unknown.
+	OperatingHours OperatingHours `db:"operating_hours"`
+	// PriceMin and PriceMax are the price range in whole rupiah. Both are nil
+	// if unknown, and always nil for a category without prices.
+	PriceMin         *int    `db:"price_min"`
+	PriceMax         *int    `db:"price_max"`
+	ShortDescription *string `db:"short_description"`
 	// Attributes holds the category's custom field values, keyed by CategoryField.Key.
 	Attributes json.RawMessage `db:"attributes"`
 	// RatingCount and RatingSum total the place's review ratings.
@@ -58,6 +63,31 @@ type Place struct {
 	Medias []Media `db:"-"`
 }
 
+// PriceRange is a price range in whole rupiah as the API carries it. A request
+// may leave a bound out; validation then rejects it, so a stored range always has both.
+type PriceRange struct {
+	Min *int `json:"min"`
+	Max *int `json:"max"`
+}
+
+// NewPriceRange returns the range of the bounds, or nil if both are nil.
+func NewPriceRange(minPrice, maxPrice *int) *PriceRange {
+	if minPrice == nil && maxPrice == nil {
+		return nil
+	}
+
+	return &PriceRange{Min: minPrice, Max: maxPrice}
+}
+
+// Bounds returns the range's bounds, both nil for a nil range.
+func (r *PriceRange) Bounds() (minPrice, maxPrice *int) {
+	if r == nil {
+		return nil, nil
+	}
+
+	return r.Min, r.Max
+}
+
 // Category is a row of CATEGORIES. Migrations define categories; the API cannot create them.
 type Category struct {
 	ID   int64  `db:"id"`
@@ -68,8 +98,12 @@ type Category struct {
 	// Label is the short name clients display.
 	Label string `db:"label"`
 	// Color is the palette key clients style the category with.
-	Color  string          `db:"color"`
-	Fields []CategoryField `db:"-"`
+	Color string `db:"color"`
+	// HasPrice is whether places of the category have a price. A mosque has none.
+	HasPrice bool `db:"has_price"`
+	// PriceUnit is what the price is per, such as "kg"; nil if it is for the whole service or item.
+	PriceUnit *string         `db:"price_unit"`
+	Fields    []CategoryField `db:"-"`
 }
 
 // CategoryField is a row of CATEGORY_FIELDS: a custom field that places of the
@@ -126,7 +160,10 @@ func NormalizePlaceName(name string) (string, error) {
 }
 
 // NormalizePlaceFields trims the optional text fields of p and turns blank ones into nil.
-// It rejects any that exceed their column length.
+// It rejects an address that exceeds its column length, operating hours that
+// ErrPlaceOperatingHoursInvalid describes, and a price range that is not
+// 0 <= min <= max <= MaxPlacePrice with both bounds. Whether the category has
+// prices at all is for the place service to check.
 func NormalizePlaceFields(p *Place) error {
 	var ok bool
 
@@ -134,15 +171,34 @@ func NormalizePlaceFields(p *Place) error {
 		return ErrPlaceAddressTooLong
 	}
 
-	if p.OperatingHours, ok = text.TrimOptionalMax(p.OperatingHours, MaxPlaceOperatingHoursLength); !ok {
-		return ErrPlaceOperatingHoursTooLong
+	hours, err := NormalizeOperatingHours(p.OperatingHours)
+	if err != nil {
+		return err
 	}
+	p.OperatingHours = hours
 
-	if p.EstimatedPriceRange, ok = text.TrimOptionalMax(p.EstimatedPriceRange, MaxPlaceEstimatedPriceRangeLength); !ok {
-		return ErrPlaceEstimatedPriceRangeTooLong
+	if err := validatePriceRange(p.PriceMin, p.PriceMax); err != nil {
+		return err
 	}
 
 	p.ShortDescription = text.TrimOptional(p.ShortDescription)
+
+	return nil
+}
+
+// validatePriceRange reports an error wrapping ErrPlacePriceRangeInvalid unless
+// both bounds are nil, or both are set with 0 <= min <= max <= MaxPlacePrice.
+func validatePriceRange(minPrice, maxPrice *int) error {
+	switch {
+	case minPrice == nil && maxPrice == nil:
+		return nil
+	case minPrice == nil || maxPrice == nil:
+		return fmt.Errorf("%w: min and max must be given together", ErrPlacePriceRangeInvalid)
+	case *minPrice < 0 || *maxPrice > MaxPlacePrice:
+		return fmt.Errorf("%w: must be between 0 and %d", ErrPlacePriceRangeInvalid, MaxPlacePrice)
+	case *minPrice > *maxPrice:
+		return fmt.Errorf("%w: min must not exceed max", ErrPlacePriceRangeInvalid)
+	}
 
 	return nil
 }

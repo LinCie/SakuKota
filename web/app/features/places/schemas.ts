@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { hoursError, type HoursValues } from "./hours";
+import { priceError } from "./price";
 import type { CategoryField } from "./types";
 import {
   isBlank,
@@ -77,7 +79,8 @@ function withinBounds(text: string, min: number, max: number): boolean {
   return !Number.isFinite(value) || (value >= min && value <= max);
 }
 
-export const placeSchema = z.object({
+/** The place's fields, shared by the place and suggestion schemas. */
+export const placeShape = {
   subDistrictId: z.string().min(1, "Pilih kecamatan."),
   categoryId: z.string().min(1, "Pilih kategori."),
   name: z
@@ -106,8 +109,32 @@ export const placeSchema = z.object({
       "Lokasi harus di Indonesia: bujur antara 95 dan 141.",
     ),
   address: z.string(),
-  operatingHours: z.string(),
-  priceRange: z.string(),
+  hours: z.custom<HoursValues>(),
+  priceMin: z.string(),
+  priceMax: z.string(),
   description: z.string(),
   attributes: z.custom<AttributeValues>(),
-});
+};
+
+/**
+ * Checks the hours and price, which span several values. They are separate from
+ * the object so the place schema can be built on again, as a suggestion's is.
+ */
+export function checkHoursAndPrice(
+  values: { hours: HoursValues; priceMin: string; priceMax: string },
+  ctx: z.RefinementCtx,
+) {
+  const hours = hoursError(values.hours);
+  if (hours) ctx.addIssue({ code: "custom", path: ["hours"], message: hours });
+
+  const price = priceError(values.priceMin, values.priceMax);
+  if (price) {
+    ctx.addIssue({
+      code: "custom",
+      path: [price.field],
+      message: price.message,
+    });
+  }
+}
+
+export const placeSchema = z.object(placeShape).superRefine(checkHoursAndPrice);

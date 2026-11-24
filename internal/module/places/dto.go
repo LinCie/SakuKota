@@ -12,14 +12,16 @@ import (
 // Request is the body for creating or replacing a place.
 // A replace clears every field left out.
 type Request struct {
-	SubDistrictID       int64          `json:"sub_district_id"`
-	CategoryID          int64          `json:"category_id"`
-	Name                string         `json:"name"`
-	Address             *string        `json:"address"`
-	Location            *postgis.Point `json:"location"`
-	OperatingHours      *string        `json:"operating_hours"`
-	EstimatedPriceRange *string        `json:"estimated_price_range"`
-	ShortDescription    *string        `json:"short_description"`
+	SubDistrictID int64          `json:"sub_district_id"`
+	CategoryID    int64          `json:"category_id"`
+	Name          string         `json:"name"`
+	Address       *string        `json:"address"`
+	Location      *postgis.Point `json:"location"`
+	// OperatingHours are the periods the place is open, or null if unknown.
+	OperatingHours domain.OperatingHours `json:"operating_hours"`
+	// EstimatedPriceRange must be null for a category without prices.
+	EstimatedPriceRange *domain.PriceRange `json:"estimated_price_range"`
+	ShortDescription    *string            `json:"short_description"`
 	// Attributes is a JSON object keyed by the category's field keys.
 	Attributes json.RawMessage `json:"attributes"`
 }
@@ -31,15 +33,17 @@ type BulkRequest struct {
 
 // Response is the API representation of a place.
 type Response struct {
-	ID                  int64           `json:"id"`
-	SubDistrictID       int64           `json:"sub_district_id"`
-	Name                string          `json:"name"`
-	Address             *string         `json:"address"`
-	Location            *postgis.Point  `json:"location"`
-	OperatingHours      *string         `json:"operating_hours"`
-	EstimatedPriceRange *string         `json:"estimated_price_range"`
-	ShortDescription    *string         `json:"short_description"`
-	Attributes          json.RawMessage `json:"attributes"`
+	ID            int64          `json:"id"`
+	SubDistrictID int64          `json:"sub_district_id"`
+	Name          string         `json:"name"`
+	Address       *string        `json:"address"`
+	Location      *postgis.Point `json:"location"`
+	// OperatingHours are sorted by day and opening time, or null if unknown.
+	OperatingHours domain.OperatingHours `json:"operating_hours"`
+	// EstimatedPriceRange is null if unknown, and always for a category without prices.
+	EstimatedPriceRange *domain.PriceRange `json:"estimated_price_range"`
+	ShortDescription    *string            `json:"short_description"`
+	Attributes          json.RawMessage    `json:"attributes"`
 	// RatingAverage is the mean star rating, or null before the first review.
 	RatingAverage *float64 `json:"rating_average"`
 	RatingCount   int      `json:"rating_count"`
@@ -63,6 +67,10 @@ type CategoryResponse struct {
 	Code  string `json:"code"`
 	Label string `json:"label"`
 	Color string `json:"color"`
+	// HasPrice is whether places of the category have a price.
+	HasPrice bool `json:"has_price"`
+	// PriceUnit is what the price is per, such as "kg", or null.
+	PriceUnit *string `json:"price_unit"`
 }
 
 // CategoryDetailResponse is a category with its custom fields.
@@ -85,16 +93,18 @@ type CategoryFieldResponse struct {
 
 // toPlace turns the request body into a place.
 func toPlace(req Request) *domain.Place {
+	priceMin, priceMax := req.EstimatedPriceRange.Bounds()
 	return &domain.Place{
-		SubDistrictID:       req.SubDistrictID,
-		CategoryID:          req.CategoryID,
-		Name:                req.Name,
-		Address:             req.Address,
-		Location:            req.Location,
-		OperatingHours:      req.OperatingHours,
-		EstimatedPriceRange: req.EstimatedPriceRange,
-		ShortDescription:    req.ShortDescription,
-		Attributes:          req.Attributes,
+		SubDistrictID:    req.SubDistrictID,
+		CategoryID:       req.CategoryID,
+		Name:             req.Name,
+		Address:          req.Address,
+		Location:         req.Location,
+		OperatingHours:   req.OperatingHours,
+		PriceMin:         priceMin,
+		PriceMax:         priceMax,
+		ShortDescription: req.ShortDescription,
+		Attributes:       req.Attributes,
 	}
 }
 
@@ -107,7 +117,7 @@ func toResponse(p domain.Place, mediaURL func(key string) string) Response {
 		Address:             p.Address,
 		Location:            p.Location,
 		OperatingHours:      p.OperatingHours,
-		EstimatedPriceRange: p.EstimatedPriceRange,
+		EstimatedPriceRange: domain.NewPriceRange(p.PriceMin, p.PriceMax),
 		ShortDescription:    p.ShortDescription,
 		Attributes:          p.Attributes,
 		RatingAverage:       ratingAverage(p.RatingCount, p.RatingSum),
@@ -130,12 +140,14 @@ func ratingAverage(count, sum int) *float64 {
 // toCategoryResponse turns c into its response.
 func toCategoryResponse(c domain.Category) CategoryResponse {
 	return CategoryResponse{
-		ID:    c.ID,
-		Name:  c.Name,
-		Slug:  c.Slug,
-		Code:  c.Code,
-		Label: c.Label,
-		Color: c.Color,
+		ID:        c.ID,
+		Name:      c.Name,
+		Slug:      c.Slug,
+		Code:      c.Code,
+		Label:     c.Label,
+		Color:     c.Color,
+		HasPrice:  c.HasPrice,
+		PriceUnit: c.PriceUnit,
 	}
 }
 

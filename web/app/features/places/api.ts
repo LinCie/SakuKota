@@ -1,6 +1,13 @@
 import { apiDelete, apiGet, apiPost, apiPut, unwrap } from "~/shared/api";
 import type { MediaUpload } from "~/shared/image-upload";
-import type { CategoryDetail, GeoPoint, Place, PlacePage } from "./types";
+import type {
+  CategoryDetail,
+  GeoPoint,
+  OperatingPeriod,
+  Place,
+  PlacePage,
+  PriceRange,
+} from "./types";
 
 // Every function here calls one backend route (see internal/router/router.go),
 // returns the response data, and throws an `ApiError` when the backend rejects
@@ -27,8 +34,8 @@ export type PlaceRequest = {
   name: string;
   address?: string | null;
   location?: GeoPoint | null;
-  operating_hours?: string | null;
-  estimated_price_range?: string | null;
+  operating_hours?: OperatingPeriod[] | null;
+  estimated_price_range?: PriceRange | null;
   short_description?: string | null;
   /** Values of the category's custom fields, keyed by `CategoryField.key`. */
   attributes?: Record<string, unknown>;

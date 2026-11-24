@@ -1,5 +1,7 @@
+import { hoursToValues } from "~/features/places/hours";
 import { attributesToValues, toPlaceRequest } from "~/features/places/mappers";
-import type { CategoryField } from "~/features/places/types";
+import { priceToValues } from "~/features/places/price";
+import type { CategoryDetail, CategoryField } from "~/features/places/types";
 import { emptyPlaceValues, type PlaceValues } from "~/features/places/values";
 import type { SubDistrict } from "~/features/subdistricts/types";
 import { orNull } from "~/shared/text";
@@ -19,9 +21,9 @@ export function emptySuggestionValues(
 /** The request body for suggesting a place. */
 export function toSuggestionRequest(
   values: SuggestionValues,
-  fields: CategoryField[],
+  category: Pick<CategoryDetail, "fields" | "has_price">,
 ): CreateSuggestionRequest {
-  return { ...toPlaceRequest(values, fields), note: orNull(values.note) };
+  return { ...toPlaceRequest(values, category), note: orNull(values.note) };
 }
 
 /** A suggestion as place form values, the starting point for approving it. */
@@ -38,8 +40,8 @@ export function suggestionToPlaceValues(
     lat: coordinates ? String(coordinates[1]) : "",
     lng: coordinates ? String(coordinates[0]) : "",
     address: suggestion.address ?? "",
-    operatingHours: suggestion.operating_hours ?? "",
-    priceRange: suggestion.estimated_price_range ?? "",
+    hours: hoursToValues(suggestion.operating_hours),
+    ...priceToValues(suggestion.estimated_price_range),
     description: suggestion.short_description ?? "",
     attributes: attributesToValues(fields, suggestion.attributes),
   };

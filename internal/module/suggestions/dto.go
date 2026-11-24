@@ -11,14 +11,15 @@ import (
 // CreateRequest is the API payload for suggesting a place. The author comes
 // from the access token.
 type CreateRequest struct {
-	SubDistrictID       int64          `json:"sub_district_id"`
-	CategoryID          int64          `json:"category_id"`
-	Name                string         `json:"name"`
-	Address             *string        `json:"address"`
-	Location            *postgis.Point `json:"location"`
-	OperatingHours      *string        `json:"operating_hours"`
-	EstimatedPriceRange *string        `json:"estimated_price_range"`
-	ShortDescription    *string        `json:"short_description"`
+	SubDistrictID int64          `json:"sub_district_id"`
+	CategoryID    int64          `json:"category_id"`
+	Name          string         `json:"name"`
+	Address       *string        `json:"address"`
+	Location      *postgis.Point `json:"location"`
+	// OperatingHours and EstimatedPriceRange take the forms of POST /places.
+	OperatingHours      domain.OperatingHours `json:"operating_hours"`
+	EstimatedPriceRange *domain.PriceRange    `json:"estimated_price_range"`
+	ShortDescription    *string               `json:"short_description"`
 	// Attributes is a JSON object keyed by the category's field keys.
 	Attributes json.RawMessage `json:"attributes"`
 	Note       *string         `json:"note"`
@@ -27,14 +28,15 @@ type CreateRequest struct {
 // ApproveRequest is the API payload for approving a suggestion: the place to
 // create, in the same shape as the body of POST /places.
 type ApproveRequest struct {
-	SubDistrictID       int64          `json:"sub_district_id"`
-	CategoryID          int64          `json:"category_id"`
-	Name                string         `json:"name"`
-	Address             *string        `json:"address"`
-	Location            *postgis.Point `json:"location"`
-	OperatingHours      *string        `json:"operating_hours"`
-	EstimatedPriceRange *string        `json:"estimated_price_range"`
-	ShortDescription    *string        `json:"short_description"`
+	SubDistrictID int64          `json:"sub_district_id"`
+	CategoryID    int64          `json:"category_id"`
+	Name          string         `json:"name"`
+	Address       *string        `json:"address"`
+	Location      *postgis.Point `json:"location"`
+	// OperatingHours and EstimatedPriceRange take the forms of POST /places.
+	OperatingHours      domain.OperatingHours `json:"operating_hours"`
+	EstimatedPriceRange *domain.PriceRange    `json:"estimated_price_range"`
+	ShortDescription    *string               `json:"short_description"`
 	// Attributes is a JSON object keyed by the category's field keys.
 	Attributes json.RawMessage `json:"attributes"`
 }
@@ -46,23 +48,23 @@ type RejectRequest struct {
 
 // Response is the API representation of a domain.Suggestion.
 type Response struct {
-	ID                  int64           `json:"id"`
-	SubDistrictID       int64           `json:"sub_district_id"`
-	CategoryID          int64           `json:"category_id"`
-	Name                string          `json:"name"`
-	Address             *string         `json:"address"`
-	Location            *postgis.Point  `json:"location"`
-	OperatingHours      *string         `json:"operating_hours"`
-	EstimatedPriceRange *string         `json:"estimated_price_range"`
-	ShortDescription    *string         `json:"short_description"`
-	Attributes          json.RawMessage `json:"attributes"`
-	Note                *string         `json:"note"`
-	Status              domain.Status   `json:"status"`
-	RejectionReason     *string         `json:"rejection_reason"`
-	PlaceID             *int64          `json:"place_id"`
-	ReviewedAt          *time.Time      `json:"reviewed_at"`
-	CreatedAt           time.Time       `json:"created_at"`
-	User                AuthorResponse  `json:"user"`
+	ID                  int64                 `json:"id"`
+	SubDistrictID       int64                 `json:"sub_district_id"`
+	CategoryID          int64                 `json:"category_id"`
+	Name                string                `json:"name"`
+	Address             *string               `json:"address"`
+	Location            *postgis.Point        `json:"location"`
+	OperatingHours      domain.OperatingHours `json:"operating_hours"`
+	EstimatedPriceRange *domain.PriceRange    `json:"estimated_price_range"`
+	ShortDescription    *string               `json:"short_description"`
+	Attributes          json.RawMessage       `json:"attributes"`
+	Note                *string               `json:"note"`
+	Status              domain.Status         `json:"status"`
+	RejectionReason     *string               `json:"rejection_reason"`
+	PlaceID             *int64                `json:"place_id"`
+	ReviewedAt          *time.Time            `json:"reviewed_at"`
+	CreatedAt           time.Time             `json:"created_at"`
+	User                AuthorResponse        `json:"user"`
 }
 
 // AuthorResponse is the API representation of a suggestion's domain.Author.
@@ -74,33 +76,37 @@ type AuthorResponse struct {
 // toSuggestion returns the suggestion the user submits. The author comes from
 // the token, not the request.
 func toSuggestion(userID int64, req CreateRequest) *domain.Suggestion {
+	priceMin, priceMax := req.EstimatedPriceRange.Bounds()
 	return &domain.Suggestion{
-		UserID:              userID,
-		SubDistrictID:       req.SubDistrictID,
-		CategoryID:          req.CategoryID,
-		Name:                req.Name,
-		Address:             req.Address,
-		Location:            req.Location,
-		OperatingHours:      req.OperatingHours,
-		EstimatedPriceRange: req.EstimatedPriceRange,
-		ShortDescription:    req.ShortDescription,
-		Attributes:          req.Attributes,
-		Note:                req.Note,
+		UserID:           userID,
+		SubDistrictID:    req.SubDistrictID,
+		CategoryID:       req.CategoryID,
+		Name:             req.Name,
+		Address:          req.Address,
+		Location:         req.Location,
+		OperatingHours:   req.OperatingHours,
+		PriceMin:         priceMin,
+		PriceMax:         priceMax,
+		ShortDescription: req.ShortDescription,
+		Attributes:       req.Attributes,
+		Note:             req.Note,
 	}
 }
 
 // toPlace returns the place the admin approves the suggestion as.
 func toPlace(req ApproveRequest) *domain.Place {
+	priceMin, priceMax := req.EstimatedPriceRange.Bounds()
 	return &domain.Place{
-		SubDistrictID:       req.SubDistrictID,
-		CategoryID:          req.CategoryID,
-		Name:                req.Name,
-		Address:             req.Address,
-		Location:            req.Location,
-		OperatingHours:      req.OperatingHours,
-		EstimatedPriceRange: req.EstimatedPriceRange,
-		ShortDescription:    req.ShortDescription,
-		Attributes:          req.Attributes,
+		SubDistrictID:    req.SubDistrictID,
+		CategoryID:       req.CategoryID,
+		Name:             req.Name,
+		Address:          req.Address,
+		Location:         req.Location,
+		OperatingHours:   req.OperatingHours,
+		PriceMin:         priceMin,
+		PriceMax:         priceMax,
+		ShortDescription: req.ShortDescription,
+		Attributes:       req.Attributes,
 	}
 }
 
@@ -114,7 +120,7 @@ func toResponse(s domain.Suggestion) Response {
 		Address:             s.Address,
 		Location:            s.Location,
 		OperatingHours:      s.OperatingHours,
-		EstimatedPriceRange: s.EstimatedPriceRange,
+		EstimatedPriceRange: domain.NewPriceRange(s.PriceMin, s.PriceMax),
 		ShortDescription:    s.ShortDescription,
 		Attributes:          s.Attributes,
 		Note:                s.Note,

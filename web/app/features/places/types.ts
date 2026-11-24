@@ -15,8 +15,10 @@ export type Place = {
   name: string;
   address: string | null;
   location: GeoPoint | null;
-  operating_hours: string | null;
-  estimated_price_range: string | null;
+  /** Periods the place is open, sorted by day and opening time; null if unknown. */
+  operating_hours: OperatingPeriod[] | null;
+  /** Null if unknown, and always for a category without prices. */
+  estimated_price_range: PriceRange | null;
   short_description: string | null;
   /** Values of the category's custom fields, keyed by `CategoryField.key`. */
   attributes: Record<string, unknown>;
@@ -26,6 +28,22 @@ export type Place = {
   /** The place's images in position order; empty if it has none. */
   medias: Media[];
   category: Category;
+};
+
+/** One stretch of a weekday during which a place is open. */
+export type OperatingPeriod = {
+  /** 1 is Monday, 7 is Sunday. */
+  day: number;
+  /** Local time as HH:MM, before `close`. */
+  open: string;
+  /** Local time as HH:MM, or 24:00 for midnight. */
+  close: string;
+};
+
+/** A price range in whole rupiah; a single price has equal bounds. */
+export type PriceRange = {
+  min: number;
+  max: number;
 };
 
 /** The places matching a filter, with how many match before the offset and limit. */
@@ -49,6 +67,10 @@ export type Category = {
   /** Short name to display. */
   label: string;
   color: CategoryColor;
+  /** Whether places of the category have a price. A mosque has none. */
+  has_price: boolean;
+  /** What the price is per, such as "kg"; null for the whole item or service. */
+  price_unit: string | null;
 };
 
 /** Whether an attribute value is a range, as the backend stores a `range` field. */

@@ -40,18 +40,24 @@ export function ApproveSuggestionDrawer({
 }: ApproveSuggestionDrawerProps) {
   const approve = useApproveSuggestion();
 
-  const fieldsOf = (categoryId: number) =>
-    categories.find((c) => c.id === categoryId)?.fields ?? [];
+  const categoryOf = (categoryId: number) =>
+    categories.find((c) => c.id === categoryId);
   const initial = suggestionToPlaceValues(
     suggestion,
-    fieldsOf(suggestion.category_id),
+    categoryOf(suggestion.category_id)?.fields ?? [],
   );
 
   const form = useForm({
     defaultValues: initial,
     validators: { onSubmit: placeSchema },
     onSubmit: ({ value }) => {
-      const body = toPlaceRequest(value, fieldsOf(Number(value.categoryId)));
+      const body = toPlaceRequest(
+        value,
+        categoryOf(Number(value.categoryId)) ?? {
+          fields: [],
+          has_price: false,
+        },
+      );
       approve.mutate(
         { id: suggestion.id, body },
         {

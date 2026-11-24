@@ -33,8 +33,8 @@ export function SuggestionForm({
 }: SuggestionFormProps) {
   const createSuggestion = useCreateSuggestion();
 
-  const fieldsOf = (categoryId: number) =>
-    categories.find((c) => c.id === categoryId)?.fields ?? [];
+  const categoryOf = (categoryId: number) =>
+    categories.find((c) => c.id === categoryId);
 
   const form = useForm({
     defaultValues: emptySuggestionValues(subDistricts),
@@ -42,7 +42,10 @@ export function SuggestionForm({
     onSubmit: ({ value, formApi }) => {
       const body = toSuggestionRequest(
         value,
-        fieldsOf(Number(value.categoryId)),
+        categoryOf(Number(value.categoryId)) ?? {
+          fields: [],
+          has_price: false,
+        },
       );
       createSuggestion.mutate(body, {
         onSuccess: () => {

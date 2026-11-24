@@ -198,8 +198,9 @@ func (s *service) DeleteMedia(ctx context.Context, id, mediaID int64) error {
 	return s.repo.DeleteMedia(ctx, id, mediaID)
 }
 
-// validate cleans the place's text and checks its location and its attributes
-// against the fields of its category.
+// validate cleans the place's text, hours, and price and checks its location,
+// its price against the category's prices, and its attributes against the
+// fields of its category.
 func (s *service) validate(ctx context.Context, p *domain.Place) error {
 	name, err := domain.NormalizePlaceName(p.Name)
 	if err != nil {
@@ -219,6 +220,10 @@ func (s *service) validate(ctx context.Context, p *domain.Place) error {
 	category, err := s.repo.FetchCategory(ctx, p.CategoryID)
 	if err != nil {
 		return err
+	}
+
+	if !category.HasPrice && (p.PriceMin != nil || p.PriceMax != nil) {
+		return domain.ErrPlacePriceNotApplicable
 	}
 
 	attributes, err := validateAttributes(category.Fields, p.Attributes)

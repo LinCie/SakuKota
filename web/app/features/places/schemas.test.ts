@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { field } from "./fixtures";
+import { emptyHours } from "./hours";
 import { attributeErrors, placeSchema, validCoordinate } from "./schemas";
 import { emptyPlaceValues, type PlaceValues } from "./values";
 
@@ -194,6 +195,37 @@ describe("placeSchema", () => {
 
   it("accepts a valid place", () => {
     expect(placeSchema.safeParse(valid()).success).toBe(true);
+  });
+
+  describe("hours and price", () => {
+    it("reports an hours problem on hours", () => {
+      const hours = emptyHours();
+      hours[2] = {
+        mode: "hours",
+        periods: [{ open: "20:00", close: "08:00" }],
+      };
+      const [message] = messages({ ...valid(), hours }, "hours");
+      expect(message).toMatch(/^Rabu: jam buka harus sebelum jam tutup/);
+    });
+
+    it("accepts hours and a price range", () => {
+      const hours = emptyHours();
+      hours[0] = { mode: "24h", periods: [] };
+      const values = { ...valid(), hours, priceMin: "9000", priceMax: "12000" };
+      expect(placeSchema.safeParse(values).success).toBe(true);
+    });
+
+    it("reports a price problem on the input it belongs to", () => {
+      expect(
+        messages({ ...valid(), priceMin: "9,5" }, "priceMin"),
+      ).toHaveLength(1);
+      expect(
+        messages({ ...valid(), priceMin: "9", priceMax: "1" }, "priceMin"),
+      ).toEqual(["Harga terendah tidak boleh melebihi harga tertinggi."]);
+      expect(
+        messages({ ...valid(), priceMax: "abc" }, "priceMax"),
+      ).toHaveLength(1);
+    });
   });
 
   it("requires a kecamatan and a category", () => {

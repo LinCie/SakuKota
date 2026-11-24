@@ -3,6 +3,10 @@ import { ArrowLeft, Check, X } from "lucide-react";
 
 import { formatAttribute } from "~/features/places/components/attribute-value";
 import { CategoryBadge } from "~/features/places/components/category-sign";
+import {
+  hoursValue,
+  priceValue,
+} from "~/features/places/components/schedule-values";
 import type { CategoryDetail, Place } from "~/features/places/types";
 import type { SubDistrict } from "~/features/subdistricts/types";
 import { Button, buttonVariants } from "~/shared/components/ui/button";
@@ -103,17 +107,17 @@ export function SuggestionDetailPage({
       value: orMissing(suggestion.address, "Alamat tidak tersedia"),
       wide: true,
     },
-    {
-      label: "Jam buka",
-      value: orMissing(suggestion.operating_hours, "Jam buka tidak tersedia"),
-    },
-    {
-      label: "Kisaran harga",
-      value: orMissing(
-        suggestion.estimated_price_range,
-        "Harga tidak tersedia",
-      ),
-    },
+    { label: "Jam buka", value: hoursValue(suggestion.operating_hours) },
+    ...(!category || category.has_price
+      ? [
+          {
+            label: "Kisaran harga",
+            value: priceValue(suggestion.estimated_price_range, {
+              price_unit: category?.price_unit ?? null,
+            }),
+          },
+        ]
+      : []),
     {
       label: "Koordinat",
       value: coordinates ? (

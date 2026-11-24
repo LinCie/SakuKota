@@ -5,6 +5,7 @@ import { DataTable, type Column } from "~/shared/components/data-table";
 import { MissingSlot } from "~/shared/components/missing-slot";
 import { RowActionsMenu } from "~/shared/components/row-actions-menu";
 
+import { formatPrice } from "../price";
 import type { Place } from "../types";
 import { CategoryBadge } from "./category-sign";
 
@@ -62,8 +63,13 @@ export function PlacesTable({
       key: "price",
       header: "Kisaran harga",
       cell: (place) =>
-        place.estimated_price_range ?? (
-          <MissingSlot>Harga tidak tersedia</MissingSlot>
+        !place.category.has_price ? (
+          <span className="text-muted-foreground">Tidak berlaku</span>
+        ) : (
+          (formatPrice(
+            place.estimated_price_range,
+            place.category.price_unit,
+          ) ?? <MissingSlot>Harga tidak tersedia</MissingSlot>)
         ),
     },
     {

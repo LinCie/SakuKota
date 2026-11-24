@@ -2,7 +2,9 @@ import type { SubDistrict } from "~/features/subdistricts/types";
 import { parseCsv } from "~/shared/csv";
 
 import type { PlaceRequest } from "./api";
+import { hoursError, hoursToValues, parseHoursText } from "./hours";
 import { toPlaceRequest } from "./mappers";
+import { priceError } from "./price";
 import { attributeErrors, INDONESIA } from "./schemas";
 import type { CategoryDetail, CategoryField } from "./types";
 import { parseNumber, type AttributeValues, type PlaceValues } from "./values";
@@ -35,23 +37,36 @@ const baseColumns: PlaceCsvColumn[] = [
   { name: "address", hint: "Alamat, maks. 255 karakter.", required: false },
   {
     name: "operating_hours",
-    hint: "Jam buka, maks. 255 karakter.",
+    hint: 'Jam buka per hari, dipisah titik koma. Contoh: "Sen-Jum, 08:00-20:00; Sab, 08:00-14:00" atau "Setiap hari, 24 jam". Hari yang tidak ditulis dianggap tutup.',
     required: false,
   },
-  {
-    name: "estimated_price_range",
-    hint: "Kisaran harga, maks. 100 karakter.",
-    required: false,
-  },
-  { name: "short_description", hint: "Deskripsi singkat.", required: false },
 ];
 
-/** Maximum lengths of the optional text columns, as the backend enforces. */
-const maxLengths: Record<string, number> = {
-  address: 255,
-  operating_hours: 255,
-  estimated_price_range: 100,
+/** The price columns, which only a category with prices has. */
+function priceColumns(category: CategoryDetail): PlaceCsvColumn[] {
+  const unit = category.price_unit ? ` per ${category.price_unit}` : "";
+  return [
+    {
+      name: "estimated_price_min",
+      hint: `Harga terendah${unit}, rupiah bulat. Isi hanya ini untuk harga tunggal.`,
+      required: false,
+    },
+    {
+      name: "estimated_price_max",
+      hint: `Harga tertinggi${unit}, rupiah bulat.`,
+      required: false,
+    },
+  ];
+}
+
+const descriptionColumn: PlaceCsvColumn = {
+  name: "short_description",
+  hint: "Deskripsi singkat.",
+  required: false,
 };
+
+/** The most characters the address may have, as the backend enforces. */
+const MAX_ADDRESS_LENGTH = 255;
 
 const booleans: Record<string, string> = {
   true: "true",
@@ -77,7 +92,11 @@ function fieldHint(field: CategoryField): string {
 
 /** The columns of the category's import CSV, in template order. A range field takes two. */
 export function placeCsvColumns(category: CategoryDetail): PlaceCsvColumn[] {
-  const columns = [...baseColumns];
+  const columns = [
+    ...baseColumns,
+    ...(category.has_price ? priceColumns(category) : []),
+    descriptionColumn,
+  ];
 
   for (const field of category.fields) {
     if (field.data_type === "range") {
@@ -195,10 +214,24 @@ export function readPlaceCsv(
       rowErrors.push("longitude harus angka antara 95 dan 141.");
     }
 
-    for (const [column, max] of Object.entries(maxLengths)) {
-      if ([...cell(column)].length > max) {
-        rowErrors.push(`${column} maksimal ${max} karakter.`);
-      }
+    if ([...cell("address")].length > MAX_ADDRESS_LENGTH) {
+      rowErrors.push(`address maksimal ${MAX_ADDRESS_LENGTH} karakter.`);
+    }
+
+    const hoursText = parseHoursText(cell("operating_hours"));
+    const hours = hoursToValues(hoursText.ok ? hoursText.hours : null);
+    const hoursProblem = hoursText.ok ? hoursError(hours) : hoursText.error;
+    if (hoursProblem) rowErrors.push(`operating_hours: ${hoursProblem}`);
+
+    const priceMin = category.has_price ? cell("estimated_price_min") : "";
+    const priceMax = category.has_price ? cell("estimated_price_max") : "";
+    const price = priceError(priceMin, priceMax);
+    if (price) {
+      const column =
+        price.field === "priceMin"
+          ? "estimated_price_min"
+          : "estimated_price_max";
+      rowErrors.push(`${column}: ${price.message}`);
     }
 
     const attributes: AttributeValues = {};
@@ -247,12 +280,13 @@ export function readPlaceCsv(
       lat: cell("latitude"),
       lng: cell("longitude"),
       address: cell("address"),
-      operatingHours: cell("operating_hours"),
-      priceRange: cell("estimated_price_range"),
+      hours,
+      priceMin,
+      priceMax,
       description: cell("short_description"),
       attributes,
     };
-    places.push(toPlaceRequest(values, category.fields));
+    places.push(toPlaceRequest(values, category));
   }
 
   return errors.length > 0 ? { ok: false, errors } : { ok: true, places };

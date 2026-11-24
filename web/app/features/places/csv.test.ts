@@ -62,7 +62,8 @@ describe("placeCsvColumns", () => {
       "longitude",
       "address",
       "operating_hours",
-      "estimated_price_range",
+      "estimated_price_min",
+      "estimated_price_max",
       "short_description",
       "halal",
       "serving_style",
@@ -70,6 +71,43 @@ describe("placeCsvColumns", () => {
       "price_max",
       "seats",
     ]);
+  });
+});
+
+describe("placeCsvColumns for a category without prices", () => {
+  const masjid: CategoryDetail = { ...category, has_price: false, fields: [] };
+
+  it("has no price columns", () => {
+    const names = placeCsvColumns(masjid).map((c) => c.name);
+    expect(names).toContain("operating_hours");
+    expect(names).not.toContain("estimated_price_min");
+    expect(names).not.toContain("estimated_price_max");
+  });
+
+  it("reads a row without a price", () => {
+    const text = toCsv([
+      placeCsvTemplate(masjid)[0],
+      placeCsvTemplate(masjid)[0].map(
+        (c) =>
+          ({
+            sub_district: "Setiabudi",
+            name: "Masjid Al-Ikhlas",
+            latitude: "-6.2",
+            longitude: "106.8",
+            operating_hours: "Setiap hari, 04:00-21:30",
+          })[c] ?? "",
+      ),
+    ]);
+
+    const result = readPlaceCsv(text, masjid, subDistricts);
+    expect(result.ok && result.places[0]).toMatchObject({
+      estimated_price_range: null,
+      operating_hours: [1, 2, 3, 4, 5, 6, 7].map((day) => ({
+        day,
+        open: "04:00",
+        close: "21:30",
+      })),
+    });
   });
 });
 
@@ -121,6 +159,75 @@ describe("readPlaceCsv", () => {
         },
       ],
     });
+  });
+
+  it("reads hours and a price range", () => {
+    const result = readPlaceCsv(
+      csv(
+        {
+          ...validRow,
+          operating_hours:
+            "Sen-Jum, 08:00-20:00; Sab, 08:00-12:00, 16:00-20:00",
+          estimated_price_min: "15000",
+          estimated_price_max: "25000",
+        },
+        { ...validRow, estimated_price_min: "3500" },
+      ),
+      warung,
+      subDistricts,
+    );
+
+    expect(result.ok && result.places.map((p) => p.operating_hours)).toEqual([
+      [
+        ...[1, 2, 3, 4, 5].map((day) => ({
+          day,
+          open: "08:00",
+          close: "20:00",
+        })),
+        { day: 6, open: "08:00", close: "12:00" },
+        { day: 6, open: "16:00", close: "20:00" },
+      ],
+      null,
+    ]);
+    expect(
+      result.ok && result.places.map((p) => p.estimated_price_range),
+    ).toEqual([
+      { min: 15000, max: 25000 },
+      { min: 3500, max: 3500 },
+    ]);
+  });
+
+  it("reports hours and prices that cannot be read", () => {
+    const result = readPlaceCsv(
+      csv(
+        { ...validRow, operating_hours: "kapan saja" },
+        { ...validRow, operating_hours: "Sen, 20:00-08:00" },
+        { ...validRow, operating_hours: "Sen, 08:00-12:00, 11:00-14:00" },
+        { ...validRow, estimated_price_min: "9", estimated_price_max: "1" },
+        { ...validRow, estimated_price_min: "15.000" },
+        { ...validRow, estimated_price_max: "murah" },
+      ),
+      warung,
+      subDistricts,
+    );
+
+    expect(result.ok).toBe(false);
+    const errors = result.ok ? [] : result.errors;
+    expect(errors).toHaveLength(6);
+    expect(errors[0]).toMatch(/^Baris 2: operating_hours: /);
+    expect(errors[1]).toMatch(
+      /^Baris 3: operating_hours: Senin: jam buka harus sebelum/,
+    );
+    expect(errors[2]).toMatch(
+      /^Baris 4: operating_hours: Senin: jam buka saling tumpang/,
+    );
+    expect(errors[3]).toMatch(/^Baris 5: estimated_price_min: Harga terendah/);
+    expect(errors[4]).toMatch(
+      /^Baris 6: estimated_price_min: Isi rupiah bulat/,
+    );
+    expect(errors[5]).toMatch(
+      /^Baris 7: estimated_price_max: Isi rupiah bulat/,
+    );
   });
 
   it("accepts columns in any order and skips blank rows", () => {

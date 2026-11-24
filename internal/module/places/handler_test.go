@@ -132,7 +132,7 @@ func responseData(rec *httptest.ResponseRecorder) string {
 // kopiCategory is the category of the places the handler tests return.
 var kopiCategory = domain.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"}
 
-const kopiCategoryJSON = `{"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum"}`
+const kopiCategoryJSON = `{"id": 2, "name": "Kopi", "slug": "kopi", "code": "K", "label": "Kopi", "color": "plum", "has_price": false, "price_unit": null}`
 
 // errorCase is a request whose failure the handler maps to a response.
 type errorCase struct {
@@ -280,6 +280,44 @@ func TestHandler_List(t *testing.T) {
 	})
 }
 
+func TestHandler_List_HoursAndPrice(t *testing.T) {
+	laundry := domain.Category{ID: 4, Name: "Laundry", Slug: "laundry", Code: "L", Label: "Laundry", Color: "sign", HasPrice: true, PriceUnit: new("kg")}
+
+	svc := newService(t)
+	svc.EXPECT().List(gomock.Any(), places.Filter{}).Return([]domain.Place{{
+		ID:             5,
+		SubDistrictID:  1,
+		Name:           "Laundry Kilat",
+		OperatingHours: domain.OperatingHours{{Day: 1, Open: "08:00", Close: "20:00"}, {Day: 6, Open: "08:00", Close: "14:00"}},
+		PriceMin:       new(9000),
+		PriceMax:       new(12000),
+		Attributes:     json.RawMessage(`{}`),
+		Category:       laundry,
+	}}, 1, nil)
+
+	rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/places", ""))
+	want := `{"total": 1, "places": [{
+		"id": 5,
+		"sub_district_id": 1,
+		"name": "Laundry Kilat",
+		"address": null,
+		"location": null,
+		"operating_hours": [
+			{"day": 1, "open": "08:00", "close": "20:00"},
+			{"day": 6, "open": "08:00", "close": "14:00"}
+		],
+		"estimated_price_range": {"min": 9000, "max": 12000},
+		"short_description": null,
+		"attributes": {},
+		"rating_average": null,
+		"rating_count": 0,
+		"medias": [],
+		"category": {"id": 4, "name": "Laundry", "slug": "laundry", "code": "L", "label": "Laundry", "color": "sign", "has_price": true, "price_unit": "kg"}
+	}]}`
+	assert.Equal(t, http.StatusOK, rec.Code, "GET /places status; body: %s", rec.Body)
+	assert.JSONEq(t, want, responseData(rec), "GET /places")
+}
+
 func TestHandler_ListCategories(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		tests := []struct {
@@ -291,7 +329,7 @@ func TestHandler_ListCategories(t *testing.T) {
 			{
 				name:       "without_fields",
 				categories: []domain.Category{{ID: 1, Name: "Warung", Slug: "warung", Code: "W", Label: "Warung", Color: "chili"}},
-				want:       `[{"id":1,"name":"Warung","slug":"warung","code":"W","label":"Warung","color":"chili","fields":[]}]`,
+				want:       `[{"id":1,"name":"Warung","slug":"warung","code":"W","label":"Warung","color":"chili","has_price":false,"price_unit":null,"fields":[]}]`,
 			},
 		}
 
@@ -320,6 +358,14 @@ func TestHandler_Create(t *testing.T) {
 			{name: "null", body: `null`},
 			{name: "truncated", body: `{"name":"Kopi"`},
 			{name: "sub_district_string", body: `{"name":"Kopi","sub_district_id":"one","category_id":2}`},
+			{name: "hours_text", body: `{"name":"Kopi","sub_district_id":1,"category_id":2,"operating_hours":"08:00-17:00"}`},
+			{name: "hours_object", body: `{"name":"Kopi","sub_district_id":1,"category_id":2,"operating_hours":{"day":1}}`},
+			{name: "hours_day_text", body: `{"name":"Kopi","sub_district_id":1,"category_id":2,"operating_hours":[{"day":"1","open":"08:00","close":"09:00"}]}`},
+			{name: "hours_day_fraction", body: `{"name":"Kopi","sub_district_id":1,"category_id":2,"operating_hours":[{"day":1.5,"open":"08:00","close":"09:00"}]}`},
+			{name: "hours_open_number", body: `{"name":"Kopi","sub_district_id":1,"category_id":2,"operating_hours":[{"day":1,"open":8,"close":"09:00"}]}`},
+			{name: "price_text", body: `{"name":"Kopi","sub_district_id":1,"category_id":2,"estimated_price_range":"Rp20.000"}`},
+			{name: "price_bound_text", body: `{"name":"Kopi","sub_district_id":1,"category_id":2,"estimated_price_range":{"min":"1","max":2}}`},
+			{name: "price_bound_fraction", body: `{"name":"Kopi","sub_district_id":1,"category_id":2,"estimated_price_range":{"min":1.5,"max":2}}`},
 			{name: "location_line", body: prefix + `{"type":"LineString","coordinates":[[106.8,-6.2],[106.9,-6.3]]}}`},
 			{name: "coordinates_swapped", body: prefix + `{"type":"Point","coordinates":[-6.2,106.8]}}`},
 			{name: "latitude_above_90", body: prefix + `{"type":"Point","coordinates":[106.8,91]}}`},
@@ -339,8 +385,10 @@ func TestHandler_Create(t *testing.T) {
 			{name: "blank_name", err: domain.ErrPlaceNameRequired, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "name_too_long", err: domain.ErrPlaceNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "address_too_long", err: domain.ErrPlaceAddressTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "hours_too_long", err: domain.ErrPlaceOperatingHoursTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "price_too_long", err: domain.ErrPlaceEstimatedPriceRangeTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "invalid_hours", err: domain.ErrPlaceOperatingHoursInvalid, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "wrapped_hours", err: fmt.Errorf("%w: day must be 1 (Monday) to 7 (Sunday)", domain.ErrPlaceOperatingHoursInvalid), wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "invalid_price", err: domain.ErrPlacePriceRangeInvalid, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "price_not_applicable", err: domain.ErrPlacePriceNotApplicable, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "unknown_sub_district", err: domain.ErrSubDistrictNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "unknown_category", err: domain.ErrCategoryNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "invalid_attributes", err: domain.ErrPlaceAttributesInvalid, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
@@ -612,20 +660,27 @@ func TestHandler_Replace(t *testing.T) {
 		}{
 			{name: "every_field",
 				body: `{"sub_district_id":2,"category_id":3,"name":"  Kopi Senja  ","address":"Jl. Sudirman 9",
-					"location":{"type":"Point","coordinates":[106.8,-6.2]},"operating_hours":"08:00-17:00",
-					"estimated_price_range":"Rp20.000-50.000","short_description":"Kopi tubruk",
+					"location":{"type":"Point","coordinates":[106.8,-6.2]},"operating_hours":[{"day":1,"open":"08:00","close":"17:00"}],
+					"estimated_price_range":{"min":20000,"max":50000},"short_description":"Kopi tubruk",
 					"attributes":{"contact":"0812"}}`,
 				want: &domain.Place{
-					SubDistrictID:       2,
-					CategoryID:          3,
-					Name:                "  Kopi Senja  ",
-					Address:             new("Jl. Sudirman 9"),
-					Location:            postgis.MustPoint(106.8, -6.2),
-					OperatingHours:      new("08:00-17:00"),
-					EstimatedPriceRange: new("Rp20.000-50.000"),
-					ShortDescription:    new("Kopi tubruk"),
-					Attributes:          json.RawMessage(`{"contact":"0812"}`),
+					SubDistrictID:    2,
+					CategoryID:       3,
+					Name:             "  Kopi Senja  ",
+					Address:          new("Jl. Sudirman 9"),
+					Location:         postgis.MustPoint(106.8, -6.2),
+					OperatingHours:   domain.OperatingHours{{Day: 1, Open: "08:00", Close: "17:00"}},
+					PriceMin:         new(20000),
+					PriceMax:         new(50000),
+					ShortDescription: new("Kopi tubruk"),
+					Attributes:       json.RawMessage(`{"contact":"0812"}`),
 				}},
+			{name: "one_price_bound_reaches_service",
+				body: `{"sub_district_id":2,"category_id":3,"name":"Kopi","estimated_price_range":{"min":5}}`,
+				want: &domain.Place{SubDistrictID: 2, CategoryID: 3, Name: "Kopi", PriceMin: new(5)}},
+			{name: "null_hours_and_price",
+				body: `{"sub_district_id":2,"category_id":3,"name":"Kopi","operating_hours":null,"estimated_price_range":null}`,
+				want: &domain.Place{SubDistrictID: 2, CategoryID: 3, Name: "Kopi"}},
 			{name: "left_out_keys_absent",
 				body: `{"sub_district_id":2,"category_id":3,"name":"Kopi"}`,
 				want: &domain.Place{SubDistrictID: 2, CategoryID: 3, Name: "Kopi"}},
@@ -652,8 +707,10 @@ func TestHandler_Replace(t *testing.T) {
 			{name: "blank_name", err: domain.ErrPlaceNameRequired, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "name_too_long", err: domain.ErrPlaceNameTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "address_too_long", err: domain.ErrPlaceAddressTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "hours_too_long", err: domain.ErrPlaceOperatingHoursTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
-			{name: "price_too_long", err: domain.ErrPlaceEstimatedPriceRangeTooLong, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "invalid_hours", err: domain.ErrPlaceOperatingHoursInvalid, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "wrapped_hours", err: fmt.Errorf("%w: day must be 1 (Monday) to 7 (Sunday)", domain.ErrPlaceOperatingHoursInvalid), wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "invalid_price", err: domain.ErrPlacePriceRangeInvalid, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "price_not_applicable", err: domain.ErrPlacePriceNotApplicable, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "unknown_sub_district", err: domain.ErrSubDistrictNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "unknown_category", err: domain.ErrCategoryNotFound, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
 			{name: "invalid_attributes", err: domain.ErrPlaceAttributesInvalid, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
@@ -940,14 +997,14 @@ func TestHandler_ShowCategory(t *testing.T) {
 			{
 				name:     "without_fields",
 				category: domain.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum"},
-				want:     `{"id":2,"name":"Kopi","slug":"kopi","code":"K","label":"Kopi","color":"plum","fields":[]}`,
+				want:     `{"id":2,"name":"Kopi","slug":"kopi","code":"K","label":"Kopi","color":"plum","has_price":false,"price_unit":null,"fields":[]}`,
 			},
 			{
 				name: "with_fields",
-				category: domain.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum", Fields: []domain.CategoryField{
+				category: domain.Category{ID: 2, Name: "Kopi", Slug: "kopi", Code: "K", Label: "Kopi", Color: "plum", HasPrice: true, PriceUnit: new("gelas"), Fields: []domain.CategoryField{
 					{ID: 9, CategoryID: 2, Key: "halal", Label: "Halal", DataType: domain.FieldTypeBoolean, Required: true, SortOrder: 1},
 				}},
-				want: `{"id":2,"name":"Kopi","slug":"kopi","code":"K","label":"Kopi","color":"plum","fields":[
+				want: `{"id":2,"name":"Kopi","slug":"kopi","code":"K","label":"Kopi","color":"plum","has_price":true,"price_unit":"gelas","fields":[
 					{"id":9,"category_id":2,"key":"halal","label":"Halal","data_type":"boolean","required":true,"options":null,"sort_order":1}
 				]}`,
 			},

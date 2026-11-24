@@ -23,6 +23,8 @@ export const category: Category = {
   code: "M",
   label: "Makan",
   color: "chili",
+  has_price: true,
+  price_unit: null,
 };
 
 export function place(overrides: Partial<Place> = {}): Place {
@@ -32,8 +34,8 @@ export function place(overrides: Partial<Place> = {}): Place {
     name: "Warung Bu Tini",
     address: "Jl. Mawar 1",
     location: { type: "Point", coordinates: [106.8, -6.2] },
-    operating_hours: "08:00-17:00",
-    estimated_price_range: "10-20k",
+    operating_hours: [{ day: 1, open: "08:00", close: "17:00" }],
+    estimated_price_range: { min: 10000, max: 20000 },
     short_description: "Enak",
     attributes: {},
     rating_average: null,

@@ -39,9 +39,9 @@ func (r *PostgresRepository) Create(ctx context.Context, p *domain.Place) (*doma
 		&created,
 		`WITH inserted AS (
 			INSERT INTO PLACES (sub_district_id, category_id, name, address,
-				location, operating_hours, estimated_price_range, short_description,
+				location, operating_hours, price_min, price_max, short_description,
 				attributes)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 			RETURNING `+placeRowColumns+`
 		)
 		SELECT `+placeColumns+`
@@ -53,7 +53,8 @@ func (r *PostgresRepository) Create(ctx context.Context, p *domain.Place) (*doma
 		p.Address,
 		p.Location,
 		p.OperatingHours,
-		p.EstimatedPriceRange,
+		p.PriceMin,
+		p.PriceMax,
 		p.ShortDescription,
 		p.Attributes,
 	)
@@ -245,7 +246,7 @@ func (r *PostgresRepository) ListCategories(ctx context.Context) ([]domain.Categ
 	err := r.db.SelectContext(
 		ctx,
 		&categories,
-		`SELECT id, name, slug, code, label, color FROM CATEGORIES ORDER BY id`,
+		`SELECT id, name, slug, code, label, color, has_price, price_unit FROM CATEGORIES ORDER BY id`,
 	)
 	if err != nil {
 		return nil, err
@@ -265,7 +266,7 @@ func (r *PostgresRepository) FetchCategory(ctx context.Context, id int64) (*doma
 	err := r.db.GetContext(
 		ctx,
 		&category,
-		`SELECT id, name, slug, code, label, color FROM CATEGORIES WHERE id = $1`,
+		`SELECT id, name, slug, code, label, color, has_price, price_unit FROM CATEGORIES WHERE id = $1`,
 		id,
 	)
 	if err != nil {
@@ -318,8 +319,8 @@ func (r *PostgresRepository) Update(ctx context.Context, p *domain.Place) (*doma
 		`WITH updated AS (
 			UPDATE PLACES
 			SET sub_district_id = $2, category_id = $3, name = $4, address = $5,
-				location = $6, operating_hours = $7, estimated_price_range = $8,
-				short_description = $9, attributes = $10
+				location = $6, operating_hours = $7, price_min = $8, price_max = $9,
+				short_description = $10, attributes = $11
 			WHERE id = $1
 			RETURNING `+placeRowColumns+`
 		)
@@ -333,7 +334,8 @@ func (r *PostgresRepository) Update(ctx context.Context, p *domain.Place) (*doma
 		p.Address,
 		p.Location,
 		p.OperatingHours,
-		p.EstimatedPriceRange,
+		p.PriceMin,
+		p.PriceMax,
 		p.ShortDescription,
 		p.Attributes,
 	)
@@ -490,15 +492,16 @@ func (r *PostgresRepository) DeleteMedia(ctx context.Context, id, mediaID int64)
 // placeColumns selects a place from alias p and its category from alias c,
 // named to fill Place.Category.
 const placeColumns = `p.id, p.sub_district_id, p.category_id, p.name, p.address,
-	p.location, p.operating_hours, p.estimated_price_range, p.short_description,
+	p.location, p.operating_hours, p.price_min, p.price_max, p.short_description,
 	p.attributes, p.rating_count, p.rating_sum,
 	c.id AS "category.id", c.name AS "category.name", c.slug AS "category.slug",
-	c.code AS "category.code", c.label AS "category.label", c.color AS "category.color"`
+	c.code AS "category.code", c.label AS "category.label", c.color AS "category.color",
+	c.has_price AS "category.has_price", c.price_unit AS "category.price_unit"`
 
 // placeRowColumns are the PLACES columns that placeColumns reads. A write's RETURNING clause
 // lists them so the row can be joined with its category and selected with placeColumns.
 const placeRowColumns = `id, sub_district_id, category_id, name, address,
-	location, operating_hours, estimated_price_range, short_description,
+	location, operating_hours, price_min, price_max, short_description,
 	attributes, rating_count, rating_sum`
 
 // placeFrom is the FROM clause the filters are written against.

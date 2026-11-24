@@ -1,4 +1,8 @@
-import type { GeoPoint } from "~/features/places/types";
+import type {
+  GeoPoint,
+  OperatingPeriod,
+  PriceRange,
+} from "~/features/places/types";
 
 // Types (see internal/module/suggestion/dto.go)
 
@@ -13,8 +17,8 @@ export type Suggestion = {
   name: string;
   address: string | null;
   location: GeoPoint | null;
-  operating_hours: string | null;
-  estimated_price_range: string | null;
+  operating_hours: OperatingPeriod[] | null;
+  estimated_price_range: PriceRange | null;
   short_description: string | null;
   /** Values of the category's custom fields, keyed by `CategoryField.key`. */
   attributes: Record<string, unknown>;

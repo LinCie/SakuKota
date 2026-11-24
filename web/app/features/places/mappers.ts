@@ -1,6 +1,8 @@
 import { orNull } from "~/shared/text";
 
 import type { PlaceRequest } from "./api";
+import { hoursToRequest, hoursToValues } from "./hours";
+import { priceToRequest, priceToValues } from "./price";
 import {
   isBlank,
   parseNumber,
@@ -9,7 +11,12 @@ import {
   type AttributeValues,
   type PlaceValues,
 } from "./values";
-import { isRange, type CategoryField, type Place } from "./types";
+import {
+  isRange,
+  type CategoryDetail,
+  type CategoryField,
+  type Place,
+} from "./types";
 
 // API → form values
 
@@ -27,8 +34,8 @@ export function placeToValues(
     lat: coordinates ? String(coordinates[1]) : "",
     lng: coordinates ? String(coordinates[0]) : "",
     address: place.address ?? "",
-    operatingHours: place.operating_hours ?? "",
-    priceRange: place.estimated_price_range ?? "",
+    hours: hoursToValues(place.operating_hours),
+    ...priceToValues(place.estimated_price_range),
     description: place.short_description ?? "",
     attributes: attributesToValues(fields, place.attributes),
   };
@@ -73,10 +80,13 @@ export function attributesToValues(
 
 // Form values → API
 
-/** The request body for creating or replacing a place. */
+/**
+ * The request body for creating or replacing a place of `category`. A category
+ * without prices gets no price, as the backend refuses one.
+ */
 export function toPlaceRequest(
   values: PlaceValues,
-  fields: CategoryField[],
+  category: Pick<CategoryDetail, "fields" | "has_price">,
 ): PlaceRequest {
   return {
     sub_district_id: Number(values.subDistrictId),
@@ -87,10 +97,14 @@ export function toPlaceRequest(
       type: "Point",
       coordinates: [parseNumber(values.lng), parseNumber(values.lat)],
     },
-    operating_hours: orNull(values.operatingHours),
-    estimated_price_range: orNull(values.priceRange),
+    operating_hours: hoursToRequest(values.hours),
+    estimated_price_range: priceToRequest(
+      values.priceMin,
+      values.priceMax,
+      category.has_price,
+    ),
     short_description: orNull(values.description),
-    attributes: buildAttributes(fields, values.attributes),
+    attributes: buildAttributes(category.fields, values.attributes),
   };
 }
 

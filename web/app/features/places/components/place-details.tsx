@@ -9,6 +9,7 @@ import { formatNumber, formatRating } from "~/shared/format";
 import { attributeValue } from "./attribute-value";
 import type { CategoryField, Place } from "../types";
 import { CategoryBadge } from "./category-sign";
+import { hoursValue, priceValue } from "./schedule-values";
 
 type PlaceDetailsProps = {
   place: Place;
@@ -105,11 +106,13 @@ export function PlaceDetails({ place, fields, onClose }: PlaceDetailsProps) {
             )}
           </DetailRow>
           <DetailRow label="Jam buka">
-            {orMissing(place.operating_hours, "Jam buka tidak tersedia")}
+            {hoursValue(place.operating_hours)}
           </DetailRow>
-          <DetailRow label="Kisaran harga">
-            {orMissing(place.estimated_price_range, "Harga tidak tersedia")}
-          </DetailRow>
+          {place.category.has_price ? (
+            <DetailRow label="Kisaran harga">
+              {priceValue(place.estimated_price_range, place.category)}
+            </DetailRow>
+          ) : null}
           {rowFields.map((field) => (
             <DetailRow key={field.id} label={field.label}>
               {attributeValue(field, place)}
