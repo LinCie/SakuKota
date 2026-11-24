@@ -4,7 +4,7 @@
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-25 (project renamed to SakuKota).
+> - Last updated: 2026-11-25 (AGPLv3 license; other docs dropped).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
@@ -502,3 +502,5 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-24 | `GET /reports/{id}` returns the reported place and review; web `/admin/reports/$reportId` shows them and holds remove and dismiss |
 | 2026-11-25 | Docs only: unpublished planning-doc paths generalized for public release; README disclaimer |
 | 2026-11-25 | Project renamed to SakuKota (module `sakukota-go`, database `sakukotago`, bucket `sakukota-images`, demo password `sakukota123`) |
+| 2026-11-25 | README rewritten to the portfolio template; earlier README versions removed from history |
+| 2026-11-25 | Licensed under AGPLv3; product, backend, and frontend docs dropped (and removed from history), leaving this file |
