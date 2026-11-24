@@ -80,6 +80,8 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
       OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://loki:3100/otlp/v1/logs
       OTEL_SERVICE_NAME: sakukota-go
+      # The web container's nginx; 2 behind the host nginx in nginx/.
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
     depends_on:
       postgres:
         condition: service_healthy

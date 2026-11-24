@@ -29,6 +29,13 @@ import (
 // anyway, and leaves room for promoting a 50 MB video in storage.
 const requestTimeout = 25 * time.Second
 
+// Sign-ups and logins hash a password with argon2id, so together they are
+// limited to authRateLimit per client per authRateWindow.
+const (
+	authRateLimit  = 10
+	authRateWindow = time.Minute
+)
+
 // NewRouter builds the HTTP router with its middleware, docs routes, and every API route.
 // Routes live under /v1, and protected ones check the token and role first.
 func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
@@ -64,8 +71,9 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
-			r.Post("/register", authModule.Handler.Register)
-			r.Post("/login", authModule.Handler.Login)
+			limit := middleware.WithRateLimit(rdb, authRateLimit, authRateWindow, cfg.TrustedProxyHops)
+			r.With(limit).Post("/register", authModule.Handler.Register)
+			r.With(limit).Post("/login", authModule.Handler.Login)
 			r.Post("/refresh", authModule.Handler.Refresh)
 			r.Post("/logout", authModule.Handler.Logout)
 		})

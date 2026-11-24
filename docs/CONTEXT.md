@@ -4,7 +4,7 @@
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-25 (request context timeout).
+> - Last updated: 2026-11-26 (auth rate limit and hash concurrency bound).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
@@ -127,7 +127,17 @@ Applies to every module unless §6 says otherwise. All routes live under `/v1`.
 ### 6.1 Auth (`internal/module/auth`)
 
 Routes under `/v1/auth`. Config: `JWTSecret`, `JWTExpiry`, `RefreshTokenExpiry`,
-`CookieSecure`.
+`CookieSecure`, `TrustedProxyHops`.
+
+- **Rate limit.** Register and login together allow 10 requests per client
+  per minute (fixed window in Redis, shared by instances); more → `429
+  TOO_MANY_REQUESTS`. If Redis fails → 500. The client is the
+  `X-Forwarded-For` entry `TrustedProxyHops` places left of the peer (the peer
+  itself for 0, or when the chain is shorter); forged entries further left are
+  ignored. IPv6 clients count per /64.
+- **Hash bound.** At most half the cores (at least one) hash with argon2id at
+  once; others wait, and a request whose context ends while waiting fails
+  with 500.
 
 - **Register.** `name` (1–100), `email` (trimmed, lower-cased, ≤255, one `@`
   with text on both sides, no spaces), `password` (≥8 code points, argon2id).
@@ -412,6 +422,7 @@ exits, with status 1 on failure.
 | `*_NOT_FOUND` (place, sub-district, category, suggestion, media, review, report) | 404 | Unknown resource, or unknown `GET /places` filter id |
 | `EMAIL_TAKEN` / `SUB_DISTRICT_EXISTS` / `SUB_DISTRICT_IN_USE` / `ALREADY_REVIEWED` / `MEDIA_LIMIT_REACHED` / `ALREADY_REPORTED` / `ALREADY_RESOLVED` | 409 | Conflicts |
 | `TOO_MANY_PENDING_SUGGESTIONS` / `TOO_MANY_PENDING_REPORTS` | 429 | Pending limits |
+| `TOO_MANY_REQUESTS` | 429 | Register/login rate limit |
 | `INTERNAL_ERROR` | 500 | Anything unexpected |
 
 An unknown sub-district or category is **404** as a `GET /places` filter but
@@ -449,6 +460,9 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 - **Specified but untested:**
   - 1 MiB body cap (`INVALID_BODY`); server timeouts (10s/30s/30s/120s).
   - Startup fails on invalid env values or a `JWT_SECRET` under 32 bytes.
+  - The auth rate limit's wiring (10/min on register and login, shared) and
+    the argon2id concurrency bound; `TRUSTED_PROXY_HOPS` is 0 by default, 1
+    in compose, 2 behind the host nginx.
   - Migration indexes and `CHECK`s (role, field data type, suggestion limits).
   - Orphan cleanup ignores request cancellation.
   - No CORS headers: the web app uses a same-origin proxy.
@@ -520,3 +534,4 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-25 | Security headers (CSP, HSTS, nosniff, frame denial, no-store, CORP, referrer policy) on every response; `/docs` keeps only `frame-ancestors` |
 | 2026-11-25 | `Permissions-Policy` (no geolocation, camera, microphone) added to the security headers |
 | 2026-11-25 | Request contexts expire after 25 s (`WithTimeout`); a timed-out call answers 500 |
+| 2026-11-26 | Register and login rate limited per client (10/min, `429 TOO_MANY_REQUESTS`, `TRUSTED_PROXY_HOPS`); argon2id hashes bounded to half the cores |

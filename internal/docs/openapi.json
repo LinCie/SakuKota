@@ -83,6 +83,15 @@
               }
             }
           },
+          "429": {
+            "description": "More than 10 sign-ups and logins from this client in the last minute.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "TOO_MANY_REQUESTS", "message": "too many requests" }
+              }
+            }
+          },
           "500": { "$ref": "#/components/responses/InternalServerError" }
         }
       }
@@ -130,6 +139,15 @@
                   "code": "INVALID_CREDENTIALS",
                   "message": "invalid email or password"
                 }
+              }
+            }
+          },
+          "429": {
+            "description": "More than 10 sign-ups and logins from this client in the last minute.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "TOO_MANY_REQUESTS", "message": "too many requests" }
               }
             }
           },

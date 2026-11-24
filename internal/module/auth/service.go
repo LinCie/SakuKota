@@ -7,9 +7,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"runtime"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"golang.org/x/sync/semaphore"
 
 	"sakukota-go/internal/config"
 	"sakukota-go/internal/domain"
@@ -50,6 +53,8 @@ type service struct {
 	cfg   config.Config
 	users UserService
 	store RefreshStore
+	// hashes bounds concurrent argon2id hashes, each holding argonMemory and a core.
+	hashes *semaphore.Weighted
 }
 
 // NewService returns a service that issues tokens signed with cfg, loads users
@@ -59,10 +64,13 @@ func NewService(cfg config.Config, userService UserService, store RefreshStore) 
 		cfg:   cfg,
 		users: userService,
 		store: store,
+		// Half the cores, leaving the rest for other requests.
+		hashes: semaphore.NewWeighted(int64(max(1, runtime.GOMAXPROCS(0)/2))),
 	}
 }
 
 // Register checks the sign-up details, then saves the user with a hashed password.
+// Hashing waits its turn among concurrent hashes, and returns ctx's error if ctx ends first.
 func (s *service) Register(ctx context.Context, u *domain.User, password string) (*domain.User, error) {
 	u.Name = strings.TrimSpace(u.Name)
 	switch {
@@ -84,7 +92,11 @@ func (s *service) Register(ctx context.Context, u *domain.User, password string)
 		return nil, domain.ErrPasswordTooShort
 	}
 
+	if err := s.hashes.Acquire(ctx, 1); err != nil {
+		return nil, err
+	}
 	hash, err := hashPassword(password)
+	s.hashes.Release(1)
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +106,7 @@ func (s *service) Register(ctx context.Context, u *domain.User, password string)
 }
 
 // Login checks the email and password, then issues a new pair of tokens.
+// Checking the password waits its turn to hash, like Register.
 func (s *service) Login(ctx context.Context, email, password string) (*domain.User, *Tokens, error) {
 	u, err := s.users.FetchByEmail(ctx, normalizeEmail(email))
 	if err != nil {
@@ -103,7 +116,11 @@ func (s *service) Login(ctx context.Context, email, password string) (*domain.Us
 		return nil, nil, err
 	}
 
+	if err := s.hashes.Acquire(ctx, 1); err != nil {
+		return nil, nil, err
+	}
 	ok, err := verifyPassword(password, u.PasswordHash)
+	s.hashes.Release(1)
 	if err != nil {
 		return nil, nil, err
 	}

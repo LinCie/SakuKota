@@ -20,7 +20,11 @@ type Config struct {
 	JWTExpiry          time.Duration
 	RefreshTokenExpiry time.Duration
 	CookieSecure       bool
-	Storage            StorageConfig
+	// TrustedProxyHops is how many proxies in front of the API append to
+	// X-Forwarded-For. The client address is taken that many entries from the
+	// right, so entries a client forges further left are ignored.
+	TrustedProxyHops int
+	Storage          StorageConfig
 }
 
 // StorageConfig locates the S3-compatible bucket that holds uploaded images.
@@ -108,6 +112,15 @@ func NewConfig() (Config, error) {
 		cookieSecure = b
 	}
 
+	trustedProxyHops := 0
+	if v := os.Getenv("TRUSTED_PROXY_HOPS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			return Config{}, errors.New("TRUSTED_PROXY_HOPS must be a non-negative integer")
+		}
+		trustedProxyHops = n
+	}
+
 	storage, err := NewStorageConfig()
 	if err != nil {
 		return Config{}, err
@@ -121,6 +134,7 @@ func NewConfig() (Config, error) {
 		JWTExpiry:          jwtExpiry,
 		RefreshTokenExpiry: refreshTokenExpiry,
 		CookieSecure:       cookieSecure,
+		TrustedProxyHops:   trustedProxyHops,
 		Storage:            storage,
 	}, nil
 }
