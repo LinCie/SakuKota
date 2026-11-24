@@ -233,3 +233,27 @@ func TestRouter_Access(t *testing.T) {
 		})
 	}
 }
+
+func TestRouter_SecurityHeaders(t *testing.T) {
+	h := newRouter(t)
+	tests := []struct {
+		name    string
+		target  string
+		wantCSP string
+	}{
+		{name: "api", target: "/v1/nowhere", wantCSP: "default-src 'none'; frame-ancestors 'none'"},
+		{name: "spec", target: "/openapi.json", wantCSP: "default-src 'none'; frame-ancestors 'none'"},
+		{name: "docs-page", target: "/docs", wantCSP: "frame-ancestors 'none'"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+
+			h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.target, nil))
+
+			assert.Equal(t, tt.wantCSP, rec.Header().Get("Content-Security-Policy"))
+			assert.Equal(t, "nosniff", rec.Header().Get("X-Content-Type-Options"))
+			assert.Equal(t, "DENY", rec.Header().Get("X-Frame-Options"))
+		})
+	}
+}

@@ -4,7 +4,7 @@
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-25 (web admin screens for sub-districts).
+> - Last updated: 2026-11-25 (request context timeout).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
@@ -92,7 +92,9 @@ Applies to every module unless §6 says otherwise. All routes live under `/v1`.
   (lon 95–141, lat −11–6, edges included) and round-trip exactly.
 - **JSON fidelity.** Attributes round-trip exactly (big ints, `1.50`, any text).
 - **Context.** Every service call gets the request context; a cancelled request
-  never produces a success.
+  never produces a success. The request context expires after 25 s (under
+  the 30 s write timeout), cancelling the call's database, Redis, and storage
+  work; the handler then answers `500 INTERNAL_ERROR`.
 - **Auth.** `Authorization: Bearer <JWT>` (HS256, configured secret, issuer
   `sakukota-go`, unexpired; anything else rejected). The token carries user ID and
   role (`user`/`admin`). No valid token → `401 UNAUTHORIZED`; non-admin on an
@@ -109,6 +111,14 @@ Applies to every module unless §6 says otherwise. All routes live under `/v1`.
     `PUT /subdistricts/{id}/boundary`, `DELETE /places/{id}/reviews/{reviewId}`,
     `GET /suggestions[/{id}]`, approve, reject, `GET /reports[/{id}]`,
     `POST /reports/{id}/remove`, `POST /reports/{id}/dismiss`.
+- **Security headers.** Every response, errors and 404s included, carries
+  `Cache-Control: no-store`, `Content-Security-Policy: default-src 'none';
+  frame-ancestors 'none'`, `Cross-Origin-Resource-Policy: same-origin`,
+  `Permissions-Policy: geolocation=(), camera=(), microphone=()`,
+  `Referrer-Policy: no-referrer`, `Strict-Transport-Security:
+  max-age=31536000`, `X-Content-Type-Options: nosniff`, and
+  `X-Frame-Options: DENY`. The `/docs` HTML page alone relaxes the CSP to
+  `frame-ancestors 'none'` so its scripts load.
 - **Privacy.** Emails appear only in the caller's own user object from register,
   login, and refresh. Nested authors are `{id, name}`. No password material.
 
@@ -507,3 +517,6 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-25 | `.env.example` lists every variable with working local values (32-byte `JWT_SECRET`); compose bucket CORS follows `WEB_PORT`; no contract change |
 | 2026-11-25 | Web dev server port (`DEV_PORT`, strict) and API proxy target (`API_PROXY_TARGET`, set by `make dev` from `PORT`) configurable; compose api fixed to container port 8080; no contract change |
 | 2026-11-25 | Web `/admin/subdistricts`: list, create (slug follows the name until edited), edit, delete, images, and a GeoJSON boundary picked in the browser, previewed, and sent to `PUT /subdistricts/{id}/boundary`; no contract change |
+| 2026-11-25 | Security headers (CSP, HSTS, nosniff, frame denial, no-store, CORP, referrer policy) on every response; `/docs` keeps only `frame-ancestors` |
+| 2026-11-25 | `Permissions-Policy` (no geolocation, camera, microphone) added to the security headers |
+| 2026-11-25 | Request contexts expire after 25 s (`WithTimeout`); a timed-out call answers 500 |

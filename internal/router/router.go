@@ -3,6 +3,7 @@ package router
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -23,6 +24,11 @@ import (
 	"sakukota-go/internal/storage"
 )
 
+// requestTimeout bounds each request's context. It stays under the server's
+// 30 s WriteTimeout (cmd/api), after which the response could not be sent
+// anyway, and leaves room for promoting a 50 MB video in storage.
+const requestTimeout = 25 * time.Second
+
 // NewRouter builds the HTTP router with its middleware, docs routes, and every API route.
 // Routes live under /v1, and protected ones check the token and role first.
 func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
@@ -36,9 +42,11 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 	r.Use(
 		middleware.WithTelemetry(cfg.Port),
 		middleware.WithRequestLog(slog.Default()),
+		middleware.WithSecurityHeaders(),
 		chimiddleware.Recoverer,
 		chimiddleware.StripSlashes,
 		middleware.WithMaxBody(),
+		middleware.WithTimeout(requestTimeout),
 	)
 
 	r.Get("/docs", docs.Scalar)
