@@ -69,6 +69,7 @@ var routeAccess = map[string]access{
 	"POST /v1/places/{id}/reviews/{reviewId}/reports":      authenticated,
 	"POST /v1/places/{id}/reports":                         authenticated,
 	"POST /v1/places/":                                     adminOnly,
+	"POST /v1/places/bulk":                                 adminOnly,
 	"PUT /v1/places/{id}":                                  adminOnly,
 	"DELETE /v1/places/{id}":                               adminOnly,
 	"POST /v1/places/{id}/medias/upload-url":               adminOnly,

@@ -11,6 +11,7 @@ import {
 import {
   addPlaceMedia,
   createPlace,
+  createPlaces,
   deletePlace,
   deletePlaceMedia,
   getCategories,
@@ -138,6 +139,14 @@ export function useCreatePlace() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createPlace,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: placeKeys.all }),
+  });
+}
+
+export function useCreatePlaces() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createPlaces,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: placeKeys.all }),
   });
 }

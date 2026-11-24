@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { FileUp, Plus } from "lucide-react";
 import { useEffect, useEffectEvent, useState } from "react";
 
 import type { SubDistrict } from "~/features/subdistricts/types";
@@ -15,6 +15,7 @@ import { writeErrorMessage } from "~/shared/write-error";
 
 import type { CategoryDetail, Place } from "../types";
 import { PlaceFormDrawer } from "../components/place-form-drawer";
+import { PlaceImportDrawer } from "../components/place-import-drawer";
 import { PlacesTable } from "../components/places-table";
 import { useDeletePlace } from "../queries";
 
@@ -57,6 +58,7 @@ export function PlacesPage({
     return () => clearTimeout(timeout);
   }, [draft, query]);
   const drawer = useDisclosure();
+  const importDrawer = useDisclosure();
   // Null while adding; the place being edited otherwise.
   const [editing, setEditing] = useState<Place | null>(null);
 
@@ -100,10 +102,20 @@ export function PlacesPage({
         title="Tempat"
         description="Tempat bertahan hidup di setiap kecamatan."
         actions={
-          <Button size="sm" onClick={openCreate}>
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            Tambah tempat
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => importDrawer.setOpen(true)}
+            >
+              <FileUp aria-hidden="true" data-icon="inline-start" />
+              Impor CSV
+            </Button>
+            <Button size="sm" onClick={openCreate}>
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              Tambah tempat
+            </Button>
+          </>
         }
       />
 
@@ -148,6 +160,13 @@ export function PlacesPage({
         categories={categories}
         subDistricts={subDistricts}
         places={places}
+      />
+
+      <PlaceImportDrawer
+        open={importDrawer.open}
+        onOpenChange={importDrawer.setOpen}
+        categories={categories}
+        subDistricts={subDistricts}
       />
 
       <ConfirmDialog

@@ -15,6 +15,9 @@ import (
 type Repository interface {
 	// Create saves the place and returns it with its category and photos.
 	Create(ctx context.Context, p *domain.Place) (*domain.Place, error)
+	// CreateMany saves the places in one transaction and returns them in order.
+	// Nothing is saved if one fails, and the error is a *domain.PlaceBatchError.
+	CreateMany(ctx context.Context, places []domain.Place) ([]domain.Place, error)
 	// AddMedia stores the photo in the place's first free position and returns the place.
 	// It returns domain.ErrPlaceNotFound, or domain.ErrMediaLimitReached if the place is full.
 	AddMedia(ctx context.Context, id int64, m domain.Media) (*domain.Place, error)
@@ -82,6 +85,25 @@ func (s *service) Create(ctx context.Context, p *domain.Place) (*domain.Place, e
 	}
 
 	return s.repo.Create(ctx, p)
+}
+
+// CreateMany validates and saves the places together: every place is saved, or
+// none is. It cleans the places in place. It returns
+// domain.ErrPlaceBatchSizeInvalid unless there are 1 to
+// domain.MaxPlaceBatchSize places; other errors are a *domain.PlaceBatchError
+// naming the failing place.
+func (s *service) CreateMany(ctx context.Context, places []domain.Place) ([]domain.Place, error) {
+	if len(places) == 0 || len(places) > domain.MaxPlaceBatchSize {
+		return nil, domain.ErrPlaceBatchSizeInvalid
+	}
+
+	for i := range places {
+		if err := s.validate(ctx, &places[i]); err != nil {
+			return nil, &domain.PlaceBatchError{Position: i + 1, Err: err}
+		}
+	}
+
+	return s.repo.CreateMany(ctx, places)
 }
 
 // MediaUploadURL returns a temporary link to upload a photo for the place.

@@ -577,6 +577,68 @@
         }
       }
     },
+    "/v1/places/bulk": {
+      "post": {
+        "tags": ["Places"],
+        "operationId": "createPlaces",
+        "summary": "Create many places",
+        "description": "Creates 1 to 500 places in one transaction: every place is created, or none is. Requires the admin role. Each place follows the rules of Create a place; a failure's message starts with the 1-based position of the failing place, e.g. \"place 3: name is required\".",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["places"],
+                "properties": {
+                  "places": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 500,
+                    "items": { "$ref": "#/components/schemas/PlaceRequest" }
+                  }
+                }
+              },
+              "example": {
+                "places": [
+                  {
+                    "sub_district_id": 1,
+                    "category_id": 1,
+                    "name": "Warung Bu Sri",
+                    "location": { "type": "Point", "coordinates": [106.8456, -6.2088] },
+                    "attributes": { "halal": true, "serving_style": "Prasmanan" }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Places created, in request order.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Place" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
     "/v1/places/{id}": {
       "get": {
         "tags": ["Places"],

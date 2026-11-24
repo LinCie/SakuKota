@@ -68,6 +68,13 @@ export async function createPlace(body: PlaceRequest): Promise<Place> {
   return unwrap(await apiPost<Place>("places", { json: body }));
 }
 
+/** Admin only. Creates every place, or none of them; resolves to them in order. */
+export async function createPlaces(bodies: PlaceRequest[]): Promise<Place[]> {
+  return unwrap(
+    await apiPost<Place[]>("places/bulk", { json: { places: bodies } }),
+  );
+}
+
 /** Admin only. */
 export async function updatePlace(
   id: number,

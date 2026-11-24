@@ -32,6 +32,9 @@ const (
 	MaxPlaceEstimatedPriceRangeLength = 100
 )
 
+// MaxPlaceBatchSize is the most places one bulk create may hold.
+const MaxPlaceBatchSize = 500
+
 // Place is a row of PLACES, joined with its category.
 type Place struct {
 	ID                  int64          `db:"id"`

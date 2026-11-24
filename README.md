@@ -83,7 +83,7 @@ Beyond the original scope:
 - **Reviews** – 1 to 5 stars with an optional comment and photos, one per user per place.
 - **Place suggestions** – a form with a map picker; users follow each suggestion's status and see the reason for a rejection.
 - **Abuse reports** – users report places or reviews; admins remove the content or dismiss the report.
-- **Admin area** – manage places and their photos and videos, review suggestions, and resolve reports.
+- **Admin area** – manage places and their photos and videos, import places in bulk from a CSV template, review suggestions, and resolve reports.
 - **My location** – center the map on the user's position.
 
 ---

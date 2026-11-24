@@ -381,6 +381,118 @@ func TestService_Create_Storage(t *testing.T) {
 	}
 }
 
+func TestService_CreateMany(t *testing.T) {
+	t.Run("batch_size", func(t *testing.T) {
+		tests := []struct {
+			name  string
+			count int
+		}{
+			{name: "empty", count: 0},
+			{name: "too_many", count: domain.MaxPlaceBatchSize + 1},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				repo, media := newMocks(t)
+				batch := make([]domain.Place, tc.count)
+				for i := range batch {
+					batch[i] = domain.Place{Name: "Kopi", SubDistrictID: 1, CategoryID: 2}
+				}
+
+				got, err := places.NewService(repo, media).CreateMany(t.Context(), batch)
+				assert.ErrorIs(t, err, domain.ErrPlaceBatchSizeInvalid, "CreateMany(%d places)", tc.count)
+				assert.Nil(t, got, "CreateMany(%d places)", tc.count)
+			})
+		}
+	})
+
+	t.Run("largest_batch", func(t *testing.T) {
+		repo, media := newMocks(t)
+		repo.EXPECT().FetchCategory(gomock.Any(), int64(2)).Return(openCategory(), nil).Times(domain.MaxPlaceBatchSize)
+		repo.EXPECT().CreateMany(gomock.Any(), gomock.Len(domain.MaxPlaceBatchSize)).Return(nil, nil)
+
+		batch := make([]domain.Place, domain.MaxPlaceBatchSize)
+		for i := range batch {
+			batch[i] = domain.Place{Name: "Kopi", SubDistrictID: 1, CategoryID: 2}
+		}
+
+		_, err := places.NewService(repo, media).CreateMany(t.Context(), batch)
+		assert.NoError(t, err, "CreateMany(%d places)", domain.MaxPlaceBatchSize)
+	})
+
+	t.Run("invalid_place", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			second  domain.Place
+			wantErr error
+		}{
+			{name: "blank_name", second: domain.Place{Name: "  ", SubDistrictID: 1, CategoryID: 2}, wantErr: domain.ErrPlaceNameRequired},
+			{name: "outside_indonesia", second: domain.Place{Name: "Kopi", SubDistrictID: 1, CategoryID: 2, Location: postgis.MustPoint(0, 0)}, wantErr: domain.ErrPlaceLocationInvalid},
+			{name: "unknown_attribute", second: domain.Place{Name: "Kopi", SubDistrictID: 1, CategoryID: 2, Attributes: json.RawMessage(`{"wifi":true}`)}, wantErr: domain.ErrPlaceAttributesInvalid},
+			{name: "missing_required_attribute", second: domain.Place{Name: "Warung", SubDistrictID: 1, CategoryID: 1}, wantErr: domain.ErrPlaceAttributesInvalid},
+			{name: "unknown_category", second: domain.Place{Name: "Kopi", SubDistrictID: 1, CategoryID: 99}, wantErr: domain.ErrCategoryNotFound},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				repo, media := newMocks(t)
+				repo.EXPECT().FetchCategory(gomock.Any(), gomock.Any()).DoAndReturn(lookupCategory).AnyTimes()
+
+				got, err := places.NewService(repo, media).CreateMany(t.Context(), []domain.Place{
+					{Name: "Kopi Senja", SubDistrictID: 1, CategoryID: 2},
+					tc.second,
+					{Name: "Kopi Pagi", SubDistrictID: 1, CategoryID: 2},
+				})
+
+				assert.ErrorIs(t, err, tc.wantErr, "CreateMany()")
+				var batchErr *domain.PlaceBatchError
+				require.ErrorAs(t, err, &batchErr, "CreateMany() error")
+				assert.Equal(t, 2, batchErr.Position, "CreateMany() error position")
+				assert.Nil(t, got, "CreateMany()")
+			})
+		}
+	})
+
+	t.Run("stores_cleaned_places", func(t *testing.T) {
+		repo, media := newMocks(t)
+		repo.EXPECT().FetchCategory(gomock.Any(), gomock.Any()).DoAndReturn(lookupCategory).AnyTimes()
+
+		want := []domain.Place{
+			{Name: "Kopi Senja", SubDistrictID: 1, CategoryID: 2, Address: new("Jl. Sudirman 9"), Attributes: json.RawMessage(`{"seats":12}`)},
+			{Name: "Warung Bu Sri", SubDistrictID: 1, CategoryID: 1, Attributes: json.RawMessage(`{"contact":"0812"}`)},
+		}
+		stored := []domain.Place{{ID: 7}, {ID: 8}}
+		repo.EXPECT().CreateMany(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, got []domain.Place) ([]domain.Place, error) {
+			require.Len(t, got, len(want), "places stored")
+			for i := range want {
+				assert.Equal(t, want[i].Name, got[i].Name, "place %d name", i+1)
+				assert.Equal(t, want[i].CategoryID, got[i].CategoryID, "place %d category", i+1)
+				assert.Equal(t, want[i].Address, got[i].Address, "place %d address", i+1)
+				assert.Nil(t, got[i].ShortDescription, "place %d blank description", i+1)
+				assert.Equal(t, decodeExact(t, want[i].Attributes), decodeExact(t, got[i].Attributes), "place %d attributes", i+1)
+			}
+			return stored, nil
+		})
+
+		got, err := places.NewService(repo, media).CreateMany(t.Context(), []domain.Place{
+			{Name: " Kopi Senja ", SubDistrictID: 1, CategoryID: 2, Address: new(" Jl. Sudirman 9 "), ShortDescription: new("  "), Attributes: json.RawMessage(`{"seats":12,"halal":null}`)},
+			{Name: "Warung Bu Sri", SubDistrictID: 1, CategoryID: 1, Attributes: json.RawMessage(`{"contact":"0812"}`)},
+		})
+		require.NoError(t, err, "CreateMany()")
+		assert.Equal(t, stored, got, "CreateMany()")
+	})
+
+	t.Run("storage_error", func(t *testing.T) {
+		repo, media := newMocks(t)
+		repo.EXPECT().FetchCategory(gomock.Any(), int64(2)).Return(openCategory(), nil)
+		storeErr := &domain.PlaceBatchError{Position: 1, Err: domain.ErrSubDistrictNotFound}
+		repo.EXPECT().CreateMany(gomock.Any(), gomock.Any()).Return(nil, storeErr)
+
+		_, err := places.NewService(repo, media).CreateMany(t.Context(), []domain.Place{{Name: "Kopi", SubDistrictID: 99, CategoryID: 2}})
+		assert.ErrorIs(t, err, domain.ErrSubDistrictNotFound, "CreateMany()")
+	})
+}
+
 // savedKopi is the stored place that updates start from: a Kopi in Menteng
 // with every optional field set.
 func savedKopi() *domain.Place {

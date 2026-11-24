@@ -118,6 +118,9 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 				// POST /v1/places
 				r.Post("/", placeModule.Handler.Create)
 
+				// POST /v1/places/bulk
+				r.Post("/bulk", placeModule.Handler.CreateMany)
+
 				// PUT /v1/places/{id}
 				r.Put("/{id}", placeModule.Handler.Replace)
 

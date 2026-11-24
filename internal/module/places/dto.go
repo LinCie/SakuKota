@@ -24,6 +24,11 @@ type Request struct {
 	Attributes json.RawMessage `json:"attributes"`
 }
 
+// BulkRequest is the body for creating many places at once.
+type BulkRequest struct {
+	Places []Request `json:"places"`
+}
+
 // Response is the API representation of a place.
 type Response struct {
 	ID                  int64           `json:"id"`

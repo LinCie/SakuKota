@@ -4,7 +4,7 @@
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-27 (user profiles; web account menu; web profile layout; web headers; web list panel motion).
+> - Last updated: 2026-11-27 (user profiles; web account menu; web profile layout; web headers; web list panel motion; admin bulk place create and web CSV import).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
@@ -111,6 +111,7 @@ Applies to every module unless §6 says otherwise. All routes live under `/v1`.
     `POST /suggestions`, `GET /suggestions/mine`, `POST /places/{id}/reports`,
     `POST /places/{id}/reviews/{reviewId}/reports`.
   - *Admin:* place and sub-district create/update/delete and media routes,
+    `POST /places/bulk`,
     `PUT /subdistricts/{id}/boundary`, `DELETE /places/{id}/reviews/{reviewId}`,
     `GET /suggestions[/{id}]`, approve, reject, `GET /reports[/{id}]`,
     `POST /reports/{id}/remove`, `POST /reports/{id}/dismiss`.
@@ -198,6 +199,12 @@ ratings, `medias` is `[]` without images.
 - **Create/Update.** Every validation failure, including an unknown category or
   sub-district, is `400 VALIDATION_ERROR`. Update validates before looking up the
   place (unknown → `404 PLACE_NOT_FOUND`) and keeps the rating and medias.
+- **Bulk create (`POST /places/bulk {places: [...]}`, admin).** Each element
+  is a create body with the same rules. 1–500 places (none or more →
+  `VALIDATION_ERROR`); `places` not an array → `INVALID_BODY`. All are
+  validated, then saved in one transaction: one failure saves none, and the
+  error (`domain.PlaceBatchError`) carries the failing place's 1-based
+  position. Returns `201` with the places in request order.
 - **Get.** Unknown → `404 PLACE_NOT_FOUND`.
 - **Delete.** `204`, then `404`. Medias, including its reviews' medias, are
   deleted and their keys queued in `STORAGE_DELETIONS` in the same statement;
@@ -567,3 +574,4 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-27 | Web `/profil`: identity header, star summary that filters own reviews, reviews grouped by month 20 at a time with their photos; no contract change |
 | 2026-11-27 | Web headers: one site header on the map, `/usulan`, and `/profil`; the map's kecamatan, info, search, and category filter in one search bar, the count in the list heading; tagline only on auth pages; admin top bar folded into the sidebar; shared page header with back link; no contract change |
 | 2026-11-27 | Web map: the desktop list panel opens and closes with a width animation, keeping its content while it closes; the map reports its view once a resize settles; no contract change |
+| 2026-11-27 | Admin `POST /places/bulk` (1–500 places, all or none, failing position in `PlaceBatchError`); web `/admin/places` imports a category's places from CSV, with a per-category template download and row-by-row checks |

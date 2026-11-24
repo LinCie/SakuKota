@@ -64,6 +64,30 @@ func (r *PostgresRepository) Create(ctx context.Context, p *domain.Place) (*doma
 	return r.withMedias(ctx, created)
 }
 
+// CreateMany inserts the places in one transaction, joining the one carried by
+// ctx if there is one, and returns them in order with their categories and
+// photos. Nothing is inserted if one fails, and the error is a
+// *domain.PlaceBatchError.
+func (r *PostgresRepository) CreateMany(ctx context.Context, places []domain.Place) ([]domain.Place, error) {
+	created := make([]domain.Place, 0, len(places))
+
+	err := database.NewTransactor(r.db).WithinTx(ctx, func(ctx context.Context) error {
+		for i := range places {
+			p, err := r.Create(ctx, &places[i])
+			if err != nil {
+				return &domain.PlaceBatchError{Position: i + 1, Err: err}
+			}
+			created = append(created, *p)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return created, nil
+}
+
 // AddMedia stores the photo in the place's first free position and returns the place.
 // The place row is locked so concurrent uploads cannot take the same position or exceed the limit.
 func (r *PostgresRepository) AddMedia(ctx context.Context, id int64, m domain.Media) (*domain.Place, error) {

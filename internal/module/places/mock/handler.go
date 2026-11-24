@@ -87,6 +87,21 @@ func (mr *MockServiceMockRecorder) Create(ctx, p any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockService)(nil).Create), ctx, p)
 }
 
+// CreateMany mocks base method.
+func (m *MockService) CreateMany(ctx context.Context, arg1 []domain.Place) ([]domain.Place, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateMany", ctx, arg1)
+	ret0, _ := ret[0].([]domain.Place)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateMany indicates an expected call of CreateMany.
+func (mr *MockServiceMockRecorder) CreateMany(ctx, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateMany", reflect.TypeOf((*MockService)(nil).CreateMany), ctx, arg1)
+}
+
 // Delete mocks base method.
 func (m *MockService) Delete(ctx context.Context, id int64) error {
 	m.ctrl.T.Helper()

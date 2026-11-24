@@ -37,6 +37,7 @@ const (
 // wired into reviews.
 type Service interface {
 	Create(ctx context.Context, p *domain.Place) (*domain.Place, error)
+	CreateMany(ctx context.Context, places []domain.Place) ([]domain.Place, error)
 	MediaUploadURL(ctx context.Context, id int64, contentType string) (storage.Upload, error)
 	AddMedia(ctx context.Context, id int64, uploadKey string) (*domain.Place, error)
 	List(ctx context.Context, filter Filter) ([]domain.Place, int, error)
@@ -80,6 +81,24 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.RespondJSON(w, http.StatusCreated, toResponse(*p, h.mediaURL))
+}
+
+// CreateMany creates every place in the request body, or none of them.
+func (h *Handler) CreateMany(w http.ResponseWriter, r *http.Request) {
+	req, ok := httpx.DecodeJSON[BulkRequest](w, r)
+	if !ok {
+		return
+	}
+
+	places := utils.Map(req.Places, func(p Request) domain.Place { return *toPlace(p) })
+
+	created, err := h.service.CreateMany(r.Context(), places)
+	if err != nil {
+		respondWriteError(w, err)
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusCreated, utils.Map(created, func(p domain.Place) Response { return toResponse(p, h.mediaURL) }))
 }
 
 // CreateMediaUpload returns a temporary link the client uploads a photo to directly.

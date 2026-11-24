@@ -213,6 +213,52 @@ func TestRepository_Create(t *testing.T) {
 	})
 }
 
+func TestRepository_CreateMany(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("stores_places_in_order", func(t *testing.T) {
+		repo := newRepository(t)
+		subDistrictID := insertSubDistrict(t, "Setiabudi")
+		laundryID := categoryID(t, "laundry")
+
+		first := newPlace(subDistrictID, laundryID, "First")
+		first.Location = postgis.MustPoint(106.82, -6.2)
+		got, err := repo.CreateMany(ctx, []domain.Place{*first, *newPlace(subDistrictID, laundryID, "Second")})
+		require.NoError(t, err, "CreateMany()")
+
+		require.Len(t, got, 2, "CreateMany()")
+		assert.Equal(t, []string{"First", "Second"}, names(got), "CreateMany() names")
+		assert.Less(t, got[0].ID, got[1].ID, "CreateMany() ids, want increasing")
+		assert.True(t, near(got[0].Location, 106.82, -6.2), "CreateMany()[0].Location = %v, want (106.82, -6.2)", got[0].Location)
+		for _, p := range got {
+			stored, err := repo.Fetch(ctx, p.ID)
+			require.NoError(t, err, "Fetch(%d)", p.ID)
+			assert.Equal(t, &p, stored, "Fetch(%d) differs from the created place", p.ID)
+		}
+	})
+
+	t.Run("failure_stores_nothing", func(t *testing.T) {
+		repo := newRepository(t)
+		subDistrictID := insertSubDistrict(t, "Setiabudi")
+		laundryID := categoryID(t, "laundry")
+
+		got, err := repo.CreateMany(ctx, []domain.Place{
+			*newPlace(subDistrictID, laundryID, "First"),
+			*newPlace(999, laundryID, "Second"),
+		})
+
+		assert.ErrorIs(t, err, domain.ErrSubDistrictNotFound, "CreateMany(sub-district 999)")
+		var batchErr *domain.PlaceBatchError
+		require.ErrorAs(t, err, &batchErr, "CreateMany(sub-district 999)")
+		assert.Equal(t, 2, batchErr.Position, "CreateMany(sub-district 999) error position")
+		assert.Nil(t, got, "CreateMany(sub-district 999)")
+
+		_, total, err := repo.List(ctx, places.Filter{Limit: 10})
+		require.NoError(t, err, "List()")
+		assert.Zero(t, total, "places stored after a failed CreateMany")
+	})
+}
+
 func TestRepository_Fetch(t *testing.T) {
 	ctx := t.Context()
 

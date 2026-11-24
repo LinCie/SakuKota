@@ -31,6 +31,7 @@ func newRouter(svc *mock.MockService) http.Handler {
 	r.Route("/places", func(r chi.Router) {
 		r.Get("/", h.List)
 		r.Post("/", h.Create)
+		r.Post("/bulk", h.CreateMany)
 		r.Get("/{id}", h.Show)
 		r.Put("/{id}", h.Replace)
 		r.Delete("/{id}", h.Delete)
@@ -448,6 +449,121 @@ func TestHandler_Create(t *testing.T) {
 				assert.NotEqual(t, http.StatusCreated, rec.Code, "POST /places status for a request whose context had ended")
 			})
 		}
+	})
+}
+
+func TestHandler_CreateMany(t *testing.T) {
+	t.Run("malformed_bodies", func(t *testing.T) {
+		tests := []struct {
+			name string
+			body string
+		}{
+			{name: "empty", body: ``},
+			{name: "null", body: `null`},
+			{name: "array", body: `[{"name":"Kopi","sub_district_id":1,"category_id":2}]`},
+			{name: "places_object", body: `{"places":{"name":"Kopi"}}`},
+			{name: "sub_district_string", body: `{"places":[{"name":"Kopi","sub_district_id":"one","category_id":2}]}`},
+			{name: "location_line", body: `{"places":[{"name":"Kopi","sub_district_id":1,"category_id":2,` +
+				`"location":{"type":"LineString","coordinates":[[106.8,-6.2],[106.9,-6.3]]}}]}`},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				rec := serve(t, newRouter(newService(t)), jsonRequest(http.MethodPost, "/places/bulk", tc.body))
+				assert.Equal(t, wantError(http.StatusBadRequest, "INVALID_BODY"), gotError(rec), "POST /places/bulk %s", tc.body)
+			})
+		}
+	})
+
+	t.Run("service_errors", func(t *testing.T) {
+		tests := []errorCase{
+			{name: "batch_size", err: domain.ErrPlaceBatchSizeInvalid, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "blank_name", err: &domain.PlaceBatchError{Position: 2, Err: domain.ErrPlaceNameRequired}, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "invalid_attributes", err: &domain.PlaceBatchError{Position: 1, Err: domain.ErrPlaceAttributesInvalid}, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "unknown_sub_district", err: &domain.PlaceBatchError{Position: 2, Err: domain.ErrSubDistrictNotFound}, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "unknown_category", err: &domain.PlaceBatchError{Position: 1, Err: domain.ErrCategoryNotFound}, wantStatus: http.StatusBadRequest, wantCode: "VALIDATION_ERROR"},
+			{name: "storage_failure", err: &domain.PlaceBatchError{Position: 1, Err: errors.New(`pq: relation "places" does not exist`)}, wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL_ERROR"},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				svc := newService(t)
+				svc.EXPECT().CreateMany(gomock.Any(), []domain.Place{
+					{Name: "Kopi", SubDistrictID: 1, CategoryID: 2},
+					{Name: "Teh", SubDistrictID: 1, CategoryID: 2},
+				}).Return(nil, tc.err)
+
+				rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/places/bulk",
+					`{"places":[{"name":"Kopi","sub_district_id":1,"category_id":2},{"name":"Teh","sub_district_id":1,"category_id":2}]}`))
+				assert.Equal(t, wantError(tc.wantStatus, tc.wantCode), gotError(rec), "POST /places/bulk with error %v", tc.err)
+				assert.NotContains(t, rec.Body.String(), "pq:", "POST /places/bulk body must not show storage detail")
+			})
+		}
+	})
+
+	t.Run("empty_places_reach_service", func(t *testing.T) {
+		svc := newService(t)
+		svc.EXPECT().CreateMany(gomock.Any(), gomock.Len(0)).Return(nil, domain.ErrPlaceBatchSizeInvalid)
+
+		rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/places/bulk", `{"places":[]}`))
+		assert.Equal(t, wantError(http.StatusBadRequest, "VALIDATION_ERROR"), gotError(rec), "POST /places/bulk with no places")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		svc := newService(t)
+		svc.EXPECT().CreateMany(gomock.Any(), []domain.Place{
+			{Name: "Kopi Senja", SubDistrictID: 1, CategoryID: 2, Location: postgis.MustPoint(106.8, -6.2), Attributes: json.RawMessage(`{"halal":true}`)},
+			{Name: "Kopi Pagi", SubDistrictID: 1, CategoryID: 2},
+		}).DoAndReturn(func(_ context.Context, ps []domain.Place) ([]domain.Place, error) {
+			created := make([]domain.Place, 0, len(ps))
+			for i, p := range ps {
+				p.ID = int64(41 + i)
+				p.Category = kopiCategory
+				if p.Attributes == nil {
+					p.Attributes = json.RawMessage(`{}`)
+				}
+				created = append(created, p)
+			}
+			return created, nil
+		})
+
+		body := `{"places":[` +
+			`{"name":"Kopi Senja","sub_district_id":1,"category_id":2,"location":{"type":"Point","coordinates":[106.8,-6.2]},"attributes":{"halal":true},"id":77},` +
+			`{"name":"Kopi Pagi","sub_district_id":1,"category_id":2}` +
+			`]}`
+		rec := serve(t, newRouter(svc), jsonRequest(http.MethodPost, "/places/bulk", body))
+
+		want := `[{
+			"id": 41,
+			"sub_district_id": 1,
+			"name": "Kopi Senja",
+			"address": null,
+			"location": {"type": "Point", "coordinates": [106.8, -6.2]},
+			"operating_hours": null,
+			"estimated_price_range": null,
+			"short_description": null,
+			"attributes": {"halal": true},
+			"rating_average": null,
+			"rating_count": 0,
+			"medias": [],
+			"category": ` + kopiCategoryJSON + `
+		}, {
+			"id": 42,
+			"sub_district_id": 1,
+			"name": "Kopi Pagi",
+			"address": null,
+			"location": null,
+			"operating_hours": null,
+			"estimated_price_range": null,
+			"short_description": null,
+			"attributes": {},
+			"rating_average": null,
+			"rating_count": 0,
+			"medias": [],
+			"category": ` + kopiCategoryJSON + `
+		}]`
+		assert.Equal(t, http.StatusCreated, rec.Code, "POST /places/bulk status; body: %s", rec.Body)
+		assert.JSONEq(t, want, responseData(rec), "POST /places/bulk")
 	})
 }
 

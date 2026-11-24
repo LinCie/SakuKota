@@ -30,6 +30,7 @@ var (
 	ErrPlaceEstimatedPriceRangeTooLong = fmt.Errorf("estimated_price_range must be %d characters or fewer", MaxPlaceEstimatedPriceRangeLength)
 	ErrPlaceAttributesInvalid          = errors.New("invalid attributes")
 	ErrPlaceLocationInvalid            = errors.New("location must be within Indonesia")
+	ErrPlaceBatchSizeInvalid           = fmt.Errorf("places must hold between 1 and %d places", MaxPlaceBatchSize)
 )
 
 // IsPlaceValidationError reports whether err means the place's data was refused.
@@ -41,7 +42,25 @@ func IsPlaceValidationError(err error) bool {
 		errors.Is(err, ErrPlaceOperatingHoursTooLong) ||
 		errors.Is(err, ErrPlaceEstimatedPriceRangeTooLong) ||
 		errors.Is(err, ErrPlaceAttributesInvalid) ||
-		errors.Is(err, ErrPlaceLocationInvalid)
+		errors.Is(err, ErrPlaceLocationInvalid) ||
+		errors.Is(err, ErrPlaceBatchSizeInvalid)
+}
+
+// PlaceBatchError is the error of one place in a bulk create.
+type PlaceBatchError struct {
+	// Position is the 1-based position of the place in the batch.
+	Position int
+	Err      error
+}
+
+// Error names the place's position and its error.
+func (e *PlaceBatchError) Error() string {
+	return fmt.Sprintf("place %d: %v", e.Position, e.Err)
+}
+
+// Unwrap returns the place's error.
+func (e *PlaceBatchError) Unwrap() error {
+	return e.Err
 }
 
 // Errors of the medias of places, sub-districts, and reviews.
