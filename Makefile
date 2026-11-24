@@ -4,6 +4,9 @@
 
 DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/sakukotago?sslmode=disable
 MIGRATIONS_DIR ?= migrations
+PORT ?= 8080
+# The web dev server proxies /api to the API on PORT.
+API_PROXY_TARGET ?= http://localhost:$(PORT)
 # Pass everything from .env (JWT_SECRET, PORT, ...) on to the commands below.
 .EXPORT_ALL_VARIABLES:
 # Set CONTAINER_ENGINE=podman (in .env or the environment) to use Podman.

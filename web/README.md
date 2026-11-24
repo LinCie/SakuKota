@@ -8,7 +8,7 @@ React 19, TypeScript, Vite, TanStack Router (file routes in `app/routes`), TanSt
 
 ## Development
 
-The API must be running (see the [root README](../README.md)); Vite proxies `/api` to `http://localhost:8080/v1`.
+The API must be running (see the [root README](../README.md)); Vite proxies `/api` to `$API_PROXY_TARGET/v1` (default `http://localhost:8080`; `make dev` sets it from the root `PORT`). Copy `.env.example` to `.env` first.
 
 ```bash
 pnpm install

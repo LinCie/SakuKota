@@ -50,7 +50,8 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-sakukotago}?sslmode=disable
       STORAGE_ENDPOINT: http://garage:3900
-      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:8081}
+      # Browsers upload from the web container, not the Vite dev server in .env.
+      CORS_ALLOWED_ORIGIN: http://localhost:${WEB_PORT:-8081}
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:-ab585f3faae621737dbe043edb29dfe69a95d3194d76218cda428e47c2f25338}
     volumes:
       - ./docker/garage/garage.toml:/etc/garage.toml:ro
@@ -72,6 +73,8 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-sakukotago}?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       STORAGE_ENDPOINT: http://garage:3900
+      # The web container's nginx proxies to api:8080; PORT in .env is for the host.
+      PORT: "8080"
       # Scraped by prometheus; not published to the host.
       METRICS_ADDR: ":9464"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318

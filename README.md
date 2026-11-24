@@ -116,19 +116,25 @@ cd web && pnpm install && cd ..
 
 ### Configuration
 
-Copy the example file and edit it. It contains only local development values.
+Copy the example files. They hold working local development values, so no edits are needed to run locally.
 
 ```bash
 cp .env.example .env
+cp web/.env.example web/.env
 ```
 
-- `JWT_SECRET` – signs access tokens; replace it with a random string of at least 32 bytes.
+- `JWT_SECRET` – signs access tokens; at least 32 bytes. Replace it with your own (`openssl rand -hex 32`) anywhere but local development.
+- `JWT_EXPIRES_MINUTES`, `REFRESH_TOKEN_EXPIRES_DAYS` – token lifetimes (default `5` and `30`).
 - `DATABASE_URL` – PostgreSQL connection string; `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` configure the container.
 - `REDIS_URL` – Redis connection string.
-- `PORT` – port for the API (default `8080`).
+- `PORT` – port for the API on the host (default `8080`); `make dev` points the web dev server's `/api` proxy at it.
+- `API_PROXY_TARGET`, `DEV_PORT` (in `web/.env`) – API that the web dev server proxies to when run without `make` (default `http://localhost:8080`), and the dev server's own port (default `5173`; keep `CORS_ALLOWED_ORIGIN` in sync).
 - `CORS_ALLOWED_ORIGIN` – origin of the web app, allowed by the image bucket's CORS rule.
 - `COOKIE_SECURE` – set to `false` only for local development over plain HTTP.
 - `STORAGE_*` – object storage endpoint, bucket, and key pair. The example key pair only works with the local storage container; use your own secrets anywhere else.
+- `METRICS_ADDR`, `PPROF_ADDR`, `OTEL_*` – optional metrics, profiling, and telemetry export; off when empty.
+- `WEB_PORT`, `PROMETHEUS_PORT`, `GRAFANA_PORT` – host ports of the compose stack.
+- `VITE_API_URL` (in `web/.env`) – API base URL for the web app (default `/api`, proxied by Vite).
 
 ### Running the Application
 
@@ -147,7 +153,7 @@ make seed
 make dev
 ```
 
-The web app is served at `http://localhost:5173` and the API at `http://localhost:8080`. The API reference is at `http://localhost:8080/docs`.
+The web app is served at `http://localhost:5173` (`DEV_PORT`) and the API at `http://localhost:8080` (`PORT`). The API reference is at `http://localhost:8080/docs`.
 
 To run the whole stack in containers instead:
 

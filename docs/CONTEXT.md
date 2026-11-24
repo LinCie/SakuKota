@@ -4,7 +4,7 @@
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-25 (AGPLv3 license; other docs dropped).
+> - Last updated: 2026-11-25 (configurable API and web dev ports).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
@@ -504,3 +504,5 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-25 | Project renamed to SakuKota (module `sakukota-go`, database `sakukotago`, bucket `sakukota-images`, demo password `sakukota123`) |
 | 2026-11-25 | README rewritten to the portfolio template; earlier README versions removed from history |
 | 2026-11-25 | Licensed under AGPLv3; product, backend, and frontend docs dropped (and removed from history), leaving this file |
+| 2026-11-25 | `.env.example` lists every variable with working local values (32-byte `JWT_SECRET`); compose bucket CORS follows `WEB_PORT`; no contract change |
+| 2026-11-25 | Web dev server port (`DEV_PORT`, strict) and API proxy target (`API_PROXY_TARGET`, set by `make dev` from `PORT`) configurable; compose api fixed to container port 8080; no contract change |
