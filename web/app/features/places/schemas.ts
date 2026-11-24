@@ -69,7 +69,7 @@ export function validCoordinate(text: string, limit: number): boolean {
 }
 
 // Indonesia's bounding box, mirroring the backend (internal/module/place/constant.go).
-const INDONESIA = { minLat: -11, maxLat: 6, minLng: 95, maxLng: 141 };
+export const INDONESIA = { minLat: -11, maxLat: 6, minLng: 95, maxLng: 141 };
 
 /** Whether a coordinate lies within [min, max]; text that is not a number is left to `validCoordinate`. */
 function withinBounds(text: string, min: number, max: number): boolean {

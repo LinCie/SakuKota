@@ -4,7 +4,7 @@
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-25 (configurable API and web dev ports).
+> - Last updated: 2026-11-25 (web admin screens for sub-districts).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
@@ -459,7 +459,7 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
   their own reports.
 - **Performance:** the `bbox` spread ranks every place in the box (~4 ms on
   1,092 seeded places; untested at 50,000).
-- **Web (`web/`):** untested. No admin screens for sub-districts. The map sends
+- **Web (`web/`):** untested. The map sends
   a `limit` sized to its screen area (20–100).
 - **`scripts/k6/get-places.js`** still reads the removed `X-Cache` header.
 
@@ -506,3 +506,4 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-25 | Licensed under AGPLv3; product, backend, and frontend docs dropped (and removed from history), leaving this file |
 | 2026-11-25 | `.env.example` lists every variable with working local values (32-byte `JWT_SECRET`); compose bucket CORS follows `WEB_PORT`; no contract change |
 | 2026-11-25 | Web dev server port (`DEV_PORT`, strict) and API proxy target (`API_PROXY_TARGET`, set by `make dev` from `PORT`) configurable; compose api fixed to container port 8080; no contract change |
+| 2026-11-25 | Web `/admin/subdistricts`: list, create (slug follows the name until edited), edit, delete, images, and a GeoJSON boundary picked in the browser, previewed, and sent to `PUT /subdistricts/{id}/boundary`; no contract change |

@@ -20,6 +20,8 @@ import { Route as AdminPlacesIndexRouteImport } from './routes/admin/places/inde
 import { Route as AdminPlacesPlaceIdRouteImport } from './routes/admin/places/$placeId'
 import { Route as AdminReportsIndexRouteImport } from './routes/admin/reports/index'
 import { Route as AdminReportsReportIdRouteImport } from './routes/admin/reports/$reportId'
+import { Route as AdminSubdistrictsIndexRouteImport } from './routes/admin/subdistricts/index'
+import { Route as AdminSubdistrictsSubDistrictIdRouteImport } from './routes/admin/subdistricts/$subDistrictId'
 import { Route as AdminSuggestionsIndexRouteImport } from './routes/admin/suggestions/index'
 import { Route as AdminSuggestionsSuggestionIdRouteImport } from './routes/admin/suggestions/$suggestionId'
 
@@ -77,6 +79,17 @@ const AdminReportsReportIdRoute = AdminReportsReportIdRouteImport.update({
   path: '/reports/$reportId',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSubdistrictsIndexRoute = AdminSubdistrictsIndexRouteImport.update({
+  id: '/subdistricts/',
+  path: '/subdistricts/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSubdistrictsSubDistrictIdRoute =
+  AdminSubdistrictsSubDistrictIdRouteImport.update({
+    id: '/subdistricts/$subDistrictId',
+    path: '/subdistricts/$subDistrictId',
+    getParentRoute: () => AdminRoute,
+  } as any)
 const AdminSuggestionsIndexRoute = AdminSuggestionsIndexRouteImport.update({
   id: '/suggestions/',
   path: '/suggestions/',
@@ -98,9 +111,11 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/admin/places/$placeId': typeof AdminPlacesPlaceIdRoute
   '/admin/reports/$reportId': typeof AdminReportsReportIdRoute
+  '/admin/subdistricts/$subDistrictId': typeof AdminSubdistrictsSubDistrictIdRoute
   '/admin/suggestions/$suggestionId': typeof AdminSuggestionsSuggestionIdRoute
   '/admin/places/': typeof AdminPlacesIndexRoute
   '/admin/reports/': typeof AdminReportsIndexRoute
+  '/admin/subdistricts/': typeof AdminSubdistrictsIndexRoute
   '/admin/suggestions/': typeof AdminSuggestionsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -111,9 +126,11 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/admin/places/$placeId': typeof AdminPlacesPlaceIdRoute
   '/admin/reports/$reportId': typeof AdminReportsReportIdRoute
+  '/admin/subdistricts/$subDistrictId': typeof AdminSubdistrictsSubDistrictIdRoute
   '/admin/suggestions/$suggestionId': typeof AdminSuggestionsSuggestionIdRoute
   '/admin/places': typeof AdminPlacesIndexRoute
   '/admin/reports': typeof AdminReportsIndexRoute
+  '/admin/subdistricts': typeof AdminSubdistrictsIndexRoute
   '/admin/suggestions': typeof AdminSuggestionsIndexRoute
 }
 export interface FileRoutesById {
@@ -127,9 +144,11 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/admin/places/$placeId': typeof AdminPlacesPlaceIdRoute
   '/admin/reports/$reportId': typeof AdminReportsReportIdRoute
+  '/admin/subdistricts/$subDistrictId': typeof AdminSubdistrictsSubDistrictIdRoute
   '/admin/suggestions/$suggestionId': typeof AdminSuggestionsSuggestionIdRoute
   '/admin/places/': typeof AdminPlacesIndexRoute
   '/admin/reports/': typeof AdminReportsIndexRoute
+  '/admin/subdistricts/': typeof AdminSubdistrictsIndexRoute
   '/admin/suggestions/': typeof AdminSuggestionsIndexRoute
 }
 export interface FileRouteTypes {
@@ -143,9 +162,11 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/admin/places/$placeId'
     | '/admin/reports/$reportId'
+    | '/admin/subdistricts/$subDistrictId'
     | '/admin/suggestions/$suggestionId'
     | '/admin/places/'
     | '/admin/reports/'
+    | '/admin/subdistricts/'
     | '/admin/suggestions/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -156,9 +177,11 @@ export interface FileRouteTypes {
     | '/admin'
     | '/admin/places/$placeId'
     | '/admin/reports/$reportId'
+    | '/admin/subdistricts/$subDistrictId'
     | '/admin/suggestions/$suggestionId'
     | '/admin/places'
     | '/admin/reports'
+    | '/admin/subdistricts'
     | '/admin/suggestions'
   id:
     | '__root__'
@@ -171,9 +194,11 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/admin/places/$placeId'
     | '/admin/reports/$reportId'
+    | '/admin/subdistricts/$subDistrictId'
     | '/admin/suggestions/$suggestionId'
     | '/admin/places/'
     | '/admin/reports/'
+    | '/admin/subdistricts/'
     | '/admin/suggestions/'
   fileRoutesById: FileRoutesById
 }
@@ -263,6 +288,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminReportsReportIdRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/subdistricts/': {
+      id: '/admin/subdistricts/'
+      path: '/subdistricts'
+      fullPath: '/admin/subdistricts/'
+      preLoaderRoute: typeof AdminSubdistrictsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/subdistricts/$subDistrictId': {
+      id: '/admin/subdistricts/$subDistrictId'
+      path: '/subdistricts/$subDistrictId'
+      fullPath: '/admin/subdistricts/$subDistrictId'
+      preLoaderRoute: typeof AdminSubdistrictsSubDistrictIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/suggestions/': {
       id: '/admin/suggestions/'
       path: '/suggestions'
@@ -296,9 +335,11 @@ interface AdminRouteChildren {
   AdminIndexRoute: typeof AdminIndexRoute
   AdminPlacesPlaceIdRoute: typeof AdminPlacesPlaceIdRoute
   AdminReportsReportIdRoute: typeof AdminReportsReportIdRoute
+  AdminSubdistrictsSubDistrictIdRoute: typeof AdminSubdistrictsSubDistrictIdRoute
   AdminSuggestionsSuggestionIdRoute: typeof AdminSuggestionsSuggestionIdRoute
   AdminPlacesIndexRoute: typeof AdminPlacesIndexRoute
   AdminReportsIndexRoute: typeof AdminReportsIndexRoute
+  AdminSubdistrictsIndexRoute: typeof AdminSubdistrictsIndexRoute
   AdminSuggestionsIndexRoute: typeof AdminSuggestionsIndexRoute
 }
 
@@ -306,9 +347,11 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminIndexRoute: AdminIndexRoute,
   AdminPlacesPlaceIdRoute: AdminPlacesPlaceIdRoute,
   AdminReportsReportIdRoute: AdminReportsReportIdRoute,
+  AdminSubdistrictsSubDistrictIdRoute: AdminSubdistrictsSubDistrictIdRoute,
   AdminSuggestionsSuggestionIdRoute: AdminSuggestionsSuggestionIdRoute,
   AdminPlacesIndexRoute: AdminPlacesIndexRoute,
   AdminReportsIndexRoute: AdminReportsIndexRoute,
+  AdminSubdistrictsIndexRoute: AdminSubdistrictsIndexRoute,
   AdminSuggestionsIndexRoute: AdminSuggestionsIndexRoute,
 }
 
