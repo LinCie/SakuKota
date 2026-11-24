@@ -18,6 +18,7 @@ type CreateRequest struct {
 type Response struct {
 	ID        int64          `json:"id"`
 	PlaceID   int64          `json:"place_id"`
+	PlaceName string         `json:"place_name"`
 	Rating    int            `json:"rating"`
 	Comment   *string        `json:"comment"`
 	CreatedAt time.Time      `json:"created_at"`
@@ -30,6 +31,8 @@ type Response struct {
 type AuthorResponse struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
+	// AvatarURL is the author's profile photo link, or null without one.
+	AvatarURL *string `json:"avatar_url"`
 }
 
 // toReview builds the review to save from the place, the author, and the request body.
@@ -48,12 +51,14 @@ func toResponse(r domain.Review, mediaURL func(key string) string) Response {
 	return Response{
 		ID:        r.ID,
 		PlaceID:   r.PlaceID,
+		PlaceName: r.PlaceName,
 		Rating:    r.Rating,
 		Comment:   r.Comment,
 		CreatedAt: r.CreatedAt,
 		User: AuthorResponse{
-			ID:   r.User.ID,
-			Name: r.User.Name,
+			ID:        r.User.ID,
+			Name:      r.User.Name,
+			AvatarURL: storage.OptionalURL(r.User.AvatarKey, mediaURL),
 		},
 		Medias: storage.ToMediaResponses(r.Medias, mediaURL),
 	}

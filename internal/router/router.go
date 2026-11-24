@@ -61,7 +61,7 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 
 	media := storage.NewMediaStore(storage.NewS3(cfg.Storage), cfg.Storage.PublicURL)
 
-	userModule := users.New(db)
+	userModule := users.New(db, media)
 	authModule := auth.New(cfg, userModule.Service, rdb)
 	placeModule := places.New(db, rdb, media)
 	reviewModule := reviews.New(db, placeModule.Service, media)
@@ -76,6 +76,25 @@ func NewRouter(db *sqlx.DB, rdb *redis.Client, cfg config.Config) http.Handler {
 			r.With(limit).Post("/login", authModule.Handler.Login)
 			r.Post("/refresh", authModule.Handler.Refresh)
 			r.Post("/logout", authModule.Handler.Logout)
+		})
+
+		r.Route("/users/me", func(r chi.Router) {
+			r.Use(middleware.WithAuth(cfg))
+
+			// GET /v1/users/me
+			r.Get("/", userModule.Handler.Show)
+
+			// PUT /v1/users/me
+			r.Put("/", userModule.Handler.Rename)
+
+			// POST /v1/users/me/avatar/upload-url
+			r.Post("/avatar/upload-url", userModule.Handler.CreateAvatarUpload)
+
+			// PUT /v1/users/me/avatar
+			r.Put("/avatar", userModule.Handler.SetAvatar)
+
+			// GET /v1/users/me/reviews
+			r.Get("/reviews", reviewModule.Handler.ListMine)
 		})
 
 		r.Route("/places", func(r chi.Router) {

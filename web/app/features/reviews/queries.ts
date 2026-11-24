@@ -1,4 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 
 import { placeKeys } from "~/features/places/queries";
 import { uploadImage } from "~/shared/image-upload";
@@ -8,6 +14,7 @@ import {
   createPlaceReview,
   deletePlaceReview,
   deleteReviewMedia,
+  getMyReviews,
   getPlaceReviews,
   requestReviewMediaUpload,
   type CreateReviewRequest,
@@ -16,10 +23,23 @@ import {
 export const reviewKeys = {
   all: ["reviews"] as const,
   place: (placeId: number) => ["reviews", "place", placeId] as const,
+  /** Keyed by user, so one user's reviews never show for the next. */
+  mine: (userId: number) => ["reviews", "mine", userId] as const,
 };
 
-// Queries. Reviews load when a place's details open, so they are not part of
-// any route loader.
+// Queries. A place's reviews load when its details open, so they are not part
+// of any route loader; the user's own reviews load with the profile route.
+
+export function myReviewsQuery(userId: number) {
+  return queryOptions({
+    queryKey: reviewKeys.mine(userId),
+    queryFn: getMyReviews,
+  });
+}
+
+export function useMyReviews(userId: number) {
+  return useSuspenseQuery(myReviewsQuery(userId));
+}
 
 export function usePlaceReviews(placeId: number) {
   return useQuery({

@@ -33,6 +33,7 @@ type Service interface {
 	MediaUploadURL(ctx context.Context, placeID, userID int64, contentType string) (storage.Upload, error)
 	AddMedia(ctx context.Context, placeID, userID int64, uploadKey string) (*domain.Review, error)
 	ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error)
+	ListByUser(ctx context.Context, userID int64) ([]domain.Review, error)
 	FetchByID(ctx context.Context, placeID, reviewID int64) (*domain.Review, error)
 	DeleteMedia(ctx context.Context, placeID, userID, mediaID int64) error
 	Delete(ctx context.Context, placeID, reviewID int64) error
@@ -100,6 +101,24 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 			httpx.RespondError(w, http.StatusNotFound, codePlaceNotFound, err.Error())
 			return
 		}
+		httpx.RespondInternalError(w)
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusOK, utils.Map(reviews, func(r domain.Review) Response { return toResponse(r, h.mediaURL) }))
+}
+
+// ListMine sends back the logged-in user's reviews, newest first.
+// The route must sit behind middleware.WithAuth, so the user is known.
+func (h *Handler) ListMine(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.RespondError(w, http.StatusUnauthorized, httpx.CodeUnauthorized, "missing user")
+		return
+	}
+
+	reviews, err := h.service.ListByUser(r.Context(), userID)
+	if err != nil {
 		httpx.RespondInternalError(w)
 		return
 	}

@@ -136,11 +136,12 @@ func linReview() domain.Review {
 	return domain.Review{
 		ID:        1,
 		PlaceID:   3,
+		PlaceName: "Warung Bu Lin",
 		UserID:    7,
 		Rating:    4,
 		Comment:   new("Murah, porsi besar"),
 		CreatedAt: time.Date(2026, 10, 4, 12, 30, 0, 0, time.UTC),
-		User:      domain.Author{ID: 7, Name: "Lin"},
+		User:      domain.Author{ID: 7, Name: "Lin", AvatarKey: new("avatars/7/a.webp")},
 		Medias: []domain.Media{
 			{ID: 4, Key: "reviews/3/7/a.webp", ContentType: "image/webp", Size: 2048, Position: 1},
 		},
@@ -151,10 +152,11 @@ func linReview() domain.Review {
 const linReviewJSON = `{
 	"id": 1,
 	"place_id": 3,
+	"place_name": "Warung Bu Lin",
 	"rating": 4,
 	"comment": "Murah, porsi besar",
 	"created_at": "2026-10-04T12:30:00Z",
-	"user": {"id": 7, "name": "Lin"},
+	"user": {"id": 7, "name": "Lin", "avatar_url": "https://cdn.test/avatars/7/a.webp"},
 	"medias": [{"id": 4, "url": "https://cdn.test/reviews/3/7/a.webp", "content_type": "image/webp", "size": 2048, "position": 1}]
 }`
 
@@ -204,6 +206,7 @@ func TestHandler_List(t *testing.T) {
 		sari := domain.Review{
 			ID:        2,
 			PlaceID:   3,
+			PlaceName: "Warung Bu Lin",
 			UserID:    8,
 			Rating:    5,
 			CreatedAt: time.Date(2026, 10, 5, 8, 0, 0, 0, time.UTC),
@@ -222,10 +225,11 @@ func TestHandler_List(t *testing.T) {
 				want: `[{
 					"id": 2,
 					"place_id": 3,
+					"place_name": "Warung Bu Lin",
 					"rating": 5,
 					"comment": null,
 					"created_at": "2026-10-05T08:00:00Z",
-					"user": {"id": 8, "name": "Sari"},
+					"user": {"id": 8, "name": "Sari", "avatar_url": null},
 					"medias": []
 				}, ` + linReviewJSON + `]`,
 			},
@@ -237,6 +241,53 @@ func TestHandler_List(t *testing.T) {
 				svc.EXPECT().ListByPlace(gomock.Any(), int64(3)).Return(tc.reviews, nil)
 
 				rec := serve(t, newRouter(svc), jsonRequest(http.MethodGet, "/places/3/reviews", ""))
+				require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body)
+				assert.JSONEq(t, tc.want, responseData(t, rec))
+			})
+		}
+	})
+}
+
+func TestHandler_ListMine(t *testing.T) {
+	newMineRouter := func(svc *mock.MockService) http.Handler {
+		h := reviews.NewHandler(svc, mediaURL)
+		r := chi.NewRouter()
+		r.With(middleware.WithAuth(testConfig)).Get("/users/me/reviews", h.ListMine)
+		return r
+	}
+
+	t.Run("requires_a_user", func(t *testing.T) {
+		// Without WithAuth in front there is no user, so nothing reaches the service.
+		rec := serve(t, http.HandlerFunc(reviews.NewHandler(newService(t), mediaURL).ListMine), jsonRequest(http.MethodGet, "/users/me/reviews", ""))
+		assert.Equal(t, wantError(http.StatusUnauthorized, "UNAUTHORIZED"), readError(t, rec))
+	})
+
+	t.Run("storage_failure", func(t *testing.T) {
+		svc := newService(t)
+		svc.EXPECT().ListByUser(gomock.Any(), int64(7)).Return(nil, errors.New("pq: connection reset"))
+
+		rec := serve(t, newMineRouter(svc), authRequest(t, http.MethodGet, "/users/me/reviews", "", 7))
+		assert.Equal(t, wantError(http.StatusInternalServerError, "INTERNAL_ERROR"), readError(t, rec))
+		assert.NotContains(t, rec.Body.String(), "pq:")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			reviews []domain.Review
+			want    string
+		}{
+			{name: "no_reviews", reviews: []domain.Review{}, want: `[]`},
+			{name: "reviews_of_the_token_user", reviews: []domain.Review{linReview()}, want: `[` + linReviewJSON + `]`},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				svc := newService(t)
+				// The user comes from the token.
+				svc.EXPECT().ListByUser(gomock.Any(), int64(7)).Return(tc.reviews, nil)
+
+				rec := serve(t, newMineRouter(svc), authRequest(t, http.MethodGet, "/users/me/reviews", "", 7))
 				require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body)
 				assert.JSONEq(t, tc.want, responseData(t, rec))
 			})

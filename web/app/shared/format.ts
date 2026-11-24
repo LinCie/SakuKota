@@ -13,6 +13,10 @@ const dateFormat = new Intl.DateTimeFormat("id-ID", {
 const localDateFormat = new Intl.DateTimeFormat("id-ID", {
   dateStyle: "long",
 });
+const localMonthFormat = new Intl.DateTimeFormat("id-ID", {
+  month: "long",
+  year: "numeric",
+});
 const ratingFormat = new Intl.NumberFormat("id-ID", {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
@@ -34,6 +38,11 @@ export function formatDate(date: Date): string {
 /** Formats a moment, such as a `created_at` timestamp, as its day where the viewer is. */
 export function formatLocalDate(date: Date): string {
   return localDateFormat.format(date);
+}
+
+/** Formats a moment's month where the viewer is, such as "November 2026". */
+export function formatLocalMonth(date: Date): string {
+  return localMonthFormat.format(date);
 }
 
 /** Formats a star rating with one decimal, such as 4,3. */

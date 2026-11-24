@@ -144,6 +144,21 @@ func (mr *MockServiceMockRecorder) ListByPlace(ctx, placeID any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByPlace", reflect.TypeOf((*MockService)(nil).ListByPlace), ctx, placeID)
 }
 
+// ListByUser mocks base method.
+func (m *MockService) ListByUser(ctx context.Context, userID int64) ([]domain.Review, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListByUser", ctx, userID)
+	ret0, _ := ret[0].([]domain.Review)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListByUser indicates an expected call of ListByUser.
+func (mr *MockServiceMockRecorder) ListByUser(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByUser", reflect.TypeOf((*MockService)(nil).ListByUser), ctx, userID)
+}
+
 // MediaUploadURL mocks base method.
 func (m *MockService) MediaUploadURL(ctx context.Context, placeID, userID int64, contentType string) (storage.Upload, error) {
 	m.ctrl.T.Helper()

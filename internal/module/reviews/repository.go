@@ -35,7 +35,7 @@ func (r *PostgresRepository) Create(ctx context.Context, review *domain.Review) 
 		)
 		SELECT `+reviewColumns+`
 		FROM inserted r
-		JOIN USERS u ON u.id = r.user_id`,
+		`+reviewJoins,
 		review.PlaceID,
 		review.UserID,
 		review.Rating,
@@ -70,7 +70,7 @@ func (r *PostgresRepository) fetch(ctx context.Context, where string, args ...an
 		&review,
 		`SELECT `+reviewColumns+`
 		FROM PLACE_REVIEWS r
-		JOIN USERS u ON u.id = r.user_id
+		`+reviewJoins+`
 		WHERE `+where,
 		args...,
 	)
@@ -174,10 +174,36 @@ func (r *PostgresRepository) ListByPlace(ctx context.Context, placeID int64) ([]
 		&reviews,
 		`SELECT `+reviewColumns+`
 		FROM PLACE_REVIEWS r
-		JOIN USERS u ON u.id = r.user_id
+		`+reviewJoins+`
 		WHERE r.place_id = $1
 		ORDER BY r.created_at DESC, r.id DESC`,
 		placeID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := r.attachMedias(ctx, reviews); err != nil {
+		return nil, err
+	}
+
+	return reviews, nil
+}
+
+// ListByUser returns the user's reviews, newest first. Reviews created at the
+// same moment list the later one first.
+func (r *PostgresRepository) ListByUser(ctx context.Context, userID int64) ([]domain.Review, error) {
+	reviews := make([]domain.Review, 0)
+
+	err := r.db.SelectContext(
+		ctx,
+		&reviews,
+		`SELECT `+reviewColumns+`
+		FROM PLACE_REVIEWS r
+		`+reviewJoins+`
+		WHERE r.user_id = $1
+		ORDER BY r.created_at DESC, r.id DESC`,
+		userID,
 	)
 	if err != nil {
 		return nil, err
@@ -342,10 +368,16 @@ func lockReview(ctx context.Context, tx *sqlx.Tx, placeID, userID int64) (int64,
 	return id, err
 }
 
-// reviewColumns selects a review from `r` and its author from `u`, aliased to
-// match the nested domain.Review.User fields.
-const reviewColumns = `r.id, r.place_id, r.user_id, r.rating, r.comment, r.created_at,
-	u.id AS "user.id", u.name AS "user.name"`
+// reviewColumns selects a review from `r`, its place's name from `p`, and its
+// author from `u` with the photo from `a`, aliased to match the nested
+// domain.Review.User fields.
+const reviewColumns = `r.id, r.place_id, r.user_id, r.rating, r.comment, r.created_at, p.name AS place_name,
+	u.id AS "user.id", u.name AS "user.name", a.key AS "user.avatar_key"`
+
+// reviewJoins joins a review `r` to the tables reviewColumns reads.
+const reviewJoins = `JOIN PLACES p ON p.id = r.place_id
+	JOIN USERS u ON u.id = r.user_id
+	LEFT JOIN MEDIAS a ON a.id = u.avatar_media_id`
 
 // mapCreateError maps a repeat review to domain.ErrPlaceAlreadyReviewed and a missing place to domain.ErrPlaceNotFound.
 // Any other error is returned unchanged.

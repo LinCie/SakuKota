@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -138,5 +139,101 @@ func TestRepository_Fetch(t *testing.T) {
 
 		assert.ErrorIs(t, err, domain.ErrUserNotFound)
 		assert.Nil(t, got)
+	})
+}
+
+// avatar is a promoted profile photo stored under key.
+func avatar(key string) domain.Media {
+	return domain.Media{Key: key, ContentType: "image/webp", Size: 1024}
+}
+
+func TestRepository_Rename(t *testing.T) {
+	t.Run("SetsName", func(t *testing.T) {
+		repo := newRepository(t)
+		ana := createUser(t, repo, "Ana", "ana@example.com", "h")
+		budi := createUser(t, repo, "Budi", "budi@example.com", "h")
+
+		got, err := repo.Rename(t.Context(), ana.ID, "Ana Lestari")
+		require.NoError(t, err)
+		assert.Equal(t, "Ana Lestari", got.Name)
+		assert.Equal(t, ana.Email, got.Email)
+		assert.False(t, got.UpdatedAt.Before(ana.UpdatedAt), "UpdatedAt moved back")
+
+		other, err := repo.Fetch(t.Context(), budi.ID)
+		require.NoError(t, err)
+		assert.Equal(t, budi, other, "another user changed")
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		repo := newRepository(t)
+
+		got, err := repo.Rename(t.Context(), 999, "Ana")
+
+		assert.ErrorIs(t, err, domain.ErrUserNotFound)
+		assert.Nil(t, got)
+	})
+}
+
+func TestRepository_SetAvatar(t *testing.T) {
+	t.Run("FirstPhoto", func(t *testing.T) {
+		repo := newRepository(t)
+		ana := createUser(t, repo, "Ana", "ana@example.com", "h")
+
+		got, err := repo.SetAvatar(t.Context(), ana.ID, avatar("avatars/1/a.webp"))
+		require.NoError(t, err)
+		assert.Equal(t, new("avatars/1/a.webp"), got.AvatarKey)
+		assert.Empty(t, pgtest.QueuedKeys(t, testDB))
+
+		byEmail, err := repo.FetchByEmail(t.Context(), ana.Email)
+		require.NoError(t, err)
+		assert.Equal(t, got, byEmail)
+	})
+
+	t.Run("ReplacesAndQueuesOldPhoto", func(t *testing.T) {
+		repo := newRepository(t)
+		ana := createUser(t, repo, "Ana", "ana@example.com", "h")
+		_, err := repo.SetAvatar(t.Context(), ana.ID, avatar("avatars/1/a.webp"))
+		require.NoError(t, err)
+
+		got, err := repo.SetAvatar(t.Context(), ana.ID, avatar("avatars/1/b.webp"))
+		require.NoError(t, err)
+		assert.Equal(t, new("avatars/1/b.webp"), got.AvatarKey)
+		assert.Equal(t, []string{"avatars/1/a.webp"}, pgtest.QueuedKeys(t, testDB))
+
+		var medias int
+		require.NoError(t, testDB.Get(&medias, `SELECT COUNT(*) FROM MEDIAS`))
+		assert.Equal(t, 1, medias, "the old MEDIAS row must be deleted")
+	})
+
+	t.Run("ConcurrentChangesQueueEveryReplacedPhoto", func(t *testing.T) {
+		repo := newRepository(t)
+		ana := createUser(t, repo, "Ana", "ana@example.com", "h")
+
+		const n = 5
+		var wg sync.WaitGroup
+		for i := range n {
+			wg.Go(func() {
+				_, err := repo.SetAvatar(t.Context(), ana.ID, avatar(fmt.Sprintf("avatars/1/%d.webp", i)))
+				assert.NoError(t, err)
+			})
+		}
+		wg.Wait()
+
+		var medias int
+		require.NoError(t, testDB.Get(&medias, `SELECT COUNT(*) FROM MEDIAS`))
+		assert.Equal(t, 1, medias, "only the current photo stays")
+		assert.Len(t, pgtest.QueuedKeys(t, testDB), n-1)
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		repo := newRepository(t)
+
+		got, err := repo.SetAvatar(t.Context(), 999, avatar("avatars/999/a.webp"))
+
+		assert.ErrorIs(t, err, domain.ErrUserNotFound)
+		assert.Nil(t, got)
+		var medias int
+		require.NoError(t, testDB.Get(&medias, `SELECT COUNT(*) FROM MEDIAS`))
+		assert.Zero(t, medias, "nothing may be stored")
 	})
 }

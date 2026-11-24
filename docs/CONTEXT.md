@@ -4,7 +4,7 @@
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-26 (auth rate limit and hash concurrency bound).
+> - Last updated: 2026-11-27 (user profiles; web account menu; web profile layout).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
@@ -35,6 +35,7 @@ is **SakuKota** / `sakukota-go`.
 | Suggestion | A user-proposed place awaiting admin review |
 | Review | A user's 1–5 star rating of a place, with optional comment and medias |
 | Report | A user's flag of an abusive place or review, with a reason, awaiting an admin |
+| Profile | The signed-in user's display name (`name`) and optional profile photo (avatar), shown on their reviews |
 
 ## 3. Sources of truth
 
@@ -60,7 +61,8 @@ is **SakuKota** / `sakukota-go`.
 
 Beyond the docs: JWT auth with rotating refresh cookies, up to 10 medias per
 place, sub-district, and review in S3-compatible storage (Garage), a cleanup queue
-for deleted objects, and abuse reports of places and reviews. Only the Must features have user stories; the rest are
+for deleted objects, abuse reports of places and reviews, and user profiles
+(display name, profile photo, own reviews). Only the Must features have user stories; the rest are
 specified only by tests.
 
 ## 5. Cross-cutting API contract
@@ -103,7 +105,8 @@ Applies to every module unless §6 says otherwise. All routes live under `/v1`.
   - *Public:* `/docs`, `/openapi.json`, `/v1/auth/*`, `GET /places`,
     `GET /places/{id}`, `GET /places/{id}/reviews`, `GET /places/categories[/{id}]`,
     `GET /subdistricts[/{id}]`.
-  - *Signed in:* `POST /places/{id}/reviews`, `DELETE /places/{id}/reviews/mine`,
+  - *Signed in:* `GET`/`PUT /users/me`, `POST /users/me/avatar/upload-url`,
+    `PUT /users/me/avatar`, `GET /users/me/reviews`, `POST /places/{id}/reviews`, `DELETE /places/{id}/reviews/mine`,
     the caller's review media routes under `/places/{id}/reviews/mine/medias`,
     `POST /suggestions`, `GET /suggestions/mine`, `POST /places/{id}/reports`,
     `POST /places/{id}/reviews/{reviewId}/reports`.
@@ -120,7 +123,8 @@ Applies to every module unless §6 says otherwise. All routes live under `/v1`.
   `X-Frame-Options: DENY`. The `/docs` HTML page alone relaxes the CSP to
   `frame-ancestors 'none'` so its scripts load.
 - **Privacy.** Emails appear only in the caller's own user object from register,
-  login, and refresh. Nested authors are `{id, name}`. No password material.
+  login, refresh, and `/users/me`. Nested authors are `{id, name}`, plus
+  `avatar_url` on reviews. No password material.
 
 ## 6. Behavior by module
 
@@ -154,8 +158,28 @@ Routes under `/v1/auth`. Config: `JWTSecret`, `JWTExpiry`, `RefreshTokenExpiry`,
 
 ### 6.2 Users (`internal/module/users`)
 
-Service only (`Create`, `FetchByEmail`, `Fetch`); passes `domain.ErrEmailTaken`
-and `domain.ErrUserNotFound` through. Role defaults to `user`.
+The service (`Create`, `FetchByEmail`, `Fetch`, also used by auth) passes
+`domain.ErrEmailTaken` and `domain.ErrUserNotFound` through. Role defaults to
+`user`.
+
+Profile routes under `/v1/users/me` (signed in; the user comes from the token):
+
+- **Response:** `{id, name, email, role, avatar_url, created_at, updated_at}`;
+  `avatar_url` is `null` without a photo. A user deleted after the token was
+  issued → `404 USER_NOT_FOUND`.
+- **Show `GET /users/me`.**
+- **Rename `PUT /users/me {name}`.** Same rules as the register name (trimmed,
+  1–100, else `VALIDATION_ERROR`); other fields are ignored. Reviews show the
+  new name.
+- **Photo.** `POST /users/me/avatar/upload-url {content_type}` presigns an
+  upload under `avatars/{userId}`; only JPEG, PNG, and WebP images (anything
+  else → `VALIDATION_ERROR`, nothing presigned). `PUT /users/me/avatar
+  {upload_key}` promotes it (same checks as other medias, errors →
+  `VALIDATION_ERROR`) and makes it the photo. The previous photo's `MEDIAS` row
+  is deleted and its key queued; concurrent changes queue every replaced photo.
+  If storing fails, the promoted object is deleted, even if the request was
+  cancelled. A photo cannot be removed, only replaced.
+- **Own reviews `GET /users/me/reviews`:** see §6.4.
 
 ### 6.3 Places and categories (`internal/module/places`)
 
@@ -222,6 +246,8 @@ ratings, `medias` is `[]` without images.
 
 - `GET /places/{id}/reviews` (public): newest first, ties by higher id; unknown
   place → 404.
+- `GET /users/me/reviews` (signed in): the caller's reviews of every place,
+  newest first, ties by higher id; `[]` without any.
 - `POST /places/{id}/reviews {rating, comment?}` (signed in): `rating` integer
   1–5 (wrong type → `INVALID_BODY`, missing/out of range → `VALIDATION_ERROR`).
   One review per user per place (`409 ALREADY_REVIEWED`, holds under
@@ -253,8 +279,9 @@ ratings, `medias` is `[]` without images.
 - **Delete own (signed in) `DELETE /places/{id}/reviews/mine`** → `204`, with
   the same effects as an admin delete. No review by the caller → `404
   REVIEW_NOT_FOUND`.
-- Response: `{id, place_id, rating, comment, created_at, user{id,name},
-  medias}`; `medias` is `[]` without any, and lists include each review's
+- Response: `{id, place_id, place_name, rating, comment, created_at,
+  user{id,name,avatar_url}, medias}`; `avatar_url` is the author's current
+  profile photo or `null`; `medias` is `[]` without any, and lists include each review's
   medias in position order. No edit.
 
 ### 6.5 Sub-districts (`internal/module/subdistricts`)
@@ -370,8 +397,8 @@ suggestions → places, reviews → places, reports → places and reviews) decl
 `Service` interface it consumes, and `NewService` returns it, backed by the
 unexported `service` struct (`places.Service` also carries `AddRating` and
 `RemoveRating` for reviews, `reviews.Service` carries `FetchByID` for
-reports). Users and storage cleanup have no handler, so their `NewService`
-returns `*service`. Services own transactions that
+reports, `users.Service` carries `Create` and `FetchByEmail` for auth).
+Storage cleanup has no handler, so its `NewService` returns `*service`. Services own transactions that
 span repositories or services through `database.Transactor.WithinTx`, which
 carries the transaction in `ctx`; repositories run queries on
 `database.Conn(ctx, db)` to join it (place delete included), and a nested
@@ -419,7 +446,7 @@ exits, with status 1 on failure.
 | `UNAUTHORIZED` | 401 | Missing or invalid access token |
 | `INVALID_CREDENTIALS` / `INVALID_REFRESH_TOKEN` | 401 | Auth |
 | `FORBIDDEN` | 403 | Non-admin on an admin route |
-| `*_NOT_FOUND` (place, sub-district, category, suggestion, media, review, report) | 404 | Unknown resource, or unknown `GET /places` filter id |
+| `*_NOT_FOUND` (place, sub-district, category, suggestion, media, review, report, user) | 404 | Unknown resource, or unknown `GET /places` filter id |
 | `EMAIL_TAKEN` / `SUB_DISTRICT_EXISTS` / `SUB_DISTRICT_IN_USE` / `ALREADY_REVIEWED` / `MEDIA_LIMIT_REACHED` / `ALREADY_REPORTED` / `ALREADY_RESOLVED` | 409 | Conflicts |
 | `TOO_MANY_PENDING_SUGGESTIONS` / `TOO_MANY_PENDING_REPORTS` | 429 | Pending limits |
 | `TOO_MANY_REQUESTS` | 429 | Register/login rate limit |
@@ -471,15 +498,15 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
   - The places cache lives 30 s with no invalidation, so lists can be 30 s
     stale; Redis failure should fall back to PostgreSQL.
 - **Known gaps:** a media added while its owner is deleted can be orphaned;
-  deleting a user cascades to their reviews but leaves the reviews' `MEDIAS`
-  rows and files unqueued;
+  deleting a user cascades to their reviews but leaves the reviews' and their
+  profile photo's `MEDIAS` rows and files unqueued;
   medias cannot be reordered; `MEDIAS` has no owner type; a report shows its
   content live, so once removed it cannot show what the content said, and
   content deleted outside a report leaves its reports pending; bucket objects from the
   old static maps were not queued (the migration was edited in place, so
   databases must be rebuilt).
 - **Unspecified:** `UploadTTL`, production token lifetime, cleanup schedule,
-  review edit, a current-user endpoint, listing users, a reporter's view of
+  review edit, listing users, other users' profiles, removing a profile photo, a reporter's view of
   their own reports.
 - **Performance:** the `bbox` spread ranks every place in the box (~4 ms on
   1,092 seeded places; untested at 50,000).
@@ -535,3 +562,6 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-25 | `Permissions-Policy` (no geolocation, camera, microphone) added to the security headers |
 | 2026-11-25 | Request contexts expire after 25 s (`WithTimeout`); a timed-out call answers 500 |
 | 2026-11-26 | Register and login rate limited per client (10/min, `429 TOO_MANY_REQUESTS`, `TRUSTED_PROXY_HOPS`); argon2id hashes bounded to half the cores |
+| 2026-11-27 | Profiles: `/users/me` show and rename, image-only profile photo (old one queued), `GET /users/me/reviews`; reviews carry `place_name` and `user.avatar_url`; `USER_NOT_FOUND`; web `/profil` page and avatars on reviews |
+| 2026-11-27 | Web header: profile and sign-out in one account menu under the user's first name on every screen size; no contract change |
+| 2026-11-27 | Web `/profil`: identity header, star summary that filters own reviews, reviews grouped by month 20 at a time with their photos; no contract change |

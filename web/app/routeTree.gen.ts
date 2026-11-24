@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as ProfilRouteImport } from './routes/profil'
 import { Route as UsulanRouteImport } from './routes/usulan'
 import { Route as AuthDaftarRouteImport } from './routes/_auth/daftar'
 import { Route as AuthMasukRouteImport } from './routes/_auth/masuk'
@@ -37,6 +38,11 @@ const AuthRoute = AuthRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfilRoute = ProfilRouteImport.update({
+  id: '/profil',
+  path: '/profil',
   getParentRoute: () => rootRouteImport,
 } as any)
 const UsulanRoute = UsulanRouteImport.update({
@@ -105,6 +111,7 @@ const AdminSuggestionsSuggestionIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/profil': typeof ProfilRoute
   '/usulan': typeof UsulanRoute
   '/daftar': typeof AuthDaftarRoute
   '/masuk': typeof AuthMasukRoute
@@ -120,6 +127,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/profil': typeof ProfilRoute
   '/usulan': typeof UsulanRoute
   '/daftar': typeof AuthDaftarRoute
   '/masuk': typeof AuthMasukRoute
@@ -138,6 +146,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_auth': typeof AuthRouteWithChildren
   '/admin': typeof AdminRouteWithChildren
+  '/profil': typeof ProfilRoute
   '/usulan': typeof UsulanRoute
   '/_auth/daftar': typeof AuthDaftarRoute
   '/_auth/masuk': typeof AuthMasukRoute
@@ -156,6 +165,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/profil'
     | '/usulan'
     | '/daftar'
     | '/masuk'
@@ -171,6 +181,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/profil'
     | '/usulan'
     | '/daftar'
     | '/masuk'
@@ -188,6 +199,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_auth'
     | '/admin'
+    | '/profil'
     | '/usulan'
     | '/_auth/daftar'
     | '/_auth/masuk'
@@ -206,6 +218,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRouteWithChildren
   AdminRoute: typeof AdminRouteWithChildren
+  ProfilRoute: typeof ProfilRoute
   UsulanRoute: typeof UsulanRoute
 }
 
@@ -230,6 +243,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profil': {
+      id: '/profil'
+      path: '/profil'
+      fullPath: '/profil'
+      preLoaderRoute: typeof ProfilRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/usulan': {
@@ -361,6 +381,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRouteWithChildren,
   AdminRoute: AdminRouteWithChildren,
+  ProfilRoute: ProfilRoute,
   UsulanRoute: UsulanRoute,
 }
 export const routeTree = rootRouteImport

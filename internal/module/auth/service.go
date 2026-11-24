@@ -72,13 +72,11 @@ func NewService(cfg config.Config, userService UserService, store RefreshStore) 
 // Register checks the sign-up details, then saves the user with a hashed password.
 // Hashing waits its turn among concurrent hashes, and returns ctx's error if ctx ends first.
 func (s *service) Register(ctx context.Context, u *domain.User, password string) (*domain.User, error) {
-	u.Name = strings.TrimSpace(u.Name)
-	switch {
-	case u.Name == "":
-		return nil, domain.ErrUserNameRequired
-	case utf8.RuneCountInString(u.Name) > domain.MaxUserNameLength:
-		return nil, domain.ErrUserNameTooLong
+	name, err := domain.NormalizeUserName(u.Name)
+	if err != nil {
+		return nil, err
 	}
+	u.Name = name
 
 	u.Email = normalizeEmail(u.Email)
 	if utf8.RuneCountInString(u.Email) > domain.MaxEmailLength {

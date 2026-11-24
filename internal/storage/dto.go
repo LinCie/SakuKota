@@ -54,6 +54,14 @@ func ToMediaResponses(medias []domain.Media, mediaURL func(key string) string) [
 	return responses
 }
 
+// OptionalURL returns the URL mediaURL builds for key, or nil when key is nil.
+func OptionalURL(key *string, mediaURL func(key string) string) *string {
+	if key == nil {
+		return nil
+	}
+	return new(mediaURL(*key))
+}
+
 // ToMediaUploadResponse turns u into the JSON shape sent to the client.
 func ToMediaUploadResponse(u Upload) MediaUploadResponse {
 	return MediaUploadResponse{

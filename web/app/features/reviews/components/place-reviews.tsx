@@ -7,6 +7,7 @@ import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { MediaCard } from "~/shared/components/media-card";
 import { MissingSlot } from "~/shared/components/missing-slot";
 import { Button, buttonVariants } from "~/shared/components/ui/button";
+import { UserAvatar } from "~/shared/components/user-avatar";
 import { formatLocalDate } from "~/shared/format";
 import { writeErrorMessage } from "~/shared/write-error";
 
@@ -125,8 +126,12 @@ export function PlaceReviews({ placeId }: { placeId: number }) {
         {reviews.data.map((review) => (
           <li key={review.id} className="flex flex-col gap-1.5 border-t py-3">
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-              <span className="text-foreground font-semibold">
-                {review.user.name}
+              <span className="text-foreground flex min-w-0 items-center gap-2 font-semibold">
+                <UserAvatar
+                  name={review.user.name}
+                  url={review.user.avatar_url}
+                />
+                <span className="truncate">{review.user.name}</span>
               </span>
               <RatingStars rating={review.rating} />
             </div>

@@ -96,6 +96,23 @@ func TestPostgresRepository_Create(t *testing.T) {
 		assert.Equal(t, &comment, got.Comment)
 		assert.WithinDuration(t, time.Now(), got.CreatedAt, time.Minute, "Create().CreatedAt")
 		assert.Equal(t, domain.Author{ID: userID, Name: "Ana"}, got.User)
+		assert.Equal(t, "Laundry", got.PlaceName)
+	})
+
+	t.Run("author_with_profile_photo", func(t *testing.T) {
+		repo := newRepository(t)
+		placeID := insertPlace(t, "Laundry")
+		userID := pgtest.InsertUser(t, testDB, "Ana")
+		setAvatar(t, userID, "avatars/1/a.webp")
+
+		got := mustCreate(t, repo, &domain.Review{PlaceID: placeID, UserID: userID, Rating: 4})
+		want := domain.Author{ID: userID, Name: "Ana", AvatarKey: new("avatars/1/a.webp")}
+		assert.Equal(t, want, got.User)
+
+		listed, err := repo.ListByPlace(t.Context(), placeID)
+		require.NoError(t, err)
+		require.Len(t, listed, 1)
+		assert.Equal(t, want, listed[0].User)
 	})
 
 	t.Run("stores_review_without_comment", func(t *testing.T) {
@@ -245,6 +262,73 @@ func TestPostgresRepository_ListByPlace(t *testing.T) {
 
 		assert.ErrorIs(t, err, domain.ErrPlaceNotFound)
 		assert.Nil(t, got)
+	})
+}
+
+// setAvatar stores key as the user's profile photo.
+func setAvatar(t *testing.T, userID int64, key string) {
+	t.Helper()
+
+	_, err := testDB.Exec(
+		`WITH media AS (INSERT INTO MEDIAS (key, content_type, size_bytes) VALUES ($2, 'image/webp', 1) RETURNING id)
+		UPDATE USERS SET avatar_media_id = (SELECT id FROM media) WHERE id = $1`,
+		userID, key)
+	require.NoError(t, err, "set avatar of user %d", userID)
+}
+
+func TestPostgresRepository_ListByUser(t *testing.T) {
+	t.Run("newest_first_with_place_names_and_medias", func(t *testing.T) {
+		repo := newRepository(t)
+		laundryID := insertPlace(t, "Laundry")
+		warungID := insertPlace(t, "Warung")
+		anaID := pgtest.InsertUser(t, testDB, "Ana")
+		budiID := pgtest.InsertUser(t, testDB, "Budi")
+
+		oldest := mustCreate(t, repo, &domain.Review{PlaceID: laundryID, UserID: anaID, Rating: 5})
+		newest := mustCreate(t, repo, &domain.Review{PlaceID: warungID, UserID: anaID, Rating: 2})
+		mustCreate(t, repo, &domain.Review{PlaceID: laundryID, UserID: budiID, Rating: 3})
+		mustAddMedia(t, repo, laundryID, anaID, "reviews/1/1/a.png")
+		_, err := testDB.Exec(`UPDATE PLACE_REVIEWS SET created_at = NOW() - INTERVAL '1 day' WHERE id = $1`, oldest.ID)
+		require.NoError(t, err, "backdate review")
+		wantMedias, err := repo.Fetch(t.Context(), laundryID, anaID)
+		require.NoError(t, err)
+
+		got, err := repo.ListByUser(t.Context(), anaID)
+		require.NoError(t, err)
+
+		require.Len(t, got, 2)
+		assert.Equal(t, newest.ID, got[0].ID)
+		assert.Equal(t, "Warung", got[0].PlaceName)
+		assert.Empty(t, got[0].Medias)
+		assert.Equal(t, oldest.ID, got[1].ID)
+		assert.Equal(t, "Laundry", got[1].PlaceName)
+		assert.Equal(t, wantMedias.Medias, got[1].Medias)
+		assert.Equal(t, domain.Author{ID: anaID, Name: "Ana"}, got[1].User)
+	})
+
+	t.Run("simultaneous_reviews_later_first", func(t *testing.T) {
+		repo := newRepository(t)
+		anaID := pgtest.InsertUser(t, testDB, "Ana")
+		first := mustCreate(t, repo, &domain.Review{PlaceID: insertPlace(t, "First"), UserID: anaID, Rating: 5})
+		second := mustCreate(t, repo, &domain.Review{PlaceID: insertPlace(t, "Second"), UserID: anaID, Rating: 4})
+		_, err := testDB.Exec(`UPDATE PLACE_REVIEWS SET created_at = '2026-01-01T00:00:00Z'`)
+		require.NoError(t, err, "equalize review times")
+
+		got, err := repo.ListByUser(t.Context(), anaID)
+		require.NoError(t, err)
+
+		require.Len(t, got, 2)
+		assert.Equal(t, []int64{second.ID, first.ID}, []int64{got[0].ID, got[1].ID})
+	})
+
+	t.Run("no_reviews", func(t *testing.T) {
+		repo := newRepository(t)
+
+		got, err := repo.ListByUser(t.Context(), pgtest.InsertUser(t, testDB, "Ana"))
+		require.NoError(t, err)
+
+		assert.NotNil(t, got, "want an empty, non-nil slice")
+		assert.Empty(t, got)
 	})
 }
 

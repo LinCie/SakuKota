@@ -29,6 +29,9 @@ type Repository interface {
 	// ListByPlace returns the place's reviews with their authors and medias,
 	// newest first, or domain.ErrPlaceNotFound.
 	ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error)
+	// ListByUser returns the user's reviews with their authors and medias,
+	// newest first.
+	ListByUser(ctx context.Context, userID int64) ([]domain.Review, error)
 	// DeleteMedia removes the photo from the user's review of the place and
 	// queues its file for deletion. It returns domain.ErrMediaNotFound if
 	// there is no such photo.
@@ -154,6 +157,11 @@ func (s *service) AddMedia(ctx context.Context, placeID, userID int64, uploadKey
 // ListByPlace returns the place's reviews, newest first.
 func (s *service) ListByPlace(ctx context.Context, placeID int64) ([]domain.Review, error) {
 	return s.repo.ListByPlace(ctx, placeID)
+}
+
+// ListByUser returns the user's reviews, newest first.
+func (s *service) ListByUser(ctx context.Context, userID int64) ([]domain.Review, error) {
+	return s.repo.ListByUser(ctx, userID)
 }
 
 // FetchByID returns the place's review with its author and medias, or

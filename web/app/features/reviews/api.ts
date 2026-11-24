@@ -18,6 +18,11 @@ export async function getPlaceReviews(placeId: number): Promise<Review[]> {
   return unwrap(await apiGet<Review[]>(`places/${placeId}/reviews`));
 }
 
+/** The signed-in user's reviews, newest first. */
+export async function getMyReviews(): Promise<Review[]> {
+  return unwrap(await apiGet<Review[]>("users/me/reviews"));
+}
+
 /** Signed-in users only; each user reviews a place once. */
 export async function createPlaceReview(
   placeId: number,

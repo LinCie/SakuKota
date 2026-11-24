@@ -11,11 +11,14 @@ const (
 // MaxReviewCommentLength caps the characters in a review's comment.
 const MaxReviewCommentLength = 1000
 
-// Review represents a row in the PLACE_REVIEWS table, joined with its author.
+// Review represents a row in the PLACE_REVIEWS table, joined with its place
+// name and author.
 type Review struct {
 	ID      int64 `db:"id"`
 	PlaceID int64 `db:"place_id"`
-	UserID  int64 `db:"user_id"`
+	// PlaceName is the reviewed place's name.
+	PlaceName string `db:"place_name"`
+	UserID    int64  `db:"user_id"`
 	// Rating is the number of stars given, from MinRating to MaxRating.
 	Rating int `db:"rating"`
 	// Comment is nil when the review is only a rating.

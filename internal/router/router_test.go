@@ -49,6 +49,12 @@ var routeAccess = map[string]access{
 	"POST /v1/auth/refresh":  public,
 	"POST /v1/auth/logout":   public,
 
+	"GET /v1/users/me/":                   authenticated,
+	"PUT /v1/users/me/":                   authenticated,
+	"POST /v1/users/me/avatar/upload-url": authenticated,
+	"PUT /v1/users/me/avatar":             authenticated,
+	"GET /v1/users/me/reviews":            authenticated,
+
 	"GET /v1/places/":                                      public,
 	"GET /v1/places/{id}":                                  public,
 	"GET /v1/places/categories/":                           public,

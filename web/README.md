@@ -23,8 +23,8 @@ pnpm build          # production build in dist/
 ## Layout
 
 ```
-app/routes/      file-based routes: the map (/), sign-in (/masuk, /daftar), suggestions (/usulan), and /admin
-app/features/    one folder per domain: places, subdistricts, reviews, suggestions, auth, admin
+app/routes/      file-based routes: the map (/), sign-in (/masuk, /daftar), suggestions (/usulan), profile (/profil), and /admin
+app/features/    one folder per domain: places, subdistricts, reviews, suggestions, auth, profile, admin
 app/shared/      API client, hooks, and shared components
 ```
 

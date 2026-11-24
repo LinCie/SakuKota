@@ -1,14 +1,21 @@
-// Package users stores user accounts and exposes them to other modules.
+// Package users stores user accounts, serves the logged-in user's profile,
+// and exposes users to other modules.
 package users
 
 import "github.com/jmoiron/sqlx"
 
-// Module wires up the users module's repository and service.
+// Module bundles the service and handler of the users feature.
 type Module struct {
-	Service *service
+	Service Service
+	Handler *Handler
 }
 
-// New builds the users module's repository and service, linked together.
-func New(db *sqlx.DB) *Module {
-	return &Module{Service: NewService(NewPostgresRepository(db))}
+// New builds the users module on db, with profile photos kept in media.
+func New(db *sqlx.DB, media MediaStorage) *Module {
+	svc := NewService(NewPostgresRepository(db), media)
+
+	return &Module{
+		Service: svc,
+		Handler: NewHandler(svc, media.PublicURL),
+	}
 }

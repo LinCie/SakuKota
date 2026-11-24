@@ -474,3 +474,19 @@ func TestService_ListByPlace(t *testing.T) {
 		})
 	}
 }
+
+func TestService_ListByUser(t *testing.T) {
+	for _, repoErr := range []error{nil, errors.New("connection reset")} {
+		repo := mock.NewMockRepository(gomock.NewController(t))
+		want := []domain.Review{{ID: 5}, {ID: 2}}
+		repo.EXPECT().ListByUser(gomock.Any(), int64(7)).Return(want, repoErr)
+
+		got, err := reviews.NewService(repo, nil, nil, nil).ListByUser(t.Context(), 7)
+		if repoErr != nil {
+			assert.ErrorIs(t, err, repoErr)
+			continue
+		}
+		require.NoError(t, err)
+		assert.Equal(t, want, got)
+	}
+}

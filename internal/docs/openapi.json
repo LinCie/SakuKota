@@ -3,7 +3,7 @@
   "info": {
     "title": "SakuKota API",
     "version": "1.0.0",
-    "description": "API for sub-districts, places, place reviews, place suggestions, reports, place categories, and authentication. Successful JSON responses are wrapped in data; errors contain code and message."
+    "description": "API for sub-districts, places, place reviews, place suggestions, reports, place categories, authentication, and user profiles. Successful JSON responses are wrapped in data; errors contain code and message."
   },
   "servers": [
     {
@@ -15,6 +15,10 @@
     {
       "name": "Auth",
       "description": "Register users, authenticate, and manage refresh-token sessions."
+    },
+    {
+      "name": "Users",
+      "description": "The signed-in user's profile: display name, profile photo, and reviews."
     },
     {
       "name": "Places",
@@ -215,6 +219,208 @@
               }
             }
           },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/users/me": {
+      "get": {
+        "tags": ["Users"],
+        "operationId": "getMyProfile",
+        "summary": "Get my profile",
+        "description": "Returns the signed-in user's profile.",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Profile retrieved successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ProfileResponse" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "The signed-in user no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "USER_NOT_FOUND", "message": "user not found" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      },
+      "put": {
+        "tags": ["Users"],
+        "operationId": "renameMe",
+        "summary": "Change my display name",
+        "description": "Replaces the signed-in user's display name, which their reviews show. Other fields in the body are ignored.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RenameRequest" },
+              "example": { "name": "Ana Lestari" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Name changed successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ProfileResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is malformed, or the name is blank or longer than 100 characters.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidBody": { "value": { "code": "INVALID_BODY", "message": "invalid request body" } },
+                  "validation": { "value": { "code": "VALIDATION_ERROR", "message": "name is required" } }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "The signed-in user no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "USER_NOT_FOUND", "message": "user not found" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/users/me/avatar/upload-url": {
+      "post": {
+        "tags": ["Users"],
+        "operationId": "createAvatarUpload",
+        "summary": "Request a profile photo upload",
+        "description": "Returns a presigned URL for uploading a new profile photo of the signed-in user straight to storage. Only JPEG, PNG, and WebP images (5 MB at most) are accepted. Send the file as the body of a request with the returned method and headers before expires_at (5 minutes), then confirm it with PUT /v1/users/me/avatar.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MediaUploadRequest" },
+              "example": { "content_type": "image/webp" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload presigned successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MediaUploadResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is malformed, or the content type is not an allowed image.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidBody": { "value": { "code": "INVALID_BODY", "message": "invalid request body" } },
+                  "validation": { "value": { "code": "VALIDATION_ERROR", "message": "profile photo must be a JPEG, PNG, or WebP image" } }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/users/me/avatar": {
+      "put": {
+        "tags": ["Users"],
+        "operationId": "setAvatar",
+        "summary": "Set my profile photo",
+        "description": "Confirms an uploaded image and makes it the signed-in user's profile photo. The previous photo is deleted. The upload must have been requested for this user, and the file must be within its size limit and of the type it was requested for.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ConfirmUploadRequest" },
+              "example": { "upload_key": "uploads/avatars/7/0b1e6d4c-3f2a-4b8e-9c7d-5a6f1e2d3c4b.webp" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profile photo set successfully.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ProfileResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is malformed, the upload key is not one requested for this user, nothing was uploaded under it, or the file is too large or of the wrong type.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "examples": {
+                  "invalidBody": { "value": { "code": "INVALID_BODY", "message": "invalid request body" } },
+                  "validation": { "value": { "code": "VALIDATION_ERROR", "message": "file has not been uploaded" } }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "The signed-in user no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "code": "USER_NOT_FOUND", "message": "user not found" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/v1/users/me/reviews": {
+      "get": {
+        "tags": ["Users"],
+        "operationId": "listMyReviews",
+        "summary": "List my reviews",
+        "description": "Returns the signed-in user's reviews with their places' names, newest first.",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Reviews retrieved successfully. An empty result returns an empty data array.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Review" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
           "500": { "$ref": "#/components/responses/InternalServerError" }
         }
       }
@@ -2620,6 +2826,33 @@
           "data": { "$ref": "#/components/schemas/User" }
         }
       },
+      "RenameRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 100, "description": "Trimmed before it is checked." }
+        }
+      },
+      "Profile": {
+        "type": "object",
+        "required": ["id", "name", "email", "role", "avatar_url", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string", "description": "Display name, shown on the user's reviews." },
+          "email": { "type": "string", "format": "email" },
+          "role": { "type": "string", "enum": ["user", "admin"] },
+          "avatar_url": { "type": ["string", "null"], "format": "uri", "description": "Link to the profile photo, or null without one." },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ProfileResponse": {
+        "type": "object",
+        "required": ["data"],
+        "properties": {
+          "data": { "$ref": "#/components/schemas/Profile" }
+        }
+      },
       "Session": {
         "type": "object",
         "required": ["user", "access_token"],
@@ -2879,18 +3112,20 @@
       },
       "ReviewAuthor": {
         "type": "object",
-        "required": ["id", "name"],
+        "required": ["id", "name", "avatar_url"],
         "properties": {
           "id": { "type": "integer", "format": "int64" },
-          "name": { "type": "string" }
+          "name": { "type": "string" },
+          "avatar_url": { "type": ["string", "null"], "format": "uri", "description": "Link to the profile photo, or null without one." }
         }
       },
       "Review": {
         "type": "object",
-        "required": ["id", "place_id", "rating", "comment", "created_at", "user", "medias"],
+        "required": ["id", "place_id", "place_name", "rating", "comment", "created_at", "user", "medias"],
         "properties": {
           "id": { "type": "integer", "format": "int64" },
           "place_id": { "type": "integer", "format": "int64" },
+          "place_name": { "type": "string", "description": "The reviewed place's name." },
           "rating": { "type": "integer", "minimum": 1, "maximum": 5 },
           "comment": { "type": ["string", "null"] },
           "created_at": { "type": "string", "format": "date-time" },

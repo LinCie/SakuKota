@@ -1,7 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { LogOut, MapPinPlus, ShieldCheck, UserRound } from "lucide-react";
 
-import { Button, buttonVariants } from "~/shared/components/ui/button";
+import { buttonVariants } from "~/shared/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,13 +16,13 @@ import { logout } from "../api";
 import { clearSession, isAdmin, useSession } from "../session";
 
 const outlineClass = buttonVariants({ variant: "outline" });
-const iconClass = buttonVariants({ variant: "outline", size: "icon" });
 
 /**
  * The header's account corner: "Masuk" when signed out (returning to the
  * current page afterwards); when signed in, "Usulkan" (not for admins),
- * "Admin" (admins only), the user's first name, and "Keluar". On phones it is
- * a single icon button; signed in, it opens a menu of the same actions.
+ * "Admin" (admins only), and a menu under the user's first name with
+ * "Profil" and "Keluar". On phones it is a single icon button whose menu also
+ * holds "Usulkan" and "Admin".
  */
 export function AccountControl({ className }: { className?: string }) {
   const session = useSession();
@@ -66,39 +66,6 @@ export function AccountControl({ className }: { className?: string }) {
 
   return (
     <div className={cn("flex shrink-0 items-center gap-2", className)}>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label={`Akun ${firstName}`}
-          className={cn(iconClass, "sm:hidden")}
-        >
-          <UserRound aria-hidden="true" className="size-5" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-auto min-w-52">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel className="max-w-60 truncate">
-              {session.user.name}
-            </DropdownMenuLabel>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          {suggestLink ? (
-            <DropdownMenuItem render={<Link to="/usulan" />}>
-              <MapPinPlus aria-hidden="true" />
-              Usulkan
-            </DropdownMenuItem>
-          ) : null}
-          {adminLink ? (
-            <DropdownMenuItem render={<Link to="/admin" />}>
-              <ShieldCheck aria-hidden="true" />
-              Admin
-            </DropdownMenuItem>
-          ) : null}
-          <DropdownMenuItem onClick={signOut}>
-            <LogOut aria-hidden="true" />
-            Keluar
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
       {suggestLink ? (
         <Link to="/usulan" className={cn(outlineClass, "max-sm:hidden")}>
           <MapPinPlus aria-hidden="true" data-icon="inline-start" />
@@ -111,13 +78,57 @@ export function AccountControl({ className }: { className?: string }) {
           Admin
         </Link>
       ) : null}
-      <span className="text-foreground ml-1 max-w-[10ch] truncate text-sm font-semibold max-sm:hidden">
-        {firstName}
-      </span>
-      <Button variant="ghost" onClick={signOut} className="max-sm:hidden">
-        <LogOut aria-hidden="true" data-icon="inline-start" />
-        Keluar
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label={`Akun ${firstName}`}
+          className={cn(outlineClass, "max-sm:size-11 max-sm:px-0")}
+        >
+          <UserRound
+            aria-hidden="true"
+            data-icon="inline-start"
+            className="max-sm:size-5"
+          />
+          <span className="max-w-[10ch] truncate max-sm:sr-only">
+            {firstName}
+          </span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-auto min-w-52">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="max-w-60 truncate">
+              {session.user.name}
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          {pathname !== "/profil" ? (
+            <DropdownMenuItem render={<Link to="/profil" />}>
+              <UserRound aria-hidden="true" />
+              Profil
+            </DropdownMenuItem>
+          ) : null}
+          {suggestLink ? (
+            <DropdownMenuItem
+              render={<Link to="/usulan" />}
+              className="sm:hidden"
+            >
+              <MapPinPlus aria-hidden="true" />
+              Usulkan
+            </DropdownMenuItem>
+          ) : null}
+          {adminLink ? (
+            <DropdownMenuItem
+              render={<Link to="/admin" />}
+              className="sm:hidden"
+            >
+              <ShieldCheck aria-hidden="true" />
+              Admin
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem onClick={signOut}>
+            <LogOut aria-hidden="true" />
+            Keluar
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

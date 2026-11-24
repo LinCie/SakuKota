@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"strings"
+	"time"
+	"unicode/utf8"
+)
 
 // RoleAdmin is the role of users who may manage places, sub-districts and
 // suggestions.
@@ -25,6 +29,8 @@ type User struct {
 	Role         string    `db:"role"`
 	CreatedAt    time.Time `db:"created_at"`
 	UpdatedAt    time.Time `db:"updated_at"`
+	// AvatarKey is the storage key of the profile photo, or nil without one.
+	AvatarKey *string `db:"avatar_key"`
 }
 
 // Author is the user who wrote a Review, submitted a Suggestion, or filed a
@@ -32,4 +38,19 @@ type User struct {
 type Author struct {
 	ID   int64  `db:"id"`
 	Name string `db:"name"`
+	// AvatarKey is the storage key of the profile photo, or nil without one.
+	AvatarKey *string `db:"avatar_key"`
+}
+
+// NormalizeUserName trims name and rejects it if it is empty or too long.
+func NormalizeUserName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	switch {
+	case name == "":
+		return "", ErrUserNameRequired
+	case utf8.RuneCountInString(name) > MaxUserNameLength:
+		return "", ErrUserNameTooLong
+	}
+
+	return name, nil
 }

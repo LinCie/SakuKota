@@ -16,6 +16,7 @@ var (
 	ErrPasswordTooShort    = fmt.Errorf("password must be at least %d characters", MinPasswordLength)
 	ErrInvalidCredentials  = errors.New("invalid email or password")
 	ErrInvalidRefreshToken = errors.New("invalid or expired refresh token")
+	ErrAvatarNotImage      = errors.New("profile photo must be a JPEG, PNG, or WebP image")
 )
 
 // Errors of places and categories.
