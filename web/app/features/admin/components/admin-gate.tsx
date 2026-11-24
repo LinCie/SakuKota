@@ -8,7 +8,7 @@ export function AdminGate({ signedIn }: { signedIn: boolean }) {
   return (
     <div className="bg-background text-foreground flex min-h-dvh flex-col">
       <header className="bg-background border-b px-4 py-3">
-        <Wordmark tagline={false} />
+        <Wordmark />
       </header>
       <main className="grid flex-1 place-items-center p-4">
         <div className="bg-card ring-foreground/10 flex w-full max-w-sm flex-col gap-4 rounded-xl p-6 ring-1">

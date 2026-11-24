@@ -26,7 +26,7 @@ export function AuthShell({ kembali }: AuthShellProps) {
   return (
     <div className="bg-background text-foreground flex min-h-dvh flex-col">
       <header className="px-3 py-2.5 md:px-5 md:py-3.5">
-        <Wordmark href={mapHref} />
+        <Wordmark href={mapHref} tagline />
       </header>
 
       {/* Anchored, not centred: the switch stays put across pages and errors. */}

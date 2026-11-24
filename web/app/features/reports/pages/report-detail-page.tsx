@@ -87,19 +87,20 @@ export function ReportDetailPage({ report }: { report: ReportDetail }) {
 
   return (
     <>
-      <Link
-        to="/admin/reports"
-        className={buttonVariants({
-          variant: "ghost",
-          size: "sm",
-          className: "text-muted-foreground -ml-3 self-start",
-        })}
-      >
-        <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-        Daftar laporan
-      </Link>
-
       <PageHeader
+        back={
+          <Link
+            to="/admin/reports"
+            className={buttonVariants({
+              variant: "ghost",
+              size: "sm",
+              className: "text-muted-foreground -ml-3 self-start",
+            })}
+          >
+            <ArrowLeft aria-hidden="true" data-icon="inline-start" />
+            Daftar laporan
+          </Link>
+        }
         title={`Laporan ${isReview ? "ulasan" : "tempat"}`}
         description={target}
         actions={

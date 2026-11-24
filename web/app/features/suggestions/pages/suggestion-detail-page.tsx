@@ -140,19 +140,20 @@ export function SuggestionDetailPage({
 
   return (
     <>
-      <Link
-        to="/admin/suggestions"
-        className={buttonVariants({
-          variant: "ghost",
-          size: "sm",
-          className: "text-muted-foreground -ml-3 self-start",
-        })}
-      >
-        <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-        Daftar usulan
-      </Link>
-
       <PageHeader
+        back={
+          <Link
+            to="/admin/suggestions"
+            className={buttonVariants({
+              variant: "ghost",
+              size: "sm",
+              className: "text-muted-foreground -ml-3 self-start",
+            })}
+          >
+            <ArrowLeft aria-hidden="true" data-icon="inline-start" />
+            Daftar usulan
+          </Link>
+        }
         title={suggestion.name}
         description={[
           category?.name,

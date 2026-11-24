@@ -116,12 +116,11 @@ components:
     backgroundColor: "{colors.muted}"
     textColor: "{colors.foreground}"
     rounded: "{rounded.full}"
-  input-search:
+  search-bar:
     backgroundColor: "{colors.card}"
     textColor: "{colors.foreground}"
     typography: "{typography.body}"
     rounded: "{rounded.full}"
-    padding: "0 40px"
     height: "{spacing.control-touch}"
   select-kecamatan:
     backgroundColor: "{colors.card}"
@@ -135,15 +134,15 @@ components:
     textColor: "{colors.foreground}"
     typography: "{typography.label}"
     rounded: "{rounded.full}"
-    padding: "0 14px"
-    height: "{spacing.control}"
+    padding: "0 12px 0 16px"
+    height: "{spacing.control-touch}"
   category-filter-trigger-active:
     backgroundColor: "{colors.pandan-soft}"
     textColor: "{colors.pandan-deep}"
     typography: "{typography.label}"
     rounded: "{rounded.full}"
-    padding: "0 14px"
-    height: "{spacing.control}"
+    padding: "0 12px 0 16px"
+    height: "{spacing.control-touch}"
   category-tile:
     rounded: "{rounded.lg}"
     size: "32px"
@@ -266,7 +265,7 @@ Tokens follow shadcn's convention in `app/app.css`: each value is a CSS variable
 
 ### Primary
 
-- **Pandan** (primary, `#426f4c`): primary buttons ("Lihat info" on desktop, "Kirim ulasan", submit buttons, "Coba lagi"), links, the active kecamatan outline, the selected item in the admin sidebar, text selection fill (as pandan-soft). Text on it is primary-foreground (5.5:1).
+- **Pandan** (primary, `#426f4c`): primary buttons ("Kirim ulasan", submit buttons, "Coba lagi"), links, the active kecamatan outline, the selected item in the admin sidebar, text selection fill (as pandan-soft). Text on it is primary-foreground (5.5:1).
 - **Pandan ring** (ring, `#5f8d68`): every keyboard focus ring (3.6:1 against linen).
 
 ### Neutral
@@ -275,7 +274,7 @@ Tokens follow shadcn's convention in `app/app.css`: each value is a CSS variable
 - **Soft white** (card, `#fefdfb`): cards, inputs, popovers, dialogs, the bottom sheet, map floaters.
 - **Warm ink** (foreground, `#2b2521`): all primary text (14.3:1 on linen), the selected map pin.
 - **Muted** (muted, `#f3f0ea`): secondary buttons, list-row hover, table headers, missing slots, skeletons.
-- **Muted ink** (muted-foreground, `#6a625a`): addresses, hints, placeholders, timestamps, the count sentence (5.7:1 on linen, 5.3:1 on muted).
+- **Muted ink** (muted-foreground, `#6a625a`): addresses, hints, placeholders, timestamps, the list count (5.7:1 on linen, 5.3:1 on muted).
 - **Warm hover** (accent, `#f1ece3`): menu item highlight and ghost-button hover (shadcn's `accent`).
 - **Hairline** (border, `#e4dfd8`): dividers, card and panel borders, the header's bottom rule.
 - **Field edge** (input, `#d3cdc4`): input, select, and outline-button borders; the scrollbar thumb.
@@ -318,7 +317,7 @@ The API's `color` keys are unchanged; the app maps each key to its tint. Telang 
 - **Headline** (600, 1.25rem, 1.3, balanced): the place name in details, dialog titles, page titles (1.5rem on admin and `/usulan`).
 - **Title** (600, 1rem): section headings ("Daftar tempat", "Ulasan", info sections), list place names, the kecamatan select value.
 - **Body** (400, 1rem, 1.55): descriptions and kecamatan notes, capped at ~65ch with pretty wrapping.
-- **Body small** (400, 0.875rem): addresses, hints, review comments, the count sentence.
+- **Body small** (400, 0.875rem): addresses, hints, review comments, the list count.
 - **Label** (500, 0.875rem): buttons, field labels, filter labels, detail-row labels.
 - **Caption** (500, 0.75rem): badges, timestamps, map attribution.
 
@@ -330,14 +329,14 @@ The API's `color` keys are unchanged; the app maps each key to its tint. Telang 
 
 ## Layout
 
-Unchanged from the product's wireframe: a single-screen app exactly the viewport tall that never scrolls; the map owns everything below the header and filter row. The list and place details live in a toggleable panel, never below the map.
+Unchanged from the product's wireframe: a single-screen app exactly the viewport tall that never scrolls; the map owns everything below the header. The list and place details live in a toggleable panel, never below the map.
 
 - **Desktop (768px+):** the panel is a 24rem column on the right, open by default, separated from the map by a hairline. Only the panel scrolls. A floating "Sembunyikan daftar" button at the map's top right hides it.
-- **1024px+:** the header is one row: wordmark left; kecamatan select, "Lihat info", search (capped ~28rem), and the account controls right. The filter row puts the category filter left and the count right.
-- **640–1023px:** the header is a two-column grid: wordmark left, account controls right, then select, "Lihat info", and search spanning both columns.
-- **Phones (<640px):** two rows above the map (~120px). Row one: a smaller wordmark, the kecamatan select filling the middle, an icon-only account button. Row two: search beside an icon-only category filter. "Info kecamatan" moves onto the map as a floating pill at the top right. A floating "Daftar tempat" pill with the count sits at the bottom left and opens a bottom sheet (up to 60% of the viewport). Selecting a place swaps the sheet to its details; closing returns to the list if it was open, else to the bare map. The map pans so the selected pin stays above the sheet.
+- **1024px+:** the header is one 64px row: the wordmark, then the search bar (up to 48rem) 32px after it, and the account controls at the far right. The count sits in the list panel's heading and on the list toggle.
+- **640–1023px:** two rows: wordmark left and account controls right, then the search bar across the full width.
+- **Phones (<640px):** two rows above the map (~120px). Row one: a smaller wordmark, the kecamatan select as its own pill filling the middle, an icon-only account button. Row two: the search bar holding only search and an icon-only category filter. "Info kecamatan" moves onto the map as a floating pill at the top right. A floating "Daftar tempat" pill with the count sits at the bottom left and opens a bottom sheet (up to 60% of the viewport). Selecting a place swaps the sheet to its details; closing returns to the list if it was open, else to the bare map. The map pans so the selected pin stays above the sheet.
 - **Auth pages:** the wordmark where the map header puts it, then one card up to 26rem wide in a centred column, top-aligned on phones and anchored 12% from the top from 768px (never vertically centred, so it holds still between pages and errors). "Kembali ke peta" sits 12px under the card.
-- **`/usulan`:** a scrolling page under the map's header: a column up to 64rem with the back link, headline, lede, and form; from 1024px a sticky 20rem "Usulanku" card on the right.
+- **`/usulan`:** a scrolling page under the site header: a column up to 64rem with the page header (back link, headline, lede) and the form; from 1024px a sticky 20rem "Usulanku" card on the right.
 
 Spacing runs on a 4px grid: 12px side padding on phones, 20px from 768px; 8px between sibling controls; 16px inside rows and cards; 24px between form sections. Touch targets are 44px on phones and 40px from 768px; dense admin controls may use 36px.
 
@@ -387,8 +386,8 @@ Built on **shadcn/ui** (style `base-maia`, Base UI primitives, Lucide icons). Ge
 
 ### Category filter (`ui/dropdown-menu`)
 
-- **Trigger:** an outline pill (40px) reading "Semua kategori", the category's label, or "N kategori", with a trailing chevron. On phones a 44px icon-only pill with a filter icon and a count badge when filtering, its label kept for screen readers.
-- **Active:** the trigger takes pandan-soft with pandan-deep text and no border.
+- **Trigger:** the search bar's last segment (at least 11rem), reading "Semua kategori", the category's label, or "N kategori", with a trailing chevron; hover fills it muted. On phones a 44px icon-only segment with a filter icon and the count when filtering, its label kept for screen readers.
+- **Active:** the segment fills pandan-soft with pandan-deep text, an end cap inside the bar.
 - **Menu:** a popover (18px, float shadow) at least as wide as the trigger, scrolling when taller than the screen: "Semua kategori" (clears; disabled when nothing is filtered), a separator, then one `DropdownMenuCheckboxItem` per category with its tile, label, and a check. The menu stays open while toggling.
 
 ### Category tile and badge
@@ -405,8 +404,9 @@ Built on **shadcn/ui** (style `base-maia`, Base UI primitives, Lucide icons). Ge
 
 ### Inputs / Fields (`ui/input`, `ui/select`, `ui/native-select`, `ui/textarea`)
 
-- **Search:** a 44px pill input (40px from 768px) with a leading search icon in muted ink and a trailing ghost clear button; the native cancel control is hidden.
-- **Kecamatan select:** a pill select trigger with a leading map-pin icon in pandan, the value in title weight, and a chevron; options in a popover.
+- **Search bar (map header):** one soft-white pill with an `input` border, 44px (40px from 768px), split by 20px hairline dividers into segments with no borders of their own: the kecamatan select and its info button, search, and the category filter. Segments hover to muted as full-height fills, rounded only at the bar's own ends and square where they meet another segment; the bar takes the focus ring while search has focus, the other segments draw their own.
+- **Kecamatan select:** a segment with a leading map-pin icon in pandan, the value in title weight, and a chevron; options in a popover. A 36px ghost info button in pandan follows it ("Info kecamatan", which opens the info dialog). On phones the select stands alone as a pill in the top row and the info moves onto the map.
+- **Search:** a segment with a leading search icon in muted ink and a trailing ghost clear button; the native cancel control is hidden.
 - **Form field:** label (label type) above a pill input with `input` border; textareas use 14px corners. Focus is the ring. An optional hint in muted body-small sits under it.
 - **Invalid:** after submit the border turns destructive with a soft destructive ring, and the message (body-small, clay red) replaces the hint; editing clears it.
 - **Form select (`ui/native-select`):** form pickers stay native selects (the best picker on a phone), drawn as the same pill field with a muted chevron; the empty choice reads in muted ink. Admin toolbars use the 36px `sm` size.
@@ -415,10 +415,11 @@ Built on **shadcn/ui** (style `base-maia`, Base UI primitives, Lucide icons). Ge
 
 ### Navigation
 
-- **Header:** linen, a hairline bottom border, no fill colour. Wordmark and a muted tagline (hidden below 640px) left; controls right.
-- **Filter row:** linen with a hairline below; the count sentence is a polite live region with the number in title weight.
+- **Site header:** the map, `/usulan`, and `/profil` share one: linen, a hairline bottom border, no fill colour, the wordmark left (no tagline) and the account controls right; the map adds its search bar.
+- **Count:** the list heading and the list toggle show it; a hidden polite live region announces the full sentence ("N tempat di Kec. X untuk “q”").
+- **Page header:** the title block of admin pages and `/usulan`: an optional ghost back link, the headline with the page's actions beside its first line (dropping under it when they do not fit), and a muted body-small description under both.
 - **Account controls:** signed out, an outline pill "Masuk" with a user icon linking to the sign-in page with the current map address. Signed in: "Usulkan" (outline pill, pin-plus icon) except on `/usulan` and in admin, "Admin" (outline pill, shield icon) for admins outside admin, the first name in title weight truncated at 10ch, and a ghost "Keluar" with a log-out icon. On phones a 44px icon-only pill: signed out it links to sign-in; signed in it opens a dropdown menu headed by the full name with "Usulkan", "Admin" for admins, and "Keluar".
-- **List panel:** from 768px a linen column with a 1px hairline on its left and no shadow; on phones a soft-white bottom sheet with 22px top corners and the sheet shadow. Its sticky heading reads "Daftar tempat" (title) with the count on phones and a ghost close button, over a hairline.
+- **List panel:** from 768px a linen column with a 1px hairline on its left and no shadow; on phones a soft-white bottom sheet with 22px top corners and the sheet shadow. Its sticky heading reads "Daftar tempat" (title) with the count and, on phones, a ghost close button, over a hairline.
 - **Place list:** rows divided by hairlines: category tile, name (title), truncated address (muted body-small), right-aligned tabular price. Hover and focus fill muted, with an inset focus ring. Loading more is a muted line; a failed page is a pandan underlined "Gagal memuat. Coba lagi".
 
 ### Map Pin (signature)
@@ -437,7 +438,7 @@ A place is a 32px circle in its category's solid tint with a white 16px Lucide i
 
 ### Auth (Masuk / Daftar)
 
-Linen page, no coloured wall. The wordmark and tagline are the map header's own component, linking back to the map.
+Linen page, no coloured wall. The wordmark with its tagline ("Peta bertahan hidup untuk perantau di Jakarta", only here) links back to the map.
 
 - **Card:** soft white, hairline ring, 14px corners, 20px padding (24px from 640px), flat.
 - **Switch:** a segmented pill pair (shadcn Tabs look, built from links): the current page is the raised soft-white segment with a subtle shadow and is the page's `<h1>`; the other is a muted-ink link segment on muted. Switching swaps only the form.
@@ -469,8 +470,8 @@ The map's header, then the layout described above. "Usulanku" is a card listing 
 
 The same world at higher density, assembled from shadcn's admin primitives.
 
-- **Frame:** a 15rem linen sidebar from 768px, with a hairline on its right, holding the wordmark and 36px nav items (label type, 16px icon, 10px corners); on phones the same items run as a scrolling strip under the wordmark. The active item is pandan-soft with pandan-deep text. A 56px linen top bar with a hairline holds an "Admin" outline badge, a ghost "Kembali ke peta", and the account controls.
-- **Page:** linen, 16px padding (24px from 768px); a headline at 1.5rem with its actions on the right.
+- **Frame:** a 15rem linen sidebar from 768px, with a hairline on its right, holding the wordmark with an "Admin" outline badge, 36px nav items (label type, 16px icon, 10px corners), and at its foot, over a hairline, "Kembali ke peta" (a muted nav item) and the account controls. On phones a top row holds the wordmark, badge, and account, over the same items as a scrolling strip; the wordmark is the way back. The active item is pandan-soft with pandan-deep text. There is no top bar.
+- **Page:** linen, 16px padding (24px from 768px), opening with the page header.
 - **Search:** the pill search field at 36px, up to 24rem wide, with the row count in muted beside it.
 - **Tables (`DataTable`):** inside a card; header row on muted with muted-ink caption-weight labels; rows divided by hairlines, hovering to muted (a column pinned for sideways scrolling on phones follows the row). Statuses are soft badges: open ones muted, resolved ones in their outcome's tint (pandan for approved or dismissed, sambal for rejected or removed).
 - **Buttons:** 36px pills (`sm`); primary, outline, ghost, and soft destructive as above.

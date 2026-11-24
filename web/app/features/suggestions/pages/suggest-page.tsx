@@ -6,9 +6,10 @@ import type { CategoryDetail, Place } from "~/features/places/types";
 import type { SubDistrict } from "~/features/subdistricts/types";
 import { cn } from "~/shared/cn";
 import { ErrorBoard } from "~/shared/components/error-board";
+import { PageHeader } from "~/shared/components/page-header";
+import { SiteHeader } from "~/shared/components/site-header";
 import { Toaster } from "~/shared/components/toaster";
 import { buttonVariants } from "~/shared/components/ui/button";
-import { Wordmark } from "~/shared/components/wordmark";
 
 import { MySuggestions } from "../components/my-suggestions";
 import { SuggestionForm } from "../components/suggestion-form";
@@ -32,40 +33,28 @@ export function SuggestPage({
   return (
     <Toaster>
       <div className="bg-background text-foreground flex min-h-dvh flex-col">
-        <header className="bg-background border-b">
-          <div className="flex items-center justify-between gap-3 px-3 py-2 md:px-5 md:py-3">
-            <Wordmark />
-            <AccountControl />
-          </div>
-        </header>
+        <SiteHeader>
+          <AccountControl />
+        </SiteHeader>
 
         <main className="mx-auto grid w-full max-w-5xl gap-10 px-3 py-6 md:px-5 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-          <section
-            aria-labelledby="suggest-title"
-            className="flex flex-col gap-6"
-          >
-            <div className="flex flex-col gap-3">
-              <Link
-                to="/"
-                className={cn(
-                  buttonVariants({ variant: "ghost" }),
-                  "text-muted-foreground -ml-3 self-start",
-                )}
-              >
-                <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-                Kembali ke peta
-              </Link>
-              <h1
-                id="suggest-title"
-                className="text-foreground text-2xl leading-tight font-semibold tracking-[-0.01em] text-balance"
-              >
-                Usulkan tempat
-              </h1>
-              <p className="text-muted-foreground max-w-prose text-sm text-pretty">
-                Tahu tempat terjangkau yang belum ada di peta? Usulkan di sini.
-                Admin meninjaunya dulu sebelum tempat itu tampil di peta.
-              </p>
-            </div>
+          <section aria-label="Usulkan tempat" className="flex flex-col gap-6">
+            <PageHeader
+              back={
+                <Link
+                  to="/"
+                  className={cn(
+                    buttonVariants({ variant: "ghost" }),
+                    "text-muted-foreground -ml-3 self-start",
+                  )}
+                >
+                  <ArrowLeft aria-hidden="true" data-icon="inline-start" />
+                  Kembali ke peta
+                </Link>
+              }
+              title="Usulkan tempat"
+              description="Tahu tempat terjangkau yang belum ada di peta? Usulkan di sini. Admin meninjaunya dulu sebelum tempat itu tampil di peta."
+            />
 
             <SuggestionForm
               categories={categories}

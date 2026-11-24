@@ -111,19 +111,20 @@ export function PlaceDetailPage({
 
   return (
     <>
-      <Link
-        to="/admin/places"
-        className={buttonVariants({
-          variant: "ghost",
-          size: "sm",
-          className: "text-muted-foreground -ml-3 self-start",
-        })}
-      >
-        <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-        Daftar tempat
-      </Link>
-
       <PageHeader
+        back={
+          <Link
+            to="/admin/places"
+            className={buttonVariants({
+              variant: "ghost",
+              size: "sm",
+              className: "text-muted-foreground -ml-3 self-start",
+            })}
+          >
+            <ArrowLeft aria-hidden="true" data-icon="inline-start" />
+            Daftar tempat
+          </Link>
+        }
         title={place.name}
         description={[
           category?.name ?? place.category.name,

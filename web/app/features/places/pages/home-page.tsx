@@ -3,7 +3,7 @@ import { Info, List, X } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import type { GetPlacesParams } from "~/features/places/api";
-import { CategoryNav } from "~/features/places/components/category-nav";
+import { CategoryFilter } from "~/features/places/components/category-filter";
 import { HomeHeader } from "~/features/places/components/home-header";
 import {
   MapEmptyState,
@@ -260,36 +260,36 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
     };
   }
 
-  // Rendered twice: in the header from 640px, in the category strip below.
-  const searchField = (
-    <SearchField
-      draft={draft}
-      onDraftChange={setDraft}
-      onSearch={() => onSearchChange({ q: draft.trim() || undefined })}
-      onClearSearch={clearSearch}
-    />
-  );
-
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
       <HomeHeader
         subDistricts={subDistricts}
         subDistrict={subDistrict}
-        search={searchField}
+        search={
+          <SearchField
+            draft={draft}
+            onDraftChange={setDraft}
+            onSearch={() => onSearchChange({ q: draft.trim() || undefined })}
+            onClearSearch={clearSearch}
+          />
+        }
+        filter={
+          <CategoryFilter
+            categories={categories}
+            activeSlugs={activeSlugs}
+            onToggle={toggleCategory}
+            onShowAll={() => onSearchChange({ kategori: undefined })}
+          />
+        }
         onKecamatanChange={changeKecamatan}
         onOpenInfo={() => setInfoOpen(true)}
       />
 
-      <CategoryNav
-        categories={categories}
-        activeSlugs={activeSlugs}
-        onToggle={toggleCategory}
-        onShowAll={() => onSearchChange({ kategori: undefined })}
-        count={listTotal}
-        areaName={areaName}
-        query={query}
-        search={searchField}
-      />
+      {/* The count is shown in the list heading and the list button; this announces it. */}
+      <p aria-live="polite" className="sr-only">
+        {listTotal} tempat di Kec. {areaName}
+        {needle ? <> untuk “{query}”</> : null}
+      </p>
 
       {/* The map takes the rest of the screen; the list and details sit beside it or over it. */}
       <main className="flex min-h-0 flex-1">
@@ -336,7 +336,7 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
               <List aria-hidden="true" data-icon="inline-start" />
               {panelOpen ? "Sembunyikan daftar" : "Daftar tempat"}
               {panelOpen ? null : (
-                <span className="text-muted-foreground font-semibold tabular-nums md:hidden">
+                <span className="text-muted-foreground font-semibold tabular-nums">
                   {listTotal}
                 </span>
               )}
@@ -357,10 +357,10 @@ export function HomePage({ search, onSearchChange }: HomePageProps) {
                   Daftar tempat
                 </h2>
                 <div className="flex items-center gap-2">
-                  {/* The strip's count is for screen readers only on phones. */}
+                  {/* Screen readers hear the count from the live region. */}
                   <p
                     aria-hidden="true"
-                    className="text-muted-foreground text-sm sm:hidden"
+                    className="text-muted-foreground text-sm"
                   >
                     <span className="text-foreground font-semibold tabular-nums">
                       {listTotal}

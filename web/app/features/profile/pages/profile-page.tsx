@@ -23,11 +23,12 @@ import { FormAlert } from "~/shared/components/form-alert";
 import { MissingSlot } from "~/shared/components/missing-slot";
 import { SectionCard } from "~/shared/components/section-card";
 import { SubmitPlate } from "~/shared/components/submit-plate";
+import { SiteHeader } from "~/shared/components/site-header";
 import { Toaster } from "~/shared/components/toaster";
 import { Badge } from "~/shared/components/ui/badge";
 import { Button, buttonVariants } from "~/shared/components/ui/button";
 import { UserAvatar } from "~/shared/components/user-avatar";
-import { Wordmark } from "~/shared/components/wordmark";
+
 import {
   formatLocalDate,
   formatLocalMonth,
@@ -49,12 +50,9 @@ export function ProfilePage({ userId }: { userId: number }) {
   return (
     <Toaster>
       <div className="bg-background text-foreground flex min-h-dvh flex-col">
-        <header className="bg-background border-b">
-          <div className="flex items-center justify-between gap-3 px-3 py-2 md:px-5 md:py-3">
-            <Wordmark />
-            <AccountControl />
-          </div>
-        </header>
+        <SiteHeader>
+          <AccountControl />
+        </SiteHeader>
 
         <main className="mx-auto grid w-full max-w-5xl gap-8 px-3 py-6 md:px-5 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start lg:gap-10">
           <div className="flex flex-col gap-6 lg:sticky lg:top-6">

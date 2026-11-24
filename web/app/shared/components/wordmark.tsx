@@ -1,12 +1,13 @@
 import { Link } from "@tanstack/react-router";
 
 /**
- * The SakuKota wordmark and tagline, linking to the map. `href` keeps a
- * specific map address (kecamatan, filters, place).
+ * The SakuKota wordmark, linking to the map, with the tagline when asked
+ * (only the auth pages show it). `href` keeps a specific map address
+ * (kecamatan, filters, place).
  */
 export function Wordmark({
   href = "/",
-  tagline = true,
+  tagline = false,
 }: {
   href?: string;
   tagline?: boolean;

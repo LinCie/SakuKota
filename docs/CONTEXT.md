@@ -4,7 +4,7 @@
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-27 (user profiles; web account menu; web profile layout).
+> - Last updated: 2026-11-27 (user profiles; web account menu; web profile layout; web headers).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
@@ -565,3 +565,4 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-27 | Profiles: `/users/me` show and rename, image-only profile photo (old one queued), `GET /users/me/reviews`; reviews carry `place_name` and `user.avatar_url`; `USER_NOT_FOUND`; web `/profil` page and avatars on reviews |
 | 2026-11-27 | Web header: profile and sign-out in one account menu under the user's first name on every screen size; no contract change |
 | 2026-11-27 | Web `/profil`: identity header, star summary that filters own reviews, reviews grouped by month 20 at a time with their photos; no contract change |
+| 2026-11-27 | Web headers: one site header on the map, `/usulan`, and `/profil`; the map's kecamatan, info, search, and category filter in one search bar, the count in the list heading; tagline only on auth pages; admin top bar folded into the sidebar; shared page header with back link; no contract change |

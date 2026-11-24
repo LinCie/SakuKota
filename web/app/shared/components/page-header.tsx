@@ -1,32 +1,38 @@
 import type { ReactNode } from "react";
 
-/** A page's title, one-line description, and actions. */
+/**
+ * A page's title block: an optional way back above it, the title with the
+ * page's actions beside it, and the description under both. When the actions
+ * do not fit beside the title, they drop under it.
+ */
 export function PageHeader({
   title,
   description,
   actions,
+  back,
 }: {
   title: string;
   description?: string;
   actions?: ReactNode;
+  /** A link back to the page this one sits under. */
+  back?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div className="flex min-w-0 flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-balance">
+    <header className="flex flex-col gap-1">
+      {back ? <div className="mb-1 flex">{back}</div> : null}
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <h1 className="min-w-0 flex-[1_1_12rem] text-2xl leading-9 font-semibold tracking-[-0.01em] text-balance">
           {title}
         </h1>
-        {description ? (
-          <p className="text-muted-foreground text-sm text-pretty">
-            {description}
-          </p>
+        {actions ? (
+          <div className="flex flex-wrap items-center gap-2">{actions}</div>
         ) : null}
       </div>
-      {actions ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {actions}
-        </div>
+      {description ? (
+        <p className="text-muted-foreground max-w-prose text-sm text-pretty">
+          {description}
+        </p>
       ) : null}
-    </div>
+    </header>
   );
 }

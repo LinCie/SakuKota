@@ -88,19 +88,20 @@ export function SubDistrictDetailPage({
 
   return (
     <>
-      <Link
-        to="/admin/subdistricts"
-        className={buttonVariants({
-          variant: "ghost",
-          size: "sm",
-          className: "text-muted-foreground -ml-3 self-start",
-        })}
-      >
-        <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-        Daftar kecamatan
-      </Link>
-
       <PageHeader
+        back={
+          <Link
+            to="/admin/subdistricts"
+            className={buttonVariants({
+              variant: "ghost",
+              size: "sm",
+              className: "text-muted-foreground -ml-3 self-start",
+            })}
+          >
+            <ArrowLeft aria-hidden="true" data-icon="inline-start" />
+            Daftar kecamatan
+          </Link>
+        }
         title={`Kec. ${subDistrict.name}`}
         description={subDistrict.slug}
         actions={
