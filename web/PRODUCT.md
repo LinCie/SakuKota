@@ -47,7 +47,7 @@ Curated micro-services (warung, tailors, local clinics, laundries, pharmacies, p
 ## Brand Commitments
 
 - Name: Rantau.
-- Layout reference: the low-fi wireframe in the planning docs (not published) (header with kecamatan picker, View Info, and search; category filter dropdown; result count; map with place detail panel; kecamatan info modal). The homepage layout should stay similar to it.
+- Layout reference: the original low-fi wireframe (not published) (header with kecamatan picker, View Info, and search; category filter dropdown; result count; map with place detail panel; kecamatan info modal). The homepage layout should stay similar to it.
 
 ## Evidence on Hand
 

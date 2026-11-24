@@ -4,13 +4,13 @@
 > to do. Update it in the same task as any verified change to backend behavior or
 > the API contract (see [Maintaining this file](#maintaining-this-file)).
 >
-> - Last updated: 2026-11-24 (admins read one report with its reported place
->   and review at `GET /reports/{id}`).
+> - Last updated: 2026-11-25 (references to unpublished planning docs
+>   generalized; README disclaimer added).
 > - Status: all Go unit and integration tests pass. `web/` is untested.
 
 ## 1. Why the project exists
 
-The design docs (not published) call it **Perantau Helper**; here it
+The original planning docs (not published) call it **Perantau Helper**; here it
 is **Rantau** / `rantau-go`.
 
 - **Problem.** People who move to Jakarta for work (*perantau*) struggle to find
@@ -43,7 +43,7 @@ is **Rantau** / `rantau-go`.
    never evidence of intent.
 2. **This file** summarizes intent and the tested contract. If it disagrees with
    a test, the test wins.
-3. **Design docs** (not published) explain the original *why* but
+3. **Design docs** (the original planning docs, not published) explain the original *why* but
    are partly outdated (§9).
 
 ## 4. Scope
@@ -501,3 +501,4 @@ An unknown sub-district or category is **404** as a `GET /places` filter but
 | 2026-11-24 | Authors delete their own review via `DELETE /places/{id}/reviews/mine`; web shows them the delete button too |
 | 2026-11-24 | Abuse reports of places and reviews (`REPORTS`, reasons, pending limit 5); admins list, remove content, or dismiss; place delete joins the caller's transaction; web report drawer and `/admin/reports` |
 | 2026-11-24 | `GET /reports/{id}` returns the reported place and review; web `/admin/reports/$reportId` shows them and holds remove and dismiss |
+| 2026-11-25 | Docs only: unpublished planning-doc paths generalized for public release; README disclaimer |
